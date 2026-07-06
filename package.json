@@ -1,0 +1,22 @@
+{
+  "name": "itera2",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "predev": "node scripts/build_defaults.js",
+    "dev": "vite",
+    "prebuild": "node scripts/build_defaults.js",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "format": "prettier --write \"src/**/*.{ts,tsx}\""
+  },
+  "devDependencies": {
+    "autoprefixer": "^10.5.2",
+    "postcss": "^8.5.16",
+    "prettier": "3.9.4",
+    "tailwindcss": "^3.4.19",
+    "typescript": "~6.0.2",
+    "vite": "^8.1.1"
+  }
+}
