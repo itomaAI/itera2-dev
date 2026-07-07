@@ -353,7 +353,7 @@ export class ShellController {
               "foreground",
               true,
               {},
-              currentUri
+              currentUri,
             );
           } else if (resolvedApp.appId === "HostEditor") {
             const content = await this.vfs.readFile(USER_PRINCIPAL, path);
@@ -370,7 +370,7 @@ export class ShellController {
               "foreground",
               false,
               args,
-              currentUri
+              currentUri,
             );
           }
         } catch (e: any) {
@@ -899,7 +899,11 @@ export class ShellController {
     // metaos://open/... (データファイルを関連付けアプリで開く)
     this.uriRouter.register(
       "open",
-      async (path: string, queryArgs: Record<string, string>, searchAndHash: string) => {
+      async (
+        path: string,
+        queryArgs: Record<string, string>,
+        searchAndHash: string,
+      ) => {
         let targetPath = path || "index.html";
         try {
           const stat = this.vfs.stat(USER_PRINCIPAL, targetPath);
@@ -913,7 +917,7 @@ export class ShellController {
               "foreground",
               true,
               queryArgs,
-              fullUri
+              fullUri,
             );
           } else if (resolvedApp.appId === "HostEditor") {
             const content = await this.vfs.readFile(USER_PRINCIPAL, targetPath);
@@ -933,20 +937,25 @@ export class ShellController {
               "foreground",
               false,
               args, // V2仕様: launchContext の代わりに args オブジェクトを渡す
-              fullUri
+              fullUri,
             );
           }
         } catch (e: any) {
-          if (window.AppUI) window.AppUI.notify(`Cannot open: ${e.message}`, "error");
+          if (window.AppUI)
+            window.AppUI.notify(`Cannot open: ${e.message}`, "error");
           this._restoreAddressBar();
         }
-      }
+      },
     );
 
     // metaos://run/... (関連付けを無視して実行ファイルとして起動し、引数を渡す)
     this.uriRouter.register(
       "run",
-      async (path: string, queryArgs: Record<string, string>, searchAndHash: string) => {
+      async (
+        path: string,
+        queryArgs: Record<string, string>,
+        searchAndHash: string,
+      ) => {
         let executablePath = path || "index.html";
         try {
           // "run" の場合、対象パスはアプリ自身。クエリパラメータのみを args として渡す。
@@ -958,56 +967,69 @@ export class ShellController {
             "foreground",
             true,
             args, // V2仕様: targetPath という誤った意図は持たせず、純粋な引数を渡す
-            fullUri
+            fullUri,
           );
         } catch (e: any) {
-          if (window.AppUI) window.AppUI.notify(`Cannot run: ${e.message}`, "error");
+          if (window.AppUI)
+            window.AppUI.notify(`Cannot run: ${e.message}`, "error");
           this._restoreAddressBar();
         }
-      }
+      },
     );
 
     // metaos://edit/... (強制的にHostコードエディタで開く)
-    this.uriRouter.register("edit", async (path: string, _args: any, _search: string) => {
-      try {
-        const content = await this.vfs.readFile(USER_PRINCIPAL, path);
-        this.editorModal.open(path, content);
-        this._closeMobileDrawers();
-      } catch (e: any) {
-        if (window.AppUI) window.AppUI.notify(`File not found: ${e.message}`, "error");
-      }
-      this._restoreAddressBar();
-    });
+    this.uriRouter.register(
+      "edit",
+      async (path: string, _args: any, _search: string) => {
+        try {
+          const content = await this.vfs.readFile(USER_PRINCIPAL, path);
+          this.editorModal.open(path, content);
+          this._closeMobileDrawers();
+        } catch (e: any) {
+          if (window.AppUI)
+            window.AppUI.notify(`File not found: ${e.message}`, "error");
+        }
+        this._restoreAddressBar();
+      },
+    );
 
     // metaos://view/... (強制的にHostメディアビューアで開く)
-    this.uriRouter.register("view", async (path: string, _args: any, _search: string) => {
-      try {
-        const blob = await this.vfs.readBlob(USER_PRINCIPAL, path);
-        this.mediaViewer.open(path, blob);
-        this._closeMobileDrawers();
-      } catch (e: any) {
-        if (window.AppUI) window.AppUI.notify(`File not found: ${e.message}`, "error");
-      }
-      this._restoreAddressBar();
-    });
+    this.uriRouter.register(
+      "view",
+      async (path: string, _args: any, _search: string) => {
+        try {
+          const blob = await this.vfs.readBlob(USER_PRINCIPAL, path);
+          this.mediaViewer.open(path, blob);
+          this._closeMobileDrawers();
+        } catch (e: any) {
+          if (window.AppUI)
+            window.AppUI.notify(`File not found: ${e.message}`, "error");
+        }
+        this._restoreAddressBar();
+      },
+    );
 
     // metaos://system/... (システムモーダルを開く)
-    this.uriRouter.register("system", async (path: string, _args: any, _search: string) => {
-      const target = path.toLowerCase();
-      if (target === "settings") {
-        this.systemModal.open();
-      } else if (target === "api_keys") {
-        this.apiSettingsModal.open();
-      } else if (target === "sync") {
-        this.syncModal.open();
-      } else if (target === "monitor") {
-        this.processMonitorModal.open();
-      } else {
-        if (window.AppUI) window.AppUI.notify(`Unknown system modal: ${target}`, "warning");
-      }
-      this._restoreAddressBar();
-      this._closeMobileDrawers();
-    });
+    this.uriRouter.register(
+      "system",
+      async (path: string, _args: any, _search: string) => {
+        const target = path.toLowerCase();
+        if (target === "settings") {
+          this.systemModal.open();
+        } else if (target === "api_keys") {
+          this.apiSettingsModal.open();
+        } else if (target === "sync") {
+          this.syncModal.open();
+        } else if (target === "monitor") {
+          this.processMonitorModal.open();
+        } else {
+          if (window.AppUI)
+            window.AppUI.notify(`Unknown system modal: ${target}`, "warning");
+        }
+        this._restoreAddressBar();
+        this._closeMobileDrawers();
+      },
+    );
   }
 
   private _restoreAddressBar(): void {

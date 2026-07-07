@@ -19,7 +19,7 @@ export interface IProcessManager {
     mode?: string,
     forceReload?: boolean,
     args?: Record<string, string>,
-    currentUri?: string
+    currentUri?: string,
   ): Promise<void>;
   kill(pid: string): boolean;
   list(): any[];
@@ -343,14 +343,14 @@ export class HostApiRouter {
       );
       if (fgApp) {
         const oldBasePath = fgApp.path.split(/[?#]/)[0];
-        
+
         let newPath = path;
         if (path.startsWith("?") || path.startsWith("#")) {
           newPath = oldBasePath + path;
         }
 
         fgApp.path = newPath;
-        
+
         // 既存のURIからIntentを抽出して新しいURIを組み立てる
         const intentMatch = fgApp.currentUri.match(/^metaos:\/\/([^\/]+)/);
         const intent = intentMatch ? intentMatch[1] : "open";

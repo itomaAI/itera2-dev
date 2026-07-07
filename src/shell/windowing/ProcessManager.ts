@@ -66,16 +66,30 @@ export class ProcessManager {
             "foreground",
             true,
             targetProc.launchContext,
-            targetProc.currentUri
+            targetProc.currentUri,
           );
         } else {
-          this.spawn("main", "index.html", "foreground", true, null, "metaos://open/index.html");
+          this.spawn(
+            "main",
+            "index.html",
+            "foreground",
+            true,
+            null,
+            "metaos://open/index.html",
+          );
         }
       };
     }
     if (this.els.BTN_HOME) {
       this.els.BTN_HOME.onclick = () => {
-        this.spawn("main", "index.html", "foreground", false, null, "metaos://open/index.html");
+        this.spawn(
+          "main",
+          "index.html",
+          "foreground",
+          false,
+          null,
+          "metaos://open/index.html",
+        );
       };
     }
   }
@@ -89,7 +103,7 @@ export class ProcessManager {
     mode: string = "background",
     forceReload: boolean = false,
     args?: Record<string, string>,
-    currentUri?: string
+    currentUri?: string,
   ): Promise<void> {
     // V1のハック継承: 'main' が指定された場合はパスベースのPIDに変換し、強制的にフォアグラウンドにする
     if (pid === "main") {
@@ -149,7 +163,7 @@ export class ProcessManager {
         this.vfs,
         path,
         pid,
-        args
+        args,
       );
 
       const iframe = document.createElement("iframe");
@@ -325,7 +339,7 @@ export class ProcessManager {
 
   getArgs(pid: string): Record<string, string> | null {
     const proc = this.processes.get(pid);
-    return proc ? (proc.args || null) : null;
+    return proc ? proc.args || null : null;
   }
 
   async captureScreenshot(pid?: string): Promise<string> {

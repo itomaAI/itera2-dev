@@ -585,8 +585,11 @@ export class TreeView {
       if (resolvedApps.length > 0) {
         // 先頭はデフォルトアプリ
         const defaultApp = resolvedApps[0];
-        const defaultLabel = defaultApp.appId === "HostRunner" ? "▶ Run (Spawn)" : `Open in ${defaultApp.appName}`;
-        
+        const defaultLabel =
+          defaultApp.appId === "HostRunner"
+            ? "▶ Run (Spawn)"
+            : `Open in ${defaultApp.appName}`;
+
         actions.push({
           label: defaultLabel,
           action: () => {
@@ -597,7 +600,10 @@ export class TreeView {
 
         // 2番目以降はフォールバックとして字下げ表示
         resolvedApps.slice(1).forEach((app) => {
-          const fallbackLabel = app.appId === "HostRunner" ? " ↳ ▶ Run (Spawn)" : ` ↳ ${app.appName}`;
+          const fallbackLabel =
+            app.appId === "HostRunner"
+              ? " ↳ ▶ Run (Spawn)"
+              : ` ↳ ${app.appName}`;
           actions.push({
             label: fallbackLabel,
             action: () => {
@@ -619,11 +625,16 @@ export class TreeView {
     actions.push({
       label: "Copy Path",
       action: () => {
-        navigator.clipboard.writeText(path).then(() => {
-          if (window.AppUI) window.AppUI.notify("Path copied to clipboard", "success");
-        }).catch(err => {
-          if (window.AppUI) window.AppUI.notify(`Failed to copy: ${err.message}`, "error");
-        });
+        navigator.clipboard
+          .writeText(path)
+          .then(() => {
+            if (window.AppUI)
+              window.AppUI.notify("Path copied to clipboard", "success");
+          })
+          .catch((err) => {
+            if (window.AppUI)
+              window.AppUI.notify(`Failed to copy: ${err.message}`, "error");
+          });
       },
     });
     actions.push({ separator: true });

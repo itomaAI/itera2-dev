@@ -15,7 +15,7 @@ export class CameraModal {
     return new Promise(async (resolve, reject) => {
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
         return reject(
-          new Error("Camera API is not supported in this browser.")
+          new Error("Camera API is not supported in this browser."),
         );
       }
 

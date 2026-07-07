@@ -113,7 +113,7 @@ window.addEventListener('message', async (e) => {
     vfs: VfsService,
     entryPath: string,
     pid: string = "main",
-    args?: Record<string, string>
+    args?: Record<string, string>,
   ): Promise<{ entryUrl: string | null; blobUrls: string[] }> {
     const blobUrls: string[] = [];
     const visited = new Map<string, string>(); // path + search + hash -> blobUrl
@@ -126,7 +126,7 @@ window.addEventListener('message', async (e) => {
       blobUrls,
       visited,
       "",
-      args
+      args,
     );
 
     return { entryUrl, blobUrls };
@@ -142,7 +142,7 @@ window.addEventListener('message', async (e) => {
     blobUrls: string[],
     visited: Map<string, string>,
     currentDir: string,
-    args?: Record<string, string>
+    args?: Record<string, string>,
   ): Promise<string | null> {
     const { basePath, search, hash } = this._parsePath(requestPath);
 
@@ -202,7 +202,7 @@ window.addEventListener('message', async (e) => {
         pid,
         search,
         hash,
-        args
+        args,
       );
 
       const blob = new Blob([htmlContent], { type: "text/html" });
@@ -412,7 +412,7 @@ window.addEventListener('message', async (e) => {
     pid: string,
     search: string,
     hash: string,
-    args?: Record<string, string>
+    args?: Record<string, string>,
   ): string {
     let html = htmlContent;
 
@@ -431,7 +431,7 @@ window.addEventListener('message', async (e) => {
 
     const bridgeUrl = GuestBridgeBuilder.getBlobUrl();
     let headInjections = `\n<script>window.__ITERA_PID__ = '${pid}';</script>\n`;
-    
+
     // V1のモンキーパッチハックを廃止し、クリーンなグローバル変数として引数を注入
     if (args) {
       headInjections += `<script>window.__ITERA_ARGS__ = ${JSON.stringify(args)};</script>\n`;

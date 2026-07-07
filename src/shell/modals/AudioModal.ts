@@ -13,9 +13,7 @@ export class AudioModal {
   async open(options?: AudioOptions): Promise<string | null> {
     return new Promise(async (resolve, reject) => {
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-        return reject(
-          new Error("Audio API is not supported in this browser.")
-        );
+        return reject(new Error("Audio API is not supported in this browser."));
       }
 
       let stream: MediaStream;

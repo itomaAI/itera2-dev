@@ -35,7 +35,9 @@ export class VfsInitializer {
 
       // 領域の判定
       const isSystemArea = cleanPath.startsWith("system/");
-      const isConfigArea = cleanPath.startsWith("system/config/") || cleanPath.startsWith("system/registry/");
+      const isConfigArea =
+        cleanPath.startsWith("system/config/") ||
+        cleanPath.startsWith("system/registry/");
 
       if (id === undefined) {
         // パスが存在しない場合は新規作成
@@ -88,7 +90,7 @@ export class VfsInitializer {
       "system/config",
       "system/cache",
       "system/themes",
-      "system/registry"
+      "system/registry",
     ];
 
     for (const rwPath of rwPaths) {

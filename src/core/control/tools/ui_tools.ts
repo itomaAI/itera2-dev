@@ -36,7 +36,14 @@ export function registerUITools(registry: ToolRegistry): void {
       const currentUri = `metaos://run/${path}`;
 
       if (context.shell?.processManager) {
-        await context.shell.processManager.spawn(pid, path, mode, forceReload, args, currentUri);
+        await context.shell.processManager.spawn(
+          pid,
+          path,
+          mode,
+          forceReload,
+          args,
+          currentUri,
+        );
         return { log: `Process started.`, ui: `🚀 Spawned [${pid}]` };
       }
       return { log: "ProcessManager not available.", error: true };
@@ -58,11 +65,17 @@ export function registerUITools(registry: ToolRegistry): void {
           if (resolvedApp.appId === "HostEditor") {
             const content = await context.vfs.readFile(USER_PRINCIPAL, path);
             context.shell.modals.editor.open(path, content);
-            return { log: `Opened ${path} in Host Editor`, ui: `📝 Opened Editor` };
+            return {
+              log: `Opened ${path} in Host Editor`,
+              ui: `📝 Opened Editor`,
+            };
           } else if (resolvedApp.appId === "HostMediaViewer") {
             const blob = await context.vfs.readBlob(USER_PRINCIPAL, path);
             context.shell.modals.media.open(path, blob);
-            return { log: `Opened ${path} in Media Viewer`, ui: `🖼️ Opened Media` };
+            return {
+              log: `Opened ${path} in Media Viewer`,
+              ui: `🖼️ Opened Media`,
+            };
           } else {
             const args = { file: path };
             const fullUri = `metaos://open/${path}`;
@@ -72,16 +85,19 @@ export function registerUITools(registry: ToolRegistry): void {
               "foreground",
               false,
               args,
-              fullUri
+              fullUri,
             );
-            return { log: `Opened ${path} in ${resolvedApp.appName}`, ui: `🚀 Opened [${resolvedApp.appId}]` };
+            return {
+              log: `Opened ${path} in ${resolvedApp.appName}`,
+              ui: `🚀 Opened [${resolvedApp.appId}]`,
+            };
           }
         } catch (e: any) {
           throw new Error(`Failed to open: ${e.message}`);
         }
       }
       return { log: "Shell not available.", error: true };
-    }
+    },
   });
 
   registry.registerSystemTool(setId, setName, {

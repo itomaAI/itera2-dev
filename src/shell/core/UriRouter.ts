@@ -76,8 +76,9 @@ export class UriRouter {
     // クエリパラメータの抽出
     const queryArgs: Record<string, string> = {};
     const hashIndex = searchAndHash.indexOf("#");
-    const searchString = hashIndex !== -1 ? searchAndHash.substring(0, hashIndex) : searchAndHash;
-    
+    const searchString =
+      hashIndex !== -1 ? searchAndHash.substring(0, hashIndex) : searchAndHash;
+
     if (searchString.startsWith("?")) {
       const params = new URLSearchParams(searchString.substring(1));
       params.forEach((value, key) => {

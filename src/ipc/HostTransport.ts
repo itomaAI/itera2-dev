@@ -87,7 +87,10 @@ export class HostTransport {
         let error: string | null = null;
 
         // セキュリティ: 送信元の厳密な検証
-        if (this.sourceValidator && !this.sourceValidator(msg.source, e.source as Window)) {
+        if (
+          this.sourceValidator &&
+          !this.sourceValidator(msg.source, e.source as Window)
+        ) {
           error = `[SecurityError] PID spoofing detected or invalid source window for PID: ${msg.source}`;
           console.error(error);
         } else {
