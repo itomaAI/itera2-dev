@@ -42,8 +42,9 @@ export class ConfigManager {
     this.cache = JSON.parse(JSON.stringify(DEFAULT_CONFIG));
 
     // VFSの変更を監視し、設定ファイルが更新されたら再ロードする
-    eventBus.subscribe((events) => {
+    eventBus.subscribe(async (events) => {
       let configChanged = false;
+      const loadPromises: Promise<void>[] = [];
       for (const event of events) {
         if (
           event.path.startsWith(`${this.configDir}/`) &&
@@ -54,11 +55,14 @@ export class ConfigManager {
           if (filename === "apps.json" || filename === "services.json")
             continue;
 
-          this._loadCategory(filename!);
+          loadPromises.push(this._loadCategory(filename!));
           configChanged = true;
         }
       }
-      if (configChanged) this._notify();
+      if (configChanged) {
+        await Promise.all(loadPromises);
+        this._notify();
+      }
     });
   }
 

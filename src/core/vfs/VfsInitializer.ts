@@ -35,7 +35,7 @@ export class VfsInitializer {
 
       // 領域の判定
       const isSystemArea = cleanPath.startsWith("system/");
-      const isConfigArea = cleanPath.startsWith("system/config/");
+      const isConfigArea = cleanPath.startsWith("system/config/") || cleanPath.startsWith("system/registry/");
 
       if (id === undefined) {
         // パスが存在しない場合は新規作成
@@ -64,39 +64,37 @@ export class VfsInitializer {
       }
     }
 
-    // --- 厳密な ACL（権限）の適用 ---
-    // system/ 領域は原則 Read-Only (AIやGuestアプリからの破壊を防止)
+    // --- 厳密な ACL（権限）の再帰的適用 ---
+    // 1. system/ 領域は原則 Read-Only (AIやGuestアプリからの破壊を防止)
     if (this.vfs.exists(SYSTEM_PRINCIPAL, "system")) {
-      await this.vfs.setAcl(SYSTEM_PRINCIPAL, "system", {
+      await this.vfs.setAclRecursive(SYSTEM_PRINCIPAL, "system", {
         owner: SYSTEM_PRINCIPAL,
         rules: [{ principal: { type: "any", id: "*" }, permissions: ["read"] }],
       });
     }
 
-    // ただし system/config/ だけはユーザー設定なので Read/Write を許可
-    if (this.vfs.exists(SYSTEM_PRINCIPAL, "system/config")) {
-      await this.vfs.setAcl(SYSTEM_PRINCIPAL, "system/config", {
-        owner: SYSTEM_PRINCIPAL,
-        rules: [
-          {
-            principal: { type: "any", id: "*" },
-            permissions: ["read", "write"],
-          },
-        ],
-      });
-    }
+    // 2. ただし以下の領域は Read/Write を許可して上塗りする
+    const readWriteAcl = {
+      owner: SYSTEM_PRINCIPAL,
+      rules: [
+        {
+          principal: { type: "any", id: "*" },
+          permissions: ["read", "write"] as import("./types").PermissionType[],
+        },
+      ],
+    };
 
-    // system/cache/ も一時ファイルとして Read/Write を許可
-    if (this.vfs.exists(SYSTEM_PRINCIPAL, "system/cache")) {
-      await this.vfs.setAcl(SYSTEM_PRINCIPAL, "system/cache", {
-        owner: SYSTEM_PRINCIPAL,
-        rules: [
-          {
-            principal: { type: "any", id: "*" },
-            permissions: ["read", "write"],
-          },
-        ],
-      });
+    const rwPaths = [
+      "system/config",
+      "system/cache",
+      "system/themes",
+      "system/registry"
+    ];
+
+    for (const rwPath of rwPaths) {
+      if (this.vfs.exists(SYSTEM_PRINCIPAL, rwPath)) {
+        await this.vfs.setAclRecursive(SYSTEM_PRINCIPAL, rwPath, readWriteAcl);
+      }
     }
 
     if (deployedCount > 0 || updatedCount > 0) {

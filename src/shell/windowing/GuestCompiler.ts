@@ -13,11 +13,9 @@ interface CachedAsset {
 }
 
 export class GuestCompiler {
-  private assetCache: Map<string, CachedAsset>;
+  private assetCache: Map<string, CachedAsset> = new Map();
 
-  constructor() {
-    this.assetCache = new Map();
-  }
+  constructor() {}
 
   private _parsePath(path: string): {
     basePath: string;
@@ -43,6 +41,21 @@ export class GuestCompiler {
     }
 
     return { basePath, search, hash };
+  }
+
+  private _resolveRelativePath(baseDir: string, relPath: string): string {
+    const stack = baseDir ? baseDir.split("/") : [];
+    const parts = relPath.split("/");
+
+    for (const part of parts) {
+      if (part === "." || part === "") continue;
+      if (part === "..") {
+        if (stack.length > 0) stack.pop();
+      } else {
+        stack.push(part);
+      }
+    }
+    return stack.join("/");
   }
 
   private _getScreenshotHelperCode(pid: string): string {
@@ -100,165 +113,130 @@ window.addEventListener('message', async (e) => {
     vfs: VfsService,
     entryPath: string,
     pid: string = "main",
+    args?: Record<string, string>
   ): Promise<{ entryUrl: string | null; blobUrls: string[] }> {
-    const parsedEntry = this._parsePath(entryPath);
-    // OSコンパイラはシステム権限で全ファイルをスキャンする
-    const stats = vfs.listFiles(SYSTEM_PRINCIPAL, {
-      recursive: true,
-      detail: true,
-    }) as VfsStat[];
-    const currentFiles = new Set(stats.map((s) => s.path));
-    const urlMap: Record<string, string> = {};
     const blobUrls: string[] = [];
+    const visited = new Map<string, string>(); // path + search + hash -> blobUrl
 
-    // 0. キャッシュのクリーンアップ
-    for (const [path, cached] of this.assetCache.entries()) {
-      if (!currentFiles.has(path)) {
-        URL.revokeObjectURL(cached.url);
-        this.assetCache.delete(path);
-      }
+    // 再帰的に依存を解決してエントリーポイントのURLを生成する
+    const entryUrl = await this._processFile(
+      vfs,
+      entryPath,
+      pid,
+      blobUrls,
+      visited,
+      "",
+      args
+    );
+
+    return { entryUrl, blobUrls };
+  }
+
+  /**
+   * ファイルをパースし、再帰的に依存を解決して Blob URL を返す。
+   */
+  private async _processFile(
+    vfs: VfsService,
+    requestPath: string,
+    pid: string,
+    blobUrls: string[],
+    visited: Map<string, string>,
+    currentDir: string,
+    args?: Record<string, string>
+  ): Promise<string | null> {
+    const { basePath, search, hash } = this._parsePath(requestPath);
+
+    // 外部URLや Data URI はそのまま返す
+    if (
+      !basePath ||
+      basePath.match(/^https?:\/\//) ||
+      basePath.startsWith("data:")
+    ) {
+      return requestPath;
     }
 
-    // 1. Assets (HTML, CSS以外) の Blob 作成
-    for (const stat of stats) {
-      if (stat.kind !== "file") continue;
-      if (stat.path.endsWith(".html") || stat.path.endsWith(".css")) continue;
+    const absPath = this._resolveRelativePath(currentDir, basePath);
+    const visitKey = absPath + search + hash;
 
-      const cached = this.assetCache.get(stat.path);
+    // 循環参照防止（すでにコンパイル済みのファイルはキャッシュのURLを返す）
+    if (visited.has(visitKey)) {
+      return visited.get(visitKey)!;
+    }
+
+    if (!vfs.exists(SYSTEM_PRINCIPAL, absPath)) {
+      console.warn(`[GuestCompiler] File not found: ${absPath}`);
+      return requestPath;
+    }
+
+    const stat = vfs.stat(SYSTEM_PRINCIPAL, absPath);
+    if (stat.kind !== "file") return requestPath;
+
+    const mimeType = stat.mimeType || this.getMimeType(absPath);
+    const isHtml = absPath.endsWith(".html");
+    const isCss = absPath.endsWith(".css");
+
+    // HTML/CSS以外の静的アセットはグローバルキャッシュ(assetCache)を確認
+    if (!isHtml && !isCss) {
+      const cached = this.assetCache.get(absPath);
       if (cached && cached.version === stat.updatedAt) {
-        urlMap[stat.path] = cached.url;
-        continue;
+        const urlWithQuery = cached.url + search + hash;
+        visited.set(visitKey, urlWithQuery);
+        return urlWithQuery;
       }
-
-      if (cached) URL.revokeObjectURL(cached.url);
-
-      const mimeType = stat.mimeType || this.getMimeType(stat.path);
-      // V2の恩恵: OPFSから直接Blobを読み出すため超高速
-      const blob = await vfs.readBlob(SYSTEM_PRINCIPAL, stat.path);
-
-      // Blob の MIME Type が空になる場合があるため、明示的に指定して再生成
-      const typedBlob = new Blob([blob], { type: mimeType });
-      const url = URL.createObjectURL(typedBlob);
-
-      this.assetCache.set(stat.path, { url, version: stat.updatedAt });
-      urlMap[stat.path] = url;
     }
 
-    // 2. CSS の Blob 作成
-    for (const stat of stats) {
-      if (stat.kind !== "file") continue;
-      if (!stat.path.endsWith(".css")) continue;
+    let fileUrl: string;
 
-      let cssContent = await vfs.readFile(SYSTEM_PRINCIPAL, stat.path);
-      cssContent = this._processCssReferences(cssContent, urlMap, stat.path);
-
-      const blob = new Blob([cssContent], { type: "text/css" });
-      const url = URL.createObjectURL(blob);
-      urlMap[stat.path] = url;
-      blobUrls.push(url);
-    }
-
-    let entryPointUrl: string | null = null;
-    const themeStyleTag = this._generateThemeInjection();
-
-    // 3. HTML (スクリプト/スタイル注入) の Blob 作成
-    for (const stat of stats) {
-      if (stat.kind !== "file") continue;
-      if (!stat.path.endsWith(".html")) continue;
-
-      let htmlContent = await vfs.readFile(SYSTEM_PRINCIPAL, stat.path);
-      htmlContent = this._processHtmlReferences(htmlContent, urlMap, stat.path);
-
-      if (!/<!DOCTYPE\s+html>/i.test(htmlContent)) {
-        htmlContent = "<!DOCTYPE html>\n" + htmlContent;
-      }
-
-      const hostLang = document.documentElement.lang || "en";
-      htmlContent = htmlContent.replace(/<html[^>]*>/i, (match) => {
-        if (match.includes("lang=")) {
-          return match.replace(/lang=(['"]).*?\1/i, `lang="${hostLang}"`);
-        } else {
-          return match.replace("<html", `<html lang="${hostLang}"`);
-        }
-      });
-
-      // Guest Bridge (MetaOS API) の注入
-      const bridgeUrl = GuestBridgeBuilder.getBlobUrl();
-      let headInjections = `\n<script>window.__ITERA_PID__ = '${pid}';</script>\n<script src="${bridgeUrl}"></script>\n`;
-
-      // V1のハックを維持: URLSearchParamsのモンキーパッチ注入 (Blob URLでのクエリパラメータ偽装)
-      if (
-        stat.path === parsedEntry.basePath &&
-        (parsedEntry.search || parsedEntry.hash)
-      ) {
-        const safeQuery = (parsedEntry.search + parsedEntry.hash).replace(
-          /'/g,
-          "\\'",
-        );
-        headInjections += `
-<script>
-(function() {
-    const INJECTED = '${safeQuery}';
-    const Original = window.URLSearchParams;
-    window.URLSearchParams = class extends Original {
-        constructor(init) {
-            if (init === undefined || init === '' || init === window.location.search) {
-                super(INJECTED);
-            } else {
-                super(init);
-            }
-        }
-    };
-})();
-</script>\n`;
-      }
-
-      if (htmlContent.includes("<head>")) {
-        htmlContent = htmlContent.replace("<head>", "<head>" + headInjections);
-      } else {
-        htmlContent = htmlContent.replace(
-          /(<!DOCTYPE\s+html>)/i,
-          `$1${headInjections}`,
-        );
-      }
-
-      if (htmlContent.includes("</head>")) {
-        htmlContent = htmlContent.replace(
-          "</head>",
-          themeStyleTag + "\n</head>",
-        );
-      } else {
-        htmlContent = htmlContent.replace(
-          /(<!DOCTYPE\s+html>)/i,
-          `$1\n${themeStyleTag}`,
-        );
-      }
-
-      htmlContent = htmlContent.replace(
-        "</body>",
-        this._getScreenshotHelperCode(pid) + "\n</body>",
+    if (isHtml) {
+      let htmlContent = await vfs.readFile(SYSTEM_PRINCIPAL, absPath);
+      htmlContent = await this._processHtmlDependencies(
+        htmlContent,
+        vfs,
+        pid,
+        blobUrls,
+        visited,
+        absPath,
+      );
+      htmlContent = this._injectHtmlScripts(
+        htmlContent,
+        pid,
+        search,
+        hash,
+        args
       );
 
       const blob = new Blob([htmlContent], { type: "text/html" });
-      const url = URL.createObjectURL(blob);
-      urlMap[stat.path] = url;
-      blobUrls.push(url);
+      fileUrl = URL.createObjectURL(blob);
+      blobUrls.push(fileUrl);
+    } else if (isCss) {
+      let cssContent = await vfs.readFile(SYSTEM_PRINCIPAL, absPath);
+      cssContent = await this._processCssDependencies(
+        cssContent,
+        vfs,
+        pid,
+        blobUrls,
+        visited,
+        absPath,
+      );
 
-      if (stat.path === parsedEntry.basePath) {
-        entryPointUrl = url;
-      }
+      const blob = new Blob([cssContent], { type: "text/css" });
+      fileUrl = URL.createObjectURL(blob);
+      blobUrls.push(fileUrl);
+    } else {
+      // 静的アセットの Blob 生成とグローバルキャッシュ保存
+      const rawBlob = await vfs.readBlob(SYSTEM_PRINCIPAL, absPath);
+      const typedBlob = new Blob([rawBlob], { type: mimeType });
+      fileUrl = URL.createObjectURL(typedBlob);
+
+      const oldCache = this.assetCache.get(absPath);
+      if (oldCache) URL.revokeObjectURL(oldCache.url);
+
+      this.assetCache.set(absPath, { url: fileUrl, version: stat.updatedAt });
     }
 
-    if (!entryPointUrl) {
-      if (urlMap["index.html"]) {
-        entryPointUrl = urlMap["index.html"];
-      } else {
-        const firstHtml = Object.keys(urlMap).find((p) => p.endsWith(".html"));
-        if (firstHtml) entryPointUrl = urlMap[firstHtml];
-      }
-    }
-
-    return { entryUrl: entryPointUrl, blobUrls };
+    const finalUrl = fileUrl + search + hash;
+    visited.set(visitKey, finalUrl);
+    return finalUrl;
   }
 
   private _generateThemeInjection(): string {
@@ -298,129 +276,187 @@ window.addEventListener('message', async (e) => {
     return `<style id="itera-guest-theme">${css}</style>`;
   }
 
-  private _processHtmlReferences(
+  private async _processHtmlDependencies(
     html: string,
-    urlMap: Record<string, string>,
+    vfs: VfsService,
+    pid: string,
+    blobUrls: string[],
+    visited: Map<string, string>,
     currentFilePath: string,
-  ): string {
+  ): Promise<string> {
     const parser = new DOMParser();
     const doc = parser.parseFromString(html, "text/html");
     const currentDir = currentFilePath.includes("/")
       ? currentFilePath.substring(0, currentFilePath.lastIndexOf("/"))
       : "";
 
-    const resolvePath = (relPath: string) => {
-      if (relPath.startsWith("/")) return relPath.substring(1);
-      if (relPath.match(/^https?:\/\//) || relPath.startsWith("data:"))
-        return null;
+    const processElements = async (selector: string, attr: string) => {
+      const elements = Array.from(doc.querySelectorAll(selector));
+      for (const el of elements) {
+        const val = el.getAttribute(attr);
+        if (!val) continue;
 
-      const stack = currentDir ? currentDir.split("/") : [];
-      const parts = relPath.split("/");
-      for (const part of parts) {
-        if (part === ".") continue;
-        if (part === "..") {
-          if (stack.length > 0) stack.pop();
-        } else {
-          stack.push(part);
+        // <a href="..."> はOSナビゲーションを破壊するため置換から除外
+        if (selector === "a[href]") continue;
+
+        const newUrl = await this._processFile(
+          vfs,
+          val,
+          pid,
+          blobUrls,
+          visited,
+          currentDir,
+        );
+        if (newUrl && newUrl !== val) {
+          el.setAttribute(attr, newUrl);
         }
       }
-      return stack.join("/");
     };
 
-    const replaceAttr = (selector: string, attr: string) => {
-      doc.querySelectorAll(selector).forEach((el) => {
-        const val = el.getAttribute(attr);
-        if (!val) return;
+    await processElements("script[src]", "src");
+    await processElements("link[href]", "href");
+    await processElements("img[src]", "src");
+    await processElements("iframe[src]", "src");
+    await processElements("video[src]", "src");
+    await processElements("audio[src]", "src");
+    await processElements("source[src]", "src");
+    await processElements("embed[src]", "src");
+    await processElements("object[data]", "data");
 
-        const { basePath, search, hash } = this._parsePath(val);
-        const suffix = search + hash;
-        const targetPath = basePath === "" ? currentFilePath : basePath;
-
-        if (urlMap[targetPath]) {
-          el.setAttribute(attr, urlMap[targetPath] + suffix);
-          return;
-        }
-
-        const resolved = resolvePath(basePath);
-        if (resolved && urlMap[resolved]) {
-          el.setAttribute(attr, urlMap[resolved] + suffix);
-        }
-      });
-    };
-
-    replaceAttr("script[src]", "src");
-    replaceAttr("link[href]", "href");
-    replaceAttr("img[src]", "src");
-    replaceAttr("a[href]", "href");
-    replaceAttr("iframe[src]", "src");
-
-    doc.querySelectorAll("[style]").forEach((el) => {
+    const styleElements = Array.from(doc.querySelectorAll("[style]"));
+    for (const el of styleElements) {
       const styleContent = el.getAttribute("style");
       if (styleContent && styleContent.includes("url(")) {
-        const resolvedStyle = this._processCssReferences(
+        const resolvedStyle = await this._processCssDependencies(
           styleContent,
-          urlMap,
+          vfs,
+          pid,
+          blobUrls,
+          visited,
           currentFilePath,
         );
         el.setAttribute("style", resolvedStyle);
       }
-    });
+    }
+
+    const styleTags = Array.from(doc.querySelectorAll("style"));
+    for (const style of styleTags) {
+      if (style.textContent && style.textContent.includes("url(")) {
+        style.textContent = await this._processCssDependencies(
+          style.textContent,
+          vfs,
+          pid,
+          blobUrls,
+          visited,
+          currentFilePath,
+        );
+      }
+    }
 
     return doc.documentElement.outerHTML;
   }
 
-  private _processCssReferences(
+  private async _processCssDependencies(
     cssContent: string,
-    urlMap: Record<string, string>,
+    vfs: VfsService,
+    pid: string,
+    blobUrls: string[],
+    visited: Map<string, string>,
     currentFilePath: string,
-  ): string {
+  ): Promise<string> {
     const currentDir = currentFilePath.includes("/")
       ? currentFilePath.substring(0, currentFilePath.lastIndexOf("/"))
       : "";
 
-    const resolvePath = (relPath: string) => {
-      if (relPath.startsWith("/")) return relPath.substring(1);
-      if (relPath.match(/^https?:\/\//) || relPath.startsWith("data:"))
-        return null;
-
-      const stack = currentDir ? currentDir.split("/") : [];
-      const parts = relPath.split("/");
-      for (const part of parts) {
-        if (part === ".") continue;
-        if (part === "..") {
-          if (stack.length > 0) stack.pop();
-        } else {
-          stack.push(part);
-        }
-      }
-      return stack.join("/");
-    };
-
     const urlRegex = /url\(\s*(['"]?)(.*?)\1\s*\)/g;
+    const matches = Array.from(cssContent.matchAll(urlRegex));
 
-    return cssContent.replace(urlRegex, (match, quote, relPath) => {
+    let result = cssContent;
+
+    // 後ろから置換することでインデックスのズレを防ぐ
+    for (let i = matches.length - 1; i >= 0; i--) {
+      const match = matches[i];
+      const quote = match[1];
+      const relPath = match[2];
+
       if (
         !relPath ||
         relPath.match(/^https?:\/\//) ||
         relPath.startsWith("data:")
       ) {
-        return match;
+        continue;
       }
 
-      const { basePath, search, hash } = this._parsePath(relPath);
-      const suffix = search + hash;
-      const targetPath = basePath === "" ? currentFilePath : basePath;
-
-      if (urlMap[targetPath]) {
-        return `url(${quote}${urlMap[targetPath]}${suffix}${quote})`;
+      const newUrl = await this._processFile(
+        vfs,
+        relPath,
+        pid,
+        blobUrls,
+        visited,
+        currentDir,
+      );
+      if (newUrl && newUrl !== relPath) {
+        const replacement = `url(${quote}${newUrl}${quote})`;
+        result =
+          result.substring(0, match.index!) +
+          replacement +
+          result.substring(match.index! + match[0].length);
       }
+    }
 
-      const resolved = resolvePath(basePath);
-      if (resolved && urlMap[resolved]) {
-        return `url(${quote}${urlMap[resolved]}${suffix}${quote})`;
+    return result;
+  }
+
+  private _injectHtmlScripts(
+    htmlContent: string,
+    pid: string,
+    search: string,
+    hash: string,
+    args?: Record<string, string>
+  ): string {
+    let html = htmlContent;
+
+    if (!/<!DOCTYPE\s+html>/i.test(html)) {
+      html = "<!DOCTYPE html>\n" + html;
+    }
+
+    const hostLang = document.documentElement.lang || "en";
+    html = html.replace(/<html[^>]*>/i, (match) => {
+      if (match.includes("lang=")) {
+        return match.replace(/lang=(['"]).*?\1/i, `lang="${hostLang}"`);
+      } else {
+        return match.replace("<html", `<html lang="${hostLang}"`);
       }
-
-      return match;
     });
+
+    const bridgeUrl = GuestBridgeBuilder.getBlobUrl();
+    let headInjections = `\n<script>window.__ITERA_PID__ = '${pid}';</script>\n`;
+    
+    // V1のモンキーパッチハックを廃止し、クリーンなグローバル変数として引数を注入
+    if (args) {
+      headInjections += `<script>window.__ITERA_ARGS__ = ${JSON.stringify(args)};</script>\n`;
+    }
+
+    headInjections += `<script src="${bridgeUrl}"></script>\n`;
+
+    if (html.includes("<head>")) {
+      html = html.replace("<head>", "<head>" + headInjections);
+    } else {
+      html = html.replace(/(<!DOCTYPE\s+html>)/i, `$1${headInjections}`);
+    }
+
+    const themeStyleTag = this._generateThemeInjection();
+    if (html.includes("</head>")) {
+      html = html.replace("</head>", themeStyleTag + "\n</head>");
+    } else {
+      html = html.replace(/(<!DOCTYPE\s+html>)/i, `$1\n${themeStyleTag}`);
+    }
+
+    html = html.replace(
+      "</body>",
+      this._getScreenshotHelperCode(pid) + "\n</body>",
+    );
+
+    return html;
   }
 }

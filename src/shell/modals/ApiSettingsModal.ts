@@ -21,7 +21,6 @@ export class ApiSettingsModal {
 
   constructor() {
     this._initElements();
-    this._migrateLegacyKey();
     this._bindEvents();
   }
 
@@ -32,19 +31,6 @@ export class ApiSettingsModal {
   private _initElements() {
     for (const [key, id] of Object.entries(DOM_IDS)) {
       this.els[key] = document.getElementById(id);
-    }
-  }
-
-  private _migrateLegacyKey() {
-    const legacyKey = localStorage.getItem("itera_api_key");
-    let secrets: any = {};
-    try {
-      secrets = JSON.parse(localStorage.getItem("itera_llm_secrets") || "{}");
-    } catch (e) {}
-
-    if (legacyKey && !secrets["google"]) {
-      secrets["google"] = legacyKey;
-      localStorage.setItem("itera_llm_secrets", JSON.stringify(secrets));
     }
   }
 

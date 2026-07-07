@@ -25,7 +25,7 @@ export interface AppManifest {
 export class AppRegistry {
   private vfs: VfsService;
   private apps: Map<string, AppManifest> = new Map();
-  private registryPath = "system/config/apps.json";
+  private registryPath = "system/registry/apps.json";
   private listeners: (() => void)[] = [];
 
   constructor(vfs: VfsService, eventBus: VfsEventBus) {

@@ -5,7 +5,7 @@
 
 import type { ToolRegistry } from "../ToolRegistry";
 import type { VfsService } from "../../vfs/VfsService";
-import { SYSTEM_PRINCIPAL } from "../../vfs/types";
+import { SYSTEM_PRINCIPAL, USER_PRINCIPAL } from "../../vfs/types";
 
 export function registerUITools(registry: ToolRegistry): void {
   const setId = "system:ui";
@@ -26,12 +26,62 @@ export function registerUITools(registry: ToolRegistry): void {
         pid = `app_${basePath.replace(/[^a-zA-Z0-9_-]/g, "_")}`;
       }
 
+      const args: Record<string, string> = {};
+      for (const [k, v] of Object.entries(params)) {
+        if (!["pid", "path", "mode", "force", "content"].includes(k)) {
+          args[k] = String(v);
+        }
+      }
+
+      const currentUri = `metaos://run/${path}`;
+
       if (context.shell?.processManager) {
-        await context.shell.processManager.spawn(pid, path, mode, forceReload);
+        await context.shell.processManager.spawn(pid, path, mode, forceReload, args, currentUri);
         return { log: `Process started.`, ui: `🚀 Spawned [${pid}]` };
       }
       return { log: "ProcessManager not available.", error: true };
     },
+  });
+
+  registry.registerSystemTool(setId, setName, {
+    name: "open",
+    description: "Open a file using default app.",
+    impl: async (params: any, context: any) => {
+      const path = params.path;
+      if (!path) throw new Error("Attribute 'path' is required.");
+
+      if (context.shell?.resolver) {
+        try {
+          const stat = context.vfs.stat(USER_PRINCIPAL, path);
+          const resolvedApp = context.shell.resolver.resolveDefault(stat);
+
+          if (resolvedApp.appId === "HostEditor") {
+            const content = await context.vfs.readFile(USER_PRINCIPAL, path);
+            context.shell.modals.editor.open(path, content);
+            return { log: `Opened ${path} in Host Editor`, ui: `📝 Opened Editor` };
+          } else if (resolvedApp.appId === "HostMediaViewer") {
+            const blob = await context.vfs.readBlob(USER_PRINCIPAL, path);
+            context.shell.modals.media.open(path, blob);
+            return { log: `Opened ${path} in Media Viewer`, ui: `🖼️ Opened Media` };
+          } else {
+            const args = { file: path };
+            const fullUri = `metaos://open/${path}`;
+            await context.shell.processManager.spawn(
+              resolvedApp.appId,
+              resolvedApp.appPath,
+              "foreground",
+              false,
+              args,
+              fullUri
+            );
+            return { log: `Opened ${path} in ${resolvedApp.appName}`, ui: `🚀 Opened [${resolvedApp.appId}]` };
+          }
+        } catch (e: any) {
+          throw new Error(`Failed to open: ${e.message}`);
+        }
+      }
+      return { log: "Shell not available.", error: true };
+    }
   });
 
   registry.registerSystemTool(setId, setName, {

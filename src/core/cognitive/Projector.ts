@@ -74,6 +74,13 @@ export abstract class BaseProjector {
 // ==========================================
 
 export class GeminiProjector extends BaseProjector {
+  private apiKey: string;
+
+  constructor(systemPrompt: string, apiKey: string) {
+    super(systemPrompt);
+    this.apiKey = apiKey;
+  }
+
   async createContext(
     state: {
       history: HistoryManager;
@@ -84,14 +91,6 @@ export class GeminiProjector extends BaseProjector {
   ): Promise<any> {
     const historyData = state.history.get();
     const history = [...historyData];
-
-    let apiKey = "";
-    try {
-      const secrets = JSON.parse(
-        localStorage.getItem("itera_llm_secrets") || "{}",
-      );
-      if (secrets.google) apiKey = secrets.google;
-    } catch (e) {}
 
     const apiMessages: any[] = [];
     const dynamicPrompt = this._buildSystemPrompt(
@@ -106,7 +105,7 @@ export class GeminiProjector extends BaseProjector {
       const parts = await this._convertTurnToParts(
         turn,
         state.vfs,
-        apiKey,
+        this.apiKey,
         signal,
       );
       if (!parts || parts.length === 0) continue;

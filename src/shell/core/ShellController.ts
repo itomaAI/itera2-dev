@@ -59,6 +59,9 @@ import { SystemModal } from "../modals/SystemModal";
 import { ApiSettingsModal } from "../modals/ApiSettingsModal";
 import { SyncModal } from "../modals/SyncModal";
 import { TaskSwitcherModal } from "../modals/TaskSwitcherModal";
+import { CameraModal } from "../modals/CameraModal";
+import { AudioModal } from "../modals/AudioModal";
+import { ProcessMonitorModal } from "../modals/ProcessMonitorModal";
 
 export class ShellController {
   private vfs!: VfsService;
@@ -83,6 +86,9 @@ export class ShellController {
   private apiSettingsModal!: ApiSettingsModal;
   private syncModal!: SyncModal;
   private taskSwitcherModal!: TaskSwitcherModal;
+  private cameraModal!: CameraModal;
+  private audioModal!: AudioModal;
+  private processMonitorModal!: ProcessMonitorModal;
 
   public transport!: HostTransport;
   private uriRouter!: UriRouter;
@@ -96,7 +102,11 @@ export class ShellController {
     return { chat: this.chatPanel };
   }
   public get modals() {
-    return { editor: this.editorModal };
+    return {
+      editor: this.editorModal,
+      camera: this.cameraModal,
+      audio: this.audioModal,
+    };
   }
 
   /**
@@ -173,11 +183,14 @@ export class ShellController {
         this.processManager,
         this.appRegistry,
       );
+      this.cameraModal = new CameraModal();
+      this.audioModal = new AudioModal();
+      this.processMonitorModal = new ProcessMonitorModal(this.processManager);
 
       this.explorer = new Explorer(this.vfs, this.eventBus, this.resolver);
 
       // URIルーターの構築とハンドラの登録
-      this.uriRouter = new UriRouter("view");
+      this.uriRouter = new UriRouter("open"); // デフォルトインテントを 'open' に変更
       this._registerUriHandlers();
 
       // 6. Engine (自律ループ) の構築
@@ -196,6 +209,15 @@ export class ShellController {
 
       // 7. IPC (HostApiRouter) の構築
       this.transport = new HostTransport();
+
+      // セキュリティ: メッセージの送信元検証（PIDの偽装防止）
+      this.transport.setSourceValidator((pid: string, sourceWindow: Window) => {
+        const proc = this.processManager.processes.get(pid);
+        if (!proc || !proc.iframe) return false;
+        // ブラウザの実装上、iframeのcontentWindow と メッセージの source は厳密等価(===)で比較可能
+        return proc.iframe.contentWindow === sourceWindow;
+      });
+
       new HostApiRouter(this.transport, {
         vfs: this.vfs,
         configManager: this.configManager,
@@ -323,20 +345,32 @@ export class ShellController {
             resolvedApp = this.resolver.resolveDefault(stat);
           }
 
-          if (resolvedApp.appId === "HostEditor") {
+          if (resolvedApp.appId === "HostRunner") {
+            const currentUri = `metaos://run/${path}`;
+            await this.processManager.spawn(
+              "main",
+              path,
+              "foreground",
+              true,
+              {},
+              currentUri
+            );
+          } else if (resolvedApp.appId === "HostEditor") {
             const content = await this.vfs.readFile(USER_PRINCIPAL, path);
             this.editorModal.open(path, content);
           } else if (resolvedApp.appId === "HostMediaViewer") {
             const blob = await this.vfs.readBlob(USER_PRINCIPAL, path);
             this.mediaViewer.open(path, blob);
           } else {
-            const launchContext = { action: "view", targetPath: path };
+            const args = { file: path };
+            const currentUri = `metaos://open/${path}`;
             await this.processManager.spawn(
               resolvedApp.appId,
               resolvedApp.appPath!,
               "foreground",
               false,
-              launchContext,
+              args,
+              currentUri
             );
           }
         } catch (e: any) {
@@ -345,10 +379,6 @@ export class ShellController {
         }
       },
     );
-
-    this.explorer.on("run_file", async (path: string) => {
-      await this.processManager.spawn("main", path, "foreground", true);
-    });
 
     this.explorer.on("history_event", (type: string, desc: string) => {
       const lpml = `<event type="${type}">\n${desc}\n</event>`;
@@ -554,10 +584,6 @@ export class ShellController {
       secrets = JSON.parse(localStorage.getItem("itera_llm_secrets") || "{}");
     } catch (e) {}
 
-    if (!secrets.google && localStorage.getItem("itera_api_key")) {
-      secrets.google = localStorage.getItem("itera_api_key");
-    }
-
     const statusEl = document.getElementById("model-status");
     if (statusEl) statusEl.textContent = `${provider}/${modelName}`;
 
@@ -594,7 +620,7 @@ export class ShellController {
         break;
       case "google":
       default:
-        newProjector = new GeminiProjector(SYSTEM_PROMPT);
+        newProjector = new GeminiProjector(SYSTEM_PROMPT, apiKey);
         newLlm = new GeminiAdapter(apiKey, modelName, llmConfig, this.logger);
         break;
     }
@@ -870,71 +896,117 @@ export class ShellController {
   }
 
   private _registerUriHandlers(): void {
-    // 'view' スキーム: HTMLならアプリとして起動、それ以外は関連付けアプリで開く
+    // metaos://open/... (データファイルを関連付けアプリで開く)
     this.uriRouter.register(
-      "view",
-      async (path: string, searchAndHash: string) => {
-        let targetPath = path;
-        if (!targetPath) {
-          targetPath = "index.html"; // 空ならルートダッシュボード
-        }
-
+      "open",
+      async (path: string, queryArgs: Record<string, string>, searchAndHash: string) => {
+        let targetPath = path || "index.html";
         try {
-          const isHtml = targetPath
-            .split(/[?#]/)[0]
-            .toLowerCase()
-            .endsWith(".html");
-          if (isHtml) {
-            // HTMLファイルはV1同様、直接アプリ(Iframe)として起動する
+          const stat = this.vfs.stat(USER_PRINCIPAL, targetPath);
+          const resolvedApp = this.resolver.resolveDefault(stat);
+
+          if (resolvedApp.appId === "HostRunner") {
+            const fullUri = `metaos://run/${targetPath}${searchAndHash}`;
             await this.processManager.spawn(
               "main",
               targetPath + searchAndHash,
               "foreground",
               true,
+              queryArgs,
+              fullUri
             );
-            return;
-          }
-
-          // HTML以外（mdや画像など）の場合は、V2のファイル関連付けで開くアプリを決める
-          const stat = this.vfs.stat(USER_PRINCIPAL, targetPath);
-          const resolvedApp = this.resolver.resolveDefault(stat);
-
-          if (resolvedApp.appId === "HostEditor") {
+          } else if (resolvedApp.appId === "HostEditor") {
             const content = await this.vfs.readFile(USER_PRINCIPAL, targetPath);
             this.editorModal.open(targetPath, content);
+            this._restoreAddressBar();
           } else if (resolvedApp.appId === "HostMediaViewer") {
             const blob = await this.vfs.readBlob(USER_PRINCIPAL, targetPath);
             this.mediaViewer.open(targetPath, blob);
+            this._restoreAddressBar();
           } else {
-            const launchContext = { action: "view", targetPath: targetPath };
-            // ※V1互換のためパスにクエリ文字列をそのまま渡す (ProcessManager が解釈する)
+            // "open" の場合、開く対象のファイルパスとクエリパラメータをマージして args として渡す
+            const args = { file: targetPath, ...queryArgs };
+            const fullUri = `metaos://open/${targetPath}${searchAndHash}`;
             await this.processManager.spawn(
               resolvedApp.appId,
-              targetPath + searchAndHash,
+              resolvedApp.appPath!,
               "foreground",
               false,
-              launchContext,
+              args, // V2仕様: launchContext の代わりに args オブジェクトを渡す
+              fullUri
             );
           }
         } catch (e: any) {
-          if (window.AppUI)
-            window.AppUI.notify(`Cannot open: ${e.message}`, "error");
+          if (window.AppUI) window.AppUI.notify(`Cannot open: ${e.message}`, "error");
           this._restoreAddressBar();
         }
-      },
+      }
     );
 
-    // 'edit' スキーム: 強制的にHostエディタで開く (例: metaos://edit/system/config/config.json)
-    this.uriRouter.register("edit", async (path: string) => {
+    // metaos://run/... (関連付けを無視して実行ファイルとして起動し、引数を渡す)
+    this.uriRouter.register(
+      "run",
+      async (path: string, queryArgs: Record<string, string>, searchAndHash: string) => {
+        let executablePath = path || "index.html";
+        try {
+          // "run" の場合、対象パスはアプリ自身。クエリパラメータのみを args として渡す。
+          const args = { ...queryArgs };
+          const fullUri = `metaos://run/${executablePath}${searchAndHash}`;
+          await this.processManager.spawn(
+            "main",
+            executablePath,
+            "foreground",
+            true,
+            args, // V2仕様: targetPath という誤った意図は持たせず、純粋な引数を渡す
+            fullUri
+          );
+        } catch (e: any) {
+          if (window.AppUI) window.AppUI.notify(`Cannot run: ${e.message}`, "error");
+          this._restoreAddressBar();
+        }
+      }
+    );
+
+    // metaos://edit/... (強制的にHostコードエディタで開く)
+    this.uriRouter.register("edit", async (path: string, _args: any, _search: string) => {
       try {
         const content = await this.vfs.readFile(USER_PRINCIPAL, path);
         this.editorModal.open(path, content);
         this._closeMobileDrawers();
       } catch (e: any) {
-        if (window.AppUI)
-          window.AppUI.notify(`File not found: ${e.message}`, "error");
+        if (window.AppUI) window.AppUI.notify(`File not found: ${e.message}`, "error");
       }
       this._restoreAddressBar();
+    });
+
+    // metaos://view/... (強制的にHostメディアビューアで開く)
+    this.uriRouter.register("view", async (path: string, _args: any, _search: string) => {
+      try {
+        const blob = await this.vfs.readBlob(USER_PRINCIPAL, path);
+        this.mediaViewer.open(path, blob);
+        this._closeMobileDrawers();
+      } catch (e: any) {
+        if (window.AppUI) window.AppUI.notify(`File not found: ${e.message}`, "error");
+      }
+      this._restoreAddressBar();
+    });
+
+    // metaos://system/... (システムモーダルを開く)
+    this.uriRouter.register("system", async (path: string, _args: any, _search: string) => {
+      const target = path.toLowerCase();
+      if (target === "settings") {
+        this.systemModal.open();
+      } else if (target === "api_keys") {
+        this.apiSettingsModal.open();
+      } else if (target === "sync") {
+        this.syncModal.open();
+      } else if (target === "monitor") {
+        this.processMonitorModal.open();
+      } else {
+        if (window.AppUI) window.AppUI.notify(`Unknown system modal: ${target}`, "warning");
+      }
+      this._restoreAddressBar();
+      this._closeMobileDrawers();
     });
   }
 
@@ -942,7 +1014,7 @@ export class ShellController {
     const fgApp = Array.from(this.processManager.processes.values()).find(
       (p) => p.state === "foreground",
     );
-    const path = fgApp ? fgApp.path : "index.html";
-    this.processManager._updateAddressBar(path);
+    const uri = fgApp ? fgApp.currentUri : "metaos://run/index.html";
+    this.processManager._updateAddressBar(uri);
   }
 }

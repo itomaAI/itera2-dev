@@ -18,14 +18,15 @@ export interface IProcessManager {
     path: string,
     mode?: string,
     forceReload?: boolean,
-    launchContext?: any,
+    args?: Record<string, string>,
+    currentUri?: string
   ): Promise<void>;
   kill(pid: string): boolean;
   list(): any[];
   broadcast(eventName: string, payload: any): void;
   captureScreenshot(pid?: string): Promise<string>;
-  resolveUrl(path: string, pid: string): Promise<string>; // ← 同期から非同期(Promise)へ変更
-  getLaunchContext(pid: string): any;
+  resolveUrl(path: string, pid: string): Promise<string>;
+  getArgs(pid: string): Record<string, string> | null;
   processes: Map<string, any>;
   _updateAddressBar(path: string): void;
 }
@@ -37,7 +38,7 @@ export interface IShell {
   _refreshEngineConfig(): void;
   _closeMobileDrawers(): void;
   panels: { chat: any };
-  modals: { editor: any };
+  modals: { editor: any; camera: any; audio: any };
 }
 export interface IToolRegistry {
   registerDynamicTool(name: string, sourcePid: string, definition: any): void;
@@ -280,8 +281,9 @@ export class HostApiRouter {
       const pid = opts?.pid || "main";
       const mode = opts?.mode || "background";
       const force = opts?.forceReload || false;
-      const context = opts?.launchContext; // V2 新機能: コンテキスト渡し
-      await d.processManager.spawn(pid, path, mode, force, context);
+      const args = opts?.args; // V2 新機能: args渡し
+      const currentUri = `metaos://run/${path}`;
+      await d.processManager.spawn(pid, path, mode, force, args, currentUri);
       if (mode === "foreground" && d.shell) d.shell._closeMobileDrawers();
       return true;
     });
@@ -306,10 +308,10 @@ export class HostApiRouter {
       return await d.processManager.captureScreenshot(pid);
     });
 
-    // ★ V2 新機能: 起動コンテキストの取得
-    t.registerHandler("sys:get_launch_context", async (_, sourcePid) => {
+    // ★ V2 新機能: 起動引数の取得
+    t.registerHandler("sys:get_args", async (_, sourcePid) => {
       if (!d.processManager) return null;
-      return d.processManager.getLaunchContext(sourcePid);
+      return d.processManager.getArgs(sourcePid);
     });
 
     // ==========================================
@@ -340,10 +342,21 @@ export class HostApiRouter {
         (p) => p.state === "foreground",
       );
       if (fgApp) {
-        const basePath = fgApp.path.split(/[?#]/)[0];
-        const newPath = basePath + path;
+        const oldBasePath = fgApp.path.split(/[?#]/)[0];
+        
+        let newPath = path;
+        if (path.startsWith("?") || path.startsWith("#")) {
+          newPath = oldBasePath + path;
+        }
+
         fgApp.path = newPath;
-        d.processManager._updateAddressBar(newPath);
+        
+        // 既存のURIからIntentを抽出して新しいURIを組み立てる
+        const intentMatch = fgApp.currentUri.match(/^metaos:\/\/([^\/]+)/);
+        const intent = intentMatch ? intentMatch[1] : "open";
+
+        fgApp.currentUri = `metaos://${intent}/${newPath}`;
+        d.processManager._updateAddressBar(fgApp.currentUri);
       }
       return true;
     });
@@ -483,25 +496,18 @@ export class HostApiRouter {
       return false;
     });
 
-    // (※ dev:photo と dev:audio の巨大なDOM操作ロジックは、V1と同じ実装としてこのクラス内に記述しますが、
-    // ここでは冗長になるため、ロジック自体は完全に同一のものを採用する前提とします。
-    // 必要であればコードを完全に展開します)
-    t.registerHandler("dev:photo", async () => {
-      if (window.AppUI)
-        window.AppUI.notify(
-          "Camera API requested (Fallback implemented).",
-          "info",
-        );
-      return null;
+    t.registerHandler("dev:photo", async ({ options }) => {
+      if (!d.shell || !d.shell.modals.camera) {
+        throw new Error("Camera modal is not available in the shell.");
+      }
+      return await d.shell.modals.camera.open(options);
     });
 
-    t.registerHandler("dev:audio", async () => {
-      if (window.AppUI)
-        window.AppUI.notify(
-          "Audio API requested (Fallback implemented).",
-          "info",
-        );
-      return null;
+    t.registerHandler("dev:audio", async ({ options }) => {
+      if (!d.shell || !d.shell.modals.audio) {
+        throw new Error("Audio modal is not available in the shell.");
+      }
+      return await d.shell.modals.audio.open(options);
     });
 
     // ==========================================

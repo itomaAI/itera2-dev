@@ -7,15 +7,24 @@ import { IpcMessage } from "./Message";
 import { RpcManager } from "./RpcManager";
 
 export type RequestHandler = (payload: any, sourcePid: string) => Promise<any>;
+export type SourceValidator = (pid: string, sourceWindow: Window) => boolean;
 
 export class HostTransport {
   private rpc: RpcManager;
   private handlers: Map<string, RequestHandler>;
+  private sourceValidator?: SourceValidator;
 
   constructor() {
     this.rpc = new RpcManager();
     this.handlers = new Map();
     this._initListener();
+  }
+
+  /**
+   * 送信元の Window が、申告された PID のものと一致するか検証するバリデーターを設定
+   */
+  setSourceValidator(validator: SourceValidator): void {
+    this.sourceValidator = validator;
   }
 
   /**
@@ -74,18 +83,24 @@ export class HostTransport {
 
       if (msg.type === "req") {
         // Guestからのリクエスト処理
-        const handler = this.handlers.get(msg.action);
         let result: any = null;
         let error: string | null = null;
 
-        if (handler) {
-          try {
-            result = await handler(msg.payload, msg.source);
-          } catch (err: any) {
-            error = err.message || String(err);
-          }
+        // セキュリティ: 送信元の厳密な検証
+        if (this.sourceValidator && !this.sourceValidator(msg.source, e.source as Window)) {
+          error = `[SecurityError] PID spoofing detected or invalid source window for PID: ${msg.source}`;
+          console.error(error);
         } else {
-          error = `[HostTransport] No handler registered for action: ${msg.action}`;
+          const handler = this.handlers.get(msg.action);
+          if (handler) {
+            try {
+              result = await handler(msg.payload, msg.source);
+            } catch (err: any) {
+              error = err.message || String(err);
+            }
+          } else {
+            error = `[HostTransport] No handler registered for action: ${msg.action}`;
+          }
         }
 
         // レスポンスの返送

@@ -584,32 +584,27 @@ export class TreeView {
 
       if (resolvedApps.length > 0) {
         // 先頭はデフォルトアプリ
+        const defaultApp = resolvedApps[0];
+        const defaultLabel = defaultApp.appId === "HostRunner" ? "▶ Run (Spawn)" : `Open in ${defaultApp.appName}`;
+        
         actions.push({
-          label: `Open in ${resolvedApps[0].appName}`,
+          label: defaultLabel,
           action: () => {
             if (this.events["open_with"])
-              this.events["open_with"](path, resolvedApps[0].appId);
+              this.events["open_with"](path, defaultApp.appId);
           },
         });
+
         // 2番目以降はフォールバックとして字下げ表示
         resolvedApps.slice(1).forEach((app) => {
+          const fallbackLabel = app.appId === "HostRunner" ? " ↳ ▶ Run (Spawn)" : ` ↳ ${app.appName}`;
           actions.push({
-            label: ` ↳ ${app.appName}`,
+            label: fallbackLabel,
             action: () => {
               if (this.events["open_with"])
                 this.events["open_with"](path, app.appId);
             },
           });
-        });
-        actions.push({ separator: true });
-      }
-
-      if (name.endsWith(".html")) {
-        actions.push({
-          label: "▶ Run (Spawn)",
-          action: () => {
-            if (this.events["run"]) this.events["run"](path);
-          },
         });
         actions.push({ separator: true });
       }
@@ -619,6 +614,16 @@ export class TreeView {
       label: "Add to Context",
       action: () => {
         if (this.events["add_to_context"]) this.events["add_to_context"](path);
+      },
+    });
+    actions.push({
+      label: "Copy Path",
+      action: () => {
+        navigator.clipboard.writeText(path).then(() => {
+          if (window.AppUI) window.AppUI.notify("Path copied to clipboard", "success");
+        }).catch(err => {
+          if (window.AppUI) window.AppUI.notify(`Failed to copy: ${err.message}`, "error");
+        });
       },
     });
     actions.push({ separator: true });

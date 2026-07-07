@@ -9,7 +9,7 @@ import type { VfsStat } from "../vfs/types";
 
 export interface ResolvedApp {
   /** 起動すべきアプリのID。Host内蔵機能を使用する場合は特殊なIDを返す */
-  appId: string | "HostEditor" | "HostMediaViewer";
+  appId: string | "HostEditor" | "HostMediaViewer" | "HostRunner";
   /** Guestアプリの場合、そのエントリーポイントとなるHTMLパス */
   appPath?: string;
   /** アプリの表示名（UIメニュー用） */
@@ -61,7 +61,9 @@ export class FileAssociationResolver {
     }
 
     // 3. どのGuestアプリも対応していない場合は、HostのフォールバックUIへ
-    if (this._isBinary(stat.name, mimeType)) {
+    if (extension === "html") {
+      return { appId: "HostRunner", appName: "Executable (Run)" };
+    } else if (this._isBinary(stat.name, mimeType)) {
       return { appId: "HostMediaViewer", appName: "Media Viewer (Host)" };
     } else {
       return { appId: "HostEditor", appName: "Code Editor (Host)" };
@@ -96,6 +98,9 @@ export class FileAssociationResolver {
     }
 
     // Hostフォールバックは常に末尾に提供する
+    if (extension === "html") {
+      available.push({ appId: "HostRunner", appName: "Executable (Run)" });
+    }
     if (this._isBinary(stat.name, mimeType)) {
       available.push({
         appId: "HostMediaViewer",

@@ -3,42 +3,93 @@
  * Itera OS v2: Custom URI Router
  */
 
+export interface ParsedUri {
+  intent: string;
+  path: string;
+  searchAndHash: string;
+  queryArgs: Record<string, string>;
+}
+
 export class UriRouter {
   private routes: Map<string, Function> = new Map();
-  private defaultScheme: string;
+  private defaultIntent: string;
 
-  constructor(defaultScheme: string = "view") {
-    this.defaultScheme = defaultScheme;
+  constructor(defaultIntent: string = "open") {
+    this.defaultIntent = defaultIntent;
   }
 
-  register(scheme: string, handler: Function): void {
-    this.routes.set(scheme, handler);
+  register(intent: string, handler: Function): void {
+    this.routes.set(intent.toLowerCase(), handler);
+  }
+
+  hasIntent(intent: string): boolean {
+    return this.routes.has(intent.toLowerCase());
   }
 
   dispatch(uriString: string): boolean {
     if (!uriString || typeof uriString !== "string") return false;
 
-    let normalizedUri = uriString.trim();
-    if (!normalizedUri.startsWith("metaos://")) {
-      // スキームが省略された場合はデフォルト(view)を補完する
-      normalizedUri = `metaos://${this.defaultScheme}/${normalizedUri}`;
-    }
-
-    const match = normalizedUri.match(/^metaos:\/\/([^\/]+)\/?([^?#]*)(.*)$/);
-    if (!match) {
+    const parsed = this._parse(uriString.trim());
+    if (!parsed) {
       throw new Error(`Invalid URI format: ${uriString}`);
     }
 
-    const scheme = match[1];
-    const path = decodeURIComponent(match[2] || "");
-    const searchAndHash = match[3] || "";
-
-    const handler = this.routes.get(scheme);
+    const handler = this.routes.get(parsed.intent);
     if (!handler) {
-      throw new Error(`Unknown action scheme: '${scheme}'`);
+      throw new Error(`Unknown action intent: '${parsed.intent}'`);
     }
 
-    handler(path, searchAndHash);
+    // 第2引数としてパース済みのクエリオブジェクトを追加で渡す
+    handler(parsed.path, parsed.queryArgs, parsed.searchAndHash);
     return true;
+  }
+
+  private _parse(uri: string): ParsedUri | null {
+    let normalized = uri;
+
+    // metaos:// プレフィックスがない場合は補完
+    if (!normalized.startsWith("metaos://")) {
+      normalized = `metaos://${normalized}`;
+    }
+
+    // 正規表現で metaos://[fullPath][?query#hash] を分解
+    const match = normalized.match(/^metaos:\/\/([^\?#]+)(.*)$/);
+    if (!match) return null;
+
+    const fullPath = match[1]; // 例: "open/data/notes.md" または "data/notes.md"
+    const searchAndHash = match[2] || "";
+
+    const segments = fullPath.split("/");
+    const firstSegment = segments[0].toLowerCase();
+
+    let intent = this.defaultIntent;
+    let pathSegments = segments;
+
+    // 最初のセグメントが登録済みのIntentであれば、それを採用する
+    if (this.hasIntent(firstSegment)) {
+      intent = firstSegment;
+      pathSegments = segments.slice(1);
+    }
+
+    const path = decodeURIComponent(pathSegments.join("/"));
+
+    // クエリパラメータの抽出
+    const queryArgs: Record<string, string> = {};
+    const hashIndex = searchAndHash.indexOf("#");
+    const searchString = hashIndex !== -1 ? searchAndHash.substring(0, hashIndex) : searchAndHash;
+    
+    if (searchString.startsWith("?")) {
+      const params = new URLSearchParams(searchString.substring(1));
+      params.forEach((value, key) => {
+        queryArgs[key] = value;
+      });
+    }
+
+    return {
+      intent,
+      path,
+      searchAndHash,
+      queryArgs,
+    };
   }
 }

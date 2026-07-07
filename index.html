@@ -108,7 +108,7 @@
                 </button>
                 <div class="flex-1 bg-app rounded px-3 py-1 text-[11px] text-text-muted font-mono border border-border-main flex items-center shadow-inner relative group focus-within:ring-1 focus-within:ring-primary/50">
                     <span class="text-success mr-2 text-[10px] shrink-0">🔒</span> 
-                    <input type="text" id="preview-address-bar" class="bg-transparent border-none outline-none flex-1 w-full text-text-main truncate placeholder-text-muted pr-6" value="metaos://view" spellcheck="false" autocomplete="off">
+                    <input type="text" id="preview-address-bar" class="bg-transparent border-none outline-none flex-1 w-full text-text-main truncate placeholder-text-muted pr-6" value="metaos://run/index.html" spellcheck="false" autocomplete="off">
                     <button id="btn-address-go" class="absolute right-1 top-1/2 -translate-y-1/2 text-text-muted hover:text-primary transition opacity-0 pointer-events-none group-focus-within:opacity-100 group-focus-within:pointer-events-auto flex items-center justify-center p-1 rounded hover:bg-hover">
                         <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"></path></svg>
                     </button>
@@ -195,11 +195,11 @@
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"></path></svg>
                             <input type="file" id="chat-file-upload" class="hidden" multiple>
                         </label>
-                        <div>
-                            <button id="btn-send" class="p-1.5 bg-primary hover:bg-primary/80 text-white rounded transition disabled:opacity-50 disabled:cursor-not-allowed shadow-sm">
-                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l7-7m7-7H3"></path></svg>
+                        <div class="flex items-center gap-1">
+                            <button id="btn-send" class="p-1.5 flex items-center justify-center bg-primary hover:bg-primary/80 text-white rounded transition disabled:opacity-50 disabled:cursor-not-allowed shadow-sm">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3"></path></svg>
                             </button>
-                            <button id="btn-stop" class="p-1.5 bg-error hover:bg-error/80 text-white rounded transition hidden shadow-sm">
+                            <button id="btn-stop" class="p-1.5 flex items-center justify-center bg-error hover:bg-error/80 text-white rounded transition hidden shadow-sm">
                                 <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8 7a1 1 0 00-1 1v4a1 1 0 001 1h4a1 1 0 001-1V8a1 1 0 00-1-1H8z" clip-rule="evenodd"></path></svg>
                             </button>
                         </div>

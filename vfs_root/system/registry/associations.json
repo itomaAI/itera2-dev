@@ -3,5 +3,8 @@
     "md": "notes",
     "txt": "notes"
   },
-  "mimeTypes": {}
+  "mimeTypes": {
+    "text/markdown": "notes",
+    "text/plain": "notes"
+  }
 }

@@ -1,1 +1,16 @@
-[]
+[
+  {
+    "id": "notes",
+    "name": "Notes",
+    "icon": "📝",
+    "path": "apps/notes.html",
+    "description": "Markdown text editor",
+    "fileHandlers": [
+      {
+        "action": "view",
+        "extensions": ["md", "txt"],
+        "mimeTypes": ["text/markdown", "text/plain"]
+      }
+    ]
+  }
+]

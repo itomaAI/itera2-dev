@@ -16,7 +16,8 @@ export interface Process {
   iframe: HTMLIFrameElement;
   blobUrls: string[];
   lastActiveTime: number;
-  launchContext?: any;
+  args?: Record<string, string>;
+  currentUri: string;
 }
 
 export class ProcessManager {
@@ -65,15 +66,16 @@ export class ProcessManager {
             "foreground",
             true,
             targetProc.launchContext,
+            targetProc.currentUri
           );
         } else {
-          this.spawn("main", "index.html", "foreground", true);
+          this.spawn("main", "index.html", "foreground", true, null, "metaos://open/index.html");
         }
       };
     }
     if (this.els.BTN_HOME) {
       this.els.BTN_HOME.onclick = () => {
-        this.spawn("main", "index.html", "foreground");
+        this.spawn("main", "index.html", "foreground", false, null, "metaos://open/index.html");
       };
     }
   }
@@ -86,7 +88,8 @@ export class ProcessManager {
     path: string,
     mode: string = "background",
     forceReload: boolean = false,
-    launchContext?: any,
+    args?: Record<string, string>,
+    currentUri?: string
   ): Promise<void> {
     // V1のハック継承: 'main' が指定された場合はパスベースのPIDに変換し、強制的にフォアグラウンドにする
     if (pid === "main") {
@@ -99,6 +102,7 @@ export class ProcessManager {
     const type =
       mode === "foreground" || pid.startsWith("app_") ? "app" : "daemon";
     const existingProc = this.processes.get(pid);
+    const uri = currentUri || `metaos://run/${path}`;
 
     if (existingProc && existingProc.iframe) {
       const isExactPathMatch = existingProc.path === path;
@@ -107,11 +111,12 @@ export class ProcessManager {
       if (!forceReload && isExactPathMatch && existingProc.type === type) {
         console.log(`[ProcessManager] Resume [${pid}] -> ${path}`);
         existingProc.path = path;
-        existingProc.launchContext = launchContext;
+        existingProc.args = args;
+        existingProc.currentUri = uri;
 
         if (mode === "foreground") {
           this._focusApp(pid);
-          this._updateAddressBar(path);
+          this._updateAddressBar(existingProc.currentUri);
         }
 
         // 再描画等のためにイベントを飛ばす
@@ -123,7 +128,7 @@ export class ProcessManager {
             source: "host",
             target: pid,
             action: "route_changed",
-            payload: { path, launchContext },
+            payload: { path, args },
             error: null,
           };
           existingProc.iframe.contentWindow.postMessage(evtMsg, "*");
@@ -144,6 +149,7 @@ export class ProcessManager {
         this.vfs,
         path,
         pid,
+        args
       );
 
       const iframe = document.createElement("iframe");
@@ -173,7 +179,8 @@ export class ProcessManager {
         iframe,
         blobUrls,
         lastActiveTime: Date.now(),
-        launchContext,
+        args,
+        currentUri: uri,
       });
 
       if (type === "app") this._enforceLRU();
@@ -186,7 +193,7 @@ export class ProcessManager {
 
       if (mode === "foreground") {
         this._focusApp(pid);
-        this._updateAddressBar(path);
+        this._updateAddressBar(uri);
       }
 
       console.log(
@@ -273,9 +280,9 @@ export class ProcessManager {
       if (apps.length > 0) {
         apps.sort((a, b) => b.lastActiveTime - a.lastActiveTime);
         this._focusApp(apps[0].pid);
-        this._updateAddressBar(apps[0].path);
+        this._updateAddressBar(apps[0].currentUri);
       } else {
-        this._updateAddressBar("");
+        this._updateAddressBar("metaos://run/index.html");
       }
     }
 
@@ -316,9 +323,9 @@ export class ProcessManager {
     }));
   }
 
-  getLaunchContext(pid: string): any {
+  getArgs(pid: string): Record<string, string> | null {
     const proc = this.processes.get(pid);
-    return proc ? proc.launchContext : null;
+    return proc ? (proc.args || null) : null;
   }
 
   async captureScreenshot(pid?: string): Promise<string> {
@@ -386,15 +393,9 @@ export class ProcessManager {
     });
   }
 
-  public _updateAddressBar(path: string): void {
+  public _updateAddressBar(uri: string): void {
     if (this.els.ADDRESS_BAR) {
-      try {
-        (this.els.ADDRESS_BAR as HTMLInputElement).value =
-          `metaos://view/${decodeURI(path)}`;
-      } catch (e) {
-        (this.els.ADDRESS_BAR as HTMLInputElement).value =
-          `metaos://view/${path}`;
-      }
+      (this.els.ADDRESS_BAR as HTMLInputElement).value = uri;
     }
   }
 

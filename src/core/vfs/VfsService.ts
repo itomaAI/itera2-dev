@@ -88,9 +88,8 @@ export class VfsService {
 
     if (nodeId === null) {
       // Root directory checks
-      if (action !== "read" && principal.type !== "system") {
-        throw new Error(`Permission Denied: Cannot modify root directory.`);
-      }
+      // Itera OS のコンセプト上、ルート直下へのファイル・ディレクトリ作成は許可する
+      // system などの重要ディレクトリは、各ノードの ACL によって個別に保護される
       return;
     }
 
@@ -736,5 +735,39 @@ export class VfsService {
     const node = this.nodeStore.getNode(id)!;
     node.acl = acl;
     await this.nodeStore.putNode(node);
+  }
+
+  /**
+   * 対象ノードとその子孫すべてのACLを強制的に書き換える
+   */
+  async setAclRecursive(
+    principal: Principal,
+    path: string,
+    acl: AccessControlList,
+  ): Promise<void> {
+    const normPath = this.pathResolver.normalizePath(path);
+    const id = this.pathResolver.getIdByPath(normPath);
+    if (!id) throw new Error(`Not found: ${normPath}`);
+
+    this._checkNodePermission(principal, id, "manage");
+
+    const applyAcl = async (nodeId: string) => {
+      const node = this.nodeStore.getNode(nodeId);
+      if (!node) return;
+
+      // ディープコピーして設定
+      node.acl = JSON.parse(JSON.stringify(acl));
+      await this.nodeStore.putNode(node);
+
+      if (node.kind === "directory") {
+        for (const child of this.nodeStore.getAllNodes()) {
+          if (child.parentId === nodeId) {
+            await applyAcl(child.id);
+          }
+        }
+      }
+    };
+
+    await applyAcl(id);
   }
 }

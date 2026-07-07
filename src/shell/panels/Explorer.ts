@@ -124,10 +124,6 @@ export class Explorer {
       }
     });
 
-    this.treeView.on("run", (path: string) => {
-      if (this.events["run_file"]) this.events["run_file"](path);
-    });
-
     this.treeView.on("create_file", async (path: string) => {
       try {
         await this.vfs.writeFile(USER_PRINCIPAL, path, "");
