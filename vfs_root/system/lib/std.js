@@ -30,6 +30,20 @@
         async writeJson(path, data, options = { overwrite: true, silent: true }) {
             const content = JSON.stringify(data, null, 2);
             await global.MetaOS.fs.write(path, content, options);
+        },
+
+        /**
+         * Reads a file as binary (Uint8Array).
+         */
+        async readBinary(path) {
+            return await global.MetaOS.fs.read(path, { encoding: 'binary' });
+        },
+
+        /**
+         * Writes a binary (Uint8Array) file.
+         */
+        async writeBinary(path, uint8ArrayData, options = { overwrite: true, silent: true }) {
+            await global.MetaOS.fs.write(path, uint8ArrayData, options);
         }
     };
 

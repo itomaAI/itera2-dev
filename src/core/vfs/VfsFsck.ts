@@ -204,6 +204,8 @@ export class VfsFsck {
       report.danglingContentsRescued;
 
     if (report.totalErrorsFixed > 0) {
+      // 修復が行われた場合、インデックスと実データの不整合を防ぐため再構築する
+      this.nodeStore.rebuildIndex();
       console.warn(
         `[VfsFsck] Repair complete. Fixed ${report.totalErrorsFixed} issues.`,
         report,

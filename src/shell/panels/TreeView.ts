@@ -656,6 +656,13 @@ export class TreeView {
       },
     });
     actions.push({
+      label: "Properties",
+      action: () => {
+        if (this.events["properties_request"])
+          this.events["properties_request"](path);
+      },
+    });
+    actions.push({
       label: "Delete",
       action: () => this._confirmDelete(path, name),
       danger: true,

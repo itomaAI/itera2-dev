@@ -39,19 +39,12 @@ export class PathResolver {
     let currentParentId: string | null = null;
 
     for (const part of parts) {
-      let foundNode: VfsNode | undefined;
+      const childId = this.nodeStore.getChildId(currentParentId, part);
 
-      for (const node of this.nodeStore.getAllNodes()) {
-        if (node.parentId === currentParentId && node.name === part) {
-          foundNode = node;
-          break;
-        }
-      }
-
-      if (!foundNode) {
+      if (childId === undefined) {
         return undefined; // 途中で見つからなければ存在しない
       }
-      currentParentId = foundNode.id;
+      currentParentId = childId;
     }
 
     return currentParentId;
@@ -88,16 +81,6 @@ export class PathResolver {
   }
 
   buildTree(): TreeNode[] {
-    const childrenMap = new Map<string | null, VfsNode[]>();
-
-    for (const node of this.nodeStore.getAllNodes()) {
-      const pId = node.parentId;
-      if (!childrenMap.has(pId)) {
-        childrenMap.set(pId, []);
-      }
-      childrenMap.get(pId)!.push(node);
-    }
-
     const buildNode = (node: VfsNode, currentPath: string): TreeNode => {
       const fullPath = currentPath ? `${currentPath}/${node.name}` : node.name;
       const treeNode: TreeNode = {
@@ -109,7 +92,7 @@ export class PathResolver {
       };
 
       if (node.kind === "directory") {
-        const children = childrenMap.get(node.id) || [];
+        const children = this.nodeStore.getChildren(node.id);
         treeNode.children = children.map((child) => buildNode(child, fullPath));
 
         treeNode.children.sort((a, b) => {
@@ -121,7 +104,7 @@ export class PathResolver {
       return treeNode;
     };
 
-    const rootNodes = childrenMap.get(null) || [];
+    const rootNodes = this.nodeStore.getChildren(null);
     const result = rootNodes.map((node) => buildNode(node, ""));
 
     result.sort((a, b) => {

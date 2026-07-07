@@ -89,14 +89,35 @@ export class HostApiRouter {
     // 1. File System (fs)
     // ==========================================
 
-    // ヘルパー: Data URI を Blob に変換
-    const dataUriToBlob = (dataUri: string): Blob | string => {
-      if (typeof dataUri === "string" && dataUri.startsWith("data:")) {
-        const parts = dataUri.split(",");
-        if (parts.length > 1) {
-          const mimeMatch = parts[0].match(/:(.*?);/);
+    // ヘルパー: 明示的なエンコーディング指定に従って文字列をバイナリに変換する
+    const prepareWriteContent = (
+      content: any,
+      encoding?: string,
+    ): Blob | string | Uint8Array | ArrayBuffer => {
+      if (
+        content instanceof Uint8Array ||
+        content instanceof Blob ||
+        content instanceof ArrayBuffer
+      ) {
+        return content;
+      }
+
+      if (typeof content === "string") {
+        if (encoding === "base64") {
+          const bstr = atob(content);
+          let n = bstr.length;
+          const u8arr = new Uint8Array(n);
+          while (n--) {
+            u8arr[n] = bstr.charCodeAt(n);
+          }
+          return new Blob([u8arr], { type: "application/octet-stream" });
+        } else if (encoding === "dataurl") {
+          const parts = content.split(",");
+          const mimeMatch = parts[0] ? parts[0].match(/:(.*?);/) : null;
           const mime = mimeMatch ? mimeMatch[1] : "application/octet-stream";
-          const bstr = atob(parts[1]);
+          const base64Data = parts.length > 1 ? parts[1] : parts[0];
+
+          const bstr = atob(base64Data);
           let n = bstr.length;
           const u8arr = new Uint8Array(n);
           while (n--) {
@@ -105,16 +126,37 @@ export class HostApiRouter {
           return new Blob([u8arr], { type: mime });
         }
       }
-      return dataUri;
+
+      // encodingの指定がない、または対象外の場合はそのまま返す（純粋な文字列として扱う）
+      return content;
     };
 
-    t.registerHandler(
-      "fs:read",
-      async ({ path }) => await d.vfs.readFile(USER_PRINCIPAL, path),
-    );
+    t.registerHandler("fs:read", async ({ path, opts }) => {
+      if (opts && opts.encoding) {
+        if (opts.encoding === "binary") {
+          const blob = await d.vfs.readBlob(USER_PRINCIPAL, path);
+          const buffer = await blob.arrayBuffer();
+          // postMessageでそのまま送受信可能な Uint8Array として返す
+          return new Uint8Array(buffer);
+        } else if (opts.encoding === "base64" || opts.encoding === "dataurl") {
+          const blob = await d.vfs.readBlob(USER_PRINCIPAL, path);
+          const dataUrl = await new Promise<string>((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onloadend = () => resolve(reader.result as string);
+            reader.onerror = reject;
+            reader.readAsDataURL(blob);
+          });
+          if (opts.encoding === "dataurl") {
+            return dataUrl;
+          }
+          return dataUrl.split(",")[1] || "";
+        }
+      }
+      return await d.vfs.readFile(USER_PRINCIPAL, path);
+    });
 
     t.registerHandler("fs:write", async ({ path, content, opts }) => {
-      const finalContent = dataUriToBlob(content);
+      const finalContent = prepareWriteContent(content, opts?.encoding);
       const res = await d.vfs.writeFile(
         USER_PRINCIPAL,
         path,
@@ -130,14 +172,7 @@ export class HostApiRouter {
     });
 
     t.registerHandler("fs:append", async ({ path, content, opts }) => {
-      let existing = "";
-      try {
-        existing = await d.vfs.readFile(USER_PRINCIPAL, path);
-      } catch (e) {}
-      const newContent =
-        existing + (existing && !existing.endsWith("\n") ? "\n" : "") + content;
-      const res = await d.vfs.writeFile(USER_PRINCIPAL, path, newContent, {
-        overwrite: true,
+      const res = await d.vfs.appendFile(USER_PRINCIPAL, path, content, {
         system: opts?.system,
       });
       this._checkAndEmitEvent(
@@ -200,6 +235,25 @@ export class HostApiRouter {
     t.registerHandler("fs:resolve_url", async ({ path }, sourcePid) => {
       if (!d.processManager) throw new Error("ProcessManager not connected.");
       return d.processManager.resolveUrl(path, sourcePid);
+    });
+
+    // ★ 追加: ACLの取得と更新
+    t.registerHandler("fs:get_acl", async ({ path }) => {
+      return d.vfs.getAcl(USER_PRINCIPAL, path);
+    });
+
+    t.registerHandler("fs:set_acl", async ({ path, acl, opts }) => {
+      if (opts?.recursive) {
+        await d.vfs.setAclRecursive(USER_PRINCIPAL, path, acl);
+      } else {
+        await d.vfs.setAcl(USER_PRINCIPAL, path, acl);
+      }
+      this._checkAndEmitEvent(
+        opts,
+        "permission_changed",
+        `User App changed permissions for: ${path}`,
+      );
+      return true;
     });
 
     // ==========================================
@@ -370,11 +424,21 @@ export class HostApiRouter {
         method: options?.method || "GET",
         headers: options?.headers || {},
       };
-      if (options?.body)
-        fetchOpts.body =
-          typeof options.body === "object"
-            ? JSON.stringify(options.body)
-            : options.body;
+
+      if (options?.body) {
+        // Uint8Array や Blob などのバイナリデータは JSON.stringify せずにそのまま送る
+        if (
+          options.body instanceof Uint8Array ||
+          options.body instanceof Blob ||
+          options.body instanceof ArrayBuffer
+        ) {
+          fetchOpts.body = options.body;
+        } else if (typeof options.body === "object") {
+          fetchOpts.body = JSON.stringify(options.body);
+        } else {
+          fetchOpts.body = options.body;
+        }
+      }
 
       if (options?.credentialId) {
         const netConf = d.configManager.get("network");
@@ -420,8 +484,9 @@ export class HostApiRouter {
       };
 
       const responseType = options?.responseType || "text";
-      if (responseType === "json") responseObj.data = await res.json();
-      else if (responseType === "dataURL") {
+      if (responseType === "json") {
+        responseObj.data = await res.json();
+      } else if (responseType === "dataURL") {
         const blob = await res.blob();
         responseObj.data = await new Promise((r, j) => {
           const reader = new FileReader();
@@ -429,6 +494,9 @@ export class HostApiRouter {
           reader.onerror = j;
           reader.readAsDataURL(blob);
         });
+      } else if (responseType === "arraybuffer" || responseType === "binary") {
+        const arrayBuffer = await res.arrayBuffer();
+        responseObj.data = new Uint8Array(arrayBuffer);
       } else {
         responseObj.data = await res.text();
       }

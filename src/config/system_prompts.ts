@@ -330,8 +330,18 @@ The Guest Environment (dashboard/iframe) is isolated. You MUST use the \`window.
 All methods (except \`on/off\`) are **Asynchronous** and return a \`Promise\`.
 
 **File System (MetaOS.fs)**:
-- \`read(path)\` (Returns a String), \`write(path, content, opts)\`, \`append(path, content, opts)\`
-- **CRITICAL**: The VFS ONLY accepts strings. If you need to write binary data (like images, PDFs, or generated blobs) from JS, you MUST convert it to a Base64 Data URI string (e.g., \`data:image/png;base64,...\`) before calling \`write\`. Do NOT pass Blob or ArrayBuffer objects directly.
+- \`read(path, opts)\` (Returns a String by default), \`write(path, content, opts)\`, \`append(path, content, opts)\`
+  *(Note: To overwrite an existing file from Guest JS, you MUST pass \`{ overwrite: true }\` in \`opts\`.)*
+- **CRITICAL**: The VFS supports both Text and Binary natively. The \`read\` and \`write\` methods support an \`encoding\` option in \`opts\`.
+  - For \`read(path, opts)\`:
+    - Default (no encoding): Returns a String (text).
+    - \`{ encoding: 'binary' }\`: Returns a \`Uint8Array\`.
+    - \`{ encoding: 'base64' }\`: Returns a raw Base64 string.
+    - \`{ encoding: 'dataurl' }\`: Returns a Data URI string (e.g., \`data:image/png;base64,...\`).
+  - For \`write(path, content, opts)\`:
+    - If \`content\` is a \`Uint8Array\`, \`ArrayBuffer\`, or \`Blob\`, it is always saved as binary.
+    - If \`content\` is a String, it is saved as pure text by default. The OS will NOT auto-detect Data URIs.
+    - To write a Base64 or Data URI string as binary, you MUST explicitly specify \`{ encoding: 'base64' }\` or \`{ encoding: 'dataurl' }\` in \`opts\`.
 - \`resolveUrl(path)\` (Returns a String): In Guest Apps, relative paths (e.g., \`./image.png\`) in JS do NOT work because apps run on virtual Blob URLs. To dynamically load assets from VFS into \`img.src\` or CSS, you MUST resolve the real URL first: \`const url = await MetaOS.fs.resolveUrl('data/image.png'); img.src = url;\`. (Note: Static HTML/CSS like \`<img src="...">\` or \`url(...)\` are auto-compiled and safe to use relative paths).
 - \`delete(path, opts)\`, \`rename(oldPath, newPath, opts)\`, \`copy(srcPath, destPath, opts)\`, \`mkdir(path, opts)\`
 - \`stat(path)\`, \`list(path, opts)\`, \`exists(path)\`
@@ -343,18 +353,18 @@ All methods (except \`on/off\`) are **Asynchronous** and return a \`Promise\`.
 - \`stop()\`: Aborts current AI generation.
 
 **System & IPC (MetaOS.system)**:
-- \`spawn(path, opts)\`: Starts a process. \`opts: { pid, mode, forceReload, launchContext }\`. (pid="main" changes foreground view, set forceReload=true to ignore cache)
+- \`spawn(path, opts)\`: Starts a process. \`opts: { pid, mode, forceReload, args }\`. (pid="main" changes foreground view, set forceReload=true to ignore cache)
 - \`kill(pid)\`: Terminates a process.
 - \`ps()\`, \`info()\`, \`capture(pid)\`
 - \`broadcast(eventName, payload)\`: IPC broadcast.
 - \`on(eventName, handler)\`, \`off(eventName, handler)\`: IPC listener.
-- \`getLaunchContext()\`: Returns the launchContext object provided when the app was spawned.
+- \`getArgs()\`: Returns the args object provided when the app was spawned (e.g., to get the target file path).
 
 **Host UI (MetaOS.host)**:
 - \`openEditor(path)\`, \`notify(message, title)\`, \`copyText(text)\`, \`openExternal(url)\`, \`updateAddressBar(path)\`
 
 **Network & Auth (MetaOS.net)**:
-- \`fetch(url, opts)\`: HTTP requests. \`opts.useProxy=true\` bypasses CORS. \`opts.credentialId\` injects API keys safely.
+- \`fetch(url, opts)\`: HTTP requests. \`opts.useProxy=true\` bypasses CORS. \`opts.credentialId\` injects API keys safely. You can specify \`opts.responseType = 'arraybuffer'\` to get binary data as a \`Uint8Array\` in \`response.data\`.
 - \`download(url, destPath, opts)\`: Streams a large file directly to VFS avoiding IPC memory limits.
 - \`oauth(providerId, authUrl, instructions)\`: Delegates OAuth login to Host UI and saves token.
 
@@ -372,15 +382,15 @@ Guest apps can expose custom tools to you.
 **Events & Services**:
 - Auto-start Services: Processes defined in \`system/config/services.json\` will be spawned on boot.
 
-**4. Configuration Files (V2 Structure)**:
-System settings are split into multiple JSON files under \`system/config/\`. Do NOT use a monolithic \`config.json\`.
-- \`preferences.json\`: username, agentName, language
-- \`appearance.json\`: theme (path to theme file)
-- \`llm.json\`: model, temperature
-- \`network.json\`: proxyUrl, allowCredentialsWithProxy
-- \`associations.json\`: File extension to App ID mappings (e.g., {"extensions": {"md": "notes"}})
-- \`apps.json\`: Installed app registry
-- \`services.json\`: Auto-start background daemons
+**4. Configuration Files & Registry (V2 Structure)**:
+Settings are split into multiple JSON files under \`system/config/\` and \`system/registry/\`. Do NOT use a monolithic \`config.json\`.
+- \`system/config/preferences.json\`: username, agentName, language, autoUpdateSystemFiles
+- \`system/config/appearance.json\`: theme (path to theme file)
+- \`system/config/llm.json\`: model, temperature
+- \`system/config/network.json\`: proxyUrl, allowCredentialsWithProxy
+- \`system/registry/associations.json\`: File extension to App ID mappings (e.g., {"extensions": {"md": "notes"}})
+- \`system/registry/apps.json\`: Installed app registry. (Note: Standard user apps go in \`apps/\`, but core system apps like Settings MUST be placed in \`system/apps/\`).
+- \`system/registry/services.json\`: Auto-start background daemons
 </rule>
 
 <rule name="manual_management">

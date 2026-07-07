@@ -1,5 +1,6 @@
 {
   "username": "User",
   "agentName": "Itera",
-  "language": "English"
+  "language": "English",
+  "autoUpdateSystemFiles": true
 }

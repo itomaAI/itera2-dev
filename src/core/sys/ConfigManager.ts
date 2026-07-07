@@ -8,7 +8,12 @@ import type { VfsEventBus } from "../vfs/VfsEventBus";
 import { SYSTEM_PRINCIPAL } from "../vfs/types";
 
 export interface OsConfig {
-  preferences: { username: string; agentName: string; language: string };
+  preferences: {
+    username: string;
+    agentName: string;
+    language: string;
+    autoUpdateSystemFiles: boolean;
+  };
   appearance: { theme: string };
   llm: { model: string; temperature: number };
   network: { proxyUrl: string; allowCredentialsWithProxy: boolean };
@@ -20,7 +25,12 @@ export interface OsConfig {
 }
 
 const DEFAULT_CONFIG: OsConfig = {
-  preferences: { username: "User", agentName: "Itera", language: "English" },
+  preferences: {
+    username: "User",
+    agentName: "Itera",
+    language: "English",
+    autoUpdateSystemFiles: true,
+  },
   appearance: { theme: "system/themes/light.json" },
   llm: { model: "gemini-3-flash-preview", temperature: 1.0 },
   network: {

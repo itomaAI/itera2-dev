@@ -12,5 +12,12 @@
         "mimeTypes": ["text/markdown", "text/plain"]
       }
     ]
+  },
+  {
+    "id": "settings",
+    "name": "Settings",
+    "icon": "⚙️",
+    "path": "system/apps/settings.html",
+    "description": "System configuration"
   }
 ]

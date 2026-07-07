@@ -10,9 +10,6 @@ export class SystemLogger {
   private vfs: VfsService;
   private baseDir = "system/logs";
 
-  // 非同期書き込みの競合を防ぐためのプロミスチェーン（キュー）
-  private writeQueue: Promise<void> = Promise.resolve();
-
   constructor(vfs: VfsService) {
     this.vfs = vfs;
   }
@@ -26,44 +23,26 @@ export class SystemLogger {
    * @param category ログのカテゴリ (例: 'system', 'usage', 'error')
    * @param payload 記録したい任意のデータオブジェクト
    */
-  log(category: string, payload: any): void {
+  async log(category: string, payload: any): Promise<void> {
     if (!category || !payload) return;
 
     const dateStr = this._getDateString();
     const path = `${this.baseDir}/${category}/${dateStr}.jsonl`;
 
-    // キューに追加して順番に書き込むことで、ファイルの破損（Race Condition）を防ぐ
-    this.writeQueue = this.writeQueue.then(async () => {
-      try {
-        const entry = {
-          timestamp: new Date().toISOString(),
-          ...payload,
-        };
-        const line = JSON.stringify(entry);
+    try {
+      const entry = {
+        timestamp: new Date().toISOString(),
+        ...payload,
+      };
+      const line = JSON.stringify(entry);
 
-        let newContent = line;
-
-        // VFS v2では append がないため、自分で読んで結合してから書き込む
-        if (this.vfs.exists(SYSTEM_PRINCIPAL, path)) {
-          const currentContent = await this.vfs.readFile(
-            SYSTEM_PRINCIPAL,
-            path,
-          );
-          newContent =
-            currentContent +
-            (currentContent && !currentContent.endsWith("\n") ? "\n" : "") +
-            line;
-        }
-
-        // isSystem: true として書き込むことでOSアップデート時に消されないようにする
-        await this.vfs.writeFile(SYSTEM_PRINCIPAL, path, newContent, {
-          overwrite: true,
-          system: true,
-        });
-      } catch (e) {
-        console.error(`[SystemLogger] Failed to write log to ${path}:`, e);
-      }
-    });
+      // VFS側のアトミックな appendFile を使用する
+      await this.vfs.appendFile(SYSTEM_PRINCIPAL, path, line, {
+        system: true,
+      });
+    } catch (e) {
+      console.error(`[SystemLogger] Failed to write log to ${path}:`, e);
+    }
   }
 
   /**

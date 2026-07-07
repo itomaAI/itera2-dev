@@ -58,10 +58,12 @@ import { MediaViewer } from "../modals/MediaViewer";
 import { SystemModal } from "../modals/SystemModal";
 import { ApiSettingsModal } from "../modals/ApiSettingsModal";
 import { SyncModal } from "../modals/SyncModal";
+import { PropertiesModal } from "../modals/PropertiesModal";
 import { TaskSwitcherModal } from "../modals/TaskSwitcherModal";
 import { CameraModal } from "../modals/CameraModal";
 import { AudioModal } from "../modals/AudioModal";
 import { ProcessMonitorModal } from "../modals/ProcessMonitorModal";
+import { CommandPaletteModal } from "../modals/CommandPaletteModal";
 
 export class ShellController {
   private vfs!: VfsService;
@@ -89,6 +91,8 @@ export class ShellController {
   private cameraModal!: CameraModal;
   private audioModal!: AudioModal;
   private processMonitorModal!: ProcessMonitorModal;
+  private propertiesModal!: PropertiesModal;
+  private commandPaletteModal!: CommandPaletteModal;
 
   public transport!: HostTransport;
   private uriRouter!: UriRouter;
@@ -186,10 +190,41 @@ export class ShellController {
       this.cameraModal = new CameraModal();
       this.audioModal = new AudioModal();
       this.processMonitorModal = new ProcessMonitorModal(this.processManager);
+      this.propertiesModal = new PropertiesModal(this.vfs);
 
       this.explorer = new Explorer(this.vfs, this.eventBus, this.resolver);
 
       // URIルーターの構築とハンドラの登録
+      this.uriRouter = new UriRouter("open"); // デフォルトインテントを 'open' に変更
+      this._registerUriHandlers();
+
+      // コマンドパレットの構築
+      this.commandPaletteModal = new CommandPaletteModal(
+        this.vfs,
+        this.appRegistry,
+        this.uriRouter,
+      );
+      this.commandPaletteModal.on("ask_ai", (query: string) => {
+        // AIへの質問をチャットパネルに投下
+        // chatPanel の send イベントハンドラを直接呼び出すのが最もクリーン
+        const chatSendHandler = this.chatPanel["events"]["send"];
+        if (chatSendHandler) chatSendHandler(query, [], []);
+      });
+      this.uriRouter = new UriRouter("open"); // デフォルトインテントを 'open' に変更
+      this._registerUriHandlers();
+
+      // コマンドパレットの構築
+      this.commandPaletteModal = new CommandPaletteModal(
+        this.vfs,
+        this.appRegistry,
+        this.uriRouter,
+      );
+      this.commandPaletteModal.on("ask_ai", (query: string) => {
+        // AIへの質問をチャットパネルに投下
+        // chatPanel の send イベントハンドラを直接呼び出すのが最もクリーン
+        const chatSendHandler = this.chatPanel["events"]["send"];
+        if (chatSendHandler) chatSendHandler(query, [], []);
+      });
       this.uriRouter = new UriRouter("open"); // デフォルトインテントを 'open' に変更
       this._registerUriHandlers();
 
@@ -255,7 +290,12 @@ export class ShellController {
           // メタデータの自動バックアップ
           if (this.nodeStore && this.vfs) {
             const indexJson = this.nodeStore.exportIndex();
-            await this.vfs.mkdir(SYSTEM_PRINCIPAL, "system/backups");
+
+            // ディレクトリが存在しない場合のみ作成する
+            if (!this.vfs.exists(SYSTEM_PRINCIPAL, "system/backups")) {
+              await this.vfs.mkdir(SYSTEM_PRINCIPAL, "system/backups");
+            }
+
             await this.vfs.writeFile(
               SYSTEM_PRINCIPAL,
               "system/backups/index_auto_backup.json",
@@ -387,6 +427,10 @@ export class ShellController {
         trigger_llm: false,
       });
       this.chatPanel.appendTurn(turn);
+    });
+
+    this.explorer.on("properties_request", (path: string) => {
+      this.propertiesModal.open(path);
     });
 
     this.explorer.on("add_to_context", (path: string) => {
@@ -886,6 +930,14 @@ export class ShellController {
         activate(btnView);
       };
     }
+
+    // --- Command Palette Shortcut ---
+    document.addEventListener("keydown", (e) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === "k") {
+        e.preventDefault();
+        this.commandPaletteModal.toggle();
+      }
+    });
   }
 
   public _closeMobileDrawers(): void {

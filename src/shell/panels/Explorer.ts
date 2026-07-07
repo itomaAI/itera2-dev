@@ -215,6 +215,11 @@ export class Explorer {
       }
     });
 
+    this.treeView.on("properties_request", (path: string) => {
+      if (this.events["properties_request"])
+        this.events["properties_request"](path);
+    });
+
     this.treeView.on("add_to_context", (path: string) => {
       if (this.events["add_to_context"]) this.events["add_to_context"](path);
     });
