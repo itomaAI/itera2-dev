@@ -270,7 +270,7 @@ export class ShellController {
           "system/themes/dark.json",
       );
       this.chatPanel.renderHistory(this.history.get());
-      this._refreshEngineConfig();
+      await this._refreshEngineConfig();
 
       // 9. イベントバインディングと起動完了
       this._bindEvents();
@@ -519,7 +519,7 @@ export class ShellController {
         if (text) content.push({ text: text });
         if (content.length === 0) return;
 
-        this._refreshEngineConfig();
+        await this._refreshEngineConfig();
         this.chatPanel.setProcessing(true);
         await this.engine.injectUserTurn(content);
       },
@@ -616,19 +616,25 @@ export class ShellController {
       }
     });
 
-    this.apiSettingsModal.on("secrets_updated", () =>
-      this._refreshEngineConfig(),
+    this.apiSettingsModal.on(
+      "secrets_updated",
+      async () => await this._refreshEngineConfig(),
     );
   }
 
-  public getMergedProviders(): any[] {
+  public async getMergedProviders(): Promise<any[]> {
     // 1. Host側のベース定義をディープコピーして初期化
     const merged = JSON.parse(JSON.stringify(PROVIDERS));
 
     // 2. VFSからカスタムプロファイルがあればマージ
     try {
-      if (this.vfs.exists(SYSTEM_PRINCIPAL, "system/registry/llm_profiles.json")) {
-        const content = this.vfs.readFile(SYSTEM_PRINCIPAL, "system/registry/llm_profiles.json");
+      if (
+        this.vfs.exists(SYSTEM_PRINCIPAL, "system/registry/llm_profiles.json")
+      ) {
+        const content = await this.vfs.readFile(
+          SYSTEM_PRINCIPAL,
+          "system/registry/llm_profiles.json",
+        );
         const parsed = JSON.parse(content);
 
         if (parsed && Array.isArray(parsed.providers)) {
@@ -641,7 +647,7 @@ export class ShellController {
               if (vfsProv.defaultCapabilities) {
                 baseProv.defaultCapabilities = {
                   ...baseProv.defaultCapabilities,
-                  ...vfsProv.defaultCapabilities
+                  ...vfsProv.defaultCapabilities,
                 };
               }
             } else {
@@ -651,7 +657,10 @@ export class ShellController {
         }
       }
     } catch (e) {
-      console.warn("[Shell] Failed to parse llm_profiles.json, using defaults.", e);
+      console.warn(
+        "[Shell] Failed to parse llm_profiles.json, using defaults.",
+        e,
+      );
     }
 
     return merged;
@@ -660,7 +669,7 @@ export class ShellController {
   /**
    * LLMエンジンとプロジェクターの設定をリロードする
    */
-  public _refreshEngineConfig(): void {
+  public async _refreshEngineConfig(): Promise<void> {
     if (!this.engine) return;
 
     const llmConfig = this.configManager.get("llm") || {
@@ -689,7 +698,7 @@ export class ShellController {
     // --- LLM Capabilities の解決 (VFS レジストリからのマージ) ---
     let capabilities: any = undefined;
 
-    const mergedProviders = this.getMergedProviders();
+    const mergedProviders = await this.getMergedProviders();
     const providerData = mergedProviders.find((p: any) => p.id === provider);
     if (providerData) {
       capabilities = { ...providerData.defaultCapabilities };

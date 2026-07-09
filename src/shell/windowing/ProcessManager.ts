@@ -454,7 +454,7 @@ export class ProcessManager {
     }
     const stack = baseDir ? baseDir.split("/") : [];
     const parts = relPath.split("/");
-			
+
     for (const part of parts) {
       if (part === "." || part === "") continue;
       if (part === "..") {

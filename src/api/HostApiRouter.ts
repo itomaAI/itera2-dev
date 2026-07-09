@@ -35,7 +35,7 @@ export interface IEngine {
   stop(): void;
 }
 export interface IShell {
-  _refreshEngineConfig(): void;
+  _refreshEngineConfig(): Promise<void>;
   _closeMobileDrawers(): void;
   panels: { chat: any };
   modals: { editor: any; camera: any; audio: any };
@@ -70,11 +70,7 @@ export class HostApiRouter {
     // 明示的に { silent: false } が指定された場合のみイベントログを発行する
     const shouldEmit = options && options.silent === false;
 
-    if (
-      shouldEmit &&
-      this.deps.history &&
-      this.deps.shell
-    ) {
+    if (shouldEmit && this.deps.history && this.deps.shell) {
       const lpml = `<event type="${type}">\n${desc}\n</event>`;
       const turn = this.deps.history.append("system", lpml, {
         type: "event_log",
@@ -284,7 +280,7 @@ export class HostApiRouter {
       }
       if (text) content.push({ text });
 
-      d.shell._refreshEngineConfig();
+      await d.shell._refreshEngineConfig();
       d.shell.panels.chat.setProcessing(true);
       await d.engine.injectUserTurn(content);
       return true;
@@ -303,7 +299,7 @@ export class HostApiRouter {
       });
       if (!opts?.silent) {
         d.shell.panels.chat.appendTurn(turn);
-        d.shell._refreshEngineConfig();
+        await d.shell._refreshEngineConfig();
         d.shell.panels.chat.setProcessing(true);
       }
       return true;
@@ -319,7 +315,7 @@ export class HostApiRouter {
       });
       d.shell.panels.chat.appendTurn(turn);
       if (triggerLlm) {
-        d.shell._refreshEngineConfig();
+        await d.shell._refreshEngineConfig();
         d.shell.panels.chat.setProcessing(true);
       }
       return true;
@@ -373,7 +369,7 @@ export class HostApiRouter {
 
     t.registerHandler("sys:get_providers", async () => {
       if (!d.shell || !d.shell.getMergedProviders) return [];
-      return d.shell.getMergedProviders();
+      return await d.shell.getMergedProviders();
     });
 
     // ==========================================

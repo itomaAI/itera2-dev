@@ -9,7 +9,7 @@ export const PROVIDERS = [
       maxMediaSizeMB: 100,
       supportedMimes: ["application/pdf", "image/*", "video/*", "audio/*"],
     },
-    models: []
+    models: [],
   },
   {
     id: "openai",
@@ -26,7 +26,7 @@ export const PROVIDERS = [
         "application/json",
       ],
     },
-    models: []
+    models: [],
   },
   {
     id: "anthropic",
@@ -37,7 +37,7 @@ export const PROVIDERS = [
       maxMediaSizeMB: 500,
       supportedMimes: ["image/*", "application/pdf", "text/plain"],
     },
-    models: []
+    models: [],
   },
   {
     id: "openrouter",
@@ -53,7 +53,7 @@ export const PROVIDERS = [
         "application/json",
       ],
     },
-    models: []
+    models: [],
   },
   {
     id: "custom",
@@ -70,6 +70,6 @@ export const PROVIDERS = [
         "application/json",
       ],
     },
-    models: []
+    models: [],
   },
 ];
