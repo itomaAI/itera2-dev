@@ -303,6 +303,7 @@ export class CommandPaletteModal {
     // 3. Files
     const files = this.vfs.listFiles(USER_PRINCIPAL, {
       recursive: true,
+      detail: true,
     }) as import("../../core/vfs/types").VfsStat[];
     files.forEach((stat) => {
       if (stat.kind === "directory") return; // ファイルのみ検索

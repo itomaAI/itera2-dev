@@ -123,6 +123,8 @@ export class HistoryManager {
     };
   }
 
+  private saveTimeoutId: ReturnType<typeof setTimeout> | null = null;
+
   private _notify(
     action: HistoryEventPayload["type"],
     turn: Turn | null = null,
@@ -134,9 +136,14 @@ export class HistoryManager {
     };
     this.listeners.forEach((cb) => cb(payload));
 
-    // ロード以外の変更時は自動でDBに保存する
+    // ロード以外の変更時は自動でDBに保存する (デバウンス付き)
     if (action !== "load") {
-      this._saveToDB();
+      if (this.saveTimeoutId) {
+        clearTimeout(this.saveTimeoutId);
+      }
+      this.saveTimeoutId = setTimeout(() => {
+        this._saveToDB();
+      }, 500);
     }
   }
 

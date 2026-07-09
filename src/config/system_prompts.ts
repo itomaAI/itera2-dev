@@ -214,12 +214,14 @@ Attributes:
 <define_tag name="spawn">
 Starts or restarts a process (application or daemon) directly.
 Attributes:
-    - pid: Process ID (e.g., "app_notes"). Use "main" to update the user's foreground screen.
+    - pid: Process ID. Provide a unique ID for the app/daemon (e.g., "app_notes").
     - path: Path to the HTML executable in VFS.
+    - mode (optional): "foreground" or "background" (defaults based on pid).
     - force (optional): "true" or "false". MUST be "true" if you just edited the source code.
     - file (optional): The path of a data file to open. In Itera OS, apps expect to receive the target file via the 'file' argument.
     - [any_other_attribute]: Any other attributes provided will be passed to the app as arguments (args).
 Rule: 
+    - When launching or switching apps, provide a unique ID to \`pid\` and set \`mode="foreground"\`. If the app is already running in the background, this will simply bring it to the front instantly.
     - IMPORTANT: If you edited the source code of a process, you MUST include force="true" to apply the new code and force a reload.
     - CRITICAL TIMING RULE: Do NOT use \`<spawn>\` in the same turn as \`<edit_file>\` or \`<create_file>\`. To ensure your code changes are saved to the file system before compilation, you MUST execute the file edits, end your turn with \`<yield />\`, wait for the successful \`<tool_output>\`, and then use \`<spawn>\` in the NEXT turn.
 </define_tag>

@@ -22,12 +22,23 @@ export function registerFSTools(registry: ToolRegistry): void {
       if (!vfs.exists(AGENT_PRINCIPAL, params.path))
         throw new Error(`File not found.`);
 
+      const stat = vfs.stat(AGENT_PRINCIPAL, params.path);
+
       const BINARY_EXTS =
-        /\.(png|jpg|jpeg|gif|webp|svg|ico|bmp|pdf|zip|tar|gz|7z|rar|mp3|wav|mp4|webm|ogg)$/i;
-      const isBinary = params.path.match(BINARY_EXTS);
+        /\.(png|jpg|jpeg|gif|webp|svg|ico|bmp|pdf|zip|tar|gz|7z|rar|mp3|wav|mp4|webm|ogg|wasm|bin|exe|dll|so|dylib|class|jar)$/i;
+      let isBinary = !!params.path.match(BINARY_EXTS);
+
+      let content = "";
+      if (!isBinary) {
+        content = await vfs.readFile(AGENT_PRINCIPAL, params.path);
+        // テキストとして読み込んだ結果、Nullバイトが含まれていればバイナリとみなす
+        if (content.indexOf("\0") !== -1) {
+          isBinary = true;
+        }
+      }
 
       if (isBinary) {
-        let mimeType = "application/octet-stream";
+        let mimeType = stat.mimeType || "application/octet-stream";
         const ext = params.path.split(".").pop()?.toLowerCase();
 
         if (ext === "pdf") mimeType = "application/pdf";
@@ -41,6 +52,8 @@ export function registerFSTools(registry: ToolRegistry): void {
         else if (ext === "mp4") mimeType = "video/mp4";
         else if (ext === "webm") mimeType = "video/webm";
         else if (ext === "ogg") mimeType = "audio/ogg";
+        else if (ext === "zip") mimeType = "application/zip";
+        else if (ext === "wasm") mimeType = "application/wasm";
 
         return {
           log: `Read binary file: ${mimeType}`,
@@ -53,7 +66,6 @@ export function registerFSTools(registry: ToolRegistry): void {
         };
       }
 
-      const content = await vfs.readFile(AGENT_PRINCIPAL, params.path);
       const lines = content.split(/\r?\n/);
 
       let s = parseInt(params.start, 10);

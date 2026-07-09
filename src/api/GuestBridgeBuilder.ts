@@ -167,7 +167,8 @@ export class GuestBridgeBuilder {
             on: (eventName, handler) => transport.on(eventName, handler),
             off: (eventName, handler) => transport.off(eventName, handler),
             capture: async (pid) => transport.requestHost('sys:capture', { pid }),
-            getArgs: async () => transport.requestHost('sys:get_args', {})
+            getArgs: async () => transport.requestHost('sys:get_args', {}),
+            getProviders: async () => transport.requestHost('sys:get_providers', {})
         },
         host: {
             openEditor: async (path) => transport.requestHost('host:open_editor', { path }),

@@ -523,6 +523,18 @@ export class TreeView {
           this._showContextMenu(e.pageX, e.pageY, "", "directory", "root");
         }
       });
+
+      this.container.addEventListener("click", (e) => {
+        const target = e.target as HTMLElement;
+        // ツリーの項目以外がクリックされた場合は選択を解除する
+        if (!target.closest(".tree-content")) {
+          this.selectedPath = null;
+          const allNodes = this.container.querySelectorAll(".tree-content");
+          allNodes.forEach((el) => {
+            el.classList.remove("bg-hover", "border-primary");
+          });
+        }
+      });
     }
   }
 

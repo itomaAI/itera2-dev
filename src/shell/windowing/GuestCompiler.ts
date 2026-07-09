@@ -4,7 +4,7 @@
  */
 
 import type { VfsService } from "../../core/vfs/VfsService";
-import { SYSTEM_PRINCIPAL, type VfsStat } from "../../core/vfs/types";
+import { USER_PRINCIPAL, type VfsStat } from "../../core/vfs/types";
 import { GuestBridgeBuilder } from "../../api/GuestBridgeBuilder";
 
 interface CachedAsset {
@@ -44,6 +44,10 @@ export class GuestCompiler {
   }
 
   private _resolveRelativePath(baseDir: string, relPath: string): string {
+    if (relPath.startsWith("/")) {
+      baseDir = "";
+      relPath = relPath.substring(1);
+    }
     const stack = baseDir ? baseDir.split("/") : [];
     const parts = relPath.split("/");
 
@@ -163,12 +167,12 @@ window.addEventListener('message', async (e) => {
       return visited.get(visitKey)!;
     }
 
-    if (!vfs.exists(SYSTEM_PRINCIPAL, absPath)) {
+    if (!vfs.exists(USER_PRINCIPAL, absPath)) {
       console.warn(`[GuestCompiler] File not found: ${absPath}`);
       return requestPath;
     }
 
-    const stat = vfs.stat(SYSTEM_PRINCIPAL, absPath);
+    const stat = vfs.stat(USER_PRINCIPAL, absPath);
     if (stat.kind !== "file") return requestPath;
 
     const mimeType = stat.mimeType || this.getMimeType(absPath);
@@ -188,7 +192,7 @@ window.addEventListener('message', async (e) => {
     let fileUrl: string;
 
     if (isHtml) {
-      let htmlContent = await vfs.readFile(SYSTEM_PRINCIPAL, absPath);
+      let htmlContent = await vfs.readFile(USER_PRINCIPAL, absPath);
       htmlContent = await this._processHtmlDependencies(
         htmlContent,
         vfs,
@@ -209,7 +213,7 @@ window.addEventListener('message', async (e) => {
       fileUrl = URL.createObjectURL(blob);
       blobUrls.push(fileUrl);
     } else if (isCss) {
-      let cssContent = await vfs.readFile(SYSTEM_PRINCIPAL, absPath);
+      let cssContent = await vfs.readFile(USER_PRINCIPAL, absPath);
       cssContent = await this._processCssDependencies(
         cssContent,
         vfs,
@@ -224,7 +228,7 @@ window.addEventListener('message', async (e) => {
       blobUrls.push(fileUrl);
     } else {
       // 静的アセットの Blob 生成とグローバルキャッシュ保存
-      const rawBlob = await vfs.readBlob(SYSTEM_PRINCIPAL, absPath);
+      const rawBlob = await vfs.readBlob(USER_PRINCIPAL, absPath);
       const typedBlob = new Blob([rawBlob], { type: mimeType });
       fileUrl = URL.createObjectURL(typedBlob);
 

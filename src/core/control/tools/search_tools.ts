@@ -11,7 +11,7 @@ const yieldToMain = () => new Promise((resolve) => setTimeout(resolve, 0));
 
 const isBinary = (path: string) =>
   !!path.match(
-    /\.(png|jpg|jpeg|gif|webp|svg|ico|bmp|pdf|zip|tar|gz|7z|rar|mp3|wav|mp4|webm|ogg|eot|ttf|woff|woff2)$/i,
+    /\.(png|jpg|jpeg|gif|webp|svg|ico|bmp|pdf|zip|tar|gz|7z|rar|mp3|wav|mp4|webm|ogg|eot|ttf|woff|woff2|wasm|bin|exe|dll|so|dylib|class|jar)$/i,
   );
 
 export function registerSearchTools(registry: ToolRegistry): void {

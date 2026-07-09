@@ -4,7 +4,7 @@
  */
 
 import type { VfsService } from "../../core/vfs/VfsService";
-import { SYSTEM_PRINCIPAL } from "../../core/vfs/types";
+import { USER_PRINCIPAL } from "../../core/vfs/types";
 import { GuestCompiler } from "./GuestCompiler";
 
 export interface Process {
@@ -296,7 +296,7 @@ export class ProcessManager {
         this._focusApp(apps[0].pid);
         this._updateAddressBar(apps[0].currentUri);
       } else {
-        this._updateAddressBar("metaos://run/index.html");
+        this.spawn("main", "index.html", "foreground");
       }
     }
 
@@ -423,18 +423,20 @@ export class ProcessManager {
       : "";
 
     let absPath = requestPath;
-    if (requestPath.startsWith("./") || requestPath.startsWith("../")) {
+    if (
+      requestPath.startsWith("./") ||
+      requestPath.startsWith("../") ||
+      requestPath.startsWith("/")
+    ) {
       absPath = this._resolveRelativePath(currentDir, requestPath);
-    } else if (requestPath.startsWith("/")) {
-      absPath = requestPath.substring(1);
     }
 
-    // 解決はシステム権限で行う
-    if (!this.vfs.exists(SYSTEM_PRINCIPAL, absPath)) {
+    // 解決はユーザー権限で行う（セキュリティ確保のため）
+    if (!this.vfs.exists(USER_PRINCIPAL, absPath)) {
       throw new Error(`File not found: ${absPath}`);
     }
 
-    const blob = await this.vfs.readBlob(SYSTEM_PRINCIPAL, absPath);
+    const blob = await this.vfs.readBlob(USER_PRINCIPAL, absPath);
     const mimeType = this.compiler.getMimeType(absPath);
     const typedBlob = new Blob([blob], { type: mimeType });
     const url = URL.createObjectURL(typedBlob);
@@ -446,9 +448,13 @@ export class ProcessManager {
   }
 
   private _resolveRelativePath(baseDir: string, relPath: string): string {
+    if (relPath.startsWith("/")) {
+      baseDir = "";
+      relPath = relPath.substring(1);
+    }
     const stack = baseDir ? baseDir.split("/") : [];
     const parts = relPath.split("/");
-
+			
     for (const part of parts) {
       if (part === "." || part === "") continue;
       if (part === "..") {

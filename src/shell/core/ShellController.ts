@@ -33,6 +33,7 @@ import { GeminiAdapter } from "../../core/cognitive/adapters/GeminiAdapter";
 import { OpenAIAdapter } from "../../core/cognitive/adapters/OpenAIAdapter";
 import { AnthropicAdapter } from "../../core/cognitive/adapters/AnthropicAdapter";
 import { SYSTEM_PROMPT } from "../../config/system_prompts";
+import { PROVIDERS } from "../../config/providers";
 
 // Control Layer
 import { ToolRegistry } from "../../core/control/ToolRegistry";
@@ -181,7 +182,7 @@ export class ShellController {
         this.nodeStore,
         contentStore,
       );
-      this.apiSettingsModal = new ApiSettingsModal();
+      this.apiSettingsModal = new ApiSettingsModal(this);
       this.syncModal = new SyncModal();
       this.taskSwitcherModal = new TaskSwitcherModal(
         this.processManager,
@@ -364,9 +365,18 @@ export class ShellController {
     }
 
     // --- VFS & Storage ---
-    this.eventBus.subscribe(() => {
+    this.eventBus.subscribe((events) => {
       this._updateStorageUI();
       this._triggerAutoSave();
+
+      for (const event of events) {
+        if (!event.path.startsWith("system/logs/")) {
+          this.processManager.broadcast("file_changed", {
+            type: event.type,
+            path: event.path,
+          });
+        }
+      }
     });
 
     this.configManager.onUpdate(async (config) => {
@@ -531,8 +541,17 @@ export class ShellController {
 
     this.chatPanel.on(
       "preview_request",
-      (name: string, src: string, mime: string) => {
-        if (src.startsWith("data:")) {
+      async (name: string, src: string, mime: string, path?: string) => {
+        if (path) {
+          try {
+            const blob = await this.vfs.readBlob(USER_PRINCIPAL, path);
+            this.mediaViewer.open(path.split("/").pop() || name, blob, mime);
+          } catch (e: any) {
+            console.error("[Shell] Failed to load media from VFS:", e);
+            if (window.AppUI)
+              window.AppUI.notify(`Cannot open media: ${e.message}`, "error");
+          }
+        } else if (src.startsWith("data:")) {
           const parts = src.split(",");
           const bstr = atob(parts[1]);
           let n = bstr.length;
@@ -602,6 +621,42 @@ export class ShellController {
     );
   }
 
+  public getMergedProviders(): any[] {
+    // 1. Host側のベース定義をディープコピーして初期化
+    const merged = JSON.parse(JSON.stringify(PROVIDERS));
+
+    // 2. VFSからカスタムプロファイルがあればマージ
+    try {
+      if (this.vfs.exists(SYSTEM_PRINCIPAL, "system/registry/llm_profiles.json")) {
+        const content = this.vfs.readFile(SYSTEM_PRINCIPAL, "system/registry/llm_profiles.json");
+        const parsed = JSON.parse(content);
+
+        if (parsed && Array.isArray(parsed.providers)) {
+          for (const vfsProv of parsed.providers) {
+            const baseProv = merged.find((p: any) => p.id === vfsProv.id);
+            if (baseProv) {
+              if (Array.isArray(vfsProv.models)) {
+                baseProv.models = vfsProv.models;
+              }
+              if (vfsProv.defaultCapabilities) {
+                baseProv.defaultCapabilities = {
+                  ...baseProv.defaultCapabilities,
+                  ...vfsProv.defaultCapabilities
+                };
+              }
+            } else {
+              merged.push(vfsProv);
+            }
+          }
+        }
+      }
+    } catch (e) {
+      console.warn("[Shell] Failed to parse llm_profiles.json, using defaults.", e);
+    }
+
+    return merged;
+  }
+
   /**
    * LLMエンジンとプロジェクターの設定をリロードする
    */
@@ -631,6 +686,24 @@ export class ShellController {
     const statusEl = document.getElementById("model-status");
     if (statusEl) statusEl.textContent = `${provider}/${modelName}`;
 
+    // --- LLM Capabilities の解決 (VFS レジストリからのマージ) ---
+    let capabilities: any = undefined;
+
+    const mergedProviders = this.getMergedProviders();
+    const providerData = mergedProviders.find((p: any) => p.id === provider);
+    if (providerData) {
+      capabilities = { ...providerData.defaultCapabilities };
+      if (Array.isArray(providerData.models)) {
+        const modelData = providerData.models.find(
+          (m: any) => m.id === modelName,
+        );
+        if (modelData && modelData.capabilities) {
+          capabilities = { ...capabilities, ...modelData.capabilities };
+        }
+      }
+    }
+    // --------------------------------------------------------------------------
+
     const apiKey = secrets[provider] || "";
     let newLlm, newProjector;
 
@@ -644,7 +717,7 @@ export class ShellController {
             : provider === "custom"
               ? secrets.custom_url || "http://localhost:11434/v1"
               : "https://api.openai.com/v1";
-        newProjector = new OpenAIProjector(SYSTEM_PROMPT);
+        newProjector = new OpenAIProjector(SYSTEM_PROMPT, capabilities);
         newLlm = new OpenAIAdapter(
           apiKey,
           modelName,
@@ -654,7 +727,11 @@ export class ShellController {
         );
         break;
       case "anthropic":
-        newProjector = new AnthropicProjector(SYSTEM_PROMPT);
+        newProjector = new AnthropicProjector(
+          SYSTEM_PROMPT,
+          capabilities,
+          apiKey,
+        );
         newLlm = new AnthropicAdapter(
           apiKey,
           modelName,
@@ -664,7 +741,7 @@ export class ShellController {
         break;
       case "google":
       default:
-        newProjector = new GeminiProjector(SYSTEM_PROMPT, apiKey);
+        newProjector = new GeminiProjector(SYSTEM_PROMPT, capabilities, apiKey);
         newLlm = new GeminiAdapter(apiKey, modelName, llmConfig, this.logger);
         break;
     }
@@ -806,7 +883,14 @@ export class ShellController {
 
   private async _startDaemons(): Promise<void> {
     try {
-      const services = this.configManager.get("services") || [];
+      let services: any[] = [];
+      if (this.vfs.exists(SYSTEM_PRINCIPAL, "system/config/services.json")) {
+        const content = await this.vfs.readFile(
+          SYSTEM_PRINCIPAL,
+          "system/config/services.json",
+        );
+        services = JSON.parse(content);
+      }
       for (const svc of services) {
         if (svc.pid && svc.path) {
           await this.processManager.spawn(svc.pid, svc.path, "background");
@@ -849,19 +933,37 @@ export class ShellController {
   }
 
   private _triggerAutoSave(): void {
+    const bar = document.getElementById("storage-usage-bar");
     const statusEl = document.getElementById("save-status");
-    if (!statusEl) return;
+
     if (this.saveTimer) clearTimeout(this.saveTimer);
 
-    statusEl.classList.remove("opacity-0");
-    statusEl.textContent = "Saving...";
-    statusEl.className = "text-[9px] text-warning italic transition-opacity";
+    if (bar) {
+      // ストレージバーをフラッシュさせるエフェクト
+      bar.classList.add(
+        "brightness-150",
+        "shadow-[0_0_8px_rgba(255,255,255,0.6)]",
+      );
+    }
 
-    this.saveTimer = setTimeout(() => {
+    if (statusEl) {
+      // 即座にテキストを表示
+      statusEl.classList.remove("opacity-0");
       statusEl.textContent = "Saved";
       statusEl.className = "text-[9px] text-success italic transition-opacity";
-      setTimeout(() => statusEl.classList.add("opacity-0"), 2000);
-    }, 500);
+    }
+
+    this.saveTimer = setTimeout(() => {
+      if (bar) {
+        bar.classList.remove(
+          "brightness-150",
+          "shadow-[0_0_8px_rgba(255,255,255,0.6)]",
+        );
+      }
+      if (statusEl) {
+        statusEl.classList.add("opacity-0");
+      }
+    }, 300); // 0.3秒後に消す
   }
 
   private _bindMobileUI(): void {

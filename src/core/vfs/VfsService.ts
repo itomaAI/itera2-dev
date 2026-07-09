@@ -507,17 +507,19 @@ export class VfsService {
     const normPath = this.pathResolver.normalizePath(path);
     if (!normPath) return "root";
 
+    const parts = normPath.split("/");
+    const name = parts.pop()!;
+    const parentPath = parts.join("/");
+
+    // 親ディレクトリの解決をロック取得の「前」に行う (デッドロック回避)
+    const parentId = await this._ensureDir(principal, parentPath);
+
     return this.lockManager.acquire(normPath, async () => {
       const existingId = this.pathResolver.getIdByPath(normPath);
       if (existingId !== undefined) {
         throw new Error(`Path already exists: ${normPath}`);
       }
 
-      const parts = normPath.split("/");
-      const name = parts.pop()!;
-      const parentPath = parts.join("/");
-
-      const parentId = await this._ensureDir(principal, parentPath);
       this._checkNodePermission(principal, parentId, "write");
 
       const newNode: VfsNode = {

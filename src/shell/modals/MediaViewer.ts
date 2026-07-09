@@ -151,6 +151,9 @@ export class MediaViewer {
     if (lowerPath.endsWith(".gif")) return "image/gif";
     if (lowerPath.endsWith(".webp")) return "image/webp";
     if (lowerPath.endsWith(".png")) return "image/png";
+    if (lowerPath.endsWith(".pdf")) return "application/pdf";
+    if (lowerPath.endsWith(".mp3")) return "audio/mpeg";
+    if (lowerPath.endsWith(".mp4")) return "video/mp4";
     return "";
   }
 }

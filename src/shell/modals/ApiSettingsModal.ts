@@ -3,7 +3,8 @@
  * Itera OS v2: API Keys Management
  */
 
-import { PROVIDERS } from "../../config/constants";
+import type { VfsService } from "../../core/vfs/VfsService";
+import { SYSTEM_PRINCIPAL } from "../../core/vfs/types";
 
 const DOM_IDS = {
   MODAL: "api-settings-modal",
@@ -15,11 +16,14 @@ const DOM_IDS = {
 };
 
 export class ApiSettingsModal {
+  private shell: any;
   private els: Record<string, HTMLElement | null> = {};
   private events: Record<string, Function> = {};
   private hasRendered = false;
+  private providers: any[] = [];
 
-  constructor() {
+  constructor(shell: any) {
+    this.shell = shell;
     this._initElements();
     this._bindEvents();
   }
@@ -34,11 +38,30 @@ export class ApiSettingsModal {
     }
   }
 
-  private _ensureInit() {
+  private async _ensureInit() {
     if (!this.hasRendered && this.els.CONTAINER) {
+      this.els.CONTAINER.innerHTML =
+        '<div class="text-center text-text-muted text-xs p-4">Loading providers...</div>';
+
+      try {
+        this.providers = await this.shell.getMergedProviders();
+      } catch (e) {
+        console.warn("[ApiSettingsModal] Failed to get providers", e);
+        this.providers = [];
+      }
+
+      // フォールバック
+      if (!this.providers || this.providers.length === 0) {
+        this.providers = [
+          { id: "google", name: "Google (Gemini)", placeholder: "AIzaSy..." },
+          { id: "openai", name: "OpenAI", placeholder: "sk-proj-..." },
+          { id: "anthropic", name: "Anthropic", placeholder: "sk-ant-..." },
+        ];
+      }
+
       this.els.CONTAINER.innerHTML = "";
 
-      PROVIDERS.forEach((provider) => {
+      this.providers.forEach((provider) => {
         const wrapper = document.createElement("div");
         wrapper.className =
           "flex flex-col gap-1.5 p-3 rounded-lg bg-card/50 border border-border-main/50";
@@ -79,7 +102,7 @@ export class ApiSettingsModal {
       secrets = JSON.parse(localStorage.getItem("itera_llm_secrets") || "{}");
     } catch (e) {}
 
-    PROVIDERS.forEach((provider) => {
+    this.providers.forEach((provider) => {
       const keyInput = document.getElementById(
         `api-key-${provider.id}`,
       ) as HTMLInputElement;
@@ -96,7 +119,7 @@ export class ApiSettingsModal {
 
   private _saveValues() {
     let secrets: any = {};
-    PROVIDERS.forEach((provider) => {
+    this.providers.forEach((provider) => {
       const keyInput = document.getElementById(
         `api-key-${provider.id}`,
       ) as HTMLInputElement;
@@ -115,9 +138,9 @@ export class ApiSettingsModal {
     if (window.AppUI) window.AppUI.notify("API Keys saved.", "success");
   }
 
-  open() {
+  async open() {
     if (this.els.MODAL) {
-      this._ensureInit();
+      await this._ensureInit();
       this._loadValues();
       this.els.MODAL.classList.remove("hidden");
     }

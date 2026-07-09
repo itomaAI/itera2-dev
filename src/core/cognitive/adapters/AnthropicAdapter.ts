@@ -50,6 +50,7 @@ export class AnthropicAdapter extends BaseLLMAdapter {
         "Content-Type": "application/json",
         "x-api-key": this.apiKey,
         "anthropic-version": "2023-06-01",
+        "anthropic-beta": "files-api-2025-04-14",
         "anthropic-dangerously-allow-browser": "true",
       },
       body: JSON.stringify(payload),

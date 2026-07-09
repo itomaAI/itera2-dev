@@ -515,7 +515,12 @@ export class ChatPanel {
         const blob = await this.vfs.readBlob(USER_PRINCIPAL, mediaObj.path);
         const url = URL.createObjectURL(blob);
         loadingDiv.remove();
-        this._appendMedia(container, url, mediaObj.mimeType || blob.type);
+        this._appendMedia(
+          container,
+          url,
+          mediaObj.mimeType || blob.type,
+          mediaObj.path,
+        );
       } else {
         loadingDiv.remove();
         const div = document.createElement("div");
@@ -557,7 +562,12 @@ export class ChatPanel {
     return safeText;
   }
 
-  private _appendMedia(container: HTMLElement, src: string, mimeType?: string) {
+  private _appendMedia(
+    container: HTMLElement,
+    src: string,
+    mimeType?: string,
+    path?: string,
+  ) {
     let mime = mimeType || "image/png";
     if (!mimeType && src.startsWith("data:")) {
       mime = src.split(";")[0].split(":")[1];
@@ -570,7 +580,7 @@ export class ChatPanel {
         "h-24 rounded border border-border-main cursor-pointer hover:opacity-80 bg-app mt-2 object-contain";
       img.onclick = () => {
         if (this.events["preview_request"])
-          this.events["preview_request"]("Image Preview", src, mime);
+          this.events["preview_request"]("Image Preview", src, mime, path);
       };
       container.appendChild(img);
     } else {
@@ -580,7 +590,7 @@ export class ChatPanel {
       div.innerHTML = `<div class="text-2xl">📄</div><div class="flex flex-col overflow-hidden"><span class="text-xs text-text-main font-bold font-mono uppercase truncate">${mime}</span><span class="text-[10px] text-text-muted truncate">BINARY DATA</span></div>`;
       div.onclick = () => {
         if (this.events["preview_request"]) {
-          this.events["preview_request"]("Attachment", src, mime);
+          this.events["preview_request"]("Attachment", src, mime, path);
         }
       };
       container.appendChild(div);

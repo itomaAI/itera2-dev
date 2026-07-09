@@ -66,9 +66,12 @@ export class HostApiRouter {
   }
 
   private _checkAndEmitEvent(options: any, type: string, desc: string) {
+    // パフォーマンスとノイズ低減のため、デフォルトはログ出力なし(silent: true)とする
+    // 明示的に { silent: false } が指定された場合のみイベントログを発行する
+    const shouldEmit = options && options.silent === false;
+
     if (
-      options &&
-      options.silent === false &&
+      shouldEmit &&
       this.deps.history &&
       this.deps.shell
     ) {
@@ -366,6 +369,11 @@ export class HostApiRouter {
     t.registerHandler("sys:get_args", async (_, sourcePid) => {
       if (!d.processManager) return null;
       return d.processManager.getArgs(sourcePid);
+    });
+
+    t.registerHandler("sys:get_providers", async () => {
+      if (!d.shell || !d.shell.getMergedProviders) return [];
+      return d.shell.getMergedProviders();
     });
 
     // ==========================================
