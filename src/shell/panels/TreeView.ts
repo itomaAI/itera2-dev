@@ -493,7 +493,7 @@ export class TreeView {
 
     if (srcPath === newPath) return;
     if (destFolder.startsWith(srcPath + "/")) {
-      alert("Cannot move a folder into its own subfolder.");
+      if (window.AppUI) window.AppUI.alert("Cannot move a folder into its own subfolder.");
       return;
     }
 
@@ -713,8 +713,8 @@ export class TreeView {
     this.contextMenu.style.top = `${posY}px`;
   }
 
-  private _promptCreate(parentPath: string, type: "file" | "folder") {
-    const name = prompt(`Enter new ${type} name:`);
+  private async _promptCreate(parentPath: string, type: "file" | "folder") {
+    const name = await window.AppUI?.prompt(`Enter new ${type} name:`);
     if (!name) return;
 
     let fullPath = parentPath ? `${parentPath}/${name}` : name;
@@ -730,14 +730,14 @@ export class TreeView {
     }
   }
 
-  private _promptRename(path: string) {
-    const newPath = prompt(`Edit path to rename/move:`, path);
+  private async _promptRename(path: string) {
+    const newPath = await window.AppUI?.prompt(`Edit path to rename/move:`, path);
     if (!newPath || newPath === path) return;
     if (this.events["rename"]) this.events["rename"](path, newPath);
   }
 
-  private _confirmDelete(path: string, name: string) {
-    if (confirm(`Are you sure you want to delete "${name}"?`)) {
+  private async _confirmDelete(path: string, name: string) {
+    if (await window.AppUI?.confirm(`Are you sure you want to delete "${name}"?`)) {
       if (this.events["delete"]) this.events["delete"](path);
     }
   }

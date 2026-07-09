@@ -3,34 +3,15 @@
  * Itera OS v2: Vite Entry Point
  */
 
-import { ShellController } from "./shell/core/ShellController";
+import { SystemBootstrapper } from "./shell/core/SystemBootstrapper";
 import "./style.css";
 
-window.AppUI = {
-  notify: (msg: string, type: string = "info") => {
-    console.log(`[Notification: ${type}] ${msg}`);
-    if (type === "error") alert(`Error: ${msg}`);
-  },
-  showLoading: (msg: string) => {
-    console.log(`[Loading] ${msg}`);
-  },
-  hideLoading: () => {
-    console.log(`[Loading] Done.`);
-  },
-  prompt: async (msg: string, defaultVal?: string) => {
-    return prompt(msg, defaultVal);
-  },
-  confirm: async (msg: string) => {
-    return confirm(msg);
-  },
-};
-
 document.addEventListener("DOMContentLoaded", async () => {
-  const controller = new ShellController();
-
   try {
-    await controller.init();
+    // OS のブートシーケンスを開始
+    await SystemBootstrapper.boot();
 
+    // 起動完了後、ローダーをフェードアウト
     const loader = document.getElementById("boot-loader");
     if (loader) {
       loader.classList.add("animate-fade-out");

@@ -65,7 +65,7 @@ export class ProcessManager {
             targetProc.path,
             "foreground",
             true,
-            targetProc.launchContext,
+            targetProc.args,
             targetProc.currentUri,
           );
         } else {

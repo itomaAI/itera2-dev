@@ -126,7 +126,7 @@ export class TaskSwitcherModal {
           app.path,
           "foreground",
           false,
-          app.launchContext,
+          app.args,
         );
         this.close();
       };

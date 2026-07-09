@@ -392,14 +392,12 @@ export class ChatPanel {
     btnDelete.className =
       "absolute top-2 right-2 text-text-muted hover:text-error opacity-100 md:opacity-0 group-hover:opacity-100 p-1 transition";
     btnDelete.innerHTML = "×";
-    btnDelete.onclick = (e) => {
+    btnDelete.onclick = async (e) => {
       e.stopPropagation();
-      const ask = window.AppUI ? window.AppUI.confirm : confirm;
-      Promise.resolve(ask("Delete this message?")).then((confirmed) => {
-        if (confirmed && this.events["delete_turn"]) {
-          this.events["delete_turn"](turn.id);
-        }
-      });
+      const confirmed = await window.AppUI?.confirm("Delete this message?");
+      if (confirmed && this.events["delete_turn"]) {
+        this.events["delete_turn"](turn.id);
+      }
     };
     div.appendChild(btnDelete);
 

@@ -334,8 +334,7 @@ export class Explorer {
   }
 
   private async _promptCreateRoot(type: "file" | "folder") {
-    const ask = window.AppUI ? window.AppUI.prompt : prompt;
-    const name = await Promise.resolve(ask(`Enter new ${type} name:`));
+    const name = await window.AppUI?.prompt(`Enter new ${type} name:`);
     if (!name) return;
 
     const fullPath = name.replace(/^\/+/, "");
