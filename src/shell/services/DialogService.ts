@@ -5,7 +5,7 @@
 
 export class DialogService {
   // 過去のコードとの互換性のため duration 引数は残しますが、自動では消えなくなります。
-  public notify(message: string, type: string = "info"): void {
+  public notify(message: string, type: string = "info", duration?: number): void {
     let container = document.getElementById("__itera-toast-container");
     if (!container) {
       container = document.createElement("div");
@@ -63,16 +63,28 @@ export class DialogService {
     `;
     
     const closeBtn = toast.querySelector("button");
-    if (closeBtn) {
-      closeBtn.onclick = () => {
+    const closeToast = () => {
+      if (document.body.contains(toast)) {
         toast.style.opacity = "0";
         toast.style.transform = "translateY(-10px)";
         // transitionendは不安定なため、setTimeoutで確実にDOMから破棄する
         setTimeout(() => toast.remove(), 200);
-      };
+      }
+    };
+
+    if (closeBtn) {
+      closeBtn.onclick = closeToast;
     }
 
     container.appendChild(toast);
+
+    // durationが明示されているか、info/successの場合は自動で消去する
+    const shouldAutoDismiss = duration !== undefined ? duration > 0 : (type === "info" || type === "success");
+    const timeoutMs = (duration && duration > 0) ? duration : 3000;
+
+    if (shouldAutoDismiss) {
+      setTimeout(closeToast, timeoutMs);
+    }
   }
 
   public showLoading(message: string = "Processing..."): void {

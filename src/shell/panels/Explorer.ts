@@ -16,13 +16,7 @@ declare const JSZip: any;
 
 declare global {
   interface Window {
-    AppUI?: {
-      notify: (msg: string, type?: string) => void;
-      showLoading: (msg: string) => void;
-      hideLoading: () => void;
-      prompt: (msg: string, defaultVal?: string) => Promise<string | null>;
-      confirm: (msg: string) => Promise<boolean>;
-    };
+    AppUI?: any;
   }
 }
 
@@ -81,7 +75,17 @@ export class Explorer {
   private _bindVFS(): void {
     this.treeView.render(this.vfs.getTree(USER_PRINCIPAL));
     this.eventBus.subscribe((events) => {
-      this.treeView.applyEvents(events);
+      // ディレクトリの大規模な構造変更が含まれている場合はツリー全体を再構築する
+      const needsFullRender = events.some(e => 
+        (e.type === "move" || e.type === "rename" || e.type === "trash" || e.type === "restore") && 
+        e.node?.kind === "directory"
+      );
+
+      if (needsFullRender) {
+        this.treeView.render(this.vfs.getTree(USER_PRINCIPAL));
+      } else {
+        this.treeView.applyEvents(events);
+      }
     });
   }
 
@@ -229,16 +233,24 @@ export class Explorer {
       if (this.els.INPUT_FILE) this.els.INPUT_FILE.click();
     });
 
+    // フォルダのアップロード時は、既存のinputではなく専用のinputを動的に作成して使い捨てる
     this.treeView.on("upload_folder_request", (path: string) => {
       this.currentUploadTarget = path;
-      if (this.els.INPUT_FILE) {
-        this.els.INPUT_FILE.setAttribute("webkitdirectory", "");
-        this.els.INPUT_FILE.click();
-        setTimeout(
-          () => this.els.INPUT_FILE?.removeAttribute("webkitdirectory"),
-          100,
-        );
-      }
+      
+      const folderInput = document.createElement("input");
+      folderInput.type = "file";
+      folderInput.multiple = true;
+      folderInput.setAttribute("webkitdirectory", "");
+      folderInput.setAttribute("directory", "");
+      folderInput.style.display = "none";
+
+      folderInput.onchange = (e) => {
+        this._handleUploadAppend(e, true);
+        folderInput.remove();
+      };
+
+      document.body.appendChild(folderInput);
+      folderInput.click();
     });
   }
 
@@ -369,7 +381,7 @@ export class Explorer {
     if (files.length === 0) return;
 
     if (window.AppUI)
-      window.AppUI.showLoading(`Uploading ${files.length} items...`);
+      window.AppUI.notify(`Uploading ${files.length} items...`, "info");
 
     const uploadedPaths: string[] = [];
     const targetDir = this.currentUploadTarget
@@ -394,6 +406,7 @@ export class Explorer {
     }
 
     if (uploadedPaths.length > 0) {
+      if (window.AppUI) window.AppUI.notify(`Upload complete: ${uploadedPaths.length} items`, "success");
       const summary =
         uploadedPaths.slice(0, 3).join(", ") +
         (uploadedPaths.length > 3 ? "..." : "");
@@ -404,7 +417,6 @@ export class Explorer {
     }
 
     input.value = "";
-    if (window.AppUI) window.AppUI.hideLoading();
   }
 
   private _bindSidebarDnD(): void {
@@ -448,7 +460,7 @@ export class Explorer {
       const items = e.dataTransfer?.items;
       if (!items) return;
 
-      if (window.AppUI) window.AppUI.showLoading("Processing Drop...");
+      if (window.AppUI) window.AppUI.notify("Processing dropped files...", "info");
 
       const promises: Promise<File[]>[] = [];
       for (let i = 0; i < items.length; i++) {
@@ -466,9 +478,8 @@ export class Explorer {
 
       if (filesToUpload.length > 0) {
         await this._batchWriteFiles(filesToUpload);
+        if (window.AppUI) window.AppUI.notify("Drop processed successfully.", "success");
       }
-
-      if (window.AppUI) window.AppUI.hideLoading();
     });
   }
 
