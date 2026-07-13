@@ -107,13 +107,28 @@ export class SystemBootstrapper {
       null,
       translator,
       toolRegistry,
-      {}
+      {},
     );
 
-    const cognitiveManager = new CognitiveManager(configManager, engine, logger, vfs);
-    const sessionManager = new SessionManager(vfs, history, logger, toolRegistry);
+    const cognitiveManager = new CognitiveManager(
+      configManager,
+      engine,
+      logger,
+      vfs,
+    );
+    const sessionManager = new SessionManager(
+      vfs,
+      history,
+      logger,
+      toolRegistry,
+    );
     const themeService = new ThemeService(configManager, vfs);
-    const maintenanceDaemon = new MaintenanceDaemon(processManager, logger, vfs, nodeStore);
+    const maintenanceDaemon = new MaintenanceDaemon(
+      processManager,
+      logger,
+      vfs,
+      nodeStore,
+    );
 
     const desktop = new DesktopEnvironment(
       vfs,
@@ -124,7 +139,7 @@ export class SystemBootstrapper {
       resolver,
       processManager,
       uriRouter,
-      cognitiveManager
+      cognitiveManager,
     );
 
     // ==========================================
@@ -149,7 +164,7 @@ export class SystemBootstrapper {
       processManager: processManager,
       resolver: resolver,
       transport: transport,
-      clearSession: (opts: any) => sessionManager.clearSession(opts)
+      clearSession: (opts: any) => sessionManager.clearSession(opts),
     };
 
     // EngineコンテキストにもFacadeを注入
@@ -175,13 +190,13 @@ export class SystemBootstrapper {
       sessionManager,
       cognitiveManager,
       resolver,
-      eventBus
+      eventBus,
     );
 
     // ==========================================
     // 6. Final Bindings & Boot Execution
     // ==========================================
-    
+
     // システムリセットなどの特殊なクリーンアップバインディング
     desktop.modals.system.on("reset", async () => {
       try {
@@ -205,7 +220,10 @@ export class SystemBootstrapper {
 
     themeService.setOnThemeAppliedCallback((payload) => {
       desktop.modals.editor.setTheme(payload.isDark ? "dark" : "light");
-      desktop.modals.editor.updateTypography(payload.fontSize, payload.monoFont);
+      desktop.modals.editor.updateTypography(
+        payload.fontSize,
+        payload.monoFont,
+      );
     });
 
     // ルーティングとイベントの活性化
@@ -213,17 +231,22 @@ export class SystemBootstrapper {
     themeService.start();
 
     // 初期化タスクの実行
-    await themeService.applyAppearance(configManager.get("appearance") || { theme: "system/themes/dark.json" });
+    await themeService.applyAppearance(
+      configManager.get("appearance") || { theme: "system/themes/dark.json" },
+    );
     desktop.panels.chat.renderHistory(history.get());
     desktop.updateStorageUI(vfs.getUsage({ type: "user", id: "local_user" }));
-    
+
     await cognitiveManager.refreshEngineConfig();
     await maintenanceDaemon.start();
 
     // ダッシュボードの起動
     await processManager.spawn("main", "index.html", "foreground");
 
-    logger.log("system", { action: "boot", message: "System booted successfully" });
+    logger.log("system", {
+      action: "boot",
+      message: "System booted successfully",
+    });
     console.log("[Itera] OS Ready.");
   }
 }

@@ -278,12 +278,13 @@ window.addEventListener('message', async (e) => {
       if (val) css += `  ${v}: ${val};\n`;
     });
 
-    const fontSize = root.style.fontSize || '16px';
+    const fontSize = root.style.fontSize || "16px";
     css += `  font-size: ${fontSize};\n`;
     css += "}";
 
-    if (root.getAttribute('data-animations') === 'false') {
-      css += "\n* { animation-duration: 0.001ms !important; transition-duration: 0.001ms !important; scroll-behavior: auto !important; }";
+    if (root.getAttribute("data-animations") === "false") {
+      css +=
+        "\n* { animation-duration: 0.001ms !important; transition-duration: 0.001ms !important; scroll-behavior: auto !important; }";
     }
 
     return `<style id="itera-guest-theme">${css}</style>`;

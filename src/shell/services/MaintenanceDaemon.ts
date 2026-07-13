@@ -29,21 +29,24 @@ export class MaintenanceDaemon {
 
   public async start(): Promise<void> {
     await this._startInitialDaemons();
-    
+
     // Initial run
     this._performDailyMaintenance();
-    
+
     // Run every 24 hours
-    setInterval(() => {
-      this._performDailyMaintenance();
-    }, 24 * 60 * 60 * 1000);
+    setInterval(
+      () => {
+        this._performDailyMaintenance();
+      },
+      24 * 60 * 60 * 1000,
+    );
   }
 
   private async _startInitialDaemons(): Promise<void> {
     try {
       let services: any[] = [];
       const registryPath = "system/registry/services.json";
-      
+
       if (this.vfs.exists(SYSTEM_PRINCIPAL, registryPath)) {
         const content = await this.vfs.readFile(SYSTEM_PRINCIPAL, registryPath);
         services = JSON.parse(content);
@@ -54,7 +57,10 @@ export class MaintenanceDaemon {
         }
       }
     } catch (e) {
-      console.warn("[MaintenanceDaemon] Failed to start background services", e);
+      console.warn(
+        "[MaintenanceDaemon] Failed to start background services",
+        e,
+      );
     }
   }
 
@@ -82,7 +88,9 @@ export class MaintenanceDaemon {
       }
 
       if (purged > 0) {
-        console.log(`[MaintenanceDaemon] Daily maintenance completed. Purged ${purged} old logs.`);
+        console.log(
+          `[MaintenanceDaemon] Daily maintenance completed. Purged ${purged} old logs.`,
+        );
       } else {
         console.log(`[MaintenanceDaemon] Daily maintenance completed.`);
       }

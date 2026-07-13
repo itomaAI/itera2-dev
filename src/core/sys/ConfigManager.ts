@@ -38,7 +38,7 @@ const DEFAULT_CONFIG: OsConfig = {
   appearance: {
     theme: "system/themes/light.json",
     typography: { uiFont: "Inter", monoFont: "monospace", fontSize: "medium" },
-    layout: { animations: true }
+    layout: { animations: true },
   },
   llm: { model: "gemini-3-flash-preview", temperature: 1.0 },
   network: {

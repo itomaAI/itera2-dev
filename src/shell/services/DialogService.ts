@@ -5,7 +5,11 @@
 
 export class DialogService {
   // 過去のコードとの互換性のため duration 引数は残しますが、自動では消えなくなります。
-  public notify(message: string, type: string = "info", duration?: number): void {
+  public notify(
+    message: string,
+    type: string = "info",
+    duration?: number,
+  ): void {
     let container = document.getElementById("__itera-toast-container");
     if (!container) {
       container = document.createElement("div");
@@ -61,7 +65,7 @@ export class DialogService {
       </div>
       <button class="text-text-muted hover:text-text-main transition flex-shrink-0" style="padding: 2px; line-height: 1;">✕</button>
     `;
-    
+
     const closeBtn = toast.querySelector("button");
     const closeToast = () => {
       if (document.body.contains(toast)) {
@@ -79,8 +83,11 @@ export class DialogService {
     container.appendChild(toast);
 
     // durationが明示されているか、info/successの場合は自動で消去する
-    const shouldAutoDismiss = duration !== undefined ? duration > 0 : (type === "info" || type === "success");
-    const timeoutMs = (duration && duration > 0) ? duration : 3000;
+    const shouldAutoDismiss =
+      duration !== undefined
+        ? duration > 0
+        : type === "info" || type === "success";
+    const timeoutMs = duration && duration > 0 ? duration : 3000;
 
     if (shouldAutoDismiss) {
       setTimeout(closeToast, timeoutMs);
@@ -106,18 +113,43 @@ export class DialogService {
   }
 
   public alert(message: string, title: string = "System Alert"): Promise<void> {
-    return this._createDialog({ type: "alert", message, title }) as Promise<void>;
+    return this._createDialog({
+      type: "alert",
+      message,
+      title,
+    }) as Promise<void>;
   }
 
-  public confirm(message: string, title: string = "Confirmation"): Promise<boolean> {
-    return this._createDialog({ type: "confirm", message, title }) as Promise<boolean>;
+  public confirm(
+    message: string,
+    title: string = "Confirmation",
+  ): Promise<boolean> {
+    return this._createDialog({
+      type: "confirm",
+      message,
+      title,
+    }) as Promise<boolean>;
   }
 
-  public prompt(message: string, defaultValue: string = "", title: string = "Input Required"): Promise<string | null> {
-    return this._createDialog({ type: "prompt", message, title, defaultValue }) as Promise<string | null>;
+  public prompt(
+    message: string,
+    defaultValue: string = "",
+    title: string = "Input Required",
+  ): Promise<string | null> {
+    return this._createDialog({
+      type: "prompt",
+      message,
+      title,
+      defaultValue,
+    }) as Promise<string | null>;
   }
 
-  private _createDialog(options: { type: string; message: string; title: string; defaultValue?: string }): Promise<any> {
+  private _createDialog(options: {
+    type: string;
+    message: string;
+    title: string;
+    defaultValue?: string;
+  }): Promise<any> {
     const { type, message, title, defaultValue } = options;
 
     return new Promise((resolve) => {
@@ -131,12 +163,14 @@ export class DialogService {
 
       // Header
       const header = document.createElement("div");
-      header.className = "px-4 py-3 border-b border-border-main bg-panel flex items-center";
+      header.className =
+        "px-4 py-3 border-b border-border-main bg-panel flex items-center";
       header.innerHTML = `<span class="font-bold text-sm text-text-main">${title}</span>`;
 
       // Body
       const body = document.createElement("div");
-      body.className = "p-4 text-sm text-text-main whitespace-pre-wrap leading-relaxed";
+      body.className =
+        "p-4 text-sm text-text-main whitespace-pre-wrap leading-relaxed";
       body.textContent = message;
 
       let input: HTMLInputElement | null = null;
@@ -153,7 +187,8 @@ export class DialogService {
 
       // Footer
       const footer = document.createElement("div");
-      footer.className = "px-4 py-3 border-t border-border-main bg-panel flex justify-end gap-2";
+      footer.className =
+        "px-4 py-3 border-t border-border-main bg-panel flex justify-end gap-2";
 
       const closeDialog = (val: any) => {
         overlay.style.opacity = "0";
@@ -171,7 +206,8 @@ export class DialogService {
       btnOk.className =
         "px-4 py-1.5 rounded text-xs font-bold bg-primary text-white hover:bg-primary/90 transition";
       btnOk.textContent = "OK";
-      btnOk.onclick = () => closeDialog(type === "prompt" ? (input ? input.value : "") : true);
+      btnOk.onclick = () =>
+        closeDialog(type === "prompt" ? (input ? input.value : "") : true);
 
       if (type !== "alert") {
         footer.appendChild(btnCancel);

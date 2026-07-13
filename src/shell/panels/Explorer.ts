@@ -76,9 +76,13 @@ export class Explorer {
     this.treeView.render(this.vfs.getTree(USER_PRINCIPAL));
     this.eventBus.subscribe((events) => {
       // ディレクトリの大規模な構造変更が含まれている場合はツリー全体を再構築する
-      const needsFullRender = events.some(e => 
-        (e.type === "move" || e.type === "rename" || e.type === "trash" || e.type === "restore") && 
-        e.node?.kind === "directory"
+      const needsFullRender = events.some(
+        (e) =>
+          (e.type === "move" ||
+            e.type === "rename" ||
+            e.type === "trash" ||
+            e.type === "restore") &&
+          e.node?.kind === "directory",
       );
 
       if (needsFullRender) {
@@ -236,7 +240,7 @@ export class Explorer {
     // フォルダのアップロード時は、既存のinputではなく専用のinputを動的に作成して使い捨てる
     this.treeView.on("upload_folder_request", (path: string) => {
       this.currentUploadTarget = path;
-      
+
       const folderInput = document.createElement("input");
       folderInput.type = "file";
       folderInput.multiple = true;
@@ -406,7 +410,11 @@ export class Explorer {
     }
 
     if (uploadedPaths.length > 0) {
-      if (window.AppUI) window.AppUI.notify(`Upload complete: ${uploadedPaths.length} items`, "success");
+      if (window.AppUI)
+        window.AppUI.notify(
+          `Upload complete: ${uploadedPaths.length} items`,
+          "success",
+        );
       const summary =
         uploadedPaths.slice(0, 3).join(", ") +
         (uploadedPaths.length > 3 ? "..." : "");
@@ -460,7 +468,8 @@ export class Explorer {
       const items = e.dataTransfer?.items;
       if (!items) return;
 
-      if (window.AppUI) window.AppUI.notify("Processing dropped files...", "info");
+      if (window.AppUI)
+        window.AppUI.notify("Processing dropped files...", "info");
 
       const promises: Promise<File[]>[] = [];
       for (let i = 0; i < items.length; i++) {
@@ -478,7 +487,8 @@ export class Explorer {
 
       if (filesToUpload.length > 0) {
         await this._batchWriteFiles(filesToUpload);
-        if (window.AppUI) window.AppUI.notify("Drop processed successfully.", "success");
+        if (window.AppUI)
+          window.AppUI.notify("Drop processed successfully.", "success");
       }
     });
   }

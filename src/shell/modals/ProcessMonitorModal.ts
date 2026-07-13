@@ -78,7 +78,9 @@ export class ProcessMonitorModal {
       "px-4 py-2 rounded-lg text-xs font-bold text-error hover:text-white border border-error/50 hover:bg-error transition";
     btnKillAll.innerText = "Kill All Daemons";
     btnKillAll.onclick = async () => {
-      const confirmed = await window.AppUI?.confirm("Are you sure you want to kill all background daemons?");
+      const confirmed = await window.AppUI?.confirm(
+        "Are you sure you want to kill all background daemons?",
+      );
       if (confirmed) {
         const procs = this.processManager.list();
         procs.forEach((p) => {

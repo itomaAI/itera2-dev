@@ -71,7 +71,8 @@ export class SessionManager {
     }
 
     if (restoreTools && this.toolRegistry) {
-      const activeToolDefs = this.toolRegistry.getActiveDynamicToolDefinitions();
+      const activeToolDefs =
+        this.toolRegistry.getActiveDynamicToolDefinitions();
       if (activeToolDefs.length > 0) {
         const defsText = activeToolDefs.join("\n");
         this.history.append(

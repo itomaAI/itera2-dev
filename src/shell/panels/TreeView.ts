@@ -493,7 +493,8 @@ export class TreeView {
 
     if (srcPath === newPath) return;
     if (destFolder.startsWith(srcPath + "/")) {
-      if (window.AppUI) window.AppUI.alert("Cannot move a folder into its own subfolder.");
+      if (window.AppUI)
+        window.AppUI.alert("Cannot move a folder into its own subfolder.");
       return;
     }
 
@@ -731,13 +732,18 @@ export class TreeView {
   }
 
   private async _promptRename(path: string) {
-    const newPath = await window.AppUI?.prompt(`Edit path to rename/move:`, path);
+    const newPath = await window.AppUI?.prompt(
+      `Edit path to rename/move:`,
+      path,
+    );
     if (!newPath || newPath === path) return;
     if (this.events["rename"]) this.events["rename"](path, newPath);
   }
 
   private async _confirmDelete(path: string, name: string) {
-    if (await window.AppUI?.confirm(`Are you sure you want to delete "${name}"?`)) {
+    if (
+      await window.AppUI?.confirm(`Are you sure you want to delete "${name}"?`)
+    ) {
       if (this.events["delete"]) this.events["delete"](path);
     }
   }

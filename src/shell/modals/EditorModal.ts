@@ -93,7 +93,7 @@ export class EditorModal {
     if (this.editorInstance && (window as any).monaco) {
       this.editorInstance.updateOptions({
         fontSize: this.currentFontSize,
-        fontFamily: this.currentMonoFont
+        fontFamily: this.currentMonoFont,
       });
     }
   }

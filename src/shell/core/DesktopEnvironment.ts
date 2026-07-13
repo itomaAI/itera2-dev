@@ -59,7 +59,7 @@ export class DesktopEnvironment {
     resolver: FileAssociationResolver,
     processManager: ProcessManager,
     uriRouter: UriRouter,
-    cognitiveManager: CognitiveManager
+    cognitiveManager: CognitiveManager,
   ) {
     const lpmlRenderer = new LpmlRenderer();
 
@@ -74,11 +74,14 @@ export class DesktopEnvironment {
     this._cameraModal = new CameraModal();
     this._audioModal = new AudioModal();
     this._systemModal = new SystemModal(vfs, nodeStore, contentStore);
-    
+
     // ApiSettingsModal は duck typing で CognitiveManager を渡す (getMergedProviders を持つため)
     this._apiSettingsModal = new ApiSettingsModal(cognitiveManager);
     this._syncModal = new SyncModal();
-    this._taskSwitcherModal = new TaskSwitcherModal(processManager, appRegistry);
+    this._taskSwitcherModal = new TaskSwitcherModal(
+      processManager,
+      appRegistry,
+    );
     this._processMonitorModal = new ProcessMonitorModal(processManager);
     this._propertiesModal = new PropertiesModal(vfs);
     this.commandPalette = new CommandPaletteModal(vfs, appRegistry, uriRouter);
@@ -113,7 +116,11 @@ export class DesktopEnvironment {
 
   // --- UI Manipulation Methods ---
 
-  public updateStorageUI(usage: { used: number; max: number; percent: number }): void {
+  public updateStorageUI(usage: {
+    used: number;
+    max: number;
+    percent: number;
+  }): void {
     const bar = document.getElementById("storage-usage-bar");
     const text = document.getElementById("storage-usage-text");
     if (!bar || !text) return;
@@ -124,7 +131,12 @@ export class DesktopEnvironment {
     text.textContent = `${usedMB} / ${maxMB} MB`;
     bar.style.width = `${usage.percent}%`;
 
-    bar.classList.remove("bg-primary", "bg-warning", "bg-error", "animate-pulse");
+    bar.classList.remove(
+      "bg-primary",
+      "bg-warning",
+      "bg-error",
+      "animate-pulse",
+    );
     text.classList.remove("text-error", "font-bold");
 
     if (usage.percent > 95) {
@@ -144,7 +156,10 @@ export class DesktopEnvironment {
     if (this.saveFeedbackTimer) clearTimeout(this.saveFeedbackTimer);
 
     if (bar) {
-      bar.classList.add("brightness-150", "shadow-[0_0_8px_rgba(255,255,255,0.6)]");
+      bar.classList.add(
+        "brightness-150",
+        "shadow-[0_0_8px_rgba(255,255,255,0.6)]",
+      );
     }
 
     if (statusEl) {
@@ -155,7 +170,10 @@ export class DesktopEnvironment {
 
     this.saveFeedbackTimer = setTimeout(() => {
       if (bar) {
-        bar.classList.remove("brightness-150", "shadow-[0_0_8px_rgba(255,255,255,0.6)]");
+        bar.classList.remove(
+          "brightness-150",
+          "shadow-[0_0_8px_rgba(255,255,255,0.6)]",
+        );
       }
       if (statusEl) {
         statusEl.classList.add("opacity-0");
@@ -164,7 +182,9 @@ export class DesktopEnvironment {
   }
 
   public updateAddressBar(uri: string): void {
-    const addressBar = document.getElementById("preview-address-bar") as HTMLInputElement;
+    const addressBar = document.getElementById(
+      "preview-address-bar",
+    ) as HTMLInputElement;
     if (addressBar) {
       addressBar.value = uri;
     }

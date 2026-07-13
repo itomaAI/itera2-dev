@@ -17,8 +17,10 @@ export interface ParseResult extends Array<ParsedAction> {
 }
 
 export class Translator {
-  static PATTERN_ATTRIBUTE = /\s+([^"'/<>=\s]+)=(?:"((?:[^"\\]|\\.)*)"|'((?:[^'\\]|\\.)*)')/g;
-  static ATTR_PART_NO_CAPTURE = "\\s+[^\"'/<>=\\s]+=(?:\"(?:[^\"\\\\]|\\\\.)*\"|'(?:[^'\\\\]|\\\\.)*')";
+  static PATTERN_ATTRIBUTE =
+    /\s+([^"'/<>=\s]+)=(?:"((?:[^"\\]|\\.)*)"|'((?:[^'\\]|\\.)*)')/g;
+  static ATTR_PART_NO_CAPTURE =
+    "\\s+[^\"'/<>=\\s]+=(?:\"(?:[^\"\\\\]|\\\\.)*\"|'(?:[^'\\\\]|\\\\.)*')";
   static PATTERN_TAG_START =
     "<([^/>\\s\\n]+)((?:" + Translator.ATTR_PART_NO_CAPTURE + ")*)\\s*>";
   static PATTERN_TAG_END = "</([^/>\\s\\n]+)\\s*>";

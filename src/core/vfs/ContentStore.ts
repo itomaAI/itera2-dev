@@ -177,7 +177,9 @@ export class ContentStore {
       for await (const key of root.keys()) {
         await root.removeEntry(key, { recursive: true });
       }
-      console.log(`[ContentStore] All OPFS contents have been successfully cleared.`);
+      console.log(
+        `[ContentStore] All OPFS contents have been successfully cleared.`,
+      );
     } catch (e: any) {
       console.error(`[ContentStore] Failed to clear OPFS contents:`, e);
       throw new Error(`OPFS Clear Error: ${e.message || String(e)}`);

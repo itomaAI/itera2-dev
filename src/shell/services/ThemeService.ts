@@ -16,14 +16,17 @@ export interface ThemeAppliedPayload {
 export class ThemeService {
   private configManager: ConfigManager;
   private vfs: VfsService;
-  private onThemeApplied: ((payload: ThemeAppliedPayload) => void) | null = null;
+  private onThemeApplied: ((payload: ThemeAppliedPayload) => void) | null =
+    null;
 
   constructor(configManager: ConfigManager, vfs: VfsService) {
     this.configManager = configManager;
     this.vfs = vfs;
   }
 
-  public setOnThemeAppliedCallback(callback: (payload: ThemeAppliedPayload) => void): void {
+  public setOnThemeAppliedCallback(
+    callback: (payload: ThemeAppliedPayload) => void,
+  ): void {
     this.onThemeApplied = callback;
   }
 
@@ -40,24 +43,25 @@ export class ThemeService {
       const root = document.documentElement;
 
       // 1. Typography & Layout
-      const uiFont = appearance.typography?.uiFont || 'Inter';
-      const monoFont = appearance.typography?.monoFont || 'monospace';
-      root.style.setProperty('--font-sans', uiFont);
-      root.style.setProperty('--font-mono', monoFont);
+      const uiFont = appearance.typography?.uiFont || "Inter";
+      const monoFont = appearance.typography?.monoFont || "monospace";
+      root.style.setProperty("--font-sans", uiFont);
+      root.style.setProperty("--font-mono", monoFont);
 
       const sizeMap: Record<string, string> = {
-        small: '14px',
-        medium: '16px',
-        large: '18px',
-        'x-large': '20px'
+        small: "14px",
+        medium: "16px",
+        large: "18px",
+        "x-large": "20px",
       };
-      const sizeStr = sizeMap[appearance.typography?.fontSize || 'medium'] || '16px';
+      const sizeStr =
+        sizeMap[appearance.typography?.fontSize || "medium"] || "16px";
       root.style.fontSize = sizeStr;
 
       if (appearance.layout?.animations === false) {
-        root.setAttribute('data-animations', 'false');
+        root.setAttribute("data-animations", "false");
       } else {
-        root.removeAttribute('data-animations');
+        root.removeAttribute("data-animations");
       }
 
       // 2. Theme Colors
@@ -72,7 +76,10 @@ export class ThemeService {
       const setVar = (name: string, hex: string) => {
         if (!hex) return;
         const shorthandRegex = /^#?([a-f\d])([a-f\d])([a-f\d])$/i;
-        hex = hex.replace(shorthandRegex, (_m, r, g, b) => r + r + g + g + b + b);
+        hex = hex.replace(
+          shorthandRegex,
+          (_m, r, g, b) => r + r + g + g + b + b,
+        );
         const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
         if (result) {
           root.style.setProperty(
@@ -99,7 +106,10 @@ export class ThemeService {
       setVar("--c-accent-success", colors.accent?.success);
       setVar("--c-accent-warning", colors.accent?.warning);
       setVar("--c-accent-error", colors.accent?.error);
-      setVar("--c-tag-thinking", colors.tags?.thinking || colors.accent?.primary);
+      setVar(
+        "--c-tag-thinking",
+        colors.tags?.thinking || colors.accent?.primary,
+      );
       setVar("--c-tag-plan", colors.tags?.plan || colors.accent?.success);
       setVar("--c-tag-report", colors.tags?.report || colors.accent?.warning);
       setVar("--c-tag-error", colors.tags?.error || colors.accent?.error);
@@ -109,7 +119,7 @@ export class ThemeService {
         this.onThemeApplied({
           isDark,
           fontSize: parseInt(sizeStr, 10),
-          monoFont
+          monoFont,
         });
       }
     } catch (e) {

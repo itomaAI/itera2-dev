@@ -47,7 +47,9 @@ export class CognitiveManager {
     const merged = JSON.parse(JSON.stringify(PROVIDERS));
 
     try {
-      if (this.vfs.exists(SYSTEM_PRINCIPAL, "system/registry/llm_profiles.json")) {
+      if (
+        this.vfs.exists(SYSTEM_PRINCIPAL, "system/registry/llm_profiles.json")
+      ) {
         const content = await this.vfs.readFile(
           SYSTEM_PRINCIPAL,
           "system/registry/llm_profiles.json",
@@ -74,7 +76,10 @@ export class CognitiveManager {
         }
       }
     } catch (e) {
-      console.warn("[CognitiveManager] Failed to parse llm_profiles.json, using defaults.", e);
+      console.warn(
+        "[CognitiveManager] Failed to parse llm_profiles.json, using defaults.",
+        e,
+      );
     }
 
     return merged;
@@ -114,7 +119,9 @@ export class CognitiveManager {
     if (providerData) {
       capabilities = { ...providerData.defaultCapabilities };
       if (Array.isArray(providerData.models)) {
-        const modelData = providerData.models.find((m: any) => m.id === modelName);
+        const modelData = providerData.models.find(
+          (m: any) => m.id === modelName,
+        );
         if (modelData && modelData.capabilities) {
           capabilities = { ...capabilities, ...modelData.capabilities };
         }
@@ -135,11 +142,26 @@ export class CognitiveManager {
               ? secrets.custom_url || "http://localhost:11434/v1"
               : "https://api.openai.com/v1";
         newProjector = new OpenAIProjector(SYSTEM_PROMPT, capabilities);
-        newLlm = new OpenAIAdapter(apiKey, modelName, baseUrl, llmConfig, this.logger);
+        newLlm = new OpenAIAdapter(
+          apiKey,
+          modelName,
+          baseUrl,
+          llmConfig,
+          this.logger,
+        );
         break;
       case "anthropic":
-        newProjector = new AnthropicProjector(SYSTEM_PROMPT, capabilities, apiKey);
-        newLlm = new AnthropicAdapter(apiKey, modelName, llmConfig, this.logger);
+        newProjector = new AnthropicProjector(
+          SYSTEM_PROMPT,
+          capabilities,
+          apiKey,
+        );
+        newLlm = new AnthropicAdapter(
+          apiKey,
+          modelName,
+          llmConfig,
+          this.logger,
+        );
         break;
       case "google":
       default:

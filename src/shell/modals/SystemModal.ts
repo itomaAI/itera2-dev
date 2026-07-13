@@ -70,7 +70,7 @@ export class SystemModal {
     if (this.els.BTN_RESET) {
       this.els.BTN_RESET.onclick = async () => {
         const confirmed = await window.AppUI?.confirm(
-          "WARNING: This will permanently delete ALL files and settings.\n\nAre you absolutely sure?"
+          "WARNING: This will permanently delete ALL files and settings.\n\nAre you absolutely sure?",
         );
         if (confirmed) {
           if (this.events["reset"]) this.events["reset"]();
@@ -164,7 +164,7 @@ export class SystemModal {
     }
 
     const confirmed = await window.AppUI?.confirm(
-      `CAUTION: This will ERASE all current files and restore from "${file.name}".\n\nContinue?`
+      `CAUTION: This will ERASE all current files and restore from "${file.name}".\n\nContinue?`,
     );
     if (!confirmed) {
       input.value = "";
@@ -287,7 +287,7 @@ export class SystemModal {
     if (!file) return;
 
     const confirmed = await window.AppUI?.confirm(
-      `CAUTION: This will overwrite your entire file system index with "${file.name}".\nAre you sure you want to proceed?`
+      `CAUTION: This will overwrite your entire file system index with "${file.name}".\nAre you sure you want to proceed?`,
     );
     if (!confirmed) {
       input.value = "";
