@@ -48,9 +48,6 @@ export class ProcessManager {
       BTN_REFRESH: document.getElementById("btn-refresh"),
       ADDRESS_BAR: document.getElementById("preview-address-bar"),
     };
-
-    const legacyFrame = document.getElementById("preview-frame");
-    if (legacyFrame) legacyFrame.remove();
   }
 
   private _bindEvents(): void {

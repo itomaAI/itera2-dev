@@ -3,6 +3,8 @@
  * Itera OS v2: API Keys Management
  */
 
+import type { CognitiveManager } from "../services/CognitiveManager";
+
 const DOM_IDS = {
   MODAL: "api-settings-modal",
   CONTAINER: "api-settings-container",
@@ -13,14 +15,14 @@ const DOM_IDS = {
 };
 
 export class ApiSettingsModal {
-  private shell: any;
+  private cognitiveManager: CognitiveManager;
   private els: Record<string, HTMLElement | null> = {};
   private events: Record<string, Function> = {};
   private hasRendered = false;
   private providers: any[] = [];
 
-  constructor(shell: any) {
-    this.shell = shell;
+  constructor(cognitiveManager: CognitiveManager) {
+    this.cognitiveManager = cognitiveManager;
     this._initElements();
     this._bindEvents();
   }
@@ -41,7 +43,7 @@ export class ApiSettingsModal {
         '<div class="text-center text-text-muted text-xs p-4">Loading providers...</div>';
 
       try {
-        this.providers = await this.shell.getMergedProviders();
+        this.providers = await this.cognitiveManager.getMergedProviders();
       } catch (e) {
         console.warn("[ApiSettingsModal] Failed to get providers", e);
         this.providers = [];

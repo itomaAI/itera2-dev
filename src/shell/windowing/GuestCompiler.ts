@@ -447,7 +447,10 @@ window.addEventListener('message', async (e) => {
 
     // V1のモンキーパッチハックを廃止し、クリーンなグローバル変数として引数を注入
     if (args) {
-      headInjections += `<script>window.__ITERA_ARGS__ = ${JSON.stringify(args)};</script>\n`;
+      const safeArgs = JSON.stringify(args)
+        .replace(/</g, "\\u003c")
+        .replace(/>/g, "\\u003e");
+      headInjections += `<script>window.__ITERA_ARGS__ = ${safeArgs};</script>\n`;
     }
 
     headInjections += `<script src="${bridgeUrl}"></script>\n`;
