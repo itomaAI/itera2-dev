@@ -4,7 +4,7 @@
  */
 
 import type { VfsService } from "../../core/vfs/VfsService";
-import { USER_PRINCIPAL, type VfsStat } from "../../core/vfs/types";
+import { USER_PRINCIPAL } from "../../core/vfs/types";
 import { GuestBridgeBuilder } from "../../api/GuestBridgeBuilder";
 
 interface CachedAsset {
@@ -268,6 +268,8 @@ window.addEventListener('message', async (e) => {
       "--c-tag-plan",
       "--c-tag-report",
       "--c-tag-error",
+      "--font-sans",
+      "--font-mono",
     ];
 
     let css = ":root {\n";
@@ -275,7 +277,14 @@ window.addEventListener('message', async (e) => {
       const val = styles.getPropertyValue(v).trim();
       if (val) css += `  ${v}: ${val};\n`;
     });
+
+    const fontSize = root.style.fontSize || '16px';
+    css += `  font-size: ${fontSize};\n`;
     css += "}";
+
+    if (root.getAttribute('data-animations') === 'false') {
+      css += "\n* { animation-duration: 0.001ms !important; transition-duration: 0.001ms !important; scroll-behavior: auto !important; }";
+    }
 
     return `<style id="itera-guest-theme">${css}</style>`;
   }
@@ -414,8 +423,8 @@ window.addEventListener('message', async (e) => {
   private _injectHtmlScripts(
     htmlContent: string,
     pid: string,
-    search: string,
-    hash: string,
+    _search: string,
+    _hash: string,
     args?: Record<string, string>,
   ): string {
     let html = htmlContent;

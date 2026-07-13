@@ -66,7 +66,7 @@ export function registerSearchTools(registry: ToolRegistry): void {
 
         if (extensions.length > 0) {
           const ext = "." + filePath.split(".").pop()?.toLowerCase();
-          if (!extensions.some((e) => ext.endsWith(e))) continue;
+          if (!extensions.some((e: string) => ext.endsWith(e))) continue;
         }
 
         if (performance.now() - lastYieldTime > YIELD_INTERVAL_MS) {

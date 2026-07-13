@@ -1,36 +1,67 @@
 /**
  * src/shell/services/ThemeService.ts
- * Itera OS v2: Visual Theme Manager
+ * Itera OS v2: Visual Theme & Appearance Manager
  */
 
 import type { ConfigManager } from "../../core/sys/ConfigManager";
 import type { VfsService } from "../../core/vfs/VfsService";
 import { SYSTEM_PRINCIPAL } from "../../core/vfs/types";
 
+export interface ThemeAppliedPayload {
+  isDark: boolean;
+  fontSize: number;
+  monoFont: string;
+}
+
 export class ThemeService {
   private configManager: ConfigManager;
   private vfs: VfsService;
-  private onThemeApplied: ((isDark: boolean) => void) | null = null;
+  private onThemeApplied: ((payload: ThemeAppliedPayload) => void) | null = null;
 
   constructor(configManager: ConfigManager, vfs: VfsService) {
     this.configManager = configManager;
     this.vfs = vfs;
   }
 
-  public setOnThemeAppliedCallback(callback: (isDark: boolean) => void): void {
+  public setOnThemeAppliedCallback(callback: (payload: ThemeAppliedPayload) => void): void {
     this.onThemeApplied = callback;
   }
 
   public start(): void {
     this.configManager.onUpdate(async (config) => {
-      if (config.appearance && config.appearance.theme) {
-        await this.applyTheme(config.appearance.theme);
+      if (config.appearance) {
+        await this.applyAppearance(config.appearance);
       }
     });
   }
 
-  public async applyTheme(themePath: string): Promise<void> {
+  public async applyAppearance(appearance: any): Promise<void> {
     try {
+      const root = document.documentElement;
+
+      // 1. Typography & Layout
+      const uiFont = appearance.typography?.uiFont || 'Inter';
+      const monoFont = appearance.typography?.monoFont || 'monospace';
+      root.style.setProperty('--font-sans', uiFont);
+      root.style.setProperty('--font-mono', monoFont);
+
+      const sizeMap: Record<string, string> = {
+        small: '14px',
+        medium: '16px',
+        large: '18px',
+        'x-large': '20px'
+      };
+      const sizeStr = sizeMap[appearance.typography?.fontSize || 'medium'] || '16px';
+      root.style.fontSize = sizeStr;
+
+      if (appearance.layout?.animations === false) {
+        root.setAttribute('data-animations', 'false');
+      } else {
+        root.removeAttribute('data-animations');
+      }
+
+      // 2. Theme Colors
+      const themePath = appearance.theme || "system/themes/dark.json";
       if (!this.vfs.exists(SYSTEM_PRINCIPAL, themePath)) return;
 
       const content = await this.vfs.readFile(SYSTEM_PRINCIPAL, themePath);
@@ -38,7 +69,6 @@ export class ThemeService {
       const colors = theme.colors;
       if (!colors) return;
 
-      const root = document.documentElement;
       const setVar = (name: string, hex: string) => {
         if (!hex) return;
         const shorthandRegex = /^#?([a-f\d])([a-f\d])([a-f\d])$/i;
@@ -76,10 +106,14 @@ export class ThemeService {
 
       if (this.onThemeApplied) {
         const isDark = (colors.bg?.app?.toLowerCase() || "") < "#888888";
-        this.onThemeApplied(isDark);
+        this.onThemeApplied({
+          isDark,
+          fontSize: parseInt(sizeStr, 10),
+          monoFont
+        });
       }
     } catch (e) {
-      console.warn("[ThemeService] Failed to apply theme", e);
+      console.warn("[ThemeService] Failed to apply appearance", e);
     }
   }
 }

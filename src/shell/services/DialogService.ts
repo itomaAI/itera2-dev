@@ -19,7 +19,7 @@ export class DialogService {
         flexDirection: "column",
         alignItems: "center",
         gap: "0.5rem",
-        zIndex: "9999",
+        zIndex: "99999",
         pointerEvents: "none",
       });
       document.body.appendChild(container);
@@ -92,7 +92,7 @@ export class DialogService {
     const overlay = document.createElement("div");
     overlay.id = "__itera-loading-overlay";
     overlay.className =
-      "fixed inset-0 bg-app/80 backdrop-blur-sm z-[9999] flex flex-col items-center justify-center itera-animate-fade";
+      "fixed inset-0 bg-app/80 backdrop-blur-sm z-[99999] flex flex-col items-center justify-center itera-animate-fade";
     overlay.innerHTML = `
       <div class="loader mb-4"></div>
       <div class="text-sm font-bold text-text-muted tracking-wider uppercase animate-pulse">${message}</div>
@@ -123,7 +123,7 @@ export class DialogService {
     return new Promise((resolve) => {
       const overlay = document.createElement("div");
       overlay.className =
-        "fixed inset-0 bg-black/60 backdrop-blur-sm z-[9998] flex items-center justify-center p-4 itera-animate-fade select-none";
+        "fixed inset-0 bg-black/60 backdrop-blur-sm z-[99999] flex items-center justify-center p-4 itera-animate-fade select-none";
 
       const box = document.createElement("div");
       box.className =

@@ -33,6 +33,12 @@ body {
 @keyframes iteraFadeIn { from { opacity: 0; } to { opacity: 1; } }
 .itera-animate-fade { animation: iteraFadeIn 0.2s ease-out forwards; }
 
+html[data-animations="false"] *, html[data-animations="false"] *::before, html[data-animations="false"] *::after {
+    animation-duration: 0.001ms !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+}
+
 .pb-safe { padding-bottom: env(safe-area-inset-bottom); }
 
 .hljs { color: rgb(var(--c-text-main)); background: transparent; }
@@ -46,6 +52,9 @@ body {
 .hljs-number, .hljs-literal { color: rgb(var(--c-accent-warning)); }
 
 :root {
+    --font-sans: 'Inter';
+    --font-mono: monospace;
+
     --c-bg-app: 17 24 39;
     --c-bg-panel: 31 41 55;
     --c-bg-card: 55 65 81;

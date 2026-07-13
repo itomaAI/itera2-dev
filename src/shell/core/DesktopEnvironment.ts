@@ -224,20 +224,24 @@ export class DesktopEnvironment {
       if (overlay) overlay.classList.remove("hidden");
     };
 
-    btnChat.onclick = () => {
-      reset();
-      activate(btnChat);
-      if (chatPanel) {
-        chatPanel.classList.remove("translate-x-full");
-        chatPanel.classList.add("translate-x-0");
-      }
-      if (overlay) overlay.classList.remove("hidden");
-    };
+    if (btnChat) {
+      btnChat.onclick = () => {
+        reset();
+        activate(btnChat);
+        if (chatPanel) {
+          chatPanel.classList.remove("translate-x-full");
+          chatPanel.classList.add("translate-x-0");
+        }
+        if (overlay) overlay.classList.remove("hidden");
+      };
+    }
 
-    btnView.onclick = () => {
-      reset();
-      activate(btnView);
-    };
+    if (btnView) {
+      btnView.onclick = () => {
+        reset();
+        activate(btnView);
+      };
+    }
 
     if (overlay) {
       overlay.onclick = () => {

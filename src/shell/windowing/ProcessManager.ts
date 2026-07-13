@@ -74,7 +74,7 @@ export class ProcessManager {
             "index.html",
             "foreground",
             true,
-            null,
+            undefined,
             "metaos://open/index.html",
           );
         }
@@ -87,7 +87,7 @@ export class ProcessManager {
           "index.html",
           "foreground",
           false,
-          null,
+          undefined,
           "metaos://open/index.html",
         );
       };

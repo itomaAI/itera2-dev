@@ -14,7 +14,11 @@ export interface OsConfig {
     language: string;
     autoUpdateSystemFiles: boolean;
   };
-  appearance: { theme: string };
+  appearance: {
+    theme: string;
+    typography?: { uiFont: string; monoFont: string; fontSize: string };
+    layout?: { animations: boolean };
+  };
   llm: { model: string; temperature: number };
   network: { proxyUrl: string; allowCredentialsWithProxy: boolean };
   associations: {
@@ -31,7 +35,11 @@ const DEFAULT_CONFIG: OsConfig = {
     language: "English",
     autoUpdateSystemFiles: true,
   },
-  appearance: { theme: "system/themes/light.json" },
+  appearance: {
+    theme: "system/themes/light.json",
+    typography: { uiFont: "Inter", monoFont: "monospace", fontSize: "medium" },
+    layout: { animations: true }
+  },
   llm: { model: "gemini-3-flash-preview", temperature: 1.0 },
   network: {
     proxyUrl: "https://corsproxy.io/?",

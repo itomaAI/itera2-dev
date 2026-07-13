@@ -36,7 +36,6 @@ export class ChatPanel {
 
   public currentStreamEl: HTMLElement | null = null;
   private currentStreamContent: string = "";
-  private isProcessing: boolean = false;
 
   constructor(renderer: any = null) {
     this.renderer = renderer;
@@ -173,8 +172,8 @@ export class ChatPanel {
       e.preventDefault();
     };
 
-    resizer.addEventListener("mousedown", start);
-    document.addEventListener("mousemove", move);
+    resizer.addEventListener("mousedown", start as EventListener);
+    document.addEventListener("mousemove", move as EventListener);
     document.addEventListener("mouseup", stop);
     window.addEventListener("blur", stop);
   }
@@ -252,8 +251,6 @@ export class ChatPanel {
   }
 
   setProcessing(processing: boolean) {
-    this.isProcessing = processing;
-
     if (this.els.BTN_STOP) {
       this.els.BTN_STOP.classList.toggle("hidden", !processing);
     }

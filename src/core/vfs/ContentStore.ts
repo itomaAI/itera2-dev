@@ -160,4 +160,27 @@ export class ContentStore {
       throw new Error(`OPFS List Keys Error: ${e.message || String(e)}`);
     }
   }
+
+  /**
+   * OPFS (または Memory) に存在するすべてのファイル実体を削除する
+   * Factory Reset などの完全初期化用
+   */
+  async clearAll(): Promise<void> {
+    if (!this.useOpfs) {
+      this.memoryStore.clear();
+      return;
+    }
+
+    try {
+      const root = await this.rootHandlePromise!;
+      // @ts-ignore - TSの環境によっては AsyncIterable の定義が不足しているため保護
+      for await (const key of root.keys()) {
+        await root.removeEntry(key, { recursive: true });
+      }
+      console.log(`[ContentStore] All OPFS contents have been successfully cleared.`);
+    } catch (e: any) {
+      console.error(`[ContentStore] Failed to clear OPFS contents:`, e);
+      throw new Error(`OPFS Clear Error: ${e.message || String(e)}`);
+    }
+  }
 }

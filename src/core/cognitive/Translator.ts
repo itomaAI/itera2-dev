@@ -17,8 +17,8 @@ export interface ParseResult extends Array<ParsedAction> {
 }
 
 export class Translator {
-  static PATTERN_ATTRIBUTE = / ([^"'/<> -]+)=(?:"([^"]*)"|'([^']*)')/g;
-  static ATTR_PART_NO_CAPTURE = " [^\"'/<> -]+=(?:\"[^\"]*\"|'[^']*')";
+  static PATTERN_ATTRIBUTE = /\s+([^"'/<>=\s]+)=(?:"((?:[^"\\]|\\.)*)"|'((?:[^'\\]|\\.)*)')/g;
+  static ATTR_PART_NO_CAPTURE = "\\s+[^\"'/<>=\\s]+=(?:\"(?:[^\"\\\\]|\\\\.)*\"|'(?:[^'\\\\]|\\\\.)*')";
   static PATTERN_TAG_START =
     "<([^/>\\s\\n]+)((?:" + Translator.ATTR_PART_NO_CAPTURE + ")*)\\s*>";
   static PATTERN_TAG_END = "</([^/>\\s\\n]+)\\s*>";
@@ -132,7 +132,10 @@ export class Translator {
     let match;
     while ((match = regex.exec(text)) !== null) {
       const key = match[1];
-      const value = match[2] !== undefined ? match[2] : match[3];
+      let value = match[2] !== undefined ? match[2] : match[3];
+      if (value) {
+        value = value.replace(/\\(.)/g, "$1");
+      }
       attributes[key] = value || "";
     }
     return attributes;

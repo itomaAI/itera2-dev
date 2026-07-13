@@ -18,6 +18,8 @@ export class EditorModal {
   private editorInstance: any = null;
   private isMonacoLoaded: boolean = false;
   private currentTheme: string = "vs-dark"; // Default
+  private currentFontSize: number = 14;
+  private currentMonoFont: string = "monospace";
 
   constructor() {
     this._initElements();
@@ -85,6 +87,17 @@ export class EditorModal {
     }
   }
 
+  updateTypography(fontSize: number, monoFont: string): void {
+    this.currentFontSize = fontSize;
+    this.currentMonoFont = monoFont;
+    if (this.editorInstance && (window as any).monaco) {
+      this.editorInstance.updateOptions({
+        fontSize: this.currentFontSize,
+        fontFamily: this.currentMonoFont
+      });
+    }
+  }
+
   private _initMonaco(callback?: Function): void {
     if (typeof (window as any).require === "undefined") {
       console.error("Monaco loader (require.js) not found.");
@@ -109,7 +122,8 @@ export class EditorModal {
           theme: this.currentTheme,
           automaticLayout: true,
           minimap: { enabled: true },
-          fontSize: 14,
+          fontSize: this.currentFontSize,
+          fontFamily: this.currentMonoFont,
           scrollBeyondLastLine: false,
           padding: { top: 10, bottom: 10 },
         },

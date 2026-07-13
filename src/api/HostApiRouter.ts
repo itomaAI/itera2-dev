@@ -37,6 +37,7 @@ export interface IEngine {
 export interface IShell {
   _refreshEngineConfig(): Promise<void>;
   _closeMobileDrawers(): void;
+  getMergedProviders?(): Promise<any[]>;
   panels: { chat: any };
   modals: { editor: any; camera: any; audio: any };
 }
@@ -92,13 +93,12 @@ export class HostApiRouter {
     const prepareWriteContent = (
       content: any,
       encoding?: string,
-    ): Blob | string | Uint8Array | ArrayBuffer => {
-      if (
-        content instanceof Uint8Array ||
-        content instanceof Blob ||
-        content instanceof ArrayBuffer
-      ) {
+    ): Blob | string | Uint8Array => {
+      if (content instanceof Uint8Array || content instanceof Blob) {
         return content;
+      }
+      if (content instanceof ArrayBuffer) {
+        return new Uint8Array(content);
       }
 
       if (typeof content === "string") {

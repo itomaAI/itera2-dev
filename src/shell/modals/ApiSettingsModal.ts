@@ -3,9 +3,6 @@
  * Itera OS v2: API Keys Management
  */
 
-import type { VfsService } from "../../core/vfs/VfsService";
-import { SYSTEM_PRINCIPAL } from "../../core/vfs/types";
-
 const DOM_IDS = {
   MODAL: "api-settings-modal",
   CONTAINER: "api-settings-container",

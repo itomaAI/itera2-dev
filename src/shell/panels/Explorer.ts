@@ -9,7 +9,7 @@ import type {
   FileAssociationResolver,
   ResolvedApp,
 } from "../../core/sys/FileAssociationResolver";
-import { USER_PRINCIPAL, SYSTEM_PRINCIPAL } from "../../core/vfs/types";
+import { USER_PRINCIPAL } from "../../core/vfs/types";
 import { TreeView } from "./TreeView";
 
 declare const JSZip: any;

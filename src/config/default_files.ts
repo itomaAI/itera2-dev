@@ -1,6 +1,6 @@
 /**
  * AUTO-GENERATED FILE - DO NOT EDIT MANUALLY
- * Generated on: 2026-07-09T07:52:18.177Z
+ * Generated on: 2026-07-13T07:54:35.580Z
  */
 
 export const DEFAULT_FILES: Record<string, string> = {
@@ -599,8 +599,50 @@ export const DEFAULT_FILES: Record<string, string> = {
                     </div>
                 </div>
 
-                <div id="theme-list" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                <div id="theme-list" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
                     <div class="text-text-muted text-sm animate-pulse">Loading themes...</div>
+                </div>
+
+                <div class="border-t border-border-main/50 pt-6">
+                    <h3 class="text-xs font-bold text-text-main uppercase tracking-wider mb-4">Typography & Layout</h3>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div>
+                            <label class="block text-xs font-bold text-text-muted uppercase mb-1.5">UI Font</label>
+                            <select id="config-app-uifont" data-key="appearance.typography.uiFont" class="w-full bg-card border border-border-main rounded-lg px-3 py-2 text-sm text-text-main focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/30 transition cursor-pointer">
+                                <option value="Inter">Inter (Default)</option>
+                                <option value="system-ui">System Default</option>
+                                <option value="Roboto">Roboto</option>
+                                <option value="Helvetica">Helvetica</option>
+                                <option value="sans-serif">Sans Serif</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-text-muted uppercase mb-1.5">Editor / Terminal Font</label>
+                            <select id="config-app-monofont" data-key="appearance.typography.monoFont" class="w-full bg-card border border-border-main rounded-lg px-3 py-2 text-sm text-text-main focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/30 transition cursor-pointer">
+                                <option value="monospace">Monospace (Default)</option>
+                                <option value="Fira Code">Fira Code</option>
+                                <option value="JetBrains Mono">JetBrains Mono</option>
+                                <option value="Consolas">Consolas</option>
+                                <option value="Courier New">Courier New</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-text-muted uppercase mb-1.5">Global UI Scale</label>
+                            <select id="config-app-fontsize" data-key="appearance.typography.fontSize" class="w-full bg-card border border-border-main rounded-lg px-3 py-2 text-sm text-text-main focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/30 transition cursor-pointer">
+                                <option value="small">Small</option>
+                                <option value="medium">Medium (Default)</option>
+                                <option value="large">Large</option>
+                                <option value="x-large">Extra Large</option>
+                            </select>
+                        </div>
+                        <div class="flex items-center gap-3 pt-6">
+                            <input type="checkbox" id="config-app-animations" data-key="appearance.layout.animations" class="w-4 h-4 rounded border-border-main text-primary focus:ring-primary cursor-pointer">
+                            <div>
+                                <label for="config-app-animations" class="block text-xs font-bold text-text-main cursor-pointer">Enable Animations</label>
+                                <p class="text-[10px] text-text-muted mt-0.5">Uncheck to reduce motion</p>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </section>
 
@@ -647,6 +689,11 @@ export const DEFAULT_FILES: Record<string, string> = {
                 DOM('config-language').value = prefsConfig.language || 'English';
                 DOM('config-network-proxyUrl').value = networkConfig.proxyUrl || '';
                 DOM('config-network-allowCredentialsWithProxy').checked = !!networkConfig.allowCredentialsWithProxy;
+
+                DOM('config-app-uifont').value = appearanceConfig.typography?.uiFont || 'Inter';
+                DOM('config-app-monofont').value = appearanceConfig.typography?.monoFont || 'monospace';
+                DOM('config-app-fontsize').value = appearanceConfig.typography?.fontSize || 'medium';
+                DOM('config-app-animations').checked = appearanceConfig.layout?.animations !== false;
 
                 await loadLlmProfiles(llmConfig.model || 'gemini-3-flash-preview');
                 await loadThemes();
@@ -701,16 +748,32 @@ export const DEFAULT_FILES: Record<string, string> = {
             if (!keyPath) return;
 
             const val = e.target.type === 'checkbox' ? e.target.checked : e.target.value;
-            const [category, key] = keyPath.split('.');
+            const parts = keyPath.split('.');
+            const category = parts[0];
             
-            if (category === 'preferences') prefsConfig[key] = val;
-            if (category === 'network') networkConfig[key] = val;
+            let targetObj;
+            if (category === 'preferences') targetObj = prefsConfig;
+            else if (category === 'network') targetObj = networkConfig;
+            else if (category === 'llm') targetObj = llmConfig;
+            else if (category === 'appearance') targetObj = appearanceConfig;
+            else return;
+
+            if (parts.length === 2) {
+                targetObj[parts[1]] = val;
+            } else if (parts.length === 3) {
+                if (!targetObj[parts[1]]) targetObj[parts[1]] = {};
+                targetObj[parts[1]][parts[2]] = val;
+            }
             
             clearTimeout(window._saveTimer);
             window._saveTimer = setTimeout(saveConfig, 500);
         };
 
-        ['config-username', 'config-agentName', 'config-language', 'config-network-proxyUrl', 'config-network-allowCredentialsWithProxy'].forEach(id => {
+        [
+            'config-username', 'config-agentName', 'config-language', 
+            'config-network-proxyUrl', 'config-network-allowCredentialsWithProxy',
+            'config-app-uifont', 'config-app-monofont', 'config-app-fontsize', 'config-app-animations'
+        ].forEach(id => {
             const el = DOM(id);
             if (el) el.addEventListener('input', handleInput);
         });
@@ -928,7 +991,15 @@ export const DEFAULT_FILES: Record<string, string> = {
 </html>`.trim(),
 
   "system/config/appearance.json": JSON.stringify({
-  "theme": "system/themes/light.json"
+  "theme": "system/themes/light.json",
+  "typography": {
+    "uiFont": "Inter",
+    "monoFont": "monospace",
+    "fontSize": "medium"
+  },
+  "layout": {
+    "animations": true
+  }
 }, null, 2),
 
   "system/config/llm.json": JSON.stringify({
@@ -1081,7 +1152,8 @@ export const DEFAULT_FILES: Record<string, string> = {
             theme: {
                 extend: {
                     fontFamily: {
-                        sans:['Inter', 'system-ui', '-apple-system', 'BlinkMacSystemFont', '"Segoe UI"', 'Roboto', '"Helvetica Neue"', 'Arial', '"Noto Sans JP"', '"Noto Sans"', '"Hiragino Kaku Gothic ProN"', '"Hiragino Sans"', 'Meiryo', 'sans-serif', '"Apple Color Emoji"', '"Segoe UI Emoji"', '"Segoe UI Symbol"', '"Noto Color Emoji"']
+                        sans: ['var(--font-sans)', 'system-ui', '-apple-system', 'BlinkMacSystemFont', '"Segoe UI"', 'Roboto', '"Helvetica Neue"', 'Arial', '"Noto Sans JP"', '"Noto Sans"', '"Hiragino Kaku Gothic ProN"', '"Hiragino Sans"', 'Meiryo', 'sans-serif', '"Apple Color Emoji"', '"Segoe UI Emoji"', '"Segoe UI Symbol"', '"Noto Color Emoji"'],
+                        mono: ['var(--font-mono)', 'ui-monospace', 'SFMono-Regular', 'Menlo', 'Monaco', 'Consolas', '"Liberation Mono"', '"Courier New"', 'monospace']
                     },
                     colors: {
                         app: 'rgb(var(--c-bg-app) / <alpha-value>)',
@@ -1112,7 +1184,6 @@ export const DEFAULT_FILES: Record<string, string> = {
     const style = document.createElement('style');
     style.textContent = \`
         body { 
-            font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans JP", "Noto Sans", "Hiragino Kaku Gothic ProN", "Hiragino Sans", Meiryo, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji"; 
             -webkit-font-smoothing: antialiased;
             -moz-osx-font-smoothing: grayscale;
         }
@@ -1664,4 +1735,4 @@ export const DEFAULT_FILES: Record<string, string> = {
 }, null, 2)
 };
 
-export const BUILD_TIME = 1783583538177;
+export const BUILD_TIME = 1783929275580;

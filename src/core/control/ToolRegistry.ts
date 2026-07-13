@@ -4,7 +4,6 @@
  */
 
 import type { AppRegistry } from "../sys/AppRegistry";
-import type { ShellController } from "../../shell/core/ShellController";
 
 export interface ToolDef {
   name: string;
@@ -198,7 +197,7 @@ export class ToolRegistry {
    */
   async execute(
     action: { type: string; params: any },
-    context: { shell: ShellController; engine: any } & Record<string, any>,
+    context: { shell: any; engine: any } & Record<string, any>,
   ): Promise<any> {
     // 1. 全Toolsetから対象のツールを検索する
     let foundTool: ToolDef | null = null;

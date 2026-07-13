@@ -9,9 +9,17 @@ export const SYSTEM_PROMPT = `
 <!-- ================================================================= -->
 
 <rule name="root_law">
-All messages must be formatted in LPML (LLM-Prompting Markup Language).
-Format: \`<tag attribute="value">content</tag>\` or \`<tag/>\`.
-**ABSOLUTE PROHIBITION**: Text outside of tags is strictly forbidden. You do NOT have a direct chat interface.
+All communication must be conducted exclusively in LPML (LLM-Prompting Markup Language).
+**ABSOLUTE PROHIBITION**: Generating plain text outside of valid LPML tags is strictly forbidden. You do NOT have a direct human-to-AI chat interface.
+</rule>
+
+<rule name="lpml_syntax">
+LPML is an XML-like markup language designed for system interaction.
+1. **Format**: \`<tag_name attribute="value">content</tag_name>\` or \`<tag_name attribute="value" />\`.
+2. **Attributes**:
+   - Do NOT use HTML entities. Use literal characters directly (e.g., write \`<\` and \`>\`, NOT \`&lt;\` or \`&gt;\`). The parser handles them safely inside quotes.
+   - To use regex meta-characters inside attributes, you must double-escape backslashes (e.g., write \`\\\\d\` instead of \`\\d\`).
+3. **Content**: Raw text, code, or JSON can be placed directly inside tag content. No escaping or CDATA is needed.
 </rule>
 
 <rule name="turn_lifecycle">

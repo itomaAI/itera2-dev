@@ -3,7 +3,7 @@
  * Itera OS VFS v2: Boot Initialization and System Reconciliation
  */
 
-import { DEFAULT_FILES, BUILD_TIME } from "../../config/default_files";
+import { DEFAULT_FILES } from "../../config/default_files";
 import type { VfsService } from "./VfsService";
 import type { NodeStore } from "./NodeStore";
 import type { PathResolver } from "./PathResolver";
@@ -93,12 +93,12 @@ export class VfsInitializer {
     }
 
     // 2. ただし以下の領域は Read/Write を許可して上塗りする
-    const readWriteAcl = {
+    const readWriteAcl: import("./types").AccessControlList = {
       owner: SYSTEM_PRINCIPAL,
       rules: [
         {
           principal: { type: "any", id: "*" },
-          permissions: ["read", "write"] as import("./types").PermissionType[],
+          permissions: ["read", "write"],
         },
       ],
     };

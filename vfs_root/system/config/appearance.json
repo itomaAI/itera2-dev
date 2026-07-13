@@ -1,3 +1,11 @@
 {
-  "theme": "system/themes/light.json"
+  "theme": "system/themes/light.json",
+  "typography": {
+    "uiFont": "Inter",
+    "monoFont": "monospace",
+    "fontSize": "medium"
+  },
+  "layout": {
+    "animations": true
+  }
 }

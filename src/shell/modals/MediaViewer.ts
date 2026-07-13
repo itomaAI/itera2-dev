@@ -13,7 +13,6 @@ const DOM_IDS = {
 export class MediaViewer {
   private els: Record<string, HTMLElement | null> = {};
   private currentObjectUrl: string | null = null;
-  private events: Record<string, Function> = {};
 
   constructor() {
     this._initElements();

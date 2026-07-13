@@ -120,7 +120,7 @@ export function registerUITools(registry: ToolRegistry): void {
   registry.registerSystemTool(setId, setName, {
     name: "ps",
     description: "List processes.",
-    impl: async (params: any, context: any) => {
+    impl: async (_params: any, context: any) => {
       if (context.shell?.processManager) {
         const list = context.shell.processManager.list();
         if (list.length === 0)
@@ -142,7 +142,7 @@ export function registerUITools(registry: ToolRegistry): void {
   registry.registerSystemTool(setId, setName, {
     name: "take_screenshot",
     description: "Capture screenshot.",
-    impl: async (params: any, context: { shell: any; vfs: VfsService }) => {
+    impl: async (_params: any, context: { shell: any; vfs: VfsService }) => {
       if (context.shell?.processManager) {
         await new Promise((r) => setTimeout(r, 1000)); // Render wait
 

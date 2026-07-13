@@ -185,6 +185,8 @@ export class SystemBootstrapper {
     // システムリセットなどの特殊なクリーンアップバインディング
     desktop.modals.system.on("reset", async () => {
       try {
+        // メタデータ（IndexedDB）を消す前に、ファイル実体（OPFS）を全削除してリソースリークを防ぐ
+        await contentStore.clearAll();
         await nodeStore.clearAll();
         window.location.reload();
       } catch (e) {
@@ -201,8 +203,9 @@ export class SystemBootstrapper {
       if (statusEl) statusEl.textContent = modelString;
     });
 
-    themeService.setOnThemeAppliedCallback((isDark) => {
-      desktop.modals.editor.setTheme(isDark ? "dark" : "light");
+    themeService.setOnThemeAppliedCallback((payload) => {
+      desktop.modals.editor.setTheme(payload.isDark ? "dark" : "light");
+      desktop.modals.editor.updateTypography(payload.fontSize, payload.monoFont);
     });
 
     // ルーティングとイベントの活性化
@@ -210,7 +213,7 @@ export class SystemBootstrapper {
     themeService.start();
 
     // 初期化タスクの実行
-    await themeService.applyTheme(configManager.get("appearance")?.theme || "system/themes/dark.json");
+    await themeService.applyAppearance(configManager.get("appearance") || { theme: "system/themes/dark.json" });
     desktop.panels.chat.renderHistory(history.get());
     desktop.updateStorageUI(vfs.getUsage({ type: "user", id: "local_user" }));
     

@@ -49,7 +49,7 @@ export class RpcManager {
   }
 
   clearAll(): void {
-    for (const [id, { reject, timeoutId }] of this.pendingRequests.entries()) {
+    for (const { reject, timeoutId } of this.pendingRequests.values()) {
       clearTimeout(timeoutId);
       reject(new Error("RPC Manager cleared all pending requests."));
     }
