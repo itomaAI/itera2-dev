@@ -1,6 +1,6 @@
 /**
  * AUTO-GENERATED FILE - DO NOT EDIT MANUALLY
- * Generated on: 2026-07-14T10:00:28.631Z
+ * Generated on: 2026-07-14T13:47:25.868Z
  */
 
 export const DEFAULT_FILES: Record<string, string> = {
@@ -1765,6 +1765,12 @@ The Virtual File System is organized into specific domains. Some areas are stric
 │   ├── init.md             # The AI's boot protocol
 │   └── rules/              # AI knowledge and behavior guidelines
 │
+├── services/               # [Background Daemons Layer] (Read/Write)
+│   └── ...                 # Headless background tasks
+│
+├── services/               # [Background Daemons Layer] (Read/Write)
+│   └── ...                 # Headless background tasks
+│
 ├── system/                 # [System Core Layer] (Strictly Protected)
 │   ├── apps/               # OS built-in apps (Settings, etc.)
 │   ├── config/             # Dynamic OS configuration
@@ -1937,7 +1943,7 @@ To show your app in the Launcher, you must add it to the system registry at \`sy
 
 Daemons are invisible HTML/JS files that run continuously in the background. They are perfect for timers, WebSocket connections (like Nostr), or cron jobs.
 
-### Creating a Daemon (\`apps/logger_daemon.html\`)
+### Creating a Daemon (\`services/logger.html\`)
 \`\`\`html
 <script>
     // Runs every 10 minutes
@@ -1957,7 +1963,7 @@ To make your daemon start automatically when Itera OS boots, add it to \`system/
 [
     {
         "pid": "sys_logger",
-        "path": "apps/logger_daemon.html"
+        "path": "services/logger.html"
     }
 ]
 \`\`\`
@@ -2096,7 +2102,7 @@ Defines which apps should start silently in the background when the OS boots.
 [
     {
         "pid": "my_crawler_daemon",
-        "path": "apps/crawler.html"
+        "path": "services/crawler.html"
     }
 ]
 \`\`\`
@@ -2222,6 +2228,8 @@ This is the absolute physical layout of your universe.
     *   \`memory/init.md\`: The boot sequence you run on startup.
     *   \`memory/rules/\`: Manuals and guidelines for specific tools or daemons.
     *   \`memory/knowledge/\`: (You are here). Store user profiles or project states here.
+*   **\`services/\`**
+    *   Background daemons and headless scripts.
 *   **\`system/\`**
     *   **PROTECTED SYSTEM CORE**. You have limited read-only access to core files, but can modify configs and registries.
     *   \`system/apps/\`: OS built-in tools (e.g., \`settings.html\`).
@@ -2357,6 +2365,7 @@ To maintain order, we define the following directory layout as the standard poli
 *   **\`memory/\`** (AI R/W, User R/O): **Your brain**. A protected area where you store your operational rules, context, and manuals. The user can view these but should not edit them directly.
     *   \`memory/init.md\`: Your boot sequence protocol.
     *   \`memory/rules/\`: Manuals and guidelines.
+*   **\`services/\`** (R/W): Headless background processes (daemons).
 *   **\`system/\`** (Strictly R/O for you): Core OS libraries (\`system/core/std.js\`) and built-in apps. You cannot rewrite these unless you perform ACL overrides.
     *   \`system/config/\`: OS configurations (\`preferences.json\`, \`appearance.json\`, \`llm.json\`, \`network.json\`). You have write access here.
     *   \`system/registry/\`: OS registries (\`apps.json\`, \`associations.json\`, \`services.json\`). You have write access here to install apps.
@@ -4134,4 +4143,4 @@ Use this Codex as a guidepost, and build a better Itera OS together with the use
 }, null, 2)
 };
 
-export const BUILD_TIME = 1784023228631;
+export const BUILD_TIME = 1784036845868;

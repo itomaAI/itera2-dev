@@ -24,17 +24,21 @@ export class VfsInitializer {
     let deployedCount = 0;
     let updatedCount = 0;
 
+    // OSの初回起動判定：'system' ディレクトリが存在するか
+    const isFirstBoot = !this.vfs.exists(SYSTEM_PRINCIPAL, 'system');
+
     // 1. 必須ディレクトリの自己修復（存在しなければシステム権限で再作成）
+    // system 領域のみを保護対象とする。ユーザー空間は自由化。
     const requiredDirs = [
       'system',
       'system/apps',
       'system/config',
       'system/core',
       'system/registry',
+      'system/services',
       'system/themes',
       'system/temp',
-      'system/logs',
-      'trash'
+      'system/logs'
     ];
 
     for (const dir of requiredDirs) {
@@ -65,11 +69,17 @@ export class VfsInitializer {
     for (const [key, content] of Object.entries(DEFAULT_FILES)) {
       const isDir = key.endsWith('/');
       const cleanPath = isDir ? key.slice(0, -1) : key;
-      const id = this.pathResolver.getIdByPath(cleanPath);
-
+      
       // 領域の判定
       const isSystemArea = cleanPath.startsWith('system/');
       const isConfigArea = cleanPath.startsWith('system/config/') || cleanPath.startsWith('system/registry/');
+
+      // 初回起動ではなく、かつシステム領域外のファイル・ディレクトリは展開をスキップ（ユーザーの自由な削除を尊重）
+      if (!isFirstBoot && !isSystemArea) {
+        continue;
+      }
+
+      const id = this.pathResolver.getIdByPath(cleanPath);
 
       if (id === undefined) {
         // パスが存在しない場合は新規作成

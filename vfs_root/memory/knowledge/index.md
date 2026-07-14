@@ -21,6 +21,8 @@ This is the absolute physical layout of your universe.
     *   `memory/init.md`: The boot sequence you run on startup.
     *   `memory/rules/`: Manuals and guidelines for specific tools or daemons.
     *   `memory/knowledge/`: (You are here). Store user profiles or project states here.
+*   **`services/`**
+    *   Background daemons and headless scripts.
 *   **`system/`**
     *   **PROTECTED SYSTEM CORE**. You have limited read-only access to core files, but can modify configs and registries.
     *   `system/apps/`: OS built-in tools (e.g., `settings.html`).

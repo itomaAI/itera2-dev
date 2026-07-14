@@ -114,6 +114,7 @@ To maintain order, we define the following directory layout as the standard poli
 *   **`memory/`** (AI R/W, User R/O): **Your brain**. A protected area where you store your operational rules, context, and manuals. The user can view these but should not edit them directly.
     *   `memory/init.md`: Your boot sequence protocol.
     *   `memory/rules/`: Manuals and guidelines.
+*   **`services/`** (R/W): Headless background processes (daemons).
 *   **`system/`** (Strictly R/O for you): Core OS libraries (`system/core/std.js`) and built-in apps. You cannot rewrite these unless you perform ACL overrides.
     *   `system/config/`: OS configurations (`preferences.json`, `appearance.json`, `llm.json`, `network.json`). You have write access here.
     *   `system/registry/`: OS registries (`apps.json`, `associations.json`, `services.json`). You have write access here to install apps.

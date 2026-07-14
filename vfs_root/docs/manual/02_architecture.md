@@ -25,6 +25,12 @@ The Virtual File System is organized into specific domains. Some areas are stric
 │   ├── init.md             # The AI's boot protocol
 │   └── rules/              # AI knowledge and behavior guidelines
 │
+├── services/               # [Background Daemons Layer] (Read/Write)
+│   └── ...                 # Headless background tasks
+│
+├── services/               # [Background Daemons Layer] (Read/Write)
+│   └── ...                 # Headless background tasks
+│
 ├── system/                 # [System Core Layer] (Strictly Protected)
 │   ├── apps/               # OS built-in apps (Settings, etc.)
 │   ├── config/             # Dynamic OS configuration

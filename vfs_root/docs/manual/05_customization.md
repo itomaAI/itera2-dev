@@ -68,7 +68,7 @@ Defines which apps should start silently in the background when the OS boots.
 [
     {
         "pid": "my_crawler_daemon",
-        "path": "apps/crawler.html"
+        "path": "services/crawler.html"
     }
 ]
 ```
