@@ -9,7 +9,7 @@
     "prebuild": "node scripts/build_defaults.js",
     "build": "tsc && vite build",
     "preview": "vite preview",
-    "format": "prettier --write \"src/**/*.{ts,tsx}\""
+    "format": "prettier --write \"src/**/*.{ts,tsx}\" \"vfs_root/**/*.{html,js,ts,tsx}\" \"*.{js,ts,html}\""
   },
   "devDependencies": {
     "autoprefixer": "^10.5.2",
