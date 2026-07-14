@@ -46,11 +46,17 @@
           },
           async readdir(filepath) {
             try {
+              const st = await MetaOS.fs.stat(filepath);
+              if (st.kind === 'file') {
+                const err = new Error('ENOTDIR: not a directory');
+                err.code = 'ENOTDIR';
+                throw err;
+              }
               const stats = await MetaOS.fs.list(filepath, { detail: true });
               return stats.map((s) => s.name);
             } catch (e) {
               const err = new Error(e.message);
-              err.code = 'ENOENT';
+              err.code = e.code === 'ENOTDIR' ? 'ENOTDIR' : 'ENOENT';
               throw err;
             }
           },

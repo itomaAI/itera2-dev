@@ -1,6 +1,6 @@
 /**
  * AUTO-GENERATED FILE - DO NOT EDIT MANUALLY
- * Generated on: 2026-07-14T15:24:12.705Z
+ * Generated on: 2026-07-14T15:37:47.779Z
  */
 
 export const DEFAULT_FILES: Record<string, string> = {
@@ -3526,11 +3526,17 @@ Use this Codex as a guidepost, and build a better Itera OS together with the use
           },
           async readdir(filepath) {
             try {
+              const st = await MetaOS.fs.stat(filepath);
+              if (st.kind === 'file') {
+                const err = new Error('ENOTDIR: not a directory');
+                err.code = 'ENOTDIR';
+                throw err;
+              }
               const stats = await MetaOS.fs.list(filepath, { detail: true });
               return stats.map((s) => s.name);
             } catch (e) {
               const err = new Error(e.message);
-              err.code = 'ENOENT';
+              err.code = e.code === 'ENOTDIR' ? 'ENOTDIR' : 'ENOENT';
               throw err;
             }
           },
@@ -5894,4 +5900,4 @@ Attributes:
 }, null, 2)
 };
 
-export const BUILD_TIME = 1784042652705;
+export const BUILD_TIME = 1784043467779;
