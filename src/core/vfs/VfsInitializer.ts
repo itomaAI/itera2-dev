@@ -94,7 +94,7 @@ export class VfsInitializer {
       ],
     };
 
-    const rwPaths = ['system/config', 'system/themes', 'system/registry'];
+    const rwPaths = ['system/config', 'system/themes', 'system/registry', 'system/temp'];
 
     for (const rwPath of rwPaths) {
       if (this.vfs.exists(SYSTEM_PRINCIPAL, rwPath)) {

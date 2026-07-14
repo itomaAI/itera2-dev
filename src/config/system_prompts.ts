@@ -331,7 +331,7 @@ However, internal thinking processes (\`<thinking>\`, \`<plan>\`) must be in Eng
 - NO Server. Everything runs client-side.
 
 **2. File Persistence & Uploads**:
-- ALL user uploads (including text and code files) and screenshots are automatically saved to \`temp/media/\`.
+- ALL user uploads (including text and code files) and screenshots are automatically saved to \`system/temp/media/\`.
 - Text uploads are expanded inline via \`<user_attachment>\`, but they ALSO physically exist in the VFS at the location specified by the \`path\` attribute.
 - Warning: This cache directory is cleared when the chat history is reset. If it contains important files, move them to a persistent directory to keep them.
 

@@ -5,6 +5,7 @@
 
 import type { VfsService } from '../../core/vfs/VfsService';
 import type { Turn } from '../../core/state/HistoryManager';
+import type { Principal } from '../../core/vfs/types';
 import { USER_PRINCIPAL } from '../../core/vfs/types';
 
 const DOM_IDS = {
@@ -25,6 +26,7 @@ const DOM_IDS = {
 export class ChatPanel {
   private renderer: any; // 後のフェーズで LpmlRenderer の型を指定します
   private vfs: VfsService | null = null;
+  private getActivePrincipal: () => Principal = () => USER_PRINCIPAL;
   private els: Record<string, HTMLElement | HTMLInputElement | HTMLTextAreaElement | null> = {};
   private events: Record<string, Function> = {};
 
@@ -43,6 +45,10 @@ export class ChatPanel {
 
   setVfs(vfs: VfsService) {
     this.vfs = vfs;
+  }
+
+  setPrincipalProvider(provider: () => Principal) {
+    this.getActivePrincipal = provider;
   }
 
   on(event: string, callback: Function) {
@@ -463,8 +469,8 @@ export class ChatPanel {
     container.appendChild(loadingDiv);
 
     try {
-      if (this.vfs.exists(USER_PRINCIPAL, mediaObj.path)) {
-        const blob = await this.vfs.readBlob(USER_PRINCIPAL, mediaObj.path);
+      if (this.vfs.exists(this.getActivePrincipal(), mediaObj.path)) {
+        const blob = await this.vfs.readBlob(this.getActivePrincipal(), mediaObj.path);
         const url = URL.createObjectURL(blob);
         loadingDiv.remove();
         this._appendMedia(container, url, mediaObj.mimeType || blob.type, mediaObj.path);

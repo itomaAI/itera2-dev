@@ -79,7 +79,7 @@ Please execute the installation by strictly following these phases:
     </main>
 
     <script>
-        const STATE_FILE = 'temp/pomodoro.json';
+        const STATE_FILE = 'system/temp/pomodoro.json';
         const MODES = { focus: 25 * 60, break: 5 * 60 };
         
         let currentMode = 'focus';

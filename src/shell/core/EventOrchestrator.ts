@@ -114,18 +114,18 @@ export class EventOrchestrator {
     this.uriRouter.register('open', async (path: string, queryArgs: Record<string, string>, searchAndHash: string) => {
       let targetPath = path || 'apps/home.html';
       try {
-        const stat = this.vfs.stat(USER_PRINCIPAL, targetPath);
+        const stat = this.vfs.stat(this.desktop.getActivePrincipal(), targetPath);
         const resolvedApp = this.resolver.resolveDefault(stat);
 
         if (resolvedApp.appId === 'HostRunner') {
           const fullUri = `metaos://run/${targetPath}${searchAndHash}`;
           await this.processManager.spawn('main', targetPath + searchAndHash, 'foreground', true, queryArgs, fullUri);
         } else if (resolvedApp.appId === 'HostEditor') {
-          const content = await this.vfs.readFile(USER_PRINCIPAL, targetPath);
+          const content = await this.vfs.readFile(this.desktop.getActivePrincipal(), targetPath);
           this.desktop.modals.editor.open(targetPath, content);
           this._restoreAddressBar();
         } else if (resolvedApp.appId === 'HostMediaViewer') {
-          const blob = await this.vfs.readBlob(USER_PRINCIPAL, targetPath);
+          const blob = await this.vfs.readBlob(this.desktop.getActivePrincipal(), targetPath);
           this.desktop.modals.media.open(targetPath, blob);
           this._restoreAddressBar();
         } else {
@@ -156,7 +156,7 @@ export class EventOrchestrator {
     // metaos://edit/... (強制的にHostコードエディタで開く)
     this.uriRouter.register('edit', async (path: string) => {
       try {
-        const content = await this.vfs.readFile(USER_PRINCIPAL, path);
+        const content = await this.vfs.readFile(this.desktop.getActivePrincipal(), path);
         this.desktop.modals.editor.open(path, content);
         this.desktop.closeMobileDrawers();
       } catch (e: any) {
@@ -168,7 +168,7 @@ export class EventOrchestrator {
     // metaos://view/... (強制的にHostメディアビューアで開く)
     this.uriRouter.register('view', async (path: string) => {
       try {
-        const blob = await this.vfs.readBlob(USER_PRINCIPAL, path);
+        const blob = await this.vfs.readBlob(this.desktop.getActivePrincipal(), path);
         this.desktop.modals.media.open(path, blob);
         this.desktop.closeMobileDrawers();
       } catch (e: any) {
@@ -201,7 +201,7 @@ export class EventOrchestrator {
   // ==========================================
   private _bindVfsEvents(): void {
     this.eventBus.subscribe((events) => {
-      this.desktop.updateStorageUI(this.vfs.getUsage(USER_PRINCIPAL));
+      this.desktop.updateStorageUI(this.vfs.getUsage(this.desktop.getActivePrincipal()));
 
       for (const event of events) {
         if (!event.path.startsWith('system/logs/')) {
@@ -262,7 +262,7 @@ export class EventOrchestrator {
     });
 
     explorer.on('properties_request', (path: string) => {
-      this.desktop.modals.properties.open(path);
+      this.desktop.modals.properties.open(path, this.desktop.getActivePrincipal());
     });
 
     explorer.on('add_to_context', (path: string) => {
@@ -299,7 +299,7 @@ export class EventOrchestrator {
     chat.on('preview_request', async (name: string, src: string, mime: string, path?: string) => {
       if (path) {
         try {
-          const blob = await this.vfs.readBlob(USER_PRINCIPAL, path);
+          const blob = await this.vfs.readBlob(this.desktop.getActivePrincipal(), path);
           this.desktop.modals.media.open(path.split('/').pop() || name, blob, mime);
         } catch (e: any) {
           if (window.AppUI) window.AppUI.notify(`Cannot open media: ${e.message}`, 'error');
@@ -365,7 +365,7 @@ export class EventOrchestrator {
     // エディタの保存
     this.desktop.modals.editor.on('save', async (path: string, content: string) => {
       try {
-        await this.vfs.writeFile(USER_PRINCIPAL, path, content, {
+        await this.vfs.writeFile(this.desktop.getActivePrincipal(), path, content, {
           overwrite: true,
         });
         // 明示的なUIセーブなので通知はデスクトップ側でよしなに行われる
@@ -392,7 +392,7 @@ export class EventOrchestrator {
    * チャットから送信されたテキストとメディアの統合処理
    */
   private async _handleChatSend(text: string, attachments: File[], vfsReferences: string[]) {
-    const CACHE_DIR = 'temp/media';
+    const CACHE_DIR = 'system/temp/media';
     const content: any[] = [];
 
     // 1. 既存VFSパスの参照
@@ -423,7 +423,7 @@ export class EventOrchestrator {
 
       try {
         if (isText) {
-          await this.vfs.writeFile(USER_PRINCIPAL, path, data, {
+          await this.vfs.writeFile(this.desktop.getActivePrincipal(), path, data, {
             system: true,
             overwrite: true,
           });
@@ -432,7 +432,7 @@ export class EventOrchestrator {
           });
         } else {
           // バイナリは Blob のまま VFS の ContentStore (OPFS) に逃がす
-          await this.vfs.writeFile(USER_PRINCIPAL, path, file, {
+          await this.vfs.writeFile(this.desktop.getActivePrincipal(), path, file, {
             system: true,
             overwrite: true,
           });

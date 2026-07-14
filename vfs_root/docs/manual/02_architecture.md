@@ -30,10 +30,8 @@ The Virtual File System is organized into specific domains. Some areas are stric
 │   ├── config/             # Dynamic OS configuration
 │   ├── core/               # Shared core libraries (std.js, ui.js)
 │   ├── registry/           # App and Service registries
+│   ├── temp/               # [Volatile Layer] User uploads and screenshots. Purged on session reset.
 │   └── themes/             # UI Themes (.json)
-│
-├── temp/                   # [Volatile Layer] (Read/Write)
-│   └── media/              # User uploads and screenshots. Purged on session reset.
 │
 └── trash/                  # [Recycle Bin] (Read/Write)
     └── ...                 # Deleted files

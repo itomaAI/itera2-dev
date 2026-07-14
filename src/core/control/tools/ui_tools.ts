@@ -142,7 +142,7 @@ export function registerUITools(registry: ToolRegistry): void {
           const base64 = await context.shell.processManager.captureScreenshot();
 
           const timestamp = Date.now();
-          const path = `temp/media/screenshot_${timestamp}.png`;
+          const path = `system/temp/media/screenshot_${timestamp}.png`;
 
           // ツールの責任として Blob に変換してから VFS に渡す
           const byteString = atob(base64);

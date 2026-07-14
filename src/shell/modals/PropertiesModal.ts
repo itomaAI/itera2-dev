@@ -4,7 +4,7 @@
  */
 
 import type { VfsService } from '../../core/vfs/VfsService';
-import { USER_PRINCIPAL, type AccessControlList, type VfsStat } from '../../core/vfs/types';
+import { USER_PRINCIPAL, type AccessControlList, type VfsStat, type Principal } from '../../core/vfs/types';
 
 export class PropertiesModal {
   private vfs: VfsService;
@@ -12,6 +12,7 @@ export class PropertiesModal {
   private currentPath: string | null = null;
   private currentAcl: AccessControlList | null = null;
   private currentStat: VfsStat | null = null;
+  private activePrincipal: Principal = USER_PRINCIPAL;
   private isOpen: boolean = false;
 
   constructor(vfs: VfsService) {
@@ -134,13 +135,14 @@ export class PropertiesModal {
     };
   }
 
-  async open(path: string) {
+  async open(path: string, principal: Principal = USER_PRINCIPAL) {
     this.currentPath = path;
+    this.activePrincipal = principal;
     this._createDOM();
 
     try {
-      this.currentStat = this.vfs.stat(USER_PRINCIPAL, path);
-      this.currentAcl = this.vfs.getAcl(USER_PRINCIPAL, path);
+      this.currentStat = this.vfs.stat(this.activePrincipal, path);
+      this.currentAcl = this.vfs.getAcl(this.activePrincipal, path);
 
       this._renderGeneral();
       this._renderPermissions();
@@ -219,13 +221,50 @@ export class PropertiesModal {
 
     const aiLevel = getLevel('agent', 'Itera_AI');
     const guestLevel = getLevel('any', '*');
+    const userLevel = getLevel('user', 'local_user');
 
     const tPerm = document.getElementById('tab-permissions')!;
+
+    const isSudo = this.activePrincipal.type === 'system';
+    
+    // Owner のシリアライズ
+    const currentOwnerStr = `\${acl.owner.type}:\${acl.owner.id}`;
 
     let html = `
       <div class="text-xs text-text-muted mb-2">Control who can access or modify this item.</div>
       
       <div class="space-y-4 flex-1">
+    `;
+
+    if (isSudo) {
+      html += `
+        <div class="bg-error/10 border border-error/30 rounded-lg p-3 mb-2">
+          <div class="flex items-center gap-2 mb-2">
+            <span class="text-error font-bold">🔒 Advanced (Sudo)</span>
+          </div>
+          
+          <label class="flex items-center justify-between w-full mb-3">
+            <span class="text-xs font-bold text-text-main">Owner</span>
+            <select id="perm-owner" class="bg-panel border border-border-main rounded text-xs p-1 text-text-main focus:outline-none focus:border-primary">
+              <option value="system:kernel" \${currentOwnerStr === 'system:kernel' ? 'selected' : ''}>System (kernel)</option>
+              <option value="user:local_user" \${currentOwnerStr === 'user:local_user' ? 'selected' : ''}>User (local_user)</option>
+              <option value="agent:Itera_AI" \${currentOwnerStr === 'agent:Itera_AI' ? 'selected' : ''}>Agent (Itera_AI)</option>
+            </select>
+          </label>
+
+          <label class="flex items-center justify-between w-full">
+            <span class="text-xs font-bold text-text-main">Local User</span>
+            <select id="perm-user" class="bg-panel border border-border-main rounded text-xs p-1 text-text-main focus:outline-none focus:border-primary">
+              <option value="read_write" \${userLevel === 'read_write' ? 'selected' : ''}>Read & Write</option>
+              <option value="read" \${userLevel === 'read' ? 'selected' : ''}>Read Only</option>
+              <option value="none" \${userLevel === 'none' ? 'selected' : ''}>No Access</option>
+            </select>
+          </label>
+        </div>
+      `;
+    }
+
+    html += `
         <div class="bg-card border border-border-main rounded-lg p-3">
           <label class="flex items-center justify-between w-full">
             <div class="flex items-center gap-2">
@@ -280,30 +319,49 @@ export class PropertiesModal {
     const aiVal = (document.getElementById('perm-ai') as HTMLSelectElement).value;
     const guestVal = (document.getElementById('perm-guest') as HTMLSelectElement).value;
     const isRecursive = (document.getElementById('perm-recursive') as HTMLInputElement)?.checked || false;
+    
+    const isSudo = this.activePrincipal.type === 'system';
+
+    let userVal = 'read_write';
+    let owner = this.currentAcl.owner;
+
+    if (isSudo) {
+      userVal = (document.getElementById('perm-user') as HTMLSelectElement)?.value || 'read_write';
+      const ownerStr = (document.getElementById('perm-owner') as HTMLSelectElement)?.value || 'user:local_user';
+      const [oType, oId] = ownerStr.split(':');
+      owner = { type: oType as any, id: oId };
+    }
 
     // Build new rules
     const newRules: any[] = [];
 
-    // Safety: User always has full rights
-    newRules.push({
-      principal: { type: 'user', id: 'local_user' },
-      permissions: ['read', 'write', 'manage'],
-    });
-
     const addRule = (type: string, id: string, val: string) => {
-      // 修正: "none" の場合はルールを除外するのではなく、空配列を設定して Explicit Deny (明示的拒否) とする
       const perms = val === 'read_write' ? ['read', 'write'] : val === 'read' ? ['read'] : [];
+      // read_writeが与えられたローカルユーザーにはmanageも付与する
+      if (val === 'read_write' && type === 'user' && id === 'local_user') {
+          perms.push('manage');
+      }
       newRules.push({
         principal: { type, id },
         permissions: perms,
       });
     };
 
+    if (isSudo) {
+      addRule('user', 'local_user', userVal);
+    } else {
+      // Safety: User always has full rights
+      newRules.push({
+        principal: { type: 'user', id: 'local_user' },
+        permissions: ['read', 'write', 'manage'],
+      });
+    }
+
     addRule('agent', 'Itera_AI', aiVal);
     addRule('any', '*', guestVal);
 
     const newAcl: AccessControlList = {
-      owner: { type: 'user', id: 'local_user' },
+      owner: owner,
       rules: newRules,
     };
 
@@ -311,9 +369,9 @@ export class PropertiesModal {
       if (window.AppUI) window.AppUI.showLoading('Applying permissions...');
 
       if (isRecursive) {
-        await this.vfs.setAclRecursive(USER_PRINCIPAL, this.currentPath, newAcl);
+        await this.vfs.setAclRecursive(this.activePrincipal, this.currentPath, newAcl);
       } else {
-        await this.vfs.setAcl(USER_PRINCIPAL, this.currentPath, newAcl);
+        await this.vfs.setAcl(this.activePrincipal, this.currentPath, newAcl);
       }
 
       if (window.AppUI) window.AppUI.notify('Permissions updated', 'success');

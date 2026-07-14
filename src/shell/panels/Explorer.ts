@@ -30,19 +30,23 @@ const DOM_IDS = {
   INPUT_FILE: 'input-upload-file',
 };
 
+import type { Principal } from '../../core/vfs/types';
+
 export class Explorer {
   private vfs: VfsService;
   private eventBus: VfsEventBus;
   private resolver: FileAssociationResolver;
+  private getActivePrincipal: () => Principal;
   private treeView: TreeView;
   private events: Record<string, Function> = {};
   private els: Record<string, HTMLElement | null> = {};
   private currentUploadTarget: string = '';
 
-  constructor(vfs: VfsService, eventBus: VfsEventBus, resolver: FileAssociationResolver) {
+  constructor(vfs: VfsService, eventBus: VfsEventBus, resolver: FileAssociationResolver, getActivePrincipal: () => Principal) {
     this.vfs = vfs;
     this.eventBus = eventBus;
     this.resolver = resolver;
+    this.getActivePrincipal = getActivePrincipal;
 
     this._initElements();
 
@@ -66,7 +70,7 @@ export class Explorer {
   }
 
   private _bindVFS(): void {
-    this.treeView.render(this.vfs.getTree(USER_PRINCIPAL));
+    this.treeView.render(this.vfs.getTree(this.getActivePrincipal()));
     this.eventBus.subscribe((events) => {
       // ディレクトリの大規模な構造変更が含まれている場合はツリー全体を再構築する
       const needsFullRender = events.some(
@@ -76,7 +80,7 @@ export class Explorer {
       );
 
       if (needsFullRender) {
-        this.treeView.render(this.vfs.getTree(USER_PRINCIPAL));
+        this.treeView.render(this.vfs.getTree(this.getActivePrincipal()));
       } else {
         this.treeView.applyEvents(events);
       }
@@ -87,7 +91,7 @@ export class Explorer {
     // 1. 通常のクリック時はデフォルトアプリを解決して ShellController へ委譲
     this.treeView.on('open', (path: string) => {
       try {
-        const stat = this.vfs.stat(USER_PRINCIPAL, path);
+        const stat = this.vfs.stat(this.getActivePrincipal(), path);
         const defaultApp = this.resolver.resolveDefault(stat);
         if (this.events['open_file']) this.events['open_file'](path, defaultApp);
       } catch (e: any) {
@@ -98,7 +102,7 @@ export class Explorer {
     // 2. 右クリックメニュー生成時のアプリ一覧要求
     this.treeView.on('resolve_apps', (path: string): ResolvedApp[] => {
       try {
-        const stat = this.vfs.stat(USER_PRINCIPAL, path);
+        const stat = this.vfs.stat(this.getActivePrincipal(), path);
         return this.resolver.resolveAllAvailable(stat);
       } catch (e) {
         return [];
@@ -108,7 +112,7 @@ export class Explorer {
     // 3. コンテキストメニューから特定のアプリを指定して開く要求
     this.treeView.on('open_with', (path: string, appId: string) => {
       try {
-        const stat = this.vfs.stat(USER_PRINCIPAL, path);
+        const stat = this.vfs.stat(this.getActivePrincipal(), path);
         const apps = this.resolver.resolveAllAvailable(stat);
         const targetApp = apps.find((a) => a.appId === appId);
         if (targetApp && this.events['open_file']) {
@@ -121,7 +125,7 @@ export class Explorer {
 
     this.treeView.on('create_file', async (path: string) => {
       try {
-        await this.vfs.writeFile(USER_PRINCIPAL, path, '');
+        await this.vfs.writeFile(this.getActivePrincipal(), path, '');
         this._emitHistory('file_created', `User created empty file: ${path}`);
         if (this.events['open_file']) this.events['open_file'](path);
       } catch (e: any) {
@@ -131,7 +135,7 @@ export class Explorer {
 
     this.treeView.on('create_folder', async (path: string) => {
       try {
-        await this.vfs.mkdir(USER_PRINCIPAL, path);
+        await this.vfs.mkdir(this.getActivePrincipal(), path);
         this._emitHistory('folder_created', `User created folder: ${path}`);
       } catch (e: any) {
         if (window.AppUI) window.AppUI.notify(e.message, 'error');
@@ -145,11 +149,11 @@ export class Explorer {
         const ext = dotIndex !== -1 ? path.substring(dotIndex) : '';
         let newPath = `${base}_copy${ext}`;
         let counter = 1;
-        while (this.vfs.exists(USER_PRINCIPAL, newPath)) {
+        while (this.vfs.exists(this.getActivePrincipal(), newPath)) {
           newPath = `${base}_copy${counter}${ext}`;
           counter++;
         }
-        await this.vfs.copyFile(USER_PRINCIPAL, path, newPath);
+        await this.vfs.copyFile(this.getActivePrincipal(), path, newPath);
         this._emitHistory('file_created', `User duplicated file: ${path} -> ${newPath}`);
       } catch (e: any) {
         if (window.AppUI) window.AppUI.notify(e.message, 'error');
@@ -158,7 +162,7 @@ export class Explorer {
 
     this.treeView.on('rename', async (oldPath: string, newPath: string) => {
       try {
-        await this.vfs.rename(USER_PRINCIPAL, oldPath, newPath);
+        await this.vfs.rename(this.getActivePrincipal(), oldPath, newPath);
         this._emitHistory('file_moved', `User renamed: ${oldPath} -> ${newPath}`);
       } catch (e: any) {
         if (window.AppUI) window.AppUI.notify(e.message, 'error');
@@ -167,7 +171,7 @@ export class Explorer {
 
     this.treeView.on('move', async (srcPath: string, destPath: string) => {
       try {
-        await this.vfs.rename(USER_PRINCIPAL, srcPath, destPath);
+        await this.vfs.rename(this.getActivePrincipal(), srcPath, destPath);
         this._emitHistory('file_moved', `User moved file: ${srcPath} -> ${destPath}`);
       } catch (e: any) {
         if (window.AppUI) window.AppUI.notify(e.message, 'error');
@@ -176,7 +180,7 @@ export class Explorer {
 
     this.treeView.on('delete', async (path: string) => {
       try {
-        await this.vfs.deleteFile(USER_PRINCIPAL, path);
+        await this.vfs.deleteFile(this.getActivePrincipal(), path);
         this._emitHistory('file_deleted', `User deleted: ${path}`);
       } catch (e: any) {
         if (window.AppUI) window.AppUI.notify(e.message, 'error');
@@ -185,10 +189,10 @@ export class Explorer {
 
     this.treeView.on('download', async (path: string) => {
       try {
-        const stat = this.vfs.stat(USER_PRINCIPAL, path);
+        const stat = this.vfs.stat(this.getActivePrincipal(), path);
         if (stat.kind === 'file') {
           if (window.AppUI) window.AppUI.showLoading(`Downloading ${stat.name}...`);
-          const blob = await this.vfs.readBlob(USER_PRINCIPAL, path);
+          const blob = await this.vfs.readBlob(this.getActivePrincipal(), path);
           this._triggerBrowserDownload(blob, stat.name);
           if (window.AppUI) window.AppUI.hideLoading();
         } else {
@@ -252,7 +256,7 @@ export class Explorer {
     if (window.AppUI) window.AppUI.showLoading(`Compressing ${dirPath || 'root'}...`);
 
     const zip = new JSZip();
-    const files = this.vfs.listFiles(USER_PRINCIPAL, {
+    const files = this.vfs.listFiles(this.getActivePrincipal(), {
       path: dirPath,
       recursive: true,
       detail: true,
@@ -270,7 +274,7 @@ export class Explorer {
       if (stat.kind === 'file') {
         const zipPath = stat.path.substring(prefix.length);
         if (!zipPath) continue;
-        const blob = await this.vfs.readBlob(USER_PRINCIPAL, stat.path);
+        const blob = await this.vfs.readBlob(this.getActivePrincipal(), stat.path);
         zip.file(zipPath, blob);
       }
     }
@@ -319,14 +323,14 @@ export class Explorer {
 
     if (type === 'folder') {
       try {
-        await this.vfs.mkdir(USER_PRINCIPAL, fullPath);
+        await this.vfs.mkdir(this.getActivePrincipal(), fullPath);
         this._emitHistory('folder_created', `User created folder: ${fullPath}`);
       } catch (e: any) {
         if (window.AppUI) window.AppUI.notify(e.message, 'error');
       }
     } else {
       try {
-        await this.vfs.writeFile(USER_PRINCIPAL, fullPath, '');
+        await this.vfs.writeFile(this.getActivePrincipal(), fullPath, '');
         this._emitHistory('file_created', `User created empty file: ${fullPath}`);
         if (this.events['open_file']) this.events['open_file'](fullPath);
       } catch (e: any) {
@@ -350,7 +354,7 @@ export class Explorer {
       const fullPath = (targetDir + relPath).replace(/^\/+/, '');
 
       try {
-        await this.vfs.writeFile(USER_PRINCIPAL, fullPath, file, {
+        await this.vfs.writeFile(this.getActivePrincipal(), fullPath, file, {
           overwrite: true,
         });
         uploadedPaths.push(fullPath);
@@ -462,7 +466,7 @@ export class Explorer {
       if (relPath.startsWith('.git/') || relPath.includes('/.git/') || relPath.endsWith('.DS_Store')) continue;
 
       try {
-        await this.vfs.writeFile(USER_PRINCIPAL, relPath, file, {
+        await this.vfs.writeFile(this.getActivePrincipal(), relPath, file, {
           overwrite: true,
         });
         uploadedPaths.push(relPath);

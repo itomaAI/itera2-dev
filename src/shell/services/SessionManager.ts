@@ -53,7 +53,7 @@ export class SessionManager {
 
     if (purgeMedia) {
       try {
-        const CACHE_DIR = 'temp/media';
+        const CACHE_DIR = 'system/temp/media';
         if (this.vfs.exists(SYSTEM_PRINCIPAL, CACHE_DIR)) {
           await this.vfs.deleteFile(SYSTEM_PRINCIPAL, CACHE_DIR, {
             permanent: true,

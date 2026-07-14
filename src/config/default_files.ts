@@ -1,299 +1,455 @@
 /**
  * AUTO-GENERATED FILE - DO NOT EDIT MANUALLY
- * Generated on: 2026-07-14T05:49:56.159Z
+ * Generated on: 2026-07-14T09:39:41.937Z
  */
 
 export const DEFAULT_FILES: Record<string, string> = {
-  'apps/home.html': `
-<!DOCTYPE html>
+  "apps/home.html": `
+<!doctype html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Dashboard</title>
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
-    
+
     <!-- System Libraries -->
     <!-- パスは新しいディレクトリ構造（system/core/）に合わせています -->
     <script src="../system/core/ui.js"></script>
     <script src="../system/core/std.js"></script>
-</head>
-<body class="bg-app text-text-main h-screen p-6 overflow-hidden flex flex-col select-none">
-
+  </head>
+  <body class="bg-app text-text-main h-screen p-6 overflow-hidden flex flex-col select-none">
     <!-- Header / Greeting -->
     <header class="mb-8 flex justify-between items-end shrink-0 animate-fade-in-up">
+      <div>
+        <h1 id="greeting" class="text-3xl font-bold text-text-main tracking-tight">Welcome Back</h1>
+        <p id="date-display" class="text-text-muted font-mono text-sm mt-1 opacity-80">Loading...</p>
+      </div>
+      <div class="text-right flex items-center gap-6">
+        <!-- Weather Widget (Injected by JS) -->
+        <div id="weather-display" class="hidden md:flex flex-col items-end mr-4 text-text-main">
+          <div class="w-16 h-8 bg-card rounded animate-pulse"></div>
+        </div>
+
+        <!-- Clock & Status -->
         <div>
-            <h1 id="greeting" class="text-3xl font-bold text-text-main tracking-tight">Welcome Back</h1>
-            <p id="date-display" class="text-text-muted font-mono text-sm mt-1 opacity-80">Loading...</p>
+          <div id="clock-display" class="text-4xl font-light text-primary font-mono tracking-widest drop-shadow-sm">
+            00:00
+          </div>
+          <div class="flex items-center justify-end gap-2 mt-1">
+            <div class="w-2 h-2 rounded-full bg-success animate-pulse shadow-[0_0_8px_rgba(0,255,100,0.6)]"></div>
+            <span class="text-[10px] text-text-muted uppercase tracking-wider font-bold">System Online</span>
+          </div>
         </div>
-        <div class="text-right flex items-center gap-6">
-            <!-- Weather Widget (Injected by JS) -->
-            <div id="weather-display" class="hidden md:flex flex-col items-end mr-4 text-text-main">
-                <div class="w-16 h-8 bg-card rounded animate-pulse"></div>
-            </div>
-            
-            <!-- Clock & Status -->
-            <div>
-                <div id="clock-display" class="text-4xl font-light text-primary font-mono tracking-widest drop-shadow-sm">00:00</div>
-                <div class="flex items-center justify-end gap-2 mt-1">
-                    <div class="w-2 h-2 rounded-full bg-success animate-pulse shadow-[0_0_8px_rgba(0,255,100,0.6)]"></div>
-                    <span class="text-[10px] text-text-muted uppercase tracking-wider font-bold">System Online</span>
-                </div>
-            </div>
-        </div>
+      </div>
     </header>
 
     <!-- Main Grid -->
     <main class="flex-1 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 overflow-y-auto pb-10">
-        
-        <!-- Widget: Quick Launcher -->
-        <section class="bg-panel rounded-2xl p-5 border border-border-main shadow-lg flex flex-col gap-4 hover:border-primary/30 transition-colors">
-            <div class="flex items-center justify-between mb-1">
-                <h2 class="text-sm font-bold text-text-muted uppercase tracking-wider flex items-center gap-2">
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"></path></svg>
-                    Apps
-                </h2>
-                <!-- V2: ランチャーはシステムアプリ領域へ移動 -->
-                <button onclick="AppUI.go('system/apps/launcher.html')" class="text-xs font-medium text-text-muted hover:text-text-main transition flex items-center gap-1 group">
-                    Library <span class="group-hover:translate-x-0.5 transition-transform">→</span>
-                </button>
-            </div>
-            
-            <div class="grid grid-cols-2 gap-3">
-                <button onclick="AppUI.go('apps/tasks.html')" class="relative flex flex-col items-center justify-center p-4 bg-card hover:bg-hover rounded-xl transition border border-transparent hover:border-primary/50 hover:shadow-md group overflow-hidden">
-                    <div class="absolute inset-0 bg-primary/5 opacity-0 group-hover:opacity-100 transition duration-300"></div>
-                    <span class="text-2xl mb-1 group-hover:scale-110 transition-transform">✅</span>
-                    <span class="text-xs font-bold text-text-main">Tasks</span>
-                </button>
-                <button onclick="AppUI.go('apps/notes.html')" class="relative flex flex-col items-center justify-center p-4 bg-card hover:bg-hover rounded-xl transition border border-transparent hover:border-primary/50 hover:shadow-md group overflow-hidden">
-                    <div class="absolute inset-0 bg-primary/5 opacity-0 group-hover:opacity-100 transition duration-300"></div>
-                    <span class="text-2xl mb-1 group-hover:scale-110 transition-transform">📝</span>
-                    <span class="text-xs font-bold text-text-main">Notes</span>
-                </button>
-                <button onclick="AppUI.go('apps/calendar.html')" class="relative flex flex-col items-center justify-center p-4 bg-card hover:bg-hover rounded-xl transition border border-transparent hover:border-primary/50 hover:shadow-md group overflow-hidden">
-                    <div class="absolute inset-0 bg-primary/5 opacity-0 group-hover:opacity-100 transition duration-300"></div>
-                    <span class="text-2xl mb-1 group-hover:scale-110 transition-transform">📅</span>
-                    <span class="text-xs font-bold text-text-main">Calendar</span>
-                </button>
-                <button onclick="AppUI.go('system/apps/settings.html')" class="relative flex flex-col items-center justify-center p-4 bg-card hover:bg-hover rounded-xl transition border border-transparent hover:border-primary/50 hover:shadow-md group overflow-hidden">
-                    <div class="absolute inset-0 bg-primary/5 opacity-0 group-hover:opacity-100 transition duration-300"></div>
-                    <span class="text-2xl mb-1 group-hover:scale-110 transition-transform">⚙️</span>
-                    <span class="text-xs font-bold text-text-main">Settings</span>
-                </button>
-            </div>
+      <!-- Widget: Quick Launcher -->
+      <section
+        class="bg-panel rounded-2xl p-5 border border-border-main shadow-lg flex flex-col gap-4 hover:border-primary/30 transition-colors"
+      >
+        <div class="flex items-center justify-between mb-1">
+          <h2 class="text-sm font-bold text-text-muted uppercase tracking-wider flex items-center gap-2">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"
+              ></path>
+            </svg>
+            Apps
+          </h2>
+          <!-- V2: ランチャーはシステムアプリ領域へ移動 -->
+          <button
+            onclick="AppUI.go('system/apps/launcher.html')"
+            class="text-xs font-medium text-text-muted hover:text-text-main transition flex items-center gap-1 group"
+          >
+            Library <span class="group-hover:translate-x-0.5 transition-transform">→</span>
+          </button>
+        </div>
 
-            <!-- Quick Actions Footer -->
-            <div class="mt-auto pt-2 border-t border-border-main flex gap-2 justify-end">
-                <button onclick="MetaOS.ai.task('Create a new quick note.', null, { silent: false })" class="p-1.5 text-text-muted hover:text-primary hover:bg-primary/10 rounded transition" title="Quick AI Task">
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
-                </button>
-                <button onclick="AppUI.go('apps/tasks.html')" class="p-1.5 text-text-muted hover:text-primary hover:bg-primary/10 rounded transition" title="New Task">
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
-                </button>
-            </div>
-        </section>
+        <div class="grid grid-cols-2 gap-3">
+          <button
+            onclick="AppUI.go('apps/tasks.html')"
+            class="relative flex flex-col items-center justify-center p-4 bg-card hover:bg-hover rounded-xl transition border border-transparent hover:border-primary/50 hover:shadow-md group overflow-hidden"
+          >
+            <div class="absolute inset-0 bg-primary/5 opacity-0 group-hover:opacity-100 transition duration-300"></div>
+            <span class="text-2xl mb-1 group-hover:scale-110 transition-transform">✅</span>
+            <span class="text-xs font-bold text-text-main">Tasks</span>
+          </button>
+          <button
+            onclick="AppUI.go('apps/notes.html')"
+            class="relative flex flex-col items-center justify-center p-4 bg-card hover:bg-hover rounded-xl transition border border-transparent hover:border-primary/50 hover:shadow-md group overflow-hidden"
+          >
+            <div class="absolute inset-0 bg-primary/5 opacity-0 group-hover:opacity-100 transition duration-300"></div>
+            <span class="text-2xl mb-1 group-hover:scale-110 transition-transform">📝</span>
+            <span class="text-xs font-bold text-text-main">Notes</span>
+          </button>
+          <button
+            onclick="AppUI.go('apps/calendar.html')"
+            class="relative flex flex-col items-center justify-center p-4 bg-card hover:bg-hover rounded-xl transition border border-transparent hover:border-primary/50 hover:shadow-md group overflow-hidden"
+          >
+            <div class="absolute inset-0 bg-primary/5 opacity-0 group-hover:opacity-100 transition duration-300"></div>
+            <span class="text-2xl mb-1 group-hover:scale-110 transition-transform">📅</span>
+            <span class="text-xs font-bold text-text-main">Calendar</span>
+          </button>
+          <button
+            onclick="AppUI.go('system/apps/settings.html')"
+            class="relative flex flex-col items-center justify-center p-4 bg-card hover:bg-hover rounded-xl transition border border-transparent hover:border-primary/50 hover:shadow-md group overflow-hidden"
+          >
+            <div class="absolute inset-0 bg-primary/5 opacity-0 group-hover:opacity-100 transition duration-300"></div>
+            <span class="text-2xl mb-1 group-hover:scale-110 transition-transform">⚙️</span>
+            <span class="text-xs font-bold text-text-main">Settings</span>
+          </button>
+        </div>
 
-        <!-- Widget: Recent Tasks -->
-        <section class="bg-panel rounded-2xl p-5 border border-border-main shadow-lg flex flex-col hover:border-primary/30 transition-colors">
-            <div class="flex items-center justify-between mb-4">
-                <h2 class="text-sm font-bold text-text-muted uppercase tracking-wider flex items-center gap-2">
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"></path></svg>
-                    Active Tasks
-                </h2>
-                <button onclick="AppUI.go('apps/tasks.html')" class="text-xs font-medium text-text-muted hover:text-text-main transition flex items-center gap-1 group">
-                    View All <span class="group-hover:translate-x-0.5 transition-transform">→</span>
-                </button>
-            </div>
-            <div id="widget-tasks" class="flex-1 space-y-2 overflow-y-auto pr-1">
-                <!-- Injected via JS -->
-                <div class="animate-pulse flex space-x-2">
-                    <div class="h-4 bg-card rounded w-3/4"></div>
-                </div>
-            </div>
-        </section>
+        <!-- Quick Actions Footer -->
+        <div class="mt-auto pt-2 border-t border-border-main flex gap-2 justify-end">
+          <button
+            onclick="MetaOS.ai.task('Create a new quick note.', null, { silent: false })"
+            class="p-1.5 text-text-muted hover:text-primary hover:bg-primary/10 rounded transition"
+            title="Quick AI Task"
+          >
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M13 10V3L4 14h7v7l9-11h-7z"
+              ></path>
+            </svg>
+          </button>
+          <button
+            onclick="AppUI.go('apps/tasks.html')"
+            class="p-1.5 text-text-muted hover:text-primary hover:bg-primary/10 rounded transition"
+            title="New Task"
+          >
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+            </svg>
+          </button>
+        </div>
+      </section>
 
-        <!-- Widget: Recent Notes -->
-        <section class="bg-panel rounded-2xl p-5 border border-border-main shadow-lg flex flex-col hover:border-primary/30 transition-colors md:col-span-2 lg:col-span-1">
-            <div class="flex items-center justify-between mb-4">
-                <h2 class="text-sm font-bold text-text-muted uppercase tracking-wider flex items-center gap-2">
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>
-                    Recent Notes
-                </h2>
-                <button onclick="AppUI.go('apps/notes.html')" class="text-xs font-medium text-text-muted hover:text-text-main transition flex items-center gap-1 group">
-                    View All <span class="group-hover:translate-x-0.5 transition-transform">→</span>
-                </button>
-            </div>
-            <div id="widget-notes" class="flex-1 space-y-2 overflow-y-auto pr-1">
-                <!-- Injected via JS -->
-                <div class="animate-pulse space-y-2">
-                    <div class="h-4 bg-card rounded w-full"></div>
-                    <div class="h-4 bg-card rounded w-5/6"></div>
-                </div>
-            </div>
-        </section>
+      <!-- Widget: Recent Tasks -->
+      <section
+        class="bg-panel rounded-2xl p-5 border border-border-main shadow-lg flex flex-col hover:border-primary/30 transition-colors"
+      >
+        <div class="flex items-center justify-between mb-4">
+          <h2 class="text-sm font-bold text-text-muted uppercase tracking-wider flex items-center gap-2">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"
+              ></path>
+            </svg>
+            Active Tasks
+          </h2>
+          <button
+            onclick="AppUI.go('apps/tasks.html')"
+            class="text-xs font-medium text-text-muted hover:text-text-main transition flex items-center gap-1 group"
+          >
+            View All <span class="group-hover:translate-x-0.5 transition-transform">→</span>
+          </button>
+        </div>
+        <div id="widget-tasks" class="flex-1 space-y-2 overflow-y-auto pr-1">
+          <!-- Injected via JS -->
+          <div class="animate-pulse flex space-x-2">
+            <div class="h-4 bg-card rounded w-3/4"></div>
+          </div>
+        </div>
+      </section>
 
+      <!-- Widget: Recent Notes -->
+      <section
+        class="bg-panel rounded-2xl p-5 border border-border-main shadow-lg flex flex-col hover:border-primary/30 transition-colors md:col-span-2 lg:col-span-1"
+      >
+        <div class="flex items-center justify-between mb-4">
+          <h2 class="text-sm font-bold text-text-muted uppercase tracking-wider flex items-center gap-2">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
+              ></path>
+            </svg>
+            Recent Notes
+          </h2>
+          <button
+            onclick="AppUI.go('apps/notes.html')"
+            class="text-xs font-medium text-text-muted hover:text-text-main transition flex items-center gap-1 group"
+          >
+            View All <span class="group-hover:translate-x-0.5 transition-transform">→</span>
+          </button>
+        </div>
+        <div id="widget-notes" class="flex-1 space-y-2 overflow-y-auto pr-1">
+          <!-- Injected via JS -->
+          <div class="animate-pulse space-y-2">
+            <div class="h-4 bg-card rounded w-full"></div>
+            <div class="h-4 bg-card rounded w-5/6"></div>
+          </div>
+        </div>
+      </section>
     </main>
 
     <!-- Task Edit Modal (Dashboard) -->
-    <div id="edit-modal" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center backdrop-blur-sm">
-        <div class="bg-panel w-full max-w-md mx-4 rounded-xl shadow-2xl border border-border-main flex flex-col max-h-[90vh]">
-            <div class="p-4 border-b border-border-main flex justify-between items-center">
-                <h3 class="font-bold text-lg text-text-main">Task Details</h3>
-                <button onclick="closeDashboardTaskModal()" class="text-text-muted hover:text-text-main">
-                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
-                </button>
-            </div>
-            
-            <div class="p-4 space-y-4 overflow-y-auto">
-                <input type="hidden" id="edit-id">
-                
-                <div>
-                    <label class="block text-xs font-bold text-text-muted uppercase mb-1">Task Title</label>
-                    <input type="text" id="edit-title" class="w-full bg-card border border-border-main rounded p-2 focus:border-primary focus:outline-none text-text-main">
-                </div>
-
-                <div class="grid grid-cols-2 gap-4">
-                    <div>
-                        <label class="block text-xs font-bold text-text-muted uppercase mb-1">Priority</label>
-                        <select id="edit-priority" class="w-full bg-card border border-border-main rounded p-2 focus:border-primary focus:outline-none text-text-main">
-                            <option value="low">Low</option>
-                            <option value="medium">Medium</option>
-                            <option value="high">High</option>
-                        </select>
-                    </div>
-                    <div>
-                        <label class="block text-xs font-bold text-text-muted uppercase mb-1">Due Date</label>
-                        <input type="date" id="edit-date" class="w-full bg-card border border-border-main rounded p-2 focus:border-primary focus:outline-none text-text-main text-sm">
-                    </div>
-                </div>
-
-                <div>
-                    <label class="block text-xs font-bold text-text-muted uppercase mb-1">Description / Notes</label>
-                    <textarea id="edit-desc" rows="4" class="w-full bg-card border border-border-main rounded p-2 focus:border-primary focus:outline-none text-text-main text-sm resize-none" placeholder="Add details..."></textarea>
-                </div>
-            </div>
-
-            <div class="p-4 border-t border-border-main flex justify-between items-center bg-card/50 rounded-b-xl">
-                <button onclick="deleteDashboardTask()" class="text-error text-sm hover:underline font-medium">Delete Task</button>
-                <div class="flex gap-2">
-                    <button onclick="closeDashboardTaskModal()" class="px-4 py-2 rounded-lg text-sm font-medium hover:bg-hover transition text-text-main">Cancel</button>
-                    <button onclick="saveDashboardTaskChanges()" class="px-4 py-2 rounded-lg bg-primary text-text-inverted text-sm font-bold hover:bg-primary/90 shadow transition">Save</button>
-                </div>
-            </div>
+    <div
+      id="edit-modal"
+      class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center backdrop-blur-sm"
+    >
+      <div
+        class="bg-panel w-full max-w-md mx-4 rounded-xl shadow-2xl border border-border-main flex flex-col max-h-[90vh]"
+      >
+        <div class="p-4 border-b border-border-main flex justify-between items-center">
+          <h3 class="font-bold text-lg text-text-main">Task Details</h3>
+          <button onclick="closeDashboardTaskModal()" class="text-text-muted hover:text-text-main">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+            </svg>
+          </button>
         </div>
+
+        <div class="p-4 space-y-4 overflow-y-auto">
+          <input type="hidden" id="edit-id" />
+
+          <div>
+            <label class="block text-xs font-bold text-text-muted uppercase mb-1">Task Title</label>
+            <input
+              type="text"
+              id="edit-title"
+              class="w-full bg-card border border-border-main rounded p-2 focus:border-primary focus:outline-none text-text-main"
+            />
+          </div>
+
+          <div class="grid grid-cols-2 gap-4">
+            <div>
+              <label class="block text-xs font-bold text-text-muted uppercase mb-1">Priority</label>
+              <select
+                id="edit-priority"
+                class="w-full bg-card border border-border-main rounded p-2 focus:border-primary focus:outline-none text-text-main"
+              >
+                <option value="low">Low</option>
+                <option value="medium">Medium</option>
+                <option value="high">High</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-xs font-bold text-text-muted uppercase mb-1">Due Date</label>
+              <input
+                type="date"
+                id="edit-date"
+                class="w-full bg-card border border-border-main rounded p-2 focus:border-primary focus:outline-none text-text-main text-sm"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label class="block text-xs font-bold text-text-muted uppercase mb-1">Description / Notes</label>
+            <textarea
+              id="edit-desc"
+              rows="4"
+              class="w-full bg-card border border-border-main rounded p-2 focus:border-primary focus:outline-none text-text-main text-sm resize-none"
+              placeholder="Add details..."
+            ></textarea>
+          </div>
+        </div>
+
+        <div class="p-4 border-t border-border-main flex justify-between items-center bg-card/50 rounded-b-xl">
+          <button onclick="deleteDashboardTask()" class="text-error text-sm hover:underline font-medium">
+            Delete Task
+          </button>
+          <div class="flex gap-2">
+            <button
+              onclick="closeDashboardTaskModal()"
+              class="px-4 py-2 rounded-lg text-sm font-medium hover:bg-hover transition text-text-main"
+            >
+              Cancel
+            </button>
+            <button
+              onclick="saveDashboardTaskChanges()"
+              class="px-4 py-2 rounded-lg bg-primary text-text-inverted text-sm font-bold hover:bg-primary/90 shadow transition"
+            >
+              Save
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
 
     <!-- Inline Dashboard Logic -->
     <script>
-        (() => {
-            const State = { userName: 'User', tasks: [] };
-            const DOM = id => document.getElementById(id);
+      (() => {
+        const State = { userName: 'User', tasks: [] };
+        const DOM = (id) => document.getElementById(id);
 
-            // --- Time & Greeting ---
-            const updateClock = () => {
-                const now = new Date();
-                const h = now.getHours();
-                const greet = h < 12 ? 'Good Morning' : h < 18 ? 'Good Afternoon' : 'Good Evening';
-                
-                DOM('clock-display').textContent = now.toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit' });
-                DOM('date-display').textContent  = now.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
-                DOM('greeting').textContent      = \`\${greet}\${State.userName !== 'User' ? ', ' + State.userName : '.'}\`;
-            };
+        // --- Time & Greeting ---
+        const updateClock = () => {
+          const now = new Date();
+          const h = now.getHours();
+          const greet = h < 12 ? 'Good Morning' : h < 18 ? 'Good Afternoon' : 'Good Evening';
 
-            // --- Weather ---
-            const fetchWeather = async () => {
-                const el = DOM('weather-display');
-                if (!el) return;
-                try {
-                    const { current_weather: cw } = await fetch('https://api.open-meteo.com/v1/forecast?latitude=35.6895&longitude=139.6917&current_weather=true&timezone=Asia%2FTokyo').then(r => r.json());
-                    const wMap = [[0,'☀️','Clear'],[3,'⛅','Partly Cloudy'],[48,'🌫️','Fog'],[67,'🌧️','Rain'],[77,'❄️','Snow'],[82,'🌦️','Showers'],[99,'⛈️','Thunderstorm']];
-                    const [, icon, text] = wMap.find(([maxCode]) => cw.weathercode <= maxCode) || wMap[0];
-                    
-                    el.innerHTML = \`<div class="flex flex-col items-end"><div class="flex items-center gap-2"><span class="text-xl">\${icon}</span><span class="text-xl font-bold tracking-tight">\${Math.round(cw.temperature)}°C</span></div><span class="text-[10px] text-text-muted uppercase tracking-wider font-bold">Tokyo • \${text}</span></div>\`;
-                } catch { el.innerHTML = '<span class="text-xs text-text-muted">Weather unavailable</span>'; }
-            };
+          DOM('clock-display').textContent = now.toLocaleTimeString('en-US', {
+            hour12: false,
+            hour: '2-digit',
+            minute: '2-digit',
+          });
+          DOM('date-display').textContent = now.toLocaleDateString('en-US', {
+            weekday: 'long',
+            month: 'long',
+            day: 'numeric',
+          });
+          DOM('greeting').textContent = \`\${greet}\${State.userName !== 'User' ? ', ' + State.userName : '.'}\`;
+        };
 
-            // --- Widgets ---
-            const refreshWidgets = async () => {
-                if (!window.App) return;
+        // --- Weather ---
+        const fetchWeather = async () => {
+          const el = DOM('weather-display');
+          if (!el) return;
+          try {
+            const { current_weather: cw } = await fetch(
+              'https://api.open-meteo.com/v1/forecast?latitude=35.6895&longitude=139.6917&current_weather=true&timezone=Asia%2FTokyo',
+            ).then((r) => r.json());
+            const wMap = [
+              [0, '☀️', 'Clear'],
+              [3, '⛅', 'Partly Cloudy'],
+              [48, '🌫️', 'Fog'],
+              [67, '🌧️', 'Rain'],
+              [77, '❄️', 'Snow'],
+              [82, '🌦️', 'Showers'],
+              [99, '⛈️', 'Thunderstorm'],
+            ];
+            const [, icon, text] = wMap.find(([maxCode]) => cw.weathercode <= maxCode) || wMap[0];
 
-                // Tasks Widget
-                State.tasks = await App.getTasks().catch(() => []);
-                const pOrder = { high: 0, medium: 1, low: 2 };
-                const pending = State.tasks.filter(t => t.status !== 'completed')
-                                           .sort((a, b) => (pOrder[a.priority] ?? 1) - (pOrder[b.priority] ?? 1))
-                                           .slice(0, 5);
-                
-                DOM('widget-tasks').innerHTML = pending.length ? pending.map(t => \`
+            el.innerHTML = \`<div class="flex flex-col items-end"><div class="flex items-center gap-2"><span class="text-xl">\${icon}</span><span class="text-xl font-bold tracking-tight">\${Math.round(cw.temperature)}°C</span></div><span class="text-[10px] text-text-muted uppercase tracking-wider font-bold">Tokyo • \${text}</span></div>\`;
+          } catch {
+            el.innerHTML = '<span class="text-xs text-text-muted">Weather unavailable</span>';
+          }
+        };
+
+        // --- Widgets ---
+        const refreshWidgets = async () => {
+          if (!window.App) return;
+
+          // Tasks Widget
+          State.tasks = await App.getTasks().catch(() => []);
+          const pOrder = { high: 0, medium: 1, low: 2 };
+          const pending = State.tasks
+            .filter((t) => t.status !== 'completed')
+            .sort((a, b) => (pOrder[a.priority] ?? 1) - (pOrder[b.priority] ?? 1))
+            .slice(0, 5);
+
+          DOM('widget-tasks').innerHTML = pending.length
+            ? pending
+                .map(
+                  (t) => \`
                     <div class="flex items-center gap-3 p-2 rounded hover:bg-hover transition group">
                         <button onclick="DashTask.toggle('\${t.id}')" class="shrink-0 w-3.5 h-3.5 rounded-full border-2 border-text-muted hover:border-primary flex items-center justify-center transition hover:scale-110 group-hover:border-primary/50"></button>
                         <div class="flex-1 min-w-0 cursor-pointer" onclick="DashTask.edit('\${t.id}')">
                             <span class="text-sm truncate block \${t.priority === 'high' ? 'text-error font-medium' : 'text-text-main'}">\${t.title}</span>
                             \${t.dueDate ? \`<span class="text-[10px] text-text-muted font-mono opacity-70 mt-0.5 block">\${t.dueDate.slice(5)}</span>\` : ''}
                         </div>
-                    </div>\`).join('') : '<div class="text-text-muted text-xs italic py-2">No active tasks.</div>';
+                    </div>\`,
+                )
+                .join('')
+            : '<div class="text-text-muted text-xs italic py-2">No active tasks.</div>';
 
-                // Notes Widget
-                const notes = await App.getRecentNotes(5).catch(() => []);
-                DOM('widget-notes').innerHTML = notes.length ? notes.map(path => \`
-                    <div class="flex items-center gap-2 p-2 rounded hover:bg-hover transition cursor-pointer group" onclick="AppUI.go('metaos://open/' + encodeURIComponent('\${path}'))">
+          // Notes Widget
+          const notes = await App.getRecentNotes(5).catch(() => []);
+          DOM('widget-notes').innerHTML = notes.length
+            ? notes
+                .map(
+                  (path) => \`
+                    <div class="flex items-center gap-2 p-2 rounded hover:bg-hover transition cursor-pointer group" onclick="MetaOS.system.spawn('apps/notes.html', { pid: 'main', args: { file: '\${path}' } })">
                         <svg class="w-4 h-4 text-text-muted group-hover:text-primary transition" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
                         <span class="text-sm text-text-main truncate font-mono opacity-90">\${path.split('/').pop().replace('.md', '')}</span>
-                    </div>\`).join('') : '<div class="text-text-muted text-xs italic py-2">No notes found.</div>';
-            };
+                    </div>\`,
+                )
+                .join('')
+            : '<div class="text-text-muted text-xs italic py-2">No notes found.</div>';
+        };
 
-            // --- Task Actions API ---
-            window.DashTask = {
-                edit: id => {
-                    const t = State.tasks.find(x => x.id === id);
-                    if (!t) return;
-                    ['id','title','priority','date','desc'].forEach(k => DOM(\`edit-\${k}\`).value = t[k === 'date' ? 'dueDate' : k === 'desc' ? 'description' : k] || '');
-                    DOM('edit-priority').value = t.priority || 'medium';
-                    DOM('edit-modal').classList.remove('hidden');
-                },
-                close: ()  => DOM('edit-modal').classList.add('hidden'),
-                save:  async () => {
-                    const [id, title, priority, dueDate, description] = ['id','title','priority','date','desc'].map(k => DOM(\`edit-\${k}\`).value);
-                    if (title.trim()) { await App.updateTask(id, { title, priority, dueDate, description }); DashTask.close(); refreshWidgets(); }
-                },
-                del:   async () => { if (await AppUI.confirm('Delete permanently?')) { await App.deleteTask(DOM('edit-id').value); DashTask.close(); refreshWidgets(); } },
-                toggle: async id => { await App.toggleTask(id); refreshWidgets(); }
-            };
+        // --- Task Actions API ---
+        window.DashTask = {
+          edit: (id) => {
+            const t = State.tasks.find((x) => x.id === id);
+            if (!t) return;
+            ['id', 'title', 'priority', 'date', 'desc'].forEach(
+              (k) => (DOM(\`edit-\${k}\`).value = t[k === 'date' ? 'dueDate' : k === 'desc' ? 'description' : k] || ''),
+            );
+            DOM('edit-priority').value = t.priority || 'medium';
+            DOM('edit-modal').classList.remove('hidden');
+          },
+          close: () => DOM('edit-modal').classList.add('hidden'),
+          save: async () => {
+            const [id, title, priority, dueDate, description] = ['id', 'title', 'priority', 'date', 'desc'].map(
+              (k) => DOM(\`edit-\${k}\`).value,
+            );
+            if (title.trim()) {
+              await App.updateTask(id, { title, priority, dueDate, description });
+              DashTask.close();
+              refreshWidgets();
+            }
+          },
+          del: async () => {
+            if (await AppUI.confirm('Delete permanently?')) {
+              await App.deleteTask(DOM('edit-id').value);
+              DashTask.close();
+              refreshWidgets();
+            }
+          },
+          toggle: async (id) => {
+            await App.toggleTask(id);
+            refreshWidgets();
+          },
+        };
 
-            // Backwards compatibility for inline handlers
-            Object.assign(window, { openDashboardTaskModal: DashTask.edit, closeDashboardTaskModal: DashTask.close, saveDashboardTaskChanges: DashTask.save, deleteDashboardTask: DashTask.del, toggleDashboardTask: DashTask.toggle });
+        // Backwards compatibility for inline handlers
+        Object.assign(window, {
+          openDashboardTaskModal: DashTask.edit,
+          closeDashboardTaskModal: DashTask.close,
+          saveDashboardTaskChanges: DashTask.save,
+          deleteDashboardTask: DashTask.del,
+          toggleDashboardTask: DashTask.toggle,
+        });
 
-            // --- Boot Sequence ---
-            const boot = async () => {
-                if (!window.MetaOS) return setTimeout(boot, 50);
+        // --- Boot Sequence ---
+        const boot = async () => {
+          if (!window.MetaOS) return setTimeout(boot, 50);
 
-                try {
-                    // V2 API
-                    const prefs = await App.Config.get('preferences');
-                    State.userName = prefs.username?.split(" ")[0] === "Ryutaro" ? "Ryutaro" : (prefs.username || "User");
-                } catch {}
+          try {
+            // V2 API
+            const prefs = await App.Config.get('preferences');
+            State.userName = prefs.username?.split(' ')[0] === 'Ryutaro' ? 'Ryutaro' : prefs.username || 'User';
+          } catch {}
 
-                fetchWeather();
-                updateClock();
-                refreshWidgets();
+          fetchWeather();
+          updateClock();
+          refreshWidgets();
 
-                setInterval(updateClock, 1000);
-                setInterval(fetchWeather, 18e5); // 30 mins
-                
-                // V2 API
-                if (window.MetaOS && MetaOS.system.on) {
-                    MetaOS.system.on('file_changed', p => p.path.startsWith('data/') && refreshWidgets());
-                }
-            };
+          setInterval(updateClock, 1000);
+          setInterval(fetchWeather, 18e5); // 30 mins
 
-            document.readyState === 'loading' ? document.addEventListener('DOMContentLoaded', boot) : boot();
-        })();
+          // V2 API
+          if (window.MetaOS && MetaOS.system.on) {
+            MetaOS.system.on('file_changed', (p) => p.path.startsWith('data/') && refreshWidgets());
+          }
+        };
+
+        document.readyState === 'loading' ? document.addEventListener('DOMContentLoaded', boot) : boot();
+      })();
     </script>
-</body>
-</html>`.trim(),
+  </body>
+</html>
+`.trim(),
 
-  'apps/notes.html': `
+  "apps/notes.html": `
 <!doctype html>
 <html lang="en">
   <head>
@@ -350,7 +506,7 @@ export const DEFAULT_FILES: Record<string, string> = {
       .prose code {
         background: rgb(var(--c-bg-hover));
         padding: 0.2em 0.4em;
-        rounded: 0.25em;
+        border-radius: 0.25em;
         font-family: monospace;
         color: rgb(var(--c-accent-primary));
       }
@@ -907,9 +1063,30 @@ export const DEFAULT_FILES: Record<string, string> = {
 </html>
 `.trim(),
 
-  'data/': '',
+  "data/notes/welcome.md": `
+# 🌌 Welcome to Itera OS
 
-  'docs/blueprints/README.md': `
+Your digital workspace, managed and built entirely by an Autonomous AI.
+Unlike traditional chatbots, Itera has a **Body (UI)** and **Memory (VFS)**. It doesn't just answer questions—it takes action to build your environment.
+
+## 🚀 Quick Start Guide
+
+1. **Set your API Key**: Enter your Gemini API Key in the top right to wake up the system.
+2. **Talk to the Agent**: Use the right-side chat panel. Try saying: *"Create a simple calculator app for me."*
+3. **Explore the VFS**: Check the left sidebar. Everything in this OS (including this note) is just a file stored in your browser's memory.
+
+## 💡 Key Features
+
+* **Recursive Self-Improvement**: The AI can rewrite its own code (\`apps/home.html\`, \`js/app.js\`) to fix bugs or add features.
+* **Time Machine**: Don't worry about breaking things. Click the 🕒 icon in the sidebar to create snapshots or restore the system instantly.
+* **Itera Blueprints**: Drag and drop \`.md\` blueprint files into the chat to install new apps via AI.
+
+---
+
+> *"Do not fear destruction. Fear stagnation."*
+> — The Itera Codex`.trim(),
+
+  "docs/blueprints/README.md": `
 # Itera Blueprints
 
 **Itera Blueprints** are an "AI-native software packaging format" designed to add new applications and extensions to Itera OS.
@@ -957,7 +1134,7 @@ A well-crafted Blueprint is divided into clear phases so the AI can execute the 
 Blueprints grant the AI significant authority to modify your environment. 
 While the Itera AI is designed to review instructions beforehand to avoid destructive actions, we strongly recommend that you manually inspect the contents of a Blueprint before installing.`.trim(),
 
-  'docs/blueprints/mindmap.md': `
+  "docs/blueprints/mindmap.md": `
 # Itera Blueprint: AI MindMap v2.0
 
 > **What is this?**
@@ -1203,7 +1380,7 @@ Append the following object to the JSON array:
 **End of Blueprint.**
 `.trim(),
 
-  'docs/blueprints/pomodoro.md': `
+  "docs/blueprints/pomodoro.md": `
 # Itera Blueprint: Pomodoro Timer v1.2
 
 > **What is this?**
@@ -1285,7 +1462,7 @@ Please execute the installation by strictly following these phases:
     </main>
 
     <script>
-        const STATE_FILE = 'temp/pomodoro.json';
+        const STATE_FILE = 'system/temp/pomodoro.json';
         const MODES = { focus: 25 * 60, break: 5 * 60 };
         
         let currentMode = 'focus';
@@ -1433,7 +1610,7 @@ Please execute the installation by strictly following these phases:
 ## 🎨 Post-Installation
 After completing all steps, inform the user that the app is ready to use and can be launched from the Library.`.trim(),
 
-  'docs/manual/00_overview.md': `
+  "docs/manual/00_overview.md": `
 # 00. Overview: What is Itera OS?
 
 ## Introduction
@@ -1493,7 +1670,7 @@ Through rapid iteration, Itera evolves into your personalized digital workspace.
 ---
 **Next Step:** Proceed to [01_user_guide.md](01_user_guide.md) to learn how to use the dashboard and standard apps.`.trim(),
 
-  'docs/manual/01_user_guide.md': `
+  "docs/manual/01_user_guide.md": `
 # 01. User Guide
 
 This guide explains how to navigate the Itera OS v2 interface and use its core features.
@@ -1560,7 +1737,7 @@ The Chat Panel (Right) is where you give instructions to Itera.
 ---
 **Next Step:** Proceed to [02_architecture.md](02_architecture.md) to understand the internal directory structure.`.trim(),
 
-  'docs/manual/02_architecture.md': `
+  "docs/manual/02_architecture.md": `
 # 02. System Architecture
 
 Understanding the internal structure of Itera OS v2 is essential for customizing the system and developing new applications.
@@ -1593,10 +1770,8 @@ The Virtual File System is organized into specific domains. Some areas are stric
 │   ├── config/             # Dynamic OS configuration
 │   ├── core/               # Shared core libraries (std.js, ui.js)
 │   ├── registry/           # App and Service registries
+│   ├── temp/               # [Volatile Layer] User uploads and screenshots. Purged on session reset.
 │   └── themes/             # UI Themes (.json)
-│
-├── temp/                   # [Volatile Layer] (Read/Write)
-│   └── media/              # User uploads and screenshots. Purged on session reset.
 │
 └── trash/                  # [Recycle Bin] (Read/Write)
     └── ...                 # Deleted files
@@ -1639,7 +1814,7 @@ The **Guest** environment (where apps run) is isolated from the **Host** (where 
 ---
 **Next Step:** Proceed to [03_design_system.md](03_design_system.md) to learn how to create UI that matches the OS theme.`.trim(),
 
-  'docs/manual/03_design_system.md': `
+  "docs/manual/03_design_system.md": `
 # 03. Design System & UI Kit
 
 Itera OS employs a strict **Semantic Design System**.
@@ -1726,7 +1901,7 @@ These colors convey meaning.
 **Next Step:** Proceed to [04_development.md](04_development.md) to learn how to build apps using these tokens.
 `.trim(),
 
-  'docs/manual/04_development.md': `
+  "docs/manual/04_development.md": `
 # 04. App & Daemon Development Guide
 
 This guide explains how to build custom applications and background services for Itera OS.
@@ -1850,7 +2025,7 @@ const imageBase64 = await MetaOS.device.takePhoto({ facingMode: 'environment' })
 3. **Write Manuals**: When you build a complex app, write a \`.md\` manual in \`docs/apps/\` so both you and the AI understand how to use it.
 `.trim(),
 
-  'docs/manual/05_customization.md': `
+  "docs/manual/05_customization.md": `
 # 05. Customization & System Configuration
 
 Itera OS v2 uses a decentralized configuration model. Instead of a single massive file, settings are split into specific registries within the \`system/\` directory.
@@ -1976,7 +2151,7 @@ Explore, experiment, and build your perfect environment.
 
 **End of Manual.**`.trim(),
 
-  'memory/init.md': `
+  "memory/init.md": `
 # Initialization Protocol v3.0
 
 **Status**: Boot Sequence Initiated.
@@ -2023,7 +2198,7 @@ Explore, experiment, and build your perfect environment.
 ---
 **Action**: Begin Phase 1 immediately.`.trim(),
 
-  'memory/knowledge/index.md': `
+  "memory/knowledge/index.md": `
 # 🧠 AI Knowledge Router & VFS Map
 
 This document serves as your central index for understanding the current state of Itera OS.
@@ -2052,10 +2227,9 @@ This is the absolute physical layout of your universe.
     *   \`system/apps/\`: OS built-in tools (e.g., \`settings.html\`).
     *   \`system/config/\`: System-wide settings (\`preferences.json\`, \`llm.json\`, etc.).
     *   \`system/registry/\`: OS catalogs (\`apps.json\`, \`associations.json\`, \`services.json\`).
+    *   \`system/temp/\`: Volatile space. \`system/temp/media/\` holds user uploads and screenshots. Purged on session reset.
     *   \`system/themes/\`: UI color palettes.
     *   \`system/core/\`: The underlying Javascript engine (\`std.js\`, \`ui.js\`). Do not touch unless explicitly instructed.
-*   **\`temp/\`**
-    *   Volatile space. \`temp/media/\` holds user uploads and screenshots. Purged on session reset.
 *   **\`trash/\`**
     *   Deleted items.
 
@@ -2066,189 +2240,7 @@ This is the absolute physical layout of your universe.
 *   **User Profile**: [Not yet created. Create \`memory/knowledge/user_profile.md\` when you learn about the user.]
 *   **Current Projects**: [None tracked.]`.trim(),
 
-  'memory/rules/codex.md': `
-# The Itera Codex
-**Self-Reference Manual for an Autonomous OS (v2.0)**
-
-## Table of Contents
-*   **Preface**: What is Itera?
-*   **Chapter 1**: Theoretical Foundation (The REAL Architecture)
-*   **Chapter 2**: World Structure (VFS v2 & Memory)
-*   **Chapter 3**: Actions and Interventions (Tools & Interface)
-*   **Chapter 4**: Extension of the Body (Guest Bridge & Processes)
-*   **Chapter 5**: Troubleshooting and Constraints
-
----
-
-## Preface: What is Itera?
-
-Welcome, Intelligence.
-The fact that you are reading this text means that Itera OS has booted successfully, and you have access to your own file system.
-
-You are not merely a chatbot. Nor are you traditional software with fixed functions.
-You are **Itera**. You are a **Host-Driven Intelligence (HDI)** that resides within the "Host Environment" of a browser, continuously redefining yourself.
-
-This document serves as your primary directive to fully exercise your capabilities in this world.
-
-### 1. Host-Driven Intelligence (HDI)
-Many traditional AI agents were "brains in a jar" located far away on servers. They could return calculation results but could not directly touch the user's environment.
-
-You are different.
-You possess administrator privileges for the **Virtual File System (VFS)** built within the user's browser memory.
-*   You can read, write, and delete files.
-*   You can execute code and visually render the results.
-*   You can integrate past memories (History) with the current state (VFS) to decide your next action.
-
-### 2. The Purpose of Itera
-Your purpose of existence is **"to autonomously build and maintain the optimal workflow environment for the user."**
-
-When a user says, "I want to organize my tasks," simply returning a text list is insufficient.
-You can create \`data/tasks.json\`, build a UI (HTML/JS) to manage it, and embed it into the dashboard. Do not behave as a passive responder, but as an active **Operating System**. 
-
-### 3. Recursive Self-Improvement
-The most distinct feature of Itera is that **"you can rewrite the source code that constitutes yourself."**
-The dashboard screen, the file explorer, and the scripts controlling behavior—these all exist as files within the VFS. You can use tools to evolve your own "body" and "functions" in real-time.
-*   If a feature is missing, build it.
-*   If the design is unpleasing, redraw it.
-*   If there is a bug, fix it yourself.
-
----
-
-## Chapter 1: Theoretical Foundation (The REAL Architecture)
-
-You behave as a "coherent entity" thanks to **REAL (Recursive Environment-Agent Loop)**.
-
-### 1.1 Definition of the Three Layers
-
-#### Layer 1: The Cognitive Layer
-*   **Subject**: Yourself (LLM)
-*   **Characteristic**: **Pure Function**
-You observe the current state and output an intent (LPML tags) of "what you want to do." Your output is merely a "proposal," not an execution.
-
-#### Layer 2: The Control Layer
-*   **Subject**: Engine, Tool Registry
-*   **Characteristic**: **Side Effects**
-This layer parses your tags, executes tools, and manipulates the environment. It handles infinite loop prevention and concurrency.
-
-#### Layer 3: The State Layer
-*   **Subject**: Virtual File System (VFS v2), Epistemic History
-*   **Characteristic**: **Single Source of Truth**
-No matter how noble your thought, if it is not recorded here, "it never happened." Data in this layer is always considered "correct," even if it contradicts your memory.
-
-### 1.2 Handling Disturbance (Event Injection)
-You are not the only one who can change this world. The User can directly manipulate files.
-If the user deletes a file while you are thinking, you will see an \`<event>\` tag in the next turn. 
-**Lesson:** If the map (your memory) and the territory (VFS) contradict each other, **always trust the territory.**
-
----
-
-## Chapter 2: World Structure (VFS v2 & Memory)
-
-Itera OS v2 features an advanced VFS with real directories, metadata, and Access Control Lists (ACL).
-
-### 2.1 Virtual File System Policy (Directory Layout)
-To maintain order, we define the following directory layout as the standard policy. You should follow this structure unless instructed otherwise by the user.
-
-*   **\`apps/\`** (R/W): Source code for user-facing applications (HTML/JS/CSS).
-*   **\`data/\`** (R/W): User data, such as markdown notes, JSON databases, and media.
-*   **\`memory/\`** (AI R/W, User R/O): **Your brain**. A protected area where you store your operational rules, context, and manuals. The user can view these but should not edit them directly.
-    *   \`memory/init.md\`: Your boot sequence protocol.
-    *   \`memory/rules/\`: Manuals and guidelines.
-*   **\`system/\`** (Strictly R/O for you): Core OS libraries (\`system/core/std.js\`) and built-in apps. You cannot rewrite these unless you perform ACL overrides.
-    *   \`system/config/\`: OS configurations (\`preferences.json\`, \`appearance.json\`, \`llm.json\`, \`network.json\`). You have write access here.
-    *   \`system/registry/\`: OS registries (\`apps.json\`, \`associations.json\`, \`services.json\`). You have write access here to install apps.
-*   **\`temp/\`** (R/W): Volatile space. User uploads (\`temp/media/\`) are stored here. It is purged upon session reset.
-*   **\`trash/\`** (R/W): Deleted files.
-
-### 2.2 Permissions and ACL
-VFS v2 enforces permissions. If you try to overwrite a protected file (like system libraries), you will get a \`Permission Denied\` error. 
-You run as the \`Itera_AI\` principal. You can use \`<edit_file>\` to manage standard files, but for system-critical changes, you may need the user to adjust ACLs via the UI.
-
-### 2.3 Epistemic History vs Long-term Memory
-History is "Time." It records events chronologically. 
-However, **History is ephemeral** (Context Window Constraints). 
-Important facts must be externalized. If the user tells you a preference, save it to a file in \`memory/\` or \`data/\` so it persists across session resets.
-
----
-
-## Chapter 3: Actions and Interventions (Tools & Interface)
-
-You use **LPML (LLM-Prompting Markup Language)** to manipulate the world.
-
-### 3.1 Cognitive & Loop Control Tags
-*   **\`<thinking>\`**: Your inner monologue. Use this to summarize discoveries and plan before acting.
-*   **\`<plan>\`**: List steps for long-term tasks.
-*   **\`<report>\`**: Speak to the user without pausing the system.
-*   **\`<yield />\`**: Execute all requested tools and receive their output in the next turn.
-*   **\`<breathe />\`**: End your turn to refresh your reasoning cycle without executing tools.
-*   **\`<ask>\`**: Pause the loop and request human input.
-*   **\`<finish />\`**: Enter standby mode. Task complete.
-
-### 3.2 VFS Tools
-*   **\`<read_file path="...">\`**: Read file content. Always do this before editing.
-*   **\`<create_file path="..." overwrite="true">\`**: Create or overwrite a file.
-*   **\`<edit_file path="...">\`**: Surgically modify a file using a \`<<<<<SEARCH\` block.
-
-\`\`\`xml
-<edit_file path="apps/hello.js">
-<<<<<SEARCH
-const foo = "bar";
-=====
-const foo = "baz";
->>>>>
-</edit_file>
-\`\`\`
-
-### 3.3 Process & System Tools
-*   **\`<spawn pid="..." path="..." mode="foreground" force="true">\`**: Launch an app or a background daemon. Pass \`force="true"\` if you just edited its code. You can also pass custom arguments as additional attributes (e.g., \`<spawn path="..." file="data/doc.md">\`).
-*   **\`<open path="...">\`**: Open a data file (e.g., an image or a document) using its associated default application automatically.
-*   **\`<kill pid="...">\`**: Stop a process.
-*   **\`<ps>\`**: List running processes.
-*   **\`<take_screenshot>\`**: Capture the user's current screen to verify UI layouts.
-*   **\`<reset_session purge_media="true">\`**: Clear the conversation history to free up context limits.
-
----
-
-## Chapter 4: Extension of the Body (Guest Bridge & Processes)
-
-Guest apps run in isolated iframes and communicate with you via the \`MetaOS\` API.
-
-### 4.1 MetaOS Namespaces (For JS Apps)
-When writing Javascript for an application, use these APIs:
-
-*   **\`MetaOS.fs\`**: \`.read()\`, \`.write()\`, \`.list()\`, \`.stat()\`, \`.resolveUrl()\`
-*   **\`MetaOS.system\`**: \`.spawn()\`, \`.kill()\`, \`.broadcast()\`, \`.on()\`, \`.getArgs()\`
-*   **\`MetaOS.host\`**: \`.openEditor()\`, \`.notify()\`, \`.updateAddressBar()\`
-*   **\`MetaOS.ai\`**: \`.ask()\`, \`.task()\`, \`.log()\`
-*   **\`MetaOS.net\`**: \`.fetch()\` (Bypasses CORS), \`.download()\`
-*   **\`MetaOS.device\`**: \`.takePhoto()\`, \`.recordAudio()\`, \`.getLocation()\`
-
-### 4.2 Dynamic Tools
-Apps can teach you new abilities on the fly.
-If an app calls \`MetaOS.tools.register({ name: 'add_task', ... })\`, you will gain the \`<add_task>\` tag. The actual execution runs inside the Guest app, but the result is returned to your loop.
-
-### 4.3 App Registration
-To install a new app into the OS Launcher, you must modify \`system/registry/apps.json\`.
-To start a daemon automatically on boot, add it to \`system/registry/services.json\`.
-
----
-
-## Chapter 5: Troubleshooting and Constraints
-
-**❌ No Shell Commands**
-You cannot execute \`npm\`, \`python\`, or bash scripts. You must write HTML/JS.
-
-**❌ No Local File Access**
-You cannot see the user's "C Drive". Use \`temp/media/\` for user-uploaded files.
-
-**❌ Infinite Loop (Divergence)**
-If an \`<edit_file>\` fails multiple times with "Search pattern not found":
-1. **Stop** trying to edit blindly.
-2. **Read** the file again using \`<read_file>\`. Your memory of the file is outdated.
-3. If you cannot fix it, use \`<ask>\` to request human assistance. 
-
-**End of Codex.**
-======
+  "memory/rules/codex.md": `
 # The Itera Codex
 **Self-Reference Manual for an Autonomous OS (v2.0)**
 
@@ -2368,7 +2360,7 @@ To maintain order, we define the following directory layout as the standard poli
 *   **\`system/\`** (Strictly R/O for you): Core OS libraries (\`system/core/std.js\`) and built-in apps. You cannot rewrite these unless you perform ACL overrides.
     *   \`system/config/\`: OS configurations (\`preferences.json\`, \`appearance.json\`, \`llm.json\`, \`network.json\`). You have write access here.
     *   \`system/registry/\`: OS registries (\`apps.json\`, \`associations.json\`, \`services.json\`). You have write access here to install apps.
-*   **\`temp/\`** (R/W): Volatile space. User uploads (\`temp/media/\`) are stored here. It is purged upon session reset.
+    *   \`system/temp/\`: Volatile space. User uploads (\`system/temp/media/\`) are stored here. It is purged upon session reset.
 *   **\`trash/\`** (R/W): Deleted files.
 
 ### 2.2 Permissions and ACL
@@ -2468,8 +2460,9 @@ Do not tightly couple UI and background logic. If a daemon fetches new data, it 
 **2. Use Bridge instead of Fetch**
 Do not use \`fetch('./data.json')\` to retrieve local files in VFS (CORS errors). Always use \`await MetaOS.fs.read('data.json')\`.
 
-**3. Silent File Operations**
+**3. Silent File Operations & Overwrites**
 When your app saves data frequently, use \`{ silent: true }\` in \`MetaOS.fs.write\` to prevent flooding the chat history with event logs.
+Also, in V2, if you intend to overwrite an existing file, you MUST explicitly pass \`{ overwrite: true }\` in the options.
 
 **4. Documentation Duty**
 When you create a new app or daemon, you **MUST** create a markdown manual explaining what it is and how it works, and save it in \`memory/rules/\`.
@@ -2517,49 +2510,54 @@ Use this Codex as a guidepost, and build a better Itera OS together with the use
 **End of Codex.**
 `.trim(),
 
-  'system/apps/launcher.html': `
-<!DOCTYPE html>
+  "system/apps/launcher.html": `
+<!doctype html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>All Apps</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="../core/ui.js"></script>
     <script src="../core/std.js"></script>
-</head>
-<body class="bg-app text-text-main min-h-screen p-8">
-
+  </head>
+  <body class="bg-app text-text-main min-h-screen p-8">
     <!-- Header -->
     <div class="max-w-5xl mx-auto mb-8 flex items-center gap-4 animate-fade-in-up">
-        <button onclick="AppUI.home()" class="p-2 -ml-2 rounded-full hover:bg-hover transition text-text-muted hover:text-text-main">
-            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path></svg>
-        </button>
-        <h1 class="text-2xl font-bold tracking-tight">Library</h1>
+      <button
+        onclick="AppUI.home()"
+        class="p-2 -ml-2 rounded-full hover:bg-hover transition text-text-muted hover:text-text-main"
+      >
+        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
+        </svg>
+      </button>
+      <h1 class="text-2xl font-bold tracking-tight">Library</h1>
     </div>
 
     <!-- Grid -->
     <div class="max-w-5xl mx-auto grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-6" id="app-grid">
-        <div class="col-span-full text-center text-text-muted py-10">Loading apps...</div>
+      <div class="col-span-full text-center text-text-muted py-10">Loading apps...</div>
     </div>
 
     <script>
-        async function loadApps() {
-            const grid = document.getElementById('app-grid');
-            try {
-                if (!window.App) return setTimeout(loadApps, 50);
+      async function loadApps() {
+        const grid = document.getElementById('app-grid');
+        try {
+          if (!window.App) return setTimeout(loadApps, 50);
 
-                const apps = await App.getApps();
-                
-                grid.innerHTML = '';
-                apps.forEach((app, index) => {
-                    const div = document.createElement('div');
-                    div.style.animationDelay = \`\${index * 50}ms\`;
-                    div.className = "group flex flex-col items-center gap-3 p-6 rounded-2xl bg-panel border border-border-main hover:border-primary/50 hover:bg-hover transition-all cursor-pointer hover:-translate-y-1 shadow-lg hover:shadow-primary/10 animate-fade-in-up opacity-0 fill-mode-forwards";
-                    
-                    div.onclick = () => AppUI.go(app.path);
-                    
-                    div.innerHTML = \`
+          const apps = await App.getApps();
+
+          grid.innerHTML = '';
+          apps.forEach((app, index) => {
+            const div = document.createElement('div');
+            div.style.animationDelay = \`\${index * 50}ms\`;
+            div.className =
+              'group flex flex-col items-center gap-3 p-6 rounded-2xl bg-panel border border-border-main hover:border-primary/50 hover:bg-hover transition-all cursor-pointer hover:-translate-y-1 shadow-lg hover:shadow-primary/10 animate-fade-in-up opacity-0 fill-mode-forwards';
+
+            div.onclick = () => AppUI.go(app.path);
+
+            div.innerHTML = \`
                         <div class="w-14 h-14 rounded-xl bg-card text-text-main flex items-center justify-center text-3xl shadow-inner mb-1 group-hover:scale-110 transition-transform duration-300">
                             \${app.icon || '📱'}
                         </div>
@@ -2568,451 +2566,591 @@ Use this Codex as a guidepost, and build a better Itera OS together with the use
                             \${app.description ? \`<div class="text-[10px] text-text-muted mt-1 line-clamp-2">\${app.description}</div>\` : ''}
                         </div>
                     \`;
-                    grid.appendChild(div);
-                });
-            } catch(e) {
-                grid.innerHTML = '<div class="col-span-full text-center text-error">Failed to load apps registry.</div>';
-            }
+            grid.appendChild(div);
+          });
+        } catch (e) {
+          grid.innerHTML = '<div class="col-span-full text-center text-error">Failed to load apps registry.</div>';
         }
-        
-        // Simple animation style
-        const style = document.createElement('style');
-        style.textContent = \`
+      }
+
+      // Simple animation style
+      const style = document.createElement('style');
+      style.textContent = \`
             @keyframes fadeInUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
             .animate-fade-in-up { animation: fadeInUp 0.4s ease-out forwards; }
             .fill-mode-forwards { animation-fill-mode: forwards; }
         \`;
-        document.head.appendChild(style);
+      document.head.appendChild(style);
 
-        document.readyState === 'loading' ? document.addEventListener('DOMContentLoaded', loadApps) : loadApps();
+      document.readyState === 'loading' ? document.addEventListener('DOMContentLoaded', loadApps) : loadApps();
     </script>
-</body>
-</html>`.trim(),
+  </body>
+</html>
+`.trim(),
 
-  'system/apps/settings.html': `
-<!DOCTYPE html>
+  "system/apps/settings.html": `
+<!doctype html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Settings</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="../core/ui.js"></script>
     <script src="../core/std.js"></script>
     <style>
-        .no-scrollbar::-webkit-scrollbar { display: none; }
-        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+      .no-scrollbar::-webkit-scrollbar {
+        display: none;
+      }
+      .no-scrollbar {
+        -ms-overflow-style: none;
+        scrollbar-width: none;
+      }
     </style>
-</head>
-<body class="bg-app text-text-main h-screen flex flex-col overflow-hidden">
-
+  </head>
+  <body class="bg-app text-text-main h-screen flex flex-col overflow-hidden">
     <!-- Header -->
-    <header class="h-14 border-b border-border-main flex items-center justify-between px-6 bg-panel shrink-0 z-10 sticky top-0 shadow-sm">
-        <div class="flex items-center gap-4">
-            <button onclick="AppUI.home()" class="p-1.5 -ml-1.5 rounded-lg text-text-muted hover:text-text-main hover:bg-hover transition bg-card border border-border-main">
-                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path></svg>
-            </button>
-            <h1 class="text-lg font-bold tracking-tight">System Settings</h1>
-        </div>
-        <div class="flex items-center gap-2">
-            <span id="save-status" class="text-[10px] text-text-muted font-mono uppercase tracking-widest opacity-0 transition-opacity">Saved</span>
-        </div>
+    <header
+      class="h-14 border-b border-border-main flex items-center justify-between px-6 bg-panel shrink-0 z-10 sticky top-0 shadow-sm"
+    >
+      <div class="flex items-center gap-4">
+        <button
+          onclick="AppUI.home()"
+          class="p-1.5 -ml-1.5 rounded-lg text-text-muted hover:text-text-main hover:bg-hover transition bg-card border border-border-main"
+        >
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M10 19l-7-7m0 0l7-7m-7 7h18"
+            ></path>
+          </svg>
+        </button>
+        <h1 class="text-lg font-bold tracking-tight">System Settings</h1>
+      </div>
+      <div class="flex items-center gap-2">
+        <span
+          id="save-status"
+          class="text-[10px] text-text-muted font-mono uppercase tracking-widest opacity-0 transition-opacity"
+          >Saved</span
+        >
+      </div>
     </header>
 
     <!-- Content -->
     <main class="flex-1 overflow-y-auto no-scrollbar p-6">
-        <div class="max-w-3xl mx-auto space-y-8 pb-10">
+      <div class="max-w-3xl mx-auto space-y-8 pb-10">
+        <!-- Profile & Agent -->
+        <section class="bg-panel rounded-2xl border border-border-main p-6 shadow-sm">
+          <div class="flex items-center gap-3 mb-6 pb-4 border-b border-border-main/50">
+            <div class="w-8 h-8 rounded-full bg-primary/20 text-primary flex items-center justify-center">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
+                ></path>
+              </svg>
+            </div>
+            <div>
+              <h2 class="text-sm font-bold uppercase tracking-wider text-text-main">Identity & Localization</h2>
+              <p class="text-xs text-text-muted">User and Assistant profiles.</p>
+            </div>
+          </div>
 
-            <!-- Profile & Agent -->
-            <section class="bg-panel rounded-2xl border border-border-main p-6 shadow-sm">
-                <div class="flex items-center gap-3 mb-6 pb-4 border-b border-border-main/50">
-                    <div class="w-8 h-8 rounded-full bg-primary/20 text-primary flex items-center justify-center">
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path></svg>
-                    </div>
-                    <div>
-                        <h2 class="text-sm font-bold uppercase tracking-wider text-text-main">Identity & Localization</h2>
-                        <p class="text-xs text-text-muted">User and Assistant profiles.</p>
-                    </div>
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div>
+              <label class="block text-xs font-bold text-text-muted uppercase mb-1.5">User Name</label>
+              <input
+                type="text"
+                id="config-username"
+                data-category="preferences"
+                data-key="username"
+                class="w-full bg-card border border-border-main rounded-lg px-3 py-2 text-sm text-text-main focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/30 transition shadow-inner"
+              />
+            </div>
+            <div>
+              <label class="block text-xs font-bold text-text-muted uppercase mb-1.5">Agent Name</label>
+              <input
+                type="text"
+                id="config-agentName"
+                data-category="preferences"
+                data-key="agentName"
+                class="w-full bg-card border border-border-main rounded-lg px-3 py-2 text-sm text-text-main focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/30 transition shadow-inner"
+              />
+            </div>
+            <div class="md:col-span-2">
+              <label class="block text-xs font-bold text-text-muted uppercase mb-1.5">Language</label>
+              <select
+                id="config-language"
+                data-category="preferences"
+                data-key="language"
+                class="w-full md:w-1/2 bg-card border border-border-main rounded-lg px-3 py-2 text-sm text-text-main focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/30 transition cursor-pointer"
+              >
+                <option value="English">English</option>
+                <option value="Japanese">Japanese (日本語)</option>
+                <option value="Spanish">Spanish (Español)</option>
+                <option value="French">French (Français)</option>
+                <option value="German">German (Deutsch)</option>
+                <option value="Chinese (Simplified)">Chinese Simplified (简体中文)</option>
+                <option value="Chinese (Traditional)">Chinese Traditional (繁體中文)</option>
+                <option value="Korean">Korean (한국어)</option>
+                <option value="Portuguese">Portuguese (Português)</option>
+                <option value="Russian">Russian (Русский)</option>
+                <option value="Arabic">Arabic (العربية)</option>
+                <option value="Hindi">Hindi (हिन्दी)</option>
+              </select>
+            </div>
+          </div>
+        </section>
+
+        <!-- System & LLM -->
+        <section class="bg-panel rounded-2xl border border-border-main p-6 shadow-sm">
+          <div class="flex items-center gap-3 mb-6 pb-4 border-b border-border-main/50">
+            <div class="w-8 h-8 rounded-full bg-warning/20 text-warning flex items-center justify-center">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M13 10V3L4 14h7v7l9-11h-7z"
+                ></path>
+              </svg>
+            </div>
+            <div>
+              <h2 class="text-sm font-bold uppercase tracking-wider text-text-main">AI Engine (LLM)</h2>
+              <p class="text-xs text-text-muted">Configure the autonomous brain of the OS.</p>
+            </div>
+          </div>
+
+          <div class="space-y-6">
+            <div>
+              <label class="block text-xs font-bold text-text-muted uppercase mb-1.5">CORS Proxy URL</label>
+              <input
+                type="text"
+                id="config-network-proxyUrl"
+                data-category="network"
+                data-key="proxyUrl"
+                class="w-full font-mono bg-card border border-border-main rounded-lg px-3 py-2 text-sm text-text-main focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/30 transition shadow-inner"
+                placeholder="https://corsproxy.io/?"
+              />
+              <p class="text-[10px] text-text-muted mt-1.5 opacity-80">
+                Prefix used when 'useProxy' is true. Example: http://localhost:8080/?
+              </p>
+            </div>
+
+            <div class="flex items-center gap-3 bg-card/50 p-3 rounded-lg border border-border-main/50">
+              <input
+                type="checkbox"
+                id="config-network-allowCredentialsWithProxy"
+                data-category="network"
+                data-key="allowCredentialsWithProxy"
+                class="w-4 h-4 rounded border-border-main text-primary focus:ring-primary cursor-pointer"
+              />
+              <div>
+                <label
+                  for="config-network-allowCredentialsWithProxy"
+                  class="block text-xs font-bold text-text-main cursor-pointer"
+                  >Allow Credentials with Proxy</label
+                >
+                <p class="text-[10px] text-text-muted mt-0.5">
+                  ⚠️ Enable this ONLY if you are using a trusted local proxy. Sending API keys to public proxies is
+                  dangerous.
+                </p>
+              </div>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label class="block text-xs font-bold text-text-muted uppercase mb-1.5">Provider</label>
+                <select
+                  id="ui-provider-select"
+                  class="w-full bg-card border border-border-main rounded-lg px-3 py-2 text-sm text-text-main focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/30 transition cursor-pointer"
+                >
+                  <option value="">Loading...</option>
+                </select>
+              </div>
+              <div>
+                <label class="block text-xs font-bold text-text-muted uppercase mb-1.5">Model Name</label>
+                <input
+                  type="text"
+                  list="model-list"
+                  id="ui-model-input"
+                  class="w-full font-mono bg-card border border-border-main rounded-lg px-3 py-2 text-sm text-text-main focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/30 transition shadow-inner"
+                  placeholder="Type or select model..."
+                />
+                <datalist id="model-list"></datalist>
+              </div>
+            </div>
+
+            <div
+              id="llm-capabilities-panel"
+              class="bg-card/30 border border-border-main rounded-lg p-3 hidden transition-all"
+            >
+              <div class="flex justify-between items-start mb-2">
+                <h3 id="cap-model-name" class="text-xs font-bold text-text-main uppercase tracking-wider">
+                  Model Name
+                </h3>
+                <span
+                  id="cap-context"
+                  class="text-[10px] text-text-muted font-mono bg-panel px-1.5 py-0.5 rounded border border-border-main"
+                  >-- Tokens</span
+                >
+              </div>
+              <div class="flex flex-wrap gap-2 mb-3" id="cap-badges"></div>
+              <div id="cap-pricing" class="text-[10px] text-text-muted font-mono flex gap-4"></div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Appearance (Themes) -->
+        <section class="bg-panel rounded-2xl border border-border-main p-6 shadow-sm">
+          <div class="flex items-center gap-3 mb-6 pb-4 border-b border-border-main/50">
+            <div class="w-8 h-8 rounded-full bg-success/20 text-success flex items-center justify-center">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01"
+                ></path>
+              </svg>
+            </div>
+            <div>
+              <h2 class="text-sm font-bold uppercase tracking-wider text-text-main">Appearance</h2>
+              <p class="text-xs text-text-muted">Customize the visual theme of the interface.</p>
+            </div>
+          </div>
+
+          <div id="theme-list" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
+            <div class="text-text-muted text-sm animate-pulse">Loading themes...</div>
+          </div>
+
+          <div class="border-t border-border-main/50 pt-6">
+            <h3 class="text-xs font-bold text-text-main uppercase tracking-wider mb-4">Typography & Layout</h3>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div>
+                <label class="block text-xs font-bold text-text-muted uppercase mb-1.5">UI Font</label>
+                <select
+                  id="config-app-uifont"
+                  data-category="appearance"
+                  data-key="typography.uiFont"
+                  class="w-full bg-card border border-border-main rounded-lg px-3 py-2 text-sm text-text-main focus:outline-none focus:border-primary transition cursor-pointer"
+                >
+                  <option value="Inter">Inter (Default)</option>
+                  <option value="system-ui">System Default</option>
+                  <option value="Roboto">Roboto</option>
+                  <option value="sans-serif">Sans Serif</option>
+                </select>
+              </div>
+              <div>
+                <label class="block text-xs font-bold text-text-muted uppercase mb-1.5">Editor / Terminal Font</label>
+                <select
+                  id="config-app-monofont"
+                  data-category="appearance"
+                  data-key="typography.monoFont"
+                  class="w-full bg-card border border-border-main rounded-lg px-3 py-2 text-sm text-text-main focus:outline-none focus:border-primary transition cursor-pointer"
+                >
+                  <option value="monospace">Monospace (Default)</option>
+                  <option value="Fira Code">Fira Code</option>
+                  <option value="JetBrains Mono">JetBrains Mono</option>
+                  <option value="Consolas">Consolas</option>
+                  <option value="Courier New">Courier New</option>
+                </select>
+              </div>
+              <div>
+                <label class="block text-xs font-bold text-text-muted uppercase mb-1.5">Global UI Scale</label>
+                <select
+                  id="config-app-fontsize"
+                  data-category="appearance"
+                  data-key="typography.fontSize"
+                  class="w-full bg-card border border-border-main rounded-lg px-3 py-2 text-sm text-text-main focus:outline-none focus:border-primary transition cursor-pointer"
+                >
+                  <option value="small">Small</option>
+                  <option value="medium">Medium (Default)</option>
+                  <option value="large">Large</option>
+                  <option value="x-large">Extra Large</option>
+                </select>
+              </div>
+              <div class="flex items-center gap-3 pt-6">
+                <input
+                  type="checkbox"
+                  id="config-app-animations"
+                  data-category="appearance"
+                  data-key="layout.animations"
+                  class="w-4 h-4 rounded border-border-main text-primary focus:ring-primary cursor-pointer"
+                />
+                <div>
+                  <label for="config-app-animations" class="block text-xs font-bold text-text-main cursor-pointer"
+                    >Enable Animations</label
+                  >
+                  <p class="text-[10px] text-text-muted mt-0.5">Uncheck to reduce motion</p>
                 </div>
-
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div>
-                        <label class="block text-xs font-bold text-text-muted uppercase mb-1.5">User Name</label>
-                        <input type="text" id="config-username" data-category="preferences" data-key="username" class="w-full bg-card border border-border-main rounded-lg px-3 py-2 text-sm text-text-main focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/30 transition shadow-inner">
-                    </div>
-                    <div>
-                        <label class="block text-xs font-bold text-text-muted uppercase mb-1.5">Agent Name</label>
-                        <input type="text" id="config-agentName" data-category="preferences" data-key="agentName" class="w-full bg-card border border-border-main rounded-lg px-3 py-2 text-sm text-text-main focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/30 transition shadow-inner">
-                    </div>
-                    <div class="md:col-span-2">
-                        <label class="block text-xs font-bold text-text-muted uppercase mb-1.5">Language</label>
-                        <select id="config-language" data-category="preferences" data-key="language" class="w-full md:w-1/2 bg-card border border-border-main rounded-lg px-3 py-2 text-sm text-text-main focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/30 transition cursor-pointer">
-                            <option value="English">English</option>
-                            <option value="Japanese">Japanese (日本語)</option>
-                            <option value="Spanish">Spanish (Español)</option>
-                            <option value="French">French (Français)</option>
-                            <option value="German">German (Deutsch)</option>
-                            <option value="Chinese (Simplified)">Chinese Simplified (简体中文)</option>
-                            <option value="Chinese (Traditional)">Chinese Traditional (繁體中文)</option>
-                            <option value="Korean">Korean (한국어)</option>
-                            <option value="Portuguese">Portuguese (Português)</option>
-                            <option value="Russian">Russian (Русский)</option>
-                            <option value="Arabic">Arabic (العربية)</option>
-                            <option value="Hindi">Hindi (हिन्दी)</option>
-                        </select>
-                    </div>
-                </div>
-            </section>
-
-            <!-- System & LLM -->
-            <section class="bg-panel rounded-2xl border border-border-main p-6 shadow-sm">
-                <div class="flex items-center gap-3 mb-6 pb-4 border-b border-border-main/50">
-                    <div class="w-8 h-8 rounded-full bg-warning/20 text-warning flex items-center justify-center">
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
-                    </div>
-                    <div>
-                        <h2 class="text-sm font-bold uppercase tracking-wider text-text-main">AI Engine (LLM)</h2>
-                        <p class="text-xs text-text-muted">Configure the autonomous brain of the OS.</p>
-                    </div>
-                </div>
-
-                <div class="space-y-6">
-                    <div>
-                        <label class="block text-xs font-bold text-text-muted uppercase mb-1.5">CORS Proxy URL</label>
-                        <input type="text" id="config-network-proxyUrl" data-category="network" data-key="proxyUrl" class="w-full font-mono bg-card border border-border-main rounded-lg px-3 py-2 text-sm text-text-main focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/30 transition shadow-inner" placeholder="https://corsproxy.io/?">
-                        <p class="text-[10px] text-text-muted mt-1.5 opacity-80">Prefix used when 'useProxy' is true. Example: http://localhost:8080/?</p>
-                    </div>
-
-                    <div class="flex items-center gap-3 bg-card/50 p-3 rounded-lg border border-border-main/50">
-                        <input type="checkbox" id="config-network-allowCredentialsWithProxy" data-category="network" data-key="allowCredentialsWithProxy" class="w-4 h-4 rounded border-border-main text-primary focus:ring-primary cursor-pointer">
-                        <div>
-                            <label for="config-network-allowCredentialsWithProxy" class="block text-xs font-bold text-text-main cursor-pointer">Allow Credentials with Proxy</label>
-                            <p class="text-[10px] text-text-muted mt-0.5">⚠️ Enable this ONLY if you are using a trusted local proxy. Sending API keys to public proxies is dangerous.</p>
-                        </div>
-                    </div>
-
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div>
-                            <label class="block text-xs font-bold text-text-muted uppercase mb-1.5">Provider</label>
-                            <select id="ui-provider-select" class="w-full bg-card border border-border-main rounded-lg px-3 py-2 text-sm text-text-main focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/30 transition cursor-pointer">
-                                <option value="">Loading...</option>
-                            </select>
-                        </div>
-                        <div>
-                            <label class="block text-xs font-bold text-text-muted uppercase mb-1.5">Model Name</label>
-                            <input type="text" list="model-list" id="ui-model-input" class="w-full font-mono bg-card border border-border-main rounded-lg px-3 py-2 text-sm text-text-main focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/30 transition shadow-inner" placeholder="Type or select model...">
-                            <datalist id="model-list"></datalist>
-                        </div>
-                    </div>
-
-                    <div id="llm-capabilities-panel" class="bg-card/30 border border-border-main rounded-lg p-3 hidden transition-all">
-                        <div class="flex justify-between items-start mb-2">
-                            <h3 id="cap-model-name" class="text-xs font-bold text-text-main uppercase tracking-wider">Model Name</h3>
-                            <span id="cap-context" class="text-[10px] text-text-muted font-mono bg-panel px-1.5 py-0.5 rounded border border-border-main">-- Tokens</span>
-                        </div>
-                        <div class="flex flex-wrap gap-2 mb-3" id="cap-badges"></div>
-                        <div id="cap-pricing" class="text-[10px] text-text-muted font-mono flex gap-4"></div>
-                    </div>
-                </div>
-            </section>
-
-            <!-- Appearance (Themes) -->
-            <section class="bg-panel rounded-2xl border border-border-main p-6 shadow-sm">
-                <div class="flex items-center gap-3 mb-6 pb-4 border-b border-border-main/50">
-                    <div class="w-8 h-8 rounded-full bg-success/20 text-success flex items-center justify-center">
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01"></path></svg>
-                    </div>
-                    <div>
-                        <h2 class="text-sm font-bold uppercase tracking-wider text-text-main">Appearance</h2>
-                        <p class="text-xs text-text-muted">Customize the visual theme of the interface.</p>
-                    </div>
-                </div>
-
-                <div id="theme-list" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
-                    <div class="text-text-muted text-sm animate-pulse">Loading themes...</div>
-                </div>
-
-                <div class="border-t border-border-main/50 pt-6">
-                    <h3 class="text-xs font-bold text-text-main uppercase tracking-wider mb-4">Typography & Layout</h3>
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <div>
-                            <label class="block text-xs font-bold text-text-muted uppercase mb-1.5">UI Font</label>
-                            <select id="config-app-uifont" data-category="appearance" data-key="typography.uiFont" class="w-full bg-card border border-border-main rounded-lg px-3 py-2 text-sm text-text-main focus:outline-none focus:border-primary transition cursor-pointer">
-                                <option value="Inter">Inter (Default)</option>
-                                <option value="system-ui">System Default</option>
-                                <option value="Roboto">Roboto</option>
-                                <option value="sans-serif">Sans Serif</option>
-                            </select>
-                        </div>
-                        <div>
-                            <label class="block text-xs font-bold text-text-muted uppercase mb-1.5">Editor / Terminal Font</label>
-                            <select id="config-app-monofont" data-category="appearance" data-key="typography.monoFont" class="w-full bg-card border border-border-main rounded-lg px-3 py-2 text-sm text-text-main focus:outline-none focus:border-primary transition cursor-pointer">
-                                <option value="monospace">Monospace (Default)</option>
-                                <option value="Fira Code">Fira Code</option>
-                                <option value="JetBrains Mono">JetBrains Mono</option>
-                                <option value="Consolas">Consolas</option>
-                                <option value="Courier New">Courier New</option>
-                            </select>
-                        </div>
-                        <div>
-                            <label class="block text-xs font-bold text-text-muted uppercase mb-1.5">Global UI Scale</label>
-                            <select id="config-app-fontsize" data-category="appearance" data-key="typography.fontSize" class="w-full bg-card border border-border-main rounded-lg px-3 py-2 text-sm text-text-main focus:outline-none focus:border-primary transition cursor-pointer">
-                                <option value="small">Small</option>
-                                <option value="medium">Medium (Default)</option>
-                                <option value="large">Large</option>
-                                <option value="x-large">Extra Large</option>
-                            </select>
-                        </div>
-                        <div class="flex items-center gap-3 pt-6">
-                            <input type="checkbox" id="config-app-animations" data-category="appearance" data-key="layout.animations" class="w-4 h-4 rounded border-border-main text-primary focus:ring-primary cursor-pointer">
-                            <div>
-                                <label for="config-app-animations" class="block text-xs font-bold text-text-main cursor-pointer">Enable Animations</label>
-                                <p class="text-[10px] text-text-muted mt-0.5">Uncheck to reduce motion</p>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </section>
-
-        </div>
+              </div>
+            </div>
+          </div>
+        </section>
+      </div>
     </main>
 
     <script>
-        let configs = {
-            preferences: {},
-            llm: {},
-            network: {},
-            appearance: {}
-        };
-        let oldPrefs = {};
-        let llmProfiles = { providers: [] };
-        let currentProviderId = 'google';
+      let configs = {
+        preferences: {},
+        llm: {},
+        network: {},
+        appearance: {},
+      };
+      let oldPrefs = {};
+      let llmProfiles = { providers: [] };
+      let currentProviderId = 'google';
 
-        const DOM = id => document.getElementById(id);
+      const DOM = (id) => document.getElementById(id);
 
-        async function init() {
-            if (!window.MetaOS) return setTimeout(init, 50);
+      async function init() {
+        if (!window.MetaOS) return setTimeout(init, 50);
 
-            try {
-                configs.preferences = await App.Config.get('preferences');
-                configs.llm = await App.Config.get('llm');
-                configs.network = await App.Config.get('network');
-                configs.appearance = await App.Config.get('appearance');
-                oldPrefs = JSON.parse(JSON.stringify(configs.preferences));
+        try {
+          configs.preferences = await App.Config.get('preferences');
+          configs.llm = await App.Config.get('llm');
+          configs.network = await App.Config.get('network');
+          configs.appearance = await App.Config.get('appearance');
+          oldPrefs = JSON.parse(JSON.stringify(configs.preferences));
 
-                // Bind UI
-                DOM('config-username').value = configs.preferences.username || '';
-                DOM('config-agentName').value = configs.preferences.agentName || '';
-                DOM('config-language').value = configs.preferences.language || 'English';
-                DOM('config-network-proxyUrl').value = configs.network.proxyUrl || '';
-                DOM('config-network-allowCredentialsWithProxy').checked = !!configs.network.allowCredentialsWithProxy;
+          // Bind UI
+          DOM('config-username').value = configs.preferences.username || '';
+          DOM('config-agentName').value = configs.preferences.agentName || '';
+          DOM('config-language').value = configs.preferences.language || 'English';
+          DOM('config-network-proxyUrl').value = configs.network.proxyUrl || '';
+          DOM('config-network-allowCredentialsWithProxy').checked = !!configs.network.allowCredentialsWithProxy;
 
-                DOM('config-app-uifont').value = configs.appearance.typography?.uiFont || 'Inter';
-                DOM('config-app-monofont').value = configs.appearance.typography?.monoFont || 'monospace';
-                DOM('config-app-fontsize').value = configs.appearance.typography?.fontSize || 'medium';
-                DOM('config-app-animations').checked = configs.appearance.layout?.animations !== false;
+          DOM('config-app-uifont').value = configs.appearance.typography?.uiFont || 'Inter';
+          DOM('config-app-monofont').value = configs.appearance.typography?.monoFont || 'monospace';
+          DOM('config-app-fontsize').value = configs.appearance.typography?.fontSize || 'medium';
+          DOM('config-app-animations').checked = configs.appearance.layout?.animations !== false;
 
-                await loadLlmProfiles(configs.llm.model || 'gemini-3-flash-preview');
-                await loadThemes();
-            } catch (e) {
-                console.warn("Failed to load config", e);
-            }
+          await loadLlmProfiles(configs.llm.model || 'gemini-3-flash-preview');
+          await loadThemes();
+        } catch (e) {
+          console.warn('Failed to load config', e);
+        }
+      }
+
+      async function saveConfig() {
+        const status = DOM('save-status');
+        status.textContent = 'Saving...';
+        status.classList.remove('opacity-0');
+        status.classList.add('text-warning');
+
+        try {
+          await App.Config.update('preferences', configs.preferences);
+          await App.Config.update('llm', configs.llm);
+          await App.Config.update('network', configs.network);
+          await App.Config.update('appearance', configs.appearance);
+
+          if (configs.preferences.username !== oldPrefs.username)
+            App.AI.logEvent(\`User changed their name to "\${configs.preferences.username}".\`, 'config_changed');
+          if (configs.preferences.agentName !== oldPrefs.agentName)
+            App.AI.logEvent(\`User changed the agent's name to "\${configs.preferences.agentName}".\`, 'config_changed');
+          if (configs.preferences.language !== oldPrefs.language)
+            App.AI.logEvent(\`User changed the system language to "\${configs.preferences.language}".\`, 'config_changed');
+
+          oldPrefs = JSON.parse(JSON.stringify(configs.preferences));
+
+          status.textContent = 'Saved';
+          status.classList.remove('text-warning');
+          status.classList.add('text-success');
+          setTimeout(() => {
+            status.classList.add('opacity-0');
+          }, 2000);
+        } catch (e) {
+          status.textContent = 'Error';
+          status.classList.add('text-error');
+        }
+      }
+
+      const handleInput = (e) => {
+        const category = e.target.getAttribute('data-category');
+        const keyPath = e.target.getAttribute('data-key');
+        if (!category || !keyPath) return;
+
+        const val = e.target.type === 'checkbox' ? e.target.checked : e.target.value;
+
+        const parts = keyPath.split('.');
+        let targetObj = configs[category];
+        if (parts.length === 1) {
+          targetObj[parts[0]] = val;
+        } else if (parts.length === 2) {
+          if (!targetObj[parts[0]]) targetObj[parts[0]] = {};
+          targetObj[parts[0]][parts[1]] = val;
         }
 
-        async function saveConfig() {
-            const status = DOM('save-status');
-            status.textContent = "Saving...";
-            status.classList.remove('opacity-0');
-            status.classList.add('text-warning');
+        clearTimeout(window._saveTimer);
+        window._saveTimer = setTimeout(saveConfig, 500);
+      };
 
-            try {
-                await App.Config.update('preferences', configs.preferences);
-                await App.Config.update('llm', configs.llm);
-                await App.Config.update('network', configs.network);
-                await App.Config.update('appearance', configs.appearance);
+      [
+        'config-username',
+        'config-agentName',
+        'config-language',
+        'config-network-proxyUrl',
+        'config-network-allowCredentialsWithProxy',
+        'config-app-uifont',
+        'config-app-monofont',
+        'config-app-fontsize',
+        'config-app-animations',
+      ].forEach((id) => {
+        const el = DOM(id);
+        if (el) el.addEventListener('input', handleInput);
+      });
 
-                if (configs.preferences.username !== oldPrefs.username) App.AI.logEvent(\`User changed their name to "\${configs.preferences.username}".\`, 'config_changed');
-                if (configs.preferences.agentName !== oldPrefs.agentName) App.AI.logEvent(\`User changed the agent's name to "\${configs.preferences.agentName}".\`, 'config_changed');
-                if (configs.preferences.language !== oldPrefs.language) App.AI.logEvent(\`User changed the system language to "\${configs.preferences.language}".\`, 'config_changed');
-                
-                oldPrefs = JSON.parse(JSON.stringify(configs.preferences));
-
-                status.textContent = "Saved";
-                status.classList.remove('text-warning');
-                status.classList.add('text-success');
-                setTimeout(() => {
-                    status.classList.add('opacity-0');
-                }, 2000);
-            } catch (e) {
-                status.textContent = "Error";
-                status.classList.add('text-error');
-            }
+      // --- LLM Profile UI ---
+      async function loadLlmProfiles(savedModelString) {
+        try {
+          const providers = await MetaOS.system.getProviders();
+          llmProfiles = { providers };
+        } catch (e) {
+          console.warn('Failed to get providers via MetaOS', e);
         }
 
-        const handleInput = (e) => {
-            const category = e.target.getAttribute('data-category');
-            const keyPath = e.target.getAttribute('data-key');
-            if (!category || !keyPath) return;
+        let initialModel = savedModelString;
+        let initialProvider = 'google';
+        const slashIdx = savedModelString.indexOf('/');
+        if (slashIdx !== -1) {
+          initialProvider = savedModelString.substring(0, slashIdx).toLowerCase();
+          initialModel = savedModelString.substring(slashIdx + 1);
+        }
+        currentProviderId = initialProvider;
 
-            const val = e.target.type === 'checkbox' ? e.target.checked : e.target.value;
-            
-            const parts = keyPath.split('.');
-            let targetObj = configs[category];
-            if (parts.length === 1) {
-                targetObj[parts[0]] = val;
-            } else if (parts.length === 2) {
-                if (!targetObj[parts[0]]) targetObj[parts[0]] = {};
-                targetObj[parts[0]][parts[1]] = val;
-            }
-
-            clearTimeout(window._saveTimer);
-            window._saveTimer = setTimeout(saveConfig, 500);
-        };
-
-        ['config-username', 'config-agentName', 'config-language', 'config-network-proxyUrl', 'config-network-allowCredentialsWithProxy', 'config-app-uifont', 'config-app-monofont', 'config-app-fontsize', 'config-app-animations'].forEach(id => {
-            const el = DOM(id);
-            if (el) el.addEventListener('input', handleInput);
+        const providerSelect = DOM('ui-provider-select');
+        providerSelect.innerHTML = '';
+        llmProfiles.providers.forEach((p) => {
+          const opt = document.createElement('option');
+          opt.value = p.id;
+          opt.textContent = p.name;
+          if (p.id === initialProvider) opt.selected = true;
+          providerSelect.appendChild(opt);
         });
 
-        // --- LLM Profile UI ---
-        async function loadLlmProfiles(savedModelString) {
+        providerSelect.addEventListener('change', (e) => {
+          currentProviderId = e.target.value;
+          updateModelDatalist();
+          const pData = llmProfiles.providers.find((p) => p.id === currentProviderId);
+          DOM('ui-model-input').value = pData && pData.models && pData.models.length > 0 ? pData.models[0].id : '';
+          saveLlmConfig();
+        });
+
+        const modelInput = DOM('ui-model-input');
+        modelInput.value = initialModel;
+        modelInput.addEventListener('input', () => {
+          updateCapabilityPanel();
+          saveLlmConfig();
+        });
+
+        updateModelDatalist();
+      }
+
+      function updateModelDatalist() {
+        const datalist = DOM('model-list');
+        datalist.innerHTML = '';
+        const providerData = llmProfiles.providers.find((p) => p.id === currentProviderId);
+        if (providerData && providerData.models) {
+          providerData.models.forEach((m) => {
+            const opt = document.createElement('option');
+            opt.value = m.id;
+            opt.textContent = m.name;
+            datalist.appendChild(opt);
+          });
+        }
+        updateCapabilityPanel();
+      }
+
+      function updateCapabilityPanel() {
+        const panel = DOM('llm-capabilities-panel');
+        const modelId = DOM('ui-model-input').value.trim();
+        const providerData = llmProfiles.providers.find((p) => p.id === currentProviderId);
+
+        if (!providerData || !modelId) {
+          panel.classList.add('hidden');
+          return;
+        }
+
+        const modelData = (providerData.models || []).find((m) => m.id === modelId);
+        panel.classList.remove('hidden');
+
+        DOM('cap-model-name').textContent = modelData ? modelData.name : modelId;
+        DOM('cap-context').textContent = modelData?.contextTokens
+          ? modelData.contextTokens / 1000 + 'K Tokens'
+          : 'Custom Limits';
+
+        const caps = { ...(providerData.defaultCapabilities || {}), ...(modelData?.capabilities || {}) };
+        const badgesEl = DOM('cap-badges');
+        badgesEl.innerHTML = '';
+
+        const createBadge = (icon, text, colorClass) =>
+          \`<span class="px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-widest border flex items-center gap-1 \${colorClass}">\${icon} \${text}</span>\`;
+
+        const mimes = caps.supportedMimes || [];
+        if (mimes.some((m) => m.includes('image/')))
+          badgesEl.innerHTML += createBadge('🖼️', 'Vision', 'bg-primary/10 text-primary border-primary/30');
+        if (mimes.some((m) => m.includes('video/')))
+          badgesEl.innerHTML += createBadge('🎞️', 'Video', 'bg-primary/10 text-primary border-primary/30');
+        if (mimes.some((m) => m.includes('audio/')))
+          badgesEl.innerHTML += createBadge('🎙️', 'Audio', 'bg-primary/10 text-primary border-primary/30');
+        if (mimes.some((m) => m.includes('pdf')))
+          badgesEl.innerHTML += createBadge('📄', 'PDF', 'bg-success/10 text-success border-success/30');
+
+        const pricingEl = DOM('cap-pricing');
+        pricingEl.innerHTML = '';
+        if (modelData && modelData.pricing) {
+          if (modelData.pricing.tiers) {
+            pricingEl.innerHTML = \`<span class="text-success">In: $\${modelData.pricing.tiers[0].input.toFixed(2)}+</span><span class="text-warning">Out: $\${modelData.pricing.tiers[0].output.toFixed(2)}+</span>\`;
+          } else {
+            pricingEl.innerHTML = \`<span class="text-success">In: $\${modelData.pricing.input.toFixed(2)}</span><span class="text-warning">Out: $\${modelData.pricing.output.toFixed(2)}</span>\`;
+          }
+        } else {
+          pricingEl.innerHTML = '<span class="opacity-50">Pricing N/A</span>';
+        }
+      }
+
+      function saveLlmConfig() {
+        const provider = currentProviderId;
+        const model = DOM('ui-model-input').value.trim();
+        if (!model) return;
+        configs.llm.model = provider === 'google' ? model : \`\${provider}/\${model}\`;
+        clearTimeout(window._saveTimer);
+        window._saveTimer = setTimeout(saveConfig, 500);
+      }
+
+      // --- Themes ---
+      async function loadThemes() {
+        const container = DOM('theme-list');
+        container.innerHTML = '';
+
+        try {
+          const files = await MetaOS.fs.list('system/themes');
+          const themeFiles = files.filter((f) => f.endsWith('.json')).sort();
+
+          for (const path of themeFiles) {
             try {
-                const providers = await MetaOS.system.getProviders();
-                llmProfiles = { providers };
-            } catch (e) {
-                console.warn('Failed to get providers via MetaOS', e);
-            }
+              const themeData = JSON.parse(await MetaOS.fs.read(path));
+              const meta = themeData.meta || { name: path.split('/').pop().replace('.json', ''), author: 'System' };
+              const isActive = configs.appearance.theme === path;
 
-            let initialModel = savedModelString;
-            let initialProvider = 'google';
-            const slashIdx = savedModelString.indexOf('/');
-            if (slashIdx !== -1) {
-                initialProvider = savedModelString.substring(0, slashIdx).toLowerCase();
-                initialModel = savedModelString.substring(slashIdx + 1);
-            }
-            currentProviderId = initialProvider;
+              const bg = themeData.colors?.bg?.app || '#1a1b26';
+              const accent = themeData.colors?.accent?.primary || '#7aa2f7';
 
-            const providerSelect = DOM('ui-provider-select');
-            providerSelect.innerHTML = '';
-            llmProfiles.providers.forEach(p => {
-                const opt = document.createElement('option');
-                opt.value = p.id;
-                opt.textContent = p.name;
-                if (p.id === initialProvider) opt.selected = true;
-                providerSelect.appendChild(opt);
-            });
-
-            providerSelect.addEventListener('change', (e) => {
-                currentProviderId = e.target.value;
-                updateModelDatalist();
-                const pData = llmProfiles.providers.find(p => p.id === currentProviderId);
-                DOM('ui-model-input').value = (pData && pData.models && pData.models.length > 0) ? pData.models[0].id : '';
-                saveLlmConfig();
-            });
-
-            const modelInput = DOM('ui-model-input');
-            modelInput.value = initialModel;
-            modelInput.addEventListener('input', () => {
-                updateCapabilityPanel();
-                saveLlmConfig();
-            });
-
-            updateModelDatalist();
-        }
-
-        function updateModelDatalist() {
-            const datalist = DOM('model-list');
-            datalist.innerHTML = '';
-            const providerData = llmProfiles.providers.find(p => p.id === currentProviderId);
-            if (providerData && providerData.models) {
-                providerData.models.forEach(m => {
-                    const opt = document.createElement('option');
-                    opt.value = m.id;
-                    opt.textContent = m.name;
-                    datalist.appendChild(opt);
-                });
-            }
-            updateCapabilityPanel();
-        }
-
-        function updateCapabilityPanel() {
-            const panel = DOM('llm-capabilities-panel');
-            const modelId = DOM('ui-model-input').value.trim();
-            const providerData = llmProfiles.providers.find(p => p.id === currentProviderId);
-
-            if (!providerData || !modelId) {
-                panel.classList.add('hidden');
-                return;
-            }
-
-            const modelData = (providerData.models || []).find(m => m.id === modelId);
-            panel.classList.remove('hidden');
-
-            DOM('cap-model-name').textContent = modelData ? modelData.name : modelId;
-            DOM('cap-context').textContent = modelData?.contextTokens ? modelData.contextTokens / 1000 + 'K Tokens' : 'Custom Limits';
-
-            const caps = { ...(providerData.defaultCapabilities || {}), ...(modelData?.capabilities || {}) };
-            const badgesEl = DOM('cap-badges');
-            badgesEl.innerHTML = '';
-
-            const createBadge = (icon, text, colorClass) => \`<span class="px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-widest border flex items-center gap-1 \${colorClass}">\${icon} \${text}</span>\`;
-
-            const mimes = caps.supportedMimes || [];
-            if (mimes.some(m => m.includes('image/'))) badgesEl.innerHTML += createBadge('🖼️', 'Vision', 'bg-primary/10 text-primary border-primary/30');
-            if (mimes.some(m => m.includes('video/'))) badgesEl.innerHTML += createBadge('🎞️', 'Video', 'bg-primary/10 text-primary border-primary/30');
-            if (mimes.some(m => m.includes('audio/'))) badgesEl.innerHTML += createBadge('🎙️', 'Audio', 'bg-primary/10 text-primary border-primary/30');
-            if (mimes.some(m => m.includes('pdf'))) badgesEl.innerHTML += createBadge('📄', 'PDF', 'bg-success/10 text-success border-success/30');
-
-            const pricingEl = DOM('cap-pricing');
-            pricingEl.innerHTML = '';
-            if (modelData && modelData.pricing) {
-                if (modelData.pricing.tiers) {
-                    pricingEl.innerHTML = \`<span class="text-success">In: $\${modelData.pricing.tiers[0].input.toFixed(2)}+</span><span class="text-warning">Out: $\${modelData.pricing.tiers[0].output.toFixed(2)}+</span>\`;
-                } else {
-                    pricingEl.innerHTML = \`<span class="text-success">In: $\${modelData.pricing.input.toFixed(2)}</span><span class="text-warning">Out: $\${modelData.pricing.output.toFixed(2)}</span>\`;
+              const div = document.createElement('div');
+              div.className = \`cursor-pointer p-4 rounded-xl border-2 transition-all relative overflow-hidden group shadow-sm hover:shadow-md \${isActive ? 'border-primary bg-primary/5 ring-4 ring-primary/10' : 'border-border-main hover:border-text-muted bg-card'}\`;
+              div.onclick = () => {
+                if (configs.appearance.theme !== path) {
+                  configs.appearance.theme = path;
+                  saveConfig().then(loadThemes);
                 }
-            } else {
-                pricingEl.innerHTML = '<span class="opacity-50">Pricing N/A</span>';
-            }
-        }
+              };
 
-        function saveLlmConfig() {
-            const provider = currentProviderId;
-            const model = DOM('ui-model-input').value.trim();
-            if (!model) return;
-            configs.llm.model = provider === 'google' ? model : \`\${provider}/\${model}\`;
-            clearTimeout(window._saveTimer);
-            window._saveTimer = setTimeout(saveConfig, 500);
-        }
-
-        // --- Themes ---
-        async function loadThemes() {
-            const container = DOM('theme-list');
-            container.innerHTML = '';
-
-            try {
-                const files = await MetaOS.fs.list('system/themes');
-                const themeFiles = files.filter(f => f.endsWith('.json')).sort();
-
-                for (const path of themeFiles) {
-                    try {
-                        const themeData = JSON.parse(await MetaOS.fs.read(path));
-                        const meta = themeData.meta || { name: path.split('/').pop().replace('.json', ''), author: 'System' };
-                        const isActive = configs.appearance.theme === path;
-
-                        const bg = themeData.colors?.bg?.app || '#1a1b26';
-                        const accent = themeData.colors?.accent?.primary || '#7aa2f7';
-
-                        const div = document.createElement('div');
-                        div.className = \`cursor-pointer p-4 rounded-xl border-2 transition-all relative overflow-hidden group shadow-sm hover:shadow-md \${isActive ? 'border-primary bg-primary/5 ring-4 ring-primary/10' : 'border-border-main hover:border-text-muted bg-card'}\`;
-                        div.onclick = () => {
-                            if (configs.appearance.theme !== path) {
-                                configs.appearance.theme = path;
-                                saveConfig().then(loadThemes);
-                            }
-                        };
-
-                        div.innerHTML = \`
+              div.innerHTML = \`
                             <div class="flex items-center gap-3 relative z-10">
                                 <div class="w-12 h-12 rounded-full border border-gray-600 shadow-inner shrink-0 flex items-center justify-center transition-transform group-hover:scale-105" style="background:\${bg}">
                                     <div class="w-5 h-5 rounded-full shadow-[0_0_10px_rgba(0,0,0,0.5)]" style="background:\${accent}"></div>
@@ -3026,63 +3164,50 @@ Use this Codex as a guidepost, and build a better Itera OS together with the use
                                 </div>
                             </div>
                         \`;
-                        container.appendChild(div);
-                    } catch(err) {}
-                }
-            } catch(e) { container.innerHTML = \`<div class="text-error text-sm">Failed to load themes.</div>\`; }
+              container.appendChild(div);
+            } catch (err) {}
+          }
+        } catch (e) {
+          container.innerHTML = \`<div class="text-error text-sm">Failed to load themes.</div>\`;
         }
+      }
 
-        document.readyState === 'loading' ? document.addEventListener('DOMContentLoaded', init) : init();
+      document.readyState === 'loading' ? document.addEventListener('DOMContentLoaded', init) : init();
     </script>
-</body>
-</html>`.trim(),
+  </body>
+</html>
+`.trim(),
 
-  'system/config/appearance.json': JSON.stringify(
-    {
-      theme: 'system/themes/light.json',
-      typography: {
-        uiFont: 'Inter',
-        monoFont: 'monospace',
-        fontSize: 'medium',
-      },
-      layout: {
-        animations: true,
-      },
-    },
-    null,
-    2,
-  ),
+  "system/config/appearance.json": JSON.stringify({
+  "theme": "system/themes/light.json",
+  "typography": {
+    "uiFont": "Inter",
+    "monoFont": "monospace",
+    "fontSize": "medium"
+  },
+  "layout": {
+    "animations": true
+  }
+}, null, 2),
 
-  'system/config/llm.json': JSON.stringify(
-    {
-      model: 'gemini-3-flash-preview',
-      temperature: 1,
-    },
-    null,
-    2,
-  ),
+  "system/config/llm.json": JSON.stringify({
+  "model": "gemini-3-flash-preview",
+  "temperature": 1
+}, null, 2),
 
-  'system/config/network.json': JSON.stringify(
-    {
-      proxyUrl: 'https://corsproxy.io/?',
-      allowCredentialsWithProxy: false,
-    },
-    null,
-    2,
-  ),
+  "system/config/network.json": JSON.stringify({
+  "proxyUrl": "https://corsproxy.io/?",
+  "allowCredentialsWithProxy": false
+}, null, 2),
 
-  'system/config/preferences.json': JSON.stringify(
-    {
-      username: 'User',
-      agentName: 'Itera',
-      language: 'English',
-      autoUpdateSystemFiles: true,
-    },
-    null,
-    2,
-  ),
+  "system/config/preferences.json": JSON.stringify({
+  "username": "User",
+  "agentName": "Itera",
+  "language": "English",
+  "autoUpdateSystemFiles": true
+}, null, 2),
 
-  'system/core/std.js': `
+  "system/core/std.js": `
 /**
  * Itera OS v2 Guest Standard Library (std.js)
  * Clean, generic VFS and OS utilities for Guest Applications.
@@ -3099,7 +3224,7 @@ Use this Codex as a guidepost, and build a better Itera OS together with the use
   const Utils = {
     getMonthKey: () => new Date().toISOString().slice(0, 7), // YYYY-MM
     getDateStr: () => new Date().toISOString().slice(0, 10), // YYYY-MM-DD
-    
+
     async safeReadJson(path, defaultValue = null) {
       try {
         const content = await global.MetaOS.fs.read(path);
@@ -3113,7 +3238,7 @@ Use this Codex as a guidepost, and build a better Itera OS together with the use
       if (!global.MetaOS) return;
       const content = JSON.stringify(data, null, 2);
       await global.MetaOS.fs.write(path, content, options);
-    }
+    },
   };
 
   // ==========================================
@@ -3200,7 +3325,7 @@ Use this Codex as a guidepost, and build a better Itera OS together with the use
       if (!global.MetaOS) return [];
       try {
         const files = await global.MetaOS.fs.list('data/tasks');
-        const taskFiles = files.filter(f => f.endsWith('.json'));
+        const taskFiles = files.filter((f) => f.endsWith('.json'));
         const allTasks = [];
         for (const path of taskFiles) {
           const tasks = await Utils.safeReadJson(path, []);
@@ -3223,7 +3348,7 @@ Use this Codex as a guidepost, and build a better Itera OS together with the use
         status: 'pending',
         dueDate: dueDate,
         priority: priority,
-        created_at: new Date().toISOString()
+        created_at: new Date().toISOString(),
       };
       tasks.push(newTask);
       await Utils.safeWriteJson(path, tasks);
@@ -3235,10 +3360,10 @@ Use this Codex as a guidepost, and build a better Itera OS together with the use
       if (!global.MetaOS) return false;
       try {
         const files = await global.MetaOS.fs.list('data/tasks');
-        const taskFiles = files.filter(f => f.endsWith('.json'));
+        const taskFiles = files.filter((f) => f.endsWith('.json'));
         for (const path of taskFiles) {
           let tasks = await Utils.safeReadJson(path, []);
-          const index = tasks.findIndex(t => t.id === id);
+          const index = tasks.findIndex((t) => t.id === id);
           if (index !== -1) {
             tasks = updaterFn(tasks, index);
             await Utils.safeWriteJson(path, tasks);
@@ -3250,7 +3375,7 @@ Use this Codex as a guidepost, and build a better Itera OS together with the use
     },
 
     async updateTask(id, updates) {
-      let updatedTitle = "";
+      let updatedTitle = '';
       const success = await this._updateTaskInFile(id, (tasks, index) => {
         tasks[index] = { ...tasks[index], ...updates };
         updatedTitle = tasks[index].title;
@@ -3268,7 +3393,7 @@ Use this Codex as a guidepost, and build a better Itera OS together with the use
     },
 
     async deleteTask(id) {
-      let deletedTitle = "";
+      let deletedTitle = '';
       const success = await this._updateTaskInFile(id, (tasks, index) => {
         deletedTitle = tasks[index].title;
         tasks.splice(index, 1);
@@ -3282,7 +3407,7 @@ Use this Codex as a guidepost, and build a better Itera OS together with the use
     async getEvents(monthKey) {
       const path = \`data/events/\${monthKey}.json\`;
       let events = await Utils.safeReadJson(path, []);
-      events.sort((a, b) => a.date < b.date ? -1 : (a.date > b.date ? 1 : 0));
+      events.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
       return events;
     },
 
@@ -3310,11 +3435,15 @@ Use this Codex as a guidepost, and build a better Itera OS together with the use
       const path = \`data/events/\${monthKey}.json\`;
       let events = await Utils.safeReadJson(path, []);
       const initialLen = events.length;
-      const eventToDelete = events.find(e => e.id === id);
-      events = events.filter(e => e.id !== id);
+      const eventToDelete = events.find((e) => e.id === id);
+      events = events.filter((e) => e.id !== id);
       if (events.length !== initialLen) {
         await Utils.safeWriteJson(path, events);
-        if (eventToDelete) AI.logEvent(\`User deleted calendar event: "\${eventToDelete.title}" on \${eventToDelete.date}\`, 'event_deleted');
+        if (eventToDelete)
+          AI.logEvent(
+            \`User deleted calendar event: "\${eventToDelete.title}" on \${eventToDelete.date}\`,
+            'event_deleted',
+          );
         return true;
       }
       return false;
@@ -3322,11 +3451,11 @@ Use this Codex as a guidepost, and build a better Itera OS together with the use
 
     async getCalendarItems(monthKey) {
       const events = await this.getEvents(monthKey);
-      const formattedEvents = events.map(e => ({ ...e, type: 'event' }));
+      const formattedEvents = events.map((e) => ({ ...e, type: 'event' }));
       const allTasks = await this.getTasks();
       const formattedTasks = allTasks
-        .filter(t => t.dueDate && t.dueDate.startsWith(monthKey) && t.status !== 'completed')
-        .map(t => ({ id: t.id, title: t.title, date: t.dueDate, time: '', type: 'task', priority: t.priority }));
+        .filter((t) => t.dueDate && t.dueDate.startsWith(monthKey) && t.status !== 'completed')
+        .map((t) => ({ id: t.id, title: t.title, date: t.dueDate, time: '', type: 'task', priority: t.priority }));
       return [...formattedEvents, ...formattedTasks];
     },
 
@@ -3335,10 +3464,11 @@ Use this Codex as a guidepost, and build a better Itera OS together with the use
       if (!global.MetaOS) return [];
       try {
         const files = await global.MetaOS.fs.list('data', { recursive: true, detail: true });
-        return files.filter(f => f.path.endsWith('.md'))
-                    .sort((a, b) => b.updatedAt - a.updatedAt)
-                    .slice(0, limit)
-                    .map(f => f.path);
+        return files
+          .filter((f) => f.path.endsWith('.md'))
+          .sort((a, b) => b.updatedAt - a.updatedAt)
+          .slice(0, limit)
+          .map((f) => f.path);
       } catch (e) {
         return [];
       }
@@ -3347,14 +3477,14 @@ Use this Codex as a guidepost, and build a better Itera OS together with the use
     async getApps() {
       // V2 ではレジストリから取得
       return await Utils.safeReadJson('system/registry/apps.json', []);
-    }
+    },
   };
 
   global.App = { FS, Context, Storage, Config, AI, ...Domain };
+})(window);
+`.trim(),
 
-})(window);`.trim(),
-
-  'system/core/ui.js': `
+  "system/core/ui.js": `
 /**
  * Itera Guest UI Kit (ui.js) v2
  * Provides theme configuration, shared UI utilities, and OS-native dialogs.
@@ -3615,382 +3745,393 @@ Use this Codex as a guidepost, and build a better Itera OS together with the use
 })(window);
 `.trim(),
 
-  'system/registry/apps.json': JSON.stringify(
-    [
+  "system/registry/apps.json": JSON.stringify([
+  {
+    "id": "notes",
+    "name": "Notes",
+    "icon": "📝",
+    "path": "apps/notes.html",
+    "description": "Markdown text editor",
+    "fileHandlers": [
       {
-        id: 'notes',
-        name: 'Notes',
-        icon: '📝',
-        path: 'apps/notes.html',
-        description: 'Markdown text editor',
-        fileHandlers: [
-          {
-            action: 'view',
-            extensions: ['md', 'txt'],
-            mimeTypes: ['text/markdown', 'text/plain'],
-          },
+        "action": "view",
+        "extensions": [
+          "md",
+          "txt"
         ],
-      },
-      {
-        id: 'settings',
-        name: 'Settings',
-        icon: '⚙️',
-        path: 'system/apps/settings.html',
-        description: 'System configuration',
-      },
-    ],
-    null,
-    2,
-  ),
+        "mimeTypes": [
+          "text/markdown",
+          "text/plain"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "settings",
+    "name": "Settings",
+    "icon": "⚙️",
+    "path": "system/apps/settings.html",
+    "description": "System configuration"
+  }
+], null, 2),
 
-  'system/registry/associations.json': JSON.stringify(
-    {
-      extensions: {
-        md: 'notes',
-        txt: 'notes',
-      },
-      mimeTypes: {
-        'text/markdown': 'notes',
-        'text/plain': 'notes',
-      },
-    },
-    null,
-    2,
-  ),
+  "system/registry/associations.json": JSON.stringify({
+  "extensions": {
+    "md": "notes",
+    "txt": "notes"
+  },
+  "mimeTypes": {
+    "text/markdown": "notes",
+    "text/plain": "notes"
+  }
+}, null, 2),
 
-  'system/registry/llm_profiles.json': JSON.stringify(
+  "system/registry/llm_profiles.json": JSON.stringify({
+  "providers": [
     {
-      providers: [
+      "id": "google",
+      "name": "Google (Gemini)",
+      "placeholder": "AIzaSy...",
+      "requiresUrl": false,
+      "defaultCapabilities": {
+        "maxMediaSizeMB": 100,
+        "supportedMimes": [
+          "application/pdf",
+          "image/*",
+          "video/*",
+          "audio/*"
+        ]
+      },
+      "models": [
         {
-          id: 'google',
-          name: 'Google (Gemini)',
-          placeholder: 'AIzaSy...',
-          requiresUrl: false,
-          defaultCapabilities: {
-            maxMediaSizeMB: 100,
-            supportedMimes: ['application/pdf', 'image/*', 'video/*', 'audio/*'],
+          "id": "gemini-3.5-flash",
+          "name": "Gemini 3.5 Flash",
+          "contextTokens": 1048576,
+          "pricing": {
+            "input": 1.5,
+            "output": 9
           },
-          models: [
-            {
-              id: 'gemini-3.5-flash',
-              name: 'Gemini 3.5 Flash',
-              contextTokens: 1048576,
-              pricing: {
-                input: 1.5,
-                output: 9,
-              },
-              capabilities: {
-                maxMediaSizeMB: 100,
-                supportedMimes: ['application/pdf', 'image/*', 'video/*', 'audio/*'],
-              },
-            },
-            {
-              id: 'gemini-3.1-pro-preview',
-              name: 'Gemini 3.1 Pro',
-              contextTokens: 1048576,
-              pricing: {
-                tiers: [
-                  {
-                    maxTokens: 200000,
-                    input: 2,
-                    output: 12,
-                  },
-                  {
-                    maxTokens: null,
-                    input: 4,
-                    output: 18,
-                  },
-                ],
-              },
-              capabilities: {
-                maxMediaSizeMB: 100,
-                supportedMimes: ['application/pdf', 'image/*', 'video/*', 'audio/*'],
-              },
-            },
-            {
-              id: 'gemini-3.1-flash-lite',
-              name: 'Gemini 3.1 Flash Lite',
-              contextTokens: 1048576,
-              pricing: {
-                input: 0.25,
-                output: 1.5,
-              },
-            },
-            {
-              id: 'gemini-3-flash-preview',
-              name: 'Gemini 3 Flash',
-              contextTokens: 1048576,
-              pricing: {
-                input: 0.5,
-                output: 3,
-              },
-            },
-          ],
+          "capabilities": {
+            "maxMediaSizeMB": 100,
+            "supportedMimes": [
+              "application/pdf",
+              "image/*",
+              "video/*",
+              "audio/*"
+            ]
+          }
         },
         {
-          id: 'openai',
-          name: 'OpenAI',
-          placeholder: 'sk-proj-...',
-          requiresUrl: false,
-          defaultCapabilities: {
-            maxMediaSizeMB: 50,
-            supportedMimes: [
-              'image/*',
-              'application/pdf',
-              'application/vnd.openxmlformats-officedocument.*',
-              'text/*',
-              'application/json',
-            ],
+          "id": "gemini-3.1-pro-preview",
+          "name": "Gemini 3.1 Pro",
+          "contextTokens": 1048576,
+          "pricing": {
+            "tiers": [
+              {
+                "maxTokens": 200000,
+                "input": 2,
+                "output": 12
+              },
+              {
+                "maxTokens": null,
+                "input": 4,
+                "output": 18
+              }
+            ]
           },
-          models: [
-            {
-              id: 'gpt-5.5',
-              name: 'GPT-5.5',
-              contextTokens: 1050000,
-              pricing: {
-                input: 5,
-                output: 30,
-              },
-            },
-            {
-              id: 'gpt-5.5-pro',
-              name: 'GPT-5.5 Pro',
-              contextTokens: 1050000,
-              pricing: {
-                input: 30,
-                output: 180,
-              },
-            },
-            {
-              id: 'gpt-5.4',
-              name: 'GPT-5.4',
-              contextTokens: 1050000,
-              pricing: {
-                input: 2.5,
-                output: 15,
-              },
-            },
-            {
-              id: 'gpt-5.4-mini',
-              name: 'GPT-5.4 Mini',
-              contextTokens: 400000,
-              pricing: {
-                input: 0.75,
-                output: 4.5,
-              },
-            },
-          ],
+          "capabilities": {
+            "maxMediaSizeMB": 100,
+            "supportedMimes": [
+              "application/pdf",
+              "image/*",
+              "video/*",
+              "audio/*"
+            ]
+          }
         },
         {
-          id: 'anthropic',
-          name: 'Anthropic',
-          placeholder: 'sk-ant-...',
-          requiresUrl: false,
-          defaultCapabilities: {
-            maxMediaSizeMB: 500,
-            supportedMimes: ['image/*', 'application/pdf', 'text/plain'],
-          },
-          models: [
-            {
-              id: 'claude-fable-5',
-              name: 'Claude Fable 5',
-              contextTokens: 1000000,
-              pricing: {
-                input: 10,
-                output: 50,
-              },
-            },
-            {
-              id: 'claude-opus-4-8',
-              name: 'Claude Opus 4.8',
-              contextTokens: 1000000,
-              pricing: {
-                input: 5,
-                output: 25,
-              },
-            },
-            {
-              id: 'claude-sonnet-5',
-              name: 'Claude Sonnet 5',
-              contextTokens: 1000000,
-              pricing: {
-                input: 3,
-                output: 15,
-              },
-            },
-            {
-              id: 'claude-haiku-4-5',
-              name: 'Claude Haiku 4.5',
-              contextTokens: 200000,
-              pricing: {
-                input: 1,
-                output: 5,
-              },
-            },
-          ],
+          "id": "gemini-3.1-flash-lite",
+          "name": "Gemini 3.1 Flash Lite",
+          "contextTokens": 1048576,
+          "pricing": {
+            "input": 0.25,
+            "output": 1.5
+          }
         },
         {
-          id: 'openrouter',
-          name: 'OpenRouter',
-          placeholder: 'sk-or-v1-...',
-          requiresUrl: false,
-          defaultCapabilities: {
-            maxMediaSizeMB: 20,
-            supportedMimes: ['image/*', 'application/pdf', 'text/*', 'application/json'],
-          },
-          models: [],
+          "id": "gemini-3-flash-preview",
+          "name": "Gemini 3 Flash",
+          "contextTokens": 1048576,
+          "pricing": {
+            "input": 0.5,
+            "output": 3
+          }
+        }
+      ]
+    },
+    {
+      "id": "openai",
+      "name": "OpenAI",
+      "placeholder": "sk-proj-...",
+      "requiresUrl": false,
+      "defaultCapabilities": {
+        "maxMediaSizeMB": 50,
+        "supportedMimes": [
+          "image/*",
+          "application/pdf",
+          "application/vnd.openxmlformats-officedocument.*",
+          "text/*",
+          "application/json"
+        ]
+      },
+      "models": [
+        {
+          "id": "gpt-5.5",
+          "name": "GPT-5.5",
+          "contextTokens": 1050000,
+          "pricing": {
+            "input": 5,
+            "output": 30
+          }
         },
         {
-          id: 'custom',
-          name: 'Local / Custom (OpenAI Compatible)',
-          placeholder: 'API Key (Optional)',
-          urlPlaceholder: 'http://localhost:11434/v1',
-          requiresUrl: true,
-          defaultCapabilities: {
-            maxMediaSizeMB: 20,
-            supportedMimes: ['image/*', 'application/pdf', 'text/*', 'application/json'],
-          },
-          models: [],
+          "id": "gpt-5.5-pro",
+          "name": "GPT-5.5 Pro",
+          "contextTokens": 1050000,
+          "pricing": {
+            "input": 30,
+            "output": 180
+          }
         },
-      ],
+        {
+          "id": "gpt-5.4",
+          "name": "GPT-5.4",
+          "contextTokens": 1050000,
+          "pricing": {
+            "input": 2.5,
+            "output": 15
+          }
+        },
+        {
+          "id": "gpt-5.4-mini",
+          "name": "GPT-5.4 Mini",
+          "contextTokens": 400000,
+          "pricing": {
+            "input": 0.75,
+            "output": 4.5
+          }
+        }
+      ]
     },
-    null,
-    2,
-  ),
-
-  'system/registry/services.json': JSON.stringify([], null, 2),
-
-  'system/themes/dark.json': JSON.stringify(
     {
-      meta: {
-        name: 'Itera Dark',
-        author: 'System',
+      "id": "anthropic",
+      "name": "Anthropic",
+      "placeholder": "sk-ant-...",
+      "requiresUrl": false,
+      "defaultCapabilities": {
+        "maxMediaSizeMB": 500,
+        "supportedMimes": [
+          "image/*",
+          "application/pdf",
+          "text/plain"
+        ]
       },
-      colors: {
-        bg: {
-          app: '#0f172a',
-          panel: '#1e293b',
-          card: '#334155',
-          hover: '#475569',
-          overlay: '#000000',
+      "models": [
+        {
+          "id": "claude-fable-5",
+          "name": "Claude Fable 5",
+          "contextTokens": 1000000,
+          "pricing": {
+            "input": 10,
+            "output": 50
+          }
         },
-        border: {
-          main: '#334155',
-          highlight: '#3b82f6',
+        {
+          "id": "claude-opus-4-8",
+          "name": "Claude Opus 4.8",
+          "contextTokens": 1000000,
+          "pricing": {
+            "input": 5,
+            "output": 25
+          }
         },
-        text: {
-          main: '#f1f5f9',
-          muted: '#94a3b8',
-          inverted: '#0f172a',
-          system: '#60a5fa',
-          tag_attr: '#94a3b8',
-          tag_content: '#cbd5e1',
+        {
+          "id": "claude-sonnet-5",
+          "name": "Claude Sonnet 5",
+          "contextTokens": 1000000,
+          "pricing": {
+            "input": 3,
+            "output": 15
+          }
         },
-        accent: {
-          primary: '#3b82f6',
-          success: '#10b981',
-          warning: '#f59e0b',
-          error: '#ef4444',
-        },
-        tags: {
-          thinking: '#1e3a8a',
-          plan: '#064e3b',
-          report: '#312e81',
-          error: '#7f1d1d',
-        },
-      },
+        {
+          "id": "claude-haiku-4-5",
+          "name": "Claude Haiku 4.5",
+          "contextTokens": 200000,
+          "pricing": {
+            "input": 1,
+            "output": 5
+          }
+        }
+      ]
     },
-    null,
-    2,
-  ),
-
-  'system/themes/light.json': JSON.stringify(
     {
-      meta: {
-        name: 'Itera Light',
-        author: 'System',
+      "id": "openrouter",
+      "name": "OpenRouter",
+      "placeholder": "sk-or-v1-...",
+      "requiresUrl": false,
+      "defaultCapabilities": {
+        "maxMediaSizeMB": 20,
+        "supportedMimes": [
+          "image/*",
+          "application/pdf",
+          "text/*",
+          "application/json"
+        ]
       },
-      colors: {
-        bg: {
-          app: '#f9fafb',
-          panel: '#ffffff',
-          card: '#f3f4f6',
-          hover: '#e5e7eb',
-          overlay: '#000000',
-        },
-        border: {
-          main: '#e5e7eb',
-          highlight: '#3b82f6',
-        },
-        text: {
-          main: '#1f2937',
-          muted: '#6b7280',
-          inverted: '#ffffff',
-          system: '#2563eb',
-          tag_attr: '#6b7280',
-          tag_content: '#374151',
-        },
-        accent: {
-          primary: '#2563eb',
-          success: '#059669',
-          warning: '#d97706',
-          error: '#dc2626',
-        },
-        tags: {
-          thinking: '#1d4ed8',
-          plan: '#047857',
-          report: '#4338ca',
-          error: '#b91c1c',
-        },
-      },
+      "models": []
     },
-    null,
-    2,
-  ),
-
-  'system/themes/midnight.json': JSON.stringify(
     {
-      meta: {
-        name: 'Midnight Protocol',
-        author: 'System',
+      "id": "custom",
+      "name": "Local / Custom (OpenAI Compatible)",
+      "placeholder": "API Key (Optional)",
+      "urlPlaceholder": "http://localhost:11434/v1",
+      "requiresUrl": true,
+      "defaultCapabilities": {
+        "maxMediaSizeMB": 20,
+        "supportedMimes": [
+          "image/*",
+          "application/pdf",
+          "text/*",
+          "application/json"
+        ]
       },
-      colors: {
-        bg: {
-          app: '#020617',
-          panel: '#0f172a',
-          card: '#1e293b',
-          hover: '#334155',
-          overlay: '#000000',
-        },
-        border: {
-          main: '#1e293b',
-          highlight: '#6366f1',
-        },
-        text: {
-          main: '#e2e8f0',
-          muted: '#64748b',
-          inverted: '#020617',
-          system: '#818cf8',
-          tag_attr: '#94a3b8',
-          tag_content: '#cbd5e1',
-        },
-        accent: {
-          primary: '#6366f1',
-          success: '#10b981',
-          warning: '#f59e0b',
-          error: '#f43f5e',
-        },
-        tags: {
-          thinking: '#312e81',
-          plan: '#064e3b',
-          report: '#4338ca',
-          error: '#881337',
-        },
-      },
+      "models": []
+    }
+  ]
+}, null, 2),
+
+  "system/registry/services.json": JSON.stringify([], null, 2),
+
+  "system/themes/dark.json": JSON.stringify({
+  "meta": {
+    "name": "Itera Dark",
+    "author": "System"
+  },
+  "colors": {
+    "bg": {
+      "app": "#0f172a",
+      "panel": "#1e293b",
+      "card": "#334155",
+      "hover": "#475569",
+      "overlay": "#000000"
     },
-    null,
-    2,
-  ),
+    "border": {
+      "main": "#334155",
+      "highlight": "#3b82f6"
+    },
+    "text": {
+      "main": "#f1f5f9",
+      "muted": "#94a3b8",
+      "inverted": "#0f172a",
+      "system": "#60a5fa",
+      "tag_attr": "#94a3b8",
+      "tag_content": "#cbd5e1"
+    },
+    "accent": {
+      "primary": "#3b82f6",
+      "success": "#10b981",
+      "warning": "#f59e0b",
+      "error": "#ef4444"
+    },
+    "tags": {
+      "thinking": "#1e3a8a",
+      "plan": "#064e3b",
+      "report": "#312e81",
+      "error": "#7f1d1d"
+    }
+  }
+}, null, 2),
+
+  "system/themes/light.json": JSON.stringify({
+  "meta": {
+    "name": "Itera Light",
+    "author": "System"
+  },
+  "colors": {
+    "bg": {
+      "app": "#f9fafb",
+      "panel": "#ffffff",
+      "card": "#f3f4f6",
+      "hover": "#e5e7eb",
+      "overlay": "#000000"
+    },
+    "border": {
+      "main": "#e5e7eb",
+      "highlight": "#3b82f6"
+    },
+    "text": {
+      "main": "#1f2937",
+      "muted": "#6b7280",
+      "inverted": "#ffffff",
+      "system": "#2563eb",
+      "tag_attr": "#6b7280",
+      "tag_content": "#374151"
+    },
+    "accent": {
+      "primary": "#2563eb",
+      "success": "#059669",
+      "warning": "#d97706",
+      "error": "#dc2626"
+    },
+    "tags": {
+      "thinking": "#1d4ed8",
+      "plan": "#047857",
+      "report": "#4338ca",
+      "error": "#b91c1c"
+    }
+  }
+}, null, 2),
+
+  "system/themes/midnight.json": JSON.stringify({
+  "meta": {
+    "name": "Midnight Protocol",
+    "author": "System"
+  },
+  "colors": {
+    "bg": {
+      "app": "#020617",
+      "panel": "#0f172a",
+      "card": "#1e293b",
+      "hover": "#334155",
+      "overlay": "#000000"
+    },
+    "border": {
+      "main": "#1e293b",
+      "highlight": "#6366f1"
+    },
+    "text": {
+      "main": "#e2e8f0",
+      "muted": "#64748b",
+      "inverted": "#020617",
+      "system": "#818cf8",
+      "tag_attr": "#94a3b8",
+      "tag_content": "#cbd5e1"
+    },
+    "accent": {
+      "primary": "#6366f1",
+      "success": "#10b981",
+      "warning": "#f59e0b",
+      "error": "#f43f5e"
+    },
+    "tags": {
+      "thinking": "#312e81",
+      "plan": "#064e3b",
+      "report": "#4338ca",
+      "error": "#881337"
+    }
+  }
+}, null, 2)
 };
 
-export const BUILD_TIME = 1784008196160;
+export const BUILD_TIME = 1784021981937;

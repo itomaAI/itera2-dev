@@ -499,7 +499,7 @@ export class VfsService {
       opts.permanent ||
       normPath === 'trash' ||
       normPath.startsWith('trash/') ||
-      normPath.startsWith('temp/') ||
+      normPath.startsWith('system/temp/') ||
       normPath.startsWith('system/logs/');
 
     if (!isPermanent) {

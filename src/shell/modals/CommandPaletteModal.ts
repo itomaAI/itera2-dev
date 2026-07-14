@@ -17,10 +17,13 @@ export interface CommandItem {
   action: () => void;
 }
 
+import type { Principal } from '../../core/vfs/types';
+
 export class CommandPaletteModal {
   private vfs: VfsService;
   private appRegistry: AppRegistry;
   private uriRouter: UriRouter;
+  private getActivePrincipal: () => Principal;
   private events: Record<string, Function> = {};
 
   private overlay: HTMLElement | null = null;
@@ -31,10 +34,11 @@ export class CommandPaletteModal {
   private currentItems: CommandItem[] = [];
   private selectedIndex = 0;
 
-  constructor(vfs: VfsService, appRegistry: AppRegistry, uriRouter: UriRouter) {
+  constructor(vfs: VfsService, appRegistry: AppRegistry, uriRouter: UriRouter, getActivePrincipal: () => Principal) {
     this.vfs = vfs;
     this.appRegistry = appRegistry;
     this.uriRouter = uriRouter;
+    this.getActivePrincipal = getActivePrincipal;
   }
 
   on(event: string, callback: Function) {
@@ -292,7 +296,7 @@ export class CommandPaletteModal {
     });
 
     // 3. Files
-    const files = this.vfs.listFiles(USER_PRINCIPAL, {
+    const files = this.vfs.listFiles(this.getActivePrincipal(), {
       recursive: true,
       detail: true,
     }) as import('../../core/vfs/types').VfsStat[];
