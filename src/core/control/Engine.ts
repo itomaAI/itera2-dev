@@ -347,6 +347,16 @@ export class Engine {
     };
 
     actions.forEach(async (action, index) => {
+      // ツール実行の順序をある程度維持するため、インデックスに応じて開始をわずかに遅らせる (0.1秒間隔)
+      if (index > 0) {
+        await new Promise((resolve) => setTimeout(resolve, index * 50));
+      }
+
+      // 待機中にループが停止（Abort）された場合は実行をキャンセル
+      if (this.abortController?.signal.aborted) {
+        return;
+      }
+
       try {
         // extraContext 経由で shell 等が注入されているため、anyキャストで型検査を通過させる
         const result = await this.registry.execute(action, context as any);

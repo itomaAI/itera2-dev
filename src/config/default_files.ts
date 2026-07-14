@@ -1,6 +1,6 @@
 /**
  * AUTO-GENERATED FILE - DO NOT EDIT MANUALLY
- * Generated on: 2026-07-14T15:02:52.886Z
+ * Generated on: 2026-07-14T15:24:12.705Z
  */
 
 export const DEFAULT_FILES: Record<string, string> = {
@@ -3587,6 +3587,9 @@ Use this Codex as a guidepost, and build a better Itera OS together with the use
       async function initDaemon() {
         if (!window.MetaOS) return setTimeout(initDaemon, 100);
 
+        // ★ 同時実行を防ぐための非同期キュー
+        let gitQueue = Promise.resolve();
+
         const definition = \`<define_tag name="git">
 Executes a Git command.
 Attributes:
@@ -3607,125 +3610,135 @@ Attributes:
           name: 'git',
           description: 'Git version control operations',
           definition,
-          handler: async (p) => {
-            const dir = p.dir || '';
-            const corsProxy = p.corsProxy || 'https://cors.isomorphic-git.org';
-            const onAuth = () => ({ username: p.token });
+          handler: (p) => {
+            // ★ キューの最後尾に自身の処理を連結する (必ず順番に実行される)
+            return new Promise((resolve) => {
+              gitQueue = gitQueue
+                .then(async () => {
+                  const dir = p.dir || '';
+                  const corsProxy = p.corsProxy || 'https://cors.isomorphic-git.org';
+                  const onAuth = () => ({ username: p.token });
 
-            let log = '';
+                  let log = '';
 
-            try {
-              switch (p.command) {
-                case 'init':
-                  await git.init({ fs: IgitFs, dir });
-                  log = \`Initialized empty Git repository in \${dir}\`;
-                  break;
+                  try {
+                    switch (p.command) {
+                      case 'init':
+                        await git.init({ fs: IgitFs, dir });
+                        log = \`Initialized empty Git repository in \${dir}\`;
+                        break;
 
-                case 'clone':
-                  await git.clone({
-                    fs: IgitFs,
-                    http,
-                    dir,
-                    url: p.url,
-                    corsProxy,
-                    depth: p.depth ? parseInt(p.depth) : 1, // Default Shallow Clone
-                    singleBranch: true,
-                    onAuth: p.token ? onAuth : undefined,
-                  });
-                  log = \`Cloned \${p.url} into \${dir}\`;
-                  break;
+                      case 'clone':
+                        await git.clone({
+                          fs: IgitFs,
+                          http,
+                          dir,
+                          url: p.url,
+                          corsProxy,
+                          depth: p.depth ? parseInt(p.depth) : 1, // Default Shallow Clone
+                          singleBranch: true,
+                          onAuth: p.token ? onAuth : undefined,
+                        });
+                        log = \`Cloned \${p.url} into \${dir}\`;
+                        break;
 
-                case 'status':
-                  const matrix = await git.statusMatrix({ fs: IgitFs, dir });
-                  const changes = matrix.filter((row) => row[1] !== row[2] || row[2] !== row[3]);
-                  if (changes.length === 0) {
-                    log = 'Nothing to commit, working tree clean';
-                  } else {
-                    log =
-                      'Changes:\\n' +
-                      changes
-                        .map((row) => {
-                          let status = 'modified';
-                          if (row[1] === 0) status = 'added';
-                          if (row[2] === 0) status = 'deleted';
-                          return \`- \${status}: \${row[0]}\`;
-                        })
-                        .join('\\n');
-                  }
-                  break;
+                      case 'status':
+                        const matrix = await git.statusMatrix({ fs: IgitFs, dir });
+                        const changes = matrix.filter((row) => row[1] !== row[2] || row[2] !== row[3]);
+                        if (changes.length === 0) {
+                          log = 'Nothing to commit, working tree clean';
+                        } else {
+                          log =
+                            'Changes:\\n' +
+                            changes
+                              .map((row) => {
+                                let status = 'modified';
+                                if (row[1] === 0) status = 'added';
+                                if (row[2] === 0) status = 'deleted';
+                                return \`- \${status}: \${row[0]}\`;
+                              })
+                              .join('\\n');
+                        }
+                        break;
 
-                case 'add':
-                  if (p.filepath === '.') {
-                    const m = await git.statusMatrix({ fs: IgitFs, dir });
-                    for (const row of m) {
-                      if (row[2] === 0) await git.remove({ fs: IgitFs, dir, filepath: row[0] });
-                      else if (row[1] !== row[2] || row[2] !== row[3])
-                        await git.add({ fs: IgitFs, dir, filepath: row[0] });
+                      case 'add':
+                        if (p.filepath === '.') {
+                          const m = await git.statusMatrix({ fs: IgitFs, dir });
+                          for (const row of m) {
+                            if (row[2] === 0) await git.remove({ fs: IgitFs, dir, filepath: row[0] });
+                            else if (row[1] !== row[2] || row[2] !== row[3])
+                              await git.add({ fs: IgitFs, dir, filepath: row[0] });
+                          }
+                          log = \`Added all changes in \${dir}\`;
+                        } else {
+                          await git.add({ fs: IgitFs, dir, filepath: p.filepath });
+                          log = \`Added \${p.filepath}\`;
+                        }
+                        break;
+
+                      case 'commit':
+                        const sha = await git.commit({
+                          fs: IgitFs,
+                          dir,
+                          message: p.message || 'Update',
+                          author: { name: p.author_name || 'Itera AI', email: p.author_email || 'ai@itera.os' },
+                        });
+                        log = \`Committed \${sha.substring(0, 7)}: \${p.message}\`;
+                        break;
+
+                      case 'push':
+                        const pushRes = await git.push({
+                          fs: IgitFs,
+                          http,
+                          dir,
+                          corsProxy,
+                          onAuth: p.token ? onAuth : undefined,
+                        });
+                        log = pushRes.ok ? 'Pushed successfully' : \`Push failed: \${pushRes.error}\`;
+                        break;
+
+                      case 'pull':
+                        await git.pull({
+                          fs: IgitFs,
+                          http,
+                          dir,
+                          corsProxy,
+                          author: { name: p.author_name || 'Itera AI', email: p.author_email || 'ai@itera.os' },
+                          onAuth: p.token ? onAuth : undefined,
+                        });
+                        log = \`Pulled successfully\`;
+                        break;
+
+                      case 'log':
+                        const commits = await git.log({ fs: IgitFs, dir, depth: p.depth ? parseInt(p.depth) : 5 });
+                        log = commits
+                          .map((c) => \`* \${c.oid.substring(0, 7)} - \${c.commit.author.name}: \${c.commit.message}\`)
+                          .join('\\n');
+                        break;
+
+                      case 'branch':
+                        await git.branch({ fs: IgitFs, dir, ref: p.ref });
+                        log = \`Created branch \${p.ref}\`;
+                        break;
+
+                      case 'checkout':
+                        await git.checkout({ fs: IgitFs, dir, ref: p.ref });
+                        log = \`Checked out \${p.ref}\`;
+                        break;
+
+                      default:
+                        throw new Error(\`Unknown git command: \${p.command}\`);
                     }
-                    log = \`Added all changes in \${dir}\`;
-                  } else {
-                    await git.add({ fs: IgitFs, dir, filepath: p.filepath });
-                    log = \`Added \${p.filepath}\`;
+                    resolve({ log, ui: \`🐙 Git \${p.command} executed\` });
+                  } catch (err) {
+                    resolve({ error: true, log: \`Git Error: \${err.message}\`, ui: \`❌ Git Error\` });
                   }
-                  break;
-
-                case 'commit':
-                  const sha = await git.commit({
-                    fs: IgitFs,
-                    dir,
-                    message: p.message || 'Update',
-                    author: { name: p.author_name || 'Itera AI', email: p.author_email || 'ai@itera.os' },
-                  });
-                  log = \`Committed \${sha.substring(0, 7)}: \${p.message}\`;
-                  break;
-
-                case 'push':
-                  const pushRes = await git.push({
-                    fs: IgitFs,
-                    http,
-                    dir,
-                    corsProxy,
-                    onAuth: p.token ? onAuth : undefined,
-                  });
-                  log = pushRes.ok ? 'Pushed successfully' : \`Push failed: \${pushRes.error}\`;
-                  break;
-
-                case 'pull':
-                  await git.pull({
-                    fs: IgitFs,
-                    http,
-                    dir,
-                    corsProxy,
-                    author: { name: p.author_name || 'Itera AI', email: p.author_email || 'ai@itera.os' },
-                    onAuth: p.token ? onAuth : undefined,
-                  });
-                  log = \`Pulled successfully\`;
-                  break;
-
-                case 'log':
-                  const commits = await git.log({ fs: IgitFs, dir, depth: p.depth ? parseInt(p.depth) : 5 });
-                  log = commits
-                    .map((c) => \`* \${c.oid.substring(0, 7)} - \${c.commit.author.name}: \${c.commit.message}\`)
-                    .join('\\n');
-                  break;
-
-                case 'branch':
-                  await git.branch({ fs: IgitFs, dir, ref: p.ref });
-                  log = \`Created branch \${p.ref}\`;
-                  break;
-
-                case 'checkout':
-                  await git.checkout({ fs: IgitFs, dir, ref: p.ref });
-                  log = \`Checked out \${p.ref}\`;
-                  break;
-
-                default:
-                  throw new Error(\`Unknown git command: \${p.command}\`);
-              }
-              return { log, ui: \`🐙 Git \${p.command} executed\` };
-            } catch (err) {
-              return { error: true, log: \`Git Error: \${err.message}\`, ui: \`❌ Git Error\` };
-            }
+                })
+                .catch((e) => {
+                  // キュー自体がコケて停止しないように保護
+                  resolve({ error: true, log: \`Queue Error: \${e.message}\`, ui: \`❌ Git Error\` });
+                });
+            });
           },
         });
 
@@ -5881,4 +5894,4 @@ Attributes:
 }, null, 2)
 };
 
-export const BUILD_TIME = 1784041372886;
+export const BUILD_TIME = 1784042652705;
