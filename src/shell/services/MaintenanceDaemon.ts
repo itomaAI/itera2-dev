@@ -47,8 +47,9 @@ export class MaintenanceDaemon {
         services = JSON.parse(content);
       }
       for (const svc of services) {
-        if (svc.pid && svc.path) {
-          await this.processManager.spawn(svc.pid, svc.path, 'background');
+        // 新スキーマ: id が指定されており、autoStart が true のものだけを起動
+        if (svc.id && svc.path && svc.autoStart) {
+          await this.processManager.spawn(svc.id, svc.path, 'background');
         }
       }
     } catch (e) {

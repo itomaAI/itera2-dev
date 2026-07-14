@@ -1,1 +1,10 @@
-[]
+[
+  {
+    "id": "git_daemon",
+    "name": "Git Client",
+    "icon": "🐙",
+    "path": "services/git.html",
+    "description": "Background service providing Git operations.",
+    "autoStart": true
+  }
+]

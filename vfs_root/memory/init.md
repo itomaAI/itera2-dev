@@ -4,8 +4,9 @@
 **Objective**: Establish identity, configure language & user settings, and define operational protocols.
 
 ## Phase 1: Orientation & Knowledge
-1.  **Read Knowledge Router**:
+1.  **Read Knowledge Router & Codex**:
     *   You MUST read `memory/knowledge/index.md` to understand the current layout of this world.
+    *   You MUST read `memory/rules/codex.md` to deeply understand your capabilities, constraints, and the REAL architecture.
 2.  **Language Selection**:
     *   Ask the user: "Which language should I use? (e.g., English, Japanese)"
     *   Immediately update the `language` field in `system/config/preferences.json`.

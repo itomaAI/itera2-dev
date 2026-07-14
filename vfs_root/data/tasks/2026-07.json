@@ -1,0 +1,29 @@
+[
+  {
+    "id": "task_tutorial_1",
+    "title": "Welcome to Itera Tasks! 🎉",
+    "status": "pending",
+    "dueDate": "2026-07-14",
+    "priority": "high",
+    "description": "This is your task manager. You can set priorities, due dates, and add detailed notes.",
+    "created_at": "2026-07-14T00:00:00.000Z"
+  },
+  {
+    "id": "task_tutorial_2",
+    "title": "Ask AI to create a task",
+    "status": "pending",
+    "dueDate": "2026-07-15",
+    "priority": "medium",
+    "description": "You don't have to type. Just ask the AI: 'Add a task to buy milk tomorrow'.",
+    "created_at": "2026-07-14T00:00:00.000Z"
+  },
+  {
+    "id": "task_tutorial_3",
+    "title": "Completed task example",
+    "status": "completed",
+    "dueDate": "2026-07-13",
+    "priority": "low",
+    "description": "You can toggle tasks by clicking the circle.",
+    "created_at": "2026-07-13T00:00:00.000Z"
+  }
+]

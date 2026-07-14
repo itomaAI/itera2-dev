@@ -14,6 +14,20 @@
     ]
   },
   {
+    "id": "tasks",
+    "name": "Tasks",
+    "icon": "✅",
+    "path": "apps/tasks.html",
+    "description": "Manage daily to-dos"
+  },
+  {
+    "id": "calendar",
+    "name": "Calendar",
+    "icon": "📅",
+    "path": "apps/calendar.html",
+    "description": "Monthly calendar and events"
+  },
+  {
     "id": "settings",
     "name": "Settings",
     "icon": "⚙️",

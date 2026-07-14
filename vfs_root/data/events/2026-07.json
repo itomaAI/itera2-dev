@@ -1,0 +1,18 @@
+[
+  {
+    "id": "event_tutorial_1",
+    "title": "Itera OS Setup 🚀",
+    "date": "2026-07-14",
+    "time": "10:00",
+    "endTime": "11:00",
+    "note": "Complete the initial setup and get familiar with the system."
+  },
+  {
+    "id": "event_tutorial_2",
+    "title": "Read the Codex",
+    "date": "2026-07-15",
+    "time": "14:00",
+    "endTime": "15:00",
+    "note": "Read memory/rules/codex.md to understand how the AI operates."
+  }
+]

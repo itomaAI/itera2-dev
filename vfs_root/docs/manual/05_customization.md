@@ -62,13 +62,17 @@ Defines which app should automatically open when a user clicks a file in the Exp
 ```
 
 ### `services.json` (Background Daemons)
-Defines which apps should start silently in the background when the OS boots.
+Defines background services and whether they should start silently when the OS boots. You can toggle these from the Settings app.
 
 ```json
 [
     {
-        "pid": "my_crawler_daemon",
-        "path": "services/crawler.html"
+        "id": "my_crawler_daemon",
+        "name": "Crawler Daemon",
+        "icon": "🕷️",
+        "path": "services/crawler.html",
+        "description": "Fetches data in the background.",
+        "autoStart": true
     }
 ]
 ```

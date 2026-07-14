@@ -85,7 +85,7 @@ export class DesktopEnvironment {
     this._apiSettingsModal = new ApiSettingsModal(cognitiveManager);
     this._syncModal = new SyncModal();
     this._taskSwitcherModal = new TaskSwitcherModal(processManager, appRegistry);
-    this._processMonitorModal = new ProcessMonitorModal(processManager);
+    this._processMonitorModal = new ProcessMonitorModal(processManager, appRegistry);
     this._propertiesModal = new PropertiesModal(vfs);
     this.commandPalette = new CommandPaletteModal(vfs, appRegistry, uriRouter, () => this.getActivePrincipal());
 

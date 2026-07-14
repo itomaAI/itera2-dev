@@ -6,16 +6,19 @@
  */
 
 import type { ProcessManager } from '../windowing/ProcessManager';
+import type { AppRegistry } from '../../core/sys/AppRegistry';
 
 export class ProcessMonitorModal {
   private processManager: ProcessManager;
+  private appRegistry: AppRegistry;
   private overlay: HTMLElement | null = null;
   private listContainer: HTMLElement | null = null;
   private pollTimer: ReturnType<typeof setInterval> | null = null;
   private isOpen: boolean = false;
 
-  constructor(processManager: ProcessManager) {
+  constructor(processManager: ProcessManager, appRegistry: AppRegistry) {
     this.processManager = processManager;
+    this.appRegistry = appRegistry;
   }
 
   /**
@@ -123,20 +126,40 @@ export class ProcessMonitorModal {
           ? 'bg-warning/20 text-warning border-warning/30'
           : 'bg-success/20 text-success border-success/30';
 
-      const icon = isDaemon ? '⚙️' : '🖥️';
+      let displayName = proc.pid;
+      let icon = isDaemon ? '⚙️' : '🖥️';
+
+      // レジストリからリッチなメタデータを取得
+      if (isDaemon) {
+        const svc = this.appRegistry.getService(proc.pid);
+        if (svc) {
+          displayName = svc.name;
+          icon = svc.icon || icon;
+        }
+      } else {
+        const basePath = proc.path.split(/[?#]/)[0];
+        const appInfo = this.appRegistry.getAllApps().find(a => a.path === basePath);
+        if (appInfo) {
+          displayName = appInfo.name;
+          icon = appInfo.icon || icon;
+        } else if (basePath === 'apps/home.html') {
+          displayName = 'Dashboard';
+          icon = '🏠';
+        }
+      }
 
       const row = document.createElement('div');
       row.className = `flex items-center justify-between p-3 rounded-xl border transition ${isForeground ? 'border-primary/50 bg-primary/5 shadow-sm' : 'border-border-main bg-panel hover:border-primary/30'}`;
 
       row.innerHTML = `
         <div class="flex items-center gap-4 overflow-hidden">
-          <div class="text-2xl opacity-80 shrink-0">${icon}</div>
+          <div class="w-10 h-10 bg-card rounded-xl flex items-center justify-center text-2xl shadow-inner shrink-0">${icon}</div>
           <div class="flex flex-col min-w-0">
             <div class="flex items-center gap-2 mb-1">
-              <span class="font-bold text-sm text-text-main truncate">${proc.pid}</span>
+              <span class="font-bold text-sm text-text-main truncate">${displayName}</span>
               <span class="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border ${badgeColor}">${proc.state}</span>
             </div>
-            <div class="text-[10px] text-text-muted font-mono truncate" title="${proc.path}">${proc.path}</div>
+            <div class="text-[10px] text-text-muted font-mono truncate" title="${proc.path}">${proc.path} ${displayName !== proc.pid && !isDaemon ? `(${proc.pid})` : ''}</div>
           </div>
         </div>
       `;

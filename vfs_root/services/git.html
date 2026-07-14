@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Git Daemon</title>
+</head>
+<body>
+    <script type="module">
+        import git from 'https://esm.sh/isomorphic-git@1.24.5';
+        import http from 'https://esm.sh/isomorphic-git@1.24.5/http/web';
+
+        // ==========================================
+        // 1. FS Adapter for isomorphic-git
+        // ==========================================
+        const IgitFs = {
+            promises: {
+                async readFile(filepath, opts) {
+                    const encoding = (opts && typeof opts === 'object' ? opts.encoding : opts) || 'binary';
+                    const isText = encoding === 'utf8' || encoding === 'utf-8';
+                    try {
+                        const data = await MetaOS.fs.read(filepath, { encoding: isText ? undefined : 'binary' });
+                        return isText ? data : new Uint8Array(data);
+                    } catch(e) {
+                        const err = new Error(e.message); err.code = 'ENOENT'; throw err;
+                    }
+                },
+                async writeFile(filepath, data, opts) {
+                    try {
+                        await MetaOS.fs.write(filepath, data, { overwrite: true, silent: true });
+                    } catch(e) {
+                        const err = new Error(e.message); err.code = 'ENOENT'; throw err;
+                    }
+                },
+                async unlink(filepath) {
+                    try { await MetaOS.fs.delete(filepath, { permanent: true }); } 
+                    catch(e) { const err = new Error(e.message); err.code = 'ENOENT'; throw err; }
+                },
+                async readdir(filepath) {
+                    try {
+                        const stats = await MetaOS.fs.list(filepath, { detail: true });
+                        return stats.map(s => s.name);
+                    } catch(e) {
+                        const err = new Error(e.message); err.code = 'ENOENT'; throw err;
+                    }
+                },
+                async mkdir(filepath) {
+                    try { await MetaOS.fs.mkdir(filepath); } catch(e) {} // 既存なら無視
+                },
+                async rmdir(filepath) {
+                    try { await MetaOS.fs.delete(filepath, { permanent: true }); } 
+                    catch(e) { const err = new Error(e.message); err.code = 'ENOENT'; throw err; }
+                },
+                async stat(filepath) {
+                    try {
+                        const st = await MetaOS.fs.stat(filepath);
+                        const isDir = st.kind === 'directory';
+                        return {
+                            type: isDir ? 'dir' : 'file',
+                            mode: isDir ? 0o040000 : 0o100644,
+                            size: st.size || 0,
+                            ino: 0,
+                            mtimeMs: st.updatedAt,
+                            ctimeMs: st.createdAt,
+                            isDirectory: () => isDir,
+                            isFile: () => !isDir,
+                            isSymbolicLink: () => false
+                        };
+                    } catch(e) {
+                        const err = new Error(e.message); err.code = 'ENOENT'; throw err;
+                    }
+                },
+                async lstat(filepath) { return this.stat(filepath); },
+                async readlink() { throw new Error("Symlinks not supported"); },
+                async symlink() { throw new Error("Symlinks not supported"); }
+            }
+        };
+
+        // ==========================================
+        // 2. Git Command Handler
+        // ==========================================
+        async function initDaemon() {
+            if (!window.MetaOS) return setTimeout(initDaemon, 100);
+
+            const definition = `<define_tag name="git">
+Executes a Git command.
+Attributes:
+- command (required): init | clone | status | add | commit | push | pull | log | checkout | branch
+- dir (required): Target directory path in VFS (e.g., 'projects/my_app').
+- url: Repository URL (for clone/pull/push).
+- filepath: File to add or checkout. Use '.' for all files.
+- message: Commit message.
+- author_name: Name for commit.
+- author_email: Email for commit.
+- token: Personal Access Token (PAT) for remote auth.
+- ref: Branch name.
+- depth: Clone depth (default 1 to save memory).
+- corsProxy: CORS proxy URL (default: 'https://cors.isomorphic-git.org').
+</define_tag>`;
+
+            await MetaOS.tools.register({
+                name: 'git',
+                description: 'Git version control operations',
+                definition,
+                handler: async (p) => {
+                    const dir = p.dir || '';
+                    const corsProxy = p.corsProxy || 'https://cors.isomorphic-git.org';
+                    const onAuth = () => ({ username: p.token });
+
+                    let log = '';
+
+                    try {
+                        switch(p.command) {
+                            case 'init':
+                                await git.init({ fs: IgitFs, dir });
+                                log = `Initialized empty Git repository in ${dir}`;
+                                break;
+                                
+                            case 'clone':
+                                await git.clone({
+                                    fs: IgitFs, http, dir, url: p.url, corsProxy,
+                                    depth: p.depth ? parseInt(p.depth) : 1, // Default Shallow Clone
+                                    singleBranch: true,
+                                    onAuth: p.token ? onAuth : undefined
+                                });
+                                log = `Cloned ${p.url} into ${dir}`;
+                                break;
+                                
+                            case 'status':
+                                const matrix = await git.statusMatrix({ fs: IgitFs, dir });
+                                const changes = matrix.filter(row => row[1] !== row[2] || row[2] !== row[3]);
+                                if (changes.length === 0) {
+                                    log = "Nothing to commit, working tree clean";
+                                } else {
+                                    log = "Changes:\n" + changes.map(row => {
+                                        let status = 'modified';
+                                        if (row[1] === 0) status = 'added';
+                                        if (row[2] === 0) status = 'deleted';
+                                        return `- ${status}: ${row[0]}`;
+                                    }).join('\n');
+                                }
+                                break;
+                                
+                            case 'add':
+                                if (p.filepath === '.') {
+                                    const m = await git.statusMatrix({ fs: IgitFs, dir });
+                                    for (const row of m) {
+                                        if (row[2] === 0) await git.remove({ fs: IgitFs, dir, filepath: row[0] });
+                                        else if (row[1] !== row[2] || row[2] !== row[3]) await git.add({ fs: IgitFs, dir, filepath: row[0] });
+                                    }
+                                    log = `Added all changes in ${dir}`;
+                                } else {
+                                    await git.add({ fs: IgitFs, dir, filepath: p.filepath });
+                                    log = `Added ${p.filepath}`;
+                                }
+                                break;
+                                
+                            case 'commit':
+                                const sha = await git.commit({
+                                    fs: IgitFs, dir,
+                                    message: p.message || 'Update',
+                                    author: { name: p.author_name || 'Itera AI', email: p.author_email || 'ai@itera.os' }
+                                });
+                                log = `Committed ${sha.substring(0,7)}: ${p.message}`;
+                                break;
+                                
+                            case 'push':
+                                const pushRes = await git.push({
+                                    fs: IgitFs, http, dir, corsProxy,
+                                    onAuth: p.token ? onAuth : undefined
+                                });
+                                log = pushRes.ok ? "Pushed successfully" : `Push failed: ${pushRes.error}`;
+                                break;
+                                
+                            case 'pull':
+                                await git.pull({
+                                    fs: IgitFs, http, dir, corsProxy,
+                                    author: { name: p.author_name || 'Itera AI', email: p.author_email || 'ai@itera.os' },
+                                    onAuth: p.token ? onAuth : undefined
+                                });
+                                log = `Pulled successfully`;
+                                break;
+                                
+                            case 'log':
+                                const commits = await git.log({ fs: IgitFs, dir, depth: p.depth ? parseInt(p.depth) : 5 });
+                                log = commits.map(c => `* ${c.oid.substring(0,7)} - ${c.commit.author.name}: ${c.commit.message}`).join('\n');
+                                break;
+                                
+                            case 'branch':
+                                await git.branch({ fs: IgitFs, dir, ref: p.ref });
+                                log = `Created branch ${p.ref}`;
+                                break;
+                                
+                            case 'checkout':
+                                await git.checkout({ fs: IgitFs, dir, ref: p.ref });
+                                log = `Checked out ${p.ref}`;
+                                break;
+                                
+                            default:
+                                throw new Error(`Unknown git command: ${p.command}`);
+                        }
+                        return { log, ui: `🐙 Git ${p.command} executed` };
+                    } catch(err) {
+                        return { error: true, log: `Git Error: ${err.message}`, ui: `❌ Git Error` };
+                    }
+                }
+            });
+
+            MetaOS.ai.log(definition + "\n\n[System] Git client tool is now available in the background.", "tool_available");
+        }
+
+        initDaemon();
+    </script>
+</body>
+</html>

@@ -22,17 +22,31 @@ export interface AppManifest {
   fileHandlers?: FileHandler[];
 }
 
+export interface ServiceManifest {
+  id: string;
+  name: string;
+  icon?: string;
+  path: string;
+  description?: string;
+  autoStart?: boolean;
+}
+
 export class AppRegistry {
   private vfs: VfsService;
   private apps: Map<string, AppManifest> = new Map();
-  private registryPath = 'system/registry/apps.json';
+  private services: Map<string, ServiceManifest> = new Map();
+  
+  private appsRegistryPath = 'system/registry/apps.json';
+  private servicesRegistryPath = 'system/registry/services.json';
   private listeners: (() => void)[] = [];
 
   constructor(vfs: VfsService, eventBus: VfsEventBus) {
     this.vfs = vfs;
 
     eventBus.subscribe((events) => {
-      const isUpdated = events.some((e) => e.path === this.registryPath);
+      const isUpdated = events.some(
+        (e) => e.path === this.appsRegistryPath || e.path === this.servicesRegistryPath
+      );
       if (isUpdated) {
         this._load().then(() => this._notify());
       }
@@ -44,22 +58,33 @@ export class AppRegistry {
   }
 
   private async _load(): Promise<void> {
+    this.apps.clear();
+    this.services.clear();
+
     try {
-      this.apps.clear(); // 常に一度クリアする
-
-      if (this.vfs.exists(SYSTEM_PRINCIPAL, this.registryPath)) {
-        const content = await this.vfs.readFile(SYSTEM_PRINCIPAL, this.registryPath);
+      if (this.vfs.exists(SYSTEM_PRINCIPAL, this.appsRegistryPath)) {
+        const content = await this.vfs.readFile(SYSTEM_PRINCIPAL, this.appsRegistryPath);
         const parsed: AppManifest[] = JSON.parse(content);
-
         for (const app of parsed) {
           this.apps.set(app.id, app);
         }
         console.log(`[AppRegistry] Loaded ${this.apps.size} apps.`);
-      } else {
-        console.log(`[AppRegistry] Registry file not found. Apps list is now empty.`);
       }
     } catch (e) {
-      console.warn(`[AppRegistry] Failed to load or parse ${this.registryPath}. Apps list is now empty.`, e);
+      console.warn(`[AppRegistry] Failed to load ${this.appsRegistryPath}.`, e);
+    }
+
+    try {
+      if (this.vfs.exists(SYSTEM_PRINCIPAL, this.servicesRegistryPath)) {
+        const content = await this.vfs.readFile(SYSTEM_PRINCIPAL, this.servicesRegistryPath);
+        const parsed: ServiceManifest[] = JSON.parse(content);
+        for (const svc of parsed) {
+          this.services.set(svc.id, svc);
+        }
+        console.log(`[AppRegistry] Loaded ${this.services.size} services.`);
+      }
+    } catch (e) {
+      console.warn(`[AppRegistry] Failed to load ${this.servicesRegistryPath}.`, e);
     }
   }
 
@@ -69,6 +94,14 @@ export class AppRegistry {
 
   getApp(appId: string): AppManifest | undefined {
     return this.apps.get(appId);
+  }
+
+  getAllServices(): ServiceManifest[] {
+    return Array.from(this.services.values());
+  }
+
+  getService(serviceId: string): ServiceManifest | undefined {
+    return this.services.get(serviceId);
   }
 
   onChange(callback: () => void): () => void {

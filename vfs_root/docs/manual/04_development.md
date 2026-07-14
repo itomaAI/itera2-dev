@@ -48,15 +48,20 @@ Daemons are invisible HTML/JS files that run continuously in the background. The
 ```
 
 ### Auto-Starting Daemons
-To make your daemon start automatically when Itera OS boots, add it to `system/registry/services.json`:
+To make your daemon start automatically when Itera OS boots, register it in `system/registry/services.json` and set `"autoStart": true`:
 ```json
 [
     {
-        "pid": "sys_logger",
-        "path": "services/logger.html"
+        "id": "sys_logger",
+        "name": "System Logger",
+        "icon": "📝",
+        "path": "services/logger.html",
+        "description": "Periodically logs system health.",
+        "autoStart": true
     }
 ]
 ```
+Users can easily toggle the `autoStart` behavior from the System Settings app.
 
 ## 3. Inter-Process Communication (IPC)
 
