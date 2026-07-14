@@ -1,6 +1,6 @@
 /**
  * AUTO-GENERATED FILE - DO NOT EDIT MANUALLY
- * Generated on: 2026-07-14T05:41:05.397Z
+ * Generated on: 2026-07-14T05:49:56.159Z
  */
 
 export const DEFAULT_FILES: Record<string, string> = {
@@ -315,8 +315,8 @@ export const DEFAULT_FILES: Record<string, string> = {
       };
     </script>
     <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
-    <script src="../system/lib/ui.js"></script>
-    <script src="../system/lib/std.js"></script>
+    <script src="../system/core/ui.js"></script>
+    <script src="../system/core/std.js"></script>
     <style>
       .prose h1,
       .prose h2,
@@ -3436,7 +3436,7 @@ Use this Codex as a guidepost, and build a better Itera OS together with the use
       else window.location.href = path;
     },
     home: () => {
-      if (global.MetaOS) global.MetaOS.system.spawn('index.html', { pid: 'main' });
+      if (global.MetaOS) global.MetaOS.system.spawn('apps/home.html', { pid: 'main' });
     },
     notify: (message, type = 'info', duration = 3000) => {
       let container = document.getElementById('__itera-toast-container');
@@ -3988,4 +3988,4 @@ Use this Codex as a guidepost, and build a better Itera OS together with the use
 }, null, 2)
 };
 
-export const BUILD_TIME = 1784007665397;
+export const BUILD_TIME = 1784008196160;

@@ -95,7 +95,7 @@
       else window.location.href = path;
     },
     home: () => {
-      if (global.MetaOS) global.MetaOS.system.spawn('index.html', { pid: 'main' });
+      if (global.MetaOS) global.MetaOS.system.spawn('apps/home.html', { pid: 'main' });
     },
     notify: (message, type = 'info', duration = 3000) => {
       let container = document.getElementById('__itera-toast-container');
