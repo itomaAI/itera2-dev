@@ -94,12 +94,30 @@ export class VfsInitializer {
       ],
     };
 
-    const rwPaths = ['system/config', 'system/cache', 'system/themes', 'system/registry'];
+    const rwPaths = ['system/config', 'system/themes', 'system/registry'];
 
     for (const rwPath of rwPaths) {
       if (this.vfs.exists(SYSTEM_PRINCIPAL, rwPath)) {
         await this.vfs.setAclRecursive(SYSTEM_PRINCIPAL, rwPath, readWriteAcl);
       }
+    }
+
+    // 3. memory 領域の権限設定 (AIのみ読み書き可能、User/GuestはRead-Only)
+    if (this.vfs.exists(SYSTEM_PRINCIPAL, 'memory')) {
+      const memoryAcl: import('./types').AccessControlList = {
+        owner: { type: 'agent', id: 'Itera_AI' },
+        rules: [
+          {
+            principal: { type: 'agent', id: 'Itera_AI' },
+            permissions: ['read', 'write', 'manage'],
+          },
+          {
+            principal: { type: 'any', id: '*' },
+            permissions: ['read'],
+          },
+        ],
+      };
+      await this.vfs.setAclRecursive(SYSTEM_PRINCIPAL, 'memory', memoryAcl);
     }
 
     if (deployedCount > 0 || updatedCount > 0) {

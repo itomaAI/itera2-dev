@@ -87,7 +87,7 @@ export class TaskSwitcherModal {
       let appName = basePath.split('/').pop()?.replace('.html', '') || 'App';
       let appIcon = '⚙️';
 
-      if (basePath === 'index.html') {
+      if (basePath === 'apps/home.html') {
         appName = 'Dashboard';
         appIcon = '🏠';
       } else {

@@ -115,7 +115,7 @@ export class SystemModal {
       }) as any[];
 
       for (const stat of files) {
-        if (stat.kind === 'file' && !stat.path.startsWith('.trash/')) {
+        if (stat.kind === 'file' && !stat.path.startsWith('trash/')) {
           const blob = await this.vfs.readBlob(SYSTEM_PRINCIPAL, stat.path);
           zip.file(stat.path, blob);
         }

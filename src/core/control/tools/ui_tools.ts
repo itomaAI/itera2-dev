@@ -16,7 +16,7 @@ export function registerUITools(registry: ToolRegistry): void {
     description: 'Spawn process.',
     impl: async (params: any, context: any) => {
       let pid = params.pid || 'main';
-      const path = params.path || 'index.html';
+      const path = params.path || 'apps/home.html';
       let mode = params.mode || 'background';
       const forceReload = params.force === 'true';
 
@@ -142,7 +142,7 @@ export function registerUITools(registry: ToolRegistry): void {
           const base64 = await context.shell.processManager.captureScreenshot();
 
           const timestamp = Date.now();
-          const path = `system/cache/media/screenshot_${timestamp}.png`;
+          const path = `temp/media/screenshot_${timestamp}.png`;
 
           // ツールの責任として Blob に変換してから VFS に渡す
           const byteString = atob(base64);
@@ -185,7 +185,7 @@ export function registerUITools(registry: ToolRegistry): void {
             (p: any) => p.state === 'foreground',
           );
           if (fg) pid = (fg as any).pid;
-          else pid = 'app_index_html';
+          else pid = 'app_apps_home_html';
         }
       }
       if (!code.trim()) throw new Error('No code provided.');

@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- System Libraries -->
+    <!-- パスは新しいディレクトリ構造（system/core/）に合わせています -->
+    <script src="../system/core/ui.js"></script>
+    <script src="../system/core/std.js"></script>
+</head>
+<body class="bg-app text-text-main h-screen p-6 overflow-hidden flex flex-col select-none">
+
+    <!-- Header / Greeting -->
+    <header class="mb-8 flex justify-between items-end shrink-0 animate-fade-in-up">
+        <div>
+            <h1 id="greeting" class="text-3xl font-bold text-text-main tracking-tight">Welcome Back</h1>
+            <p id="date-display" class="text-text-muted font-mono text-sm mt-1 opacity-80">Loading...</p>
+        </div>
+        <div class="text-right flex items-center gap-6">
+            <!-- Weather Widget (Injected by JS) -->
+            <div id="weather-display" class="hidden md:flex flex-col items-end mr-4 text-text-main">
+                <div class="w-16 h-8 bg-card rounded animate-pulse"></div>
+            </div>
+            
+            <!-- Clock & Status -->
+            <div>
+                <div id="clock-display" class="text-4xl font-light text-primary font-mono tracking-widest drop-shadow-sm">00:00</div>
+                <div class="flex items-center justify-end gap-2 mt-1">
+                    <div class="w-2 h-2 rounded-full bg-success animate-pulse shadow-[0_0_8px_rgba(0,255,100,0.6)]"></div>
+                    <span class="text-[10px] text-text-muted uppercase tracking-wider font-bold">System Online</span>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Grid -->
+    <main class="flex-1 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 overflow-y-auto pb-10">
+        
+        <!-- Widget: Quick Launcher -->
+        <section class="bg-panel rounded-2xl p-5 border border-border-main shadow-lg flex flex-col gap-4 hover:border-primary/30 transition-colors">
+            <div class="flex items-center justify-between mb-1">
+                <h2 class="text-sm font-bold text-text-muted uppercase tracking-wider flex items-center gap-2">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"></path></svg>
+                    Apps
+                </h2>
+                <!-- V2: ランチャーはシステムアプリ領域へ移動 -->
+                <button onclick="AppUI.go('system/apps/launcher.html')" class="text-xs font-medium text-text-muted hover:text-text-main transition flex items-center gap-1 group">
+                    Library <span class="group-hover:translate-x-0.5 transition-transform">→</span>
+                </button>
+            </div>
+            
+            <div class="grid grid-cols-2 gap-3">
+                <button onclick="AppUI.go('apps/tasks.html')" class="relative flex flex-col items-center justify-center p-4 bg-card hover:bg-hover rounded-xl transition border border-transparent hover:border-primary/50 hover:shadow-md group overflow-hidden">
+                    <div class="absolute inset-0 bg-primary/5 opacity-0 group-hover:opacity-100 transition duration-300"></div>
+                    <span class="text-2xl mb-1 group-hover:scale-110 transition-transform">✅</span>
+                    <span class="text-xs font-bold text-text-main">Tasks</span>
+                </button>
+                <button onclick="AppUI.go('apps/notes.html')" class="relative flex flex-col items-center justify-center p-4 bg-card hover:bg-hover rounded-xl transition border border-transparent hover:border-primary/50 hover:shadow-md group overflow-hidden">
+                    <div class="absolute inset-0 bg-primary/5 opacity-0 group-hover:opacity-100 transition duration-300"></div>
+                    <span class="text-2xl mb-1 group-hover:scale-110 transition-transform">📝</span>
+                    <span class="text-xs font-bold text-text-main">Notes</span>
+                </button>
+                <button onclick="AppUI.go('apps/calendar.html')" class="relative flex flex-col items-center justify-center p-4 bg-card hover:bg-hover rounded-xl transition border border-transparent hover:border-primary/50 hover:shadow-md group overflow-hidden">
+                    <div class="absolute inset-0 bg-primary/5 opacity-0 group-hover:opacity-100 transition duration-300"></div>
+                    <span class="text-2xl mb-1 group-hover:scale-110 transition-transform">📅</span>
+                    <span class="text-xs font-bold text-text-main">Calendar</span>
+                </button>
+                <button onclick="AppUI.go('system/apps/settings.html')" class="relative flex flex-col items-center justify-center p-4 bg-card hover:bg-hover rounded-xl transition border border-transparent hover:border-primary/50 hover:shadow-md group overflow-hidden">
+                    <div class="absolute inset-0 bg-primary/5 opacity-0 group-hover:opacity-100 transition duration-300"></div>
+                    <span class="text-2xl mb-1 group-hover:scale-110 transition-transform">⚙️</span>
+                    <span class="text-xs font-bold text-text-main">Settings</span>
+                </button>
+            </div>
+
+            <!-- Quick Actions Footer -->
+            <div class="mt-auto pt-2 border-t border-border-main flex gap-2 justify-end">
+                <button onclick="MetaOS.ai.task('Create a new quick note.', null, { silent: false })" class="p-1.5 text-text-muted hover:text-primary hover:bg-primary/10 rounded transition" title="Quick AI Task">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+                </button>
+                <button onclick="AppUI.go('apps/tasks.html')" class="p-1.5 text-text-muted hover:text-primary hover:bg-primary/10 rounded transition" title="New Task">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+                </button>
+            </div>
+        </section>
+
+        <!-- Widget: Recent Tasks -->
+        <section class="bg-panel rounded-2xl p-5 border border-border-main shadow-lg flex flex-col hover:border-primary/30 transition-colors">
+            <div class="flex items-center justify-between mb-4">
+                <h2 class="text-sm font-bold text-text-muted uppercase tracking-wider flex items-center gap-2">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"></path></svg>
+                    Active Tasks
+                </h2>
+                <button onclick="AppUI.go('apps/tasks.html')" class="text-xs font-medium text-text-muted hover:text-text-main transition flex items-center gap-1 group">
+                    View All <span class="group-hover:translate-x-0.5 transition-transform">→</span>
+                </button>
+            </div>
+            <div id="widget-tasks" class="flex-1 space-y-2 overflow-y-auto pr-1">
+                <!-- Injected via JS -->
+                <div class="animate-pulse flex space-x-2">
+                    <div class="h-4 bg-card rounded w-3/4"></div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Widget: Recent Notes -->
+        <section class="bg-panel rounded-2xl p-5 border border-border-main shadow-lg flex flex-col hover:border-primary/30 transition-colors md:col-span-2 lg:col-span-1">
+            <div class="flex items-center justify-between mb-4">
+                <h2 class="text-sm font-bold text-text-muted uppercase tracking-wider flex items-center gap-2">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>
+                    Recent Notes
+                </h2>
+                <button onclick="AppUI.go('apps/notes.html')" class="text-xs font-medium text-text-muted hover:text-text-main transition flex items-center gap-1 group">
+                    View All <span class="group-hover:translate-x-0.5 transition-transform">→</span>
+                </button>
+            </div>
+            <div id="widget-notes" class="flex-1 space-y-2 overflow-y-auto pr-1">
+                <!-- Injected via JS -->
+                <div class="animate-pulse space-y-2">
+                    <div class="h-4 bg-card rounded w-full"></div>
+                    <div class="h-4 bg-card rounded w-5/6"></div>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- Task Edit Modal (Dashboard) -->
+    <div id="edit-modal" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center backdrop-blur-sm">
+        <div class="bg-panel w-full max-w-md mx-4 rounded-xl shadow-2xl border border-border-main flex flex-col max-h-[90vh]">
+            <div class="p-4 border-b border-border-main flex justify-between items-center">
+                <h3 class="font-bold text-lg text-text-main">Task Details</h3>
+                <button onclick="closeDashboardTaskModal()" class="text-text-muted hover:text-text-main">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
+            </div>
+            
+            <div class="p-4 space-y-4 overflow-y-auto">
+                <input type="hidden" id="edit-id">
+                
+                <div>
+                    <label class="block text-xs font-bold text-text-muted uppercase mb-1">Task Title</label>
+                    <input type="text" id="edit-title" class="w-full bg-card border border-border-main rounded p-2 focus:border-primary focus:outline-none text-text-main">
+                </div>
+
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs font-bold text-text-muted uppercase mb-1">Priority</label>
+                        <select id="edit-priority" class="w-full bg-card border border-border-main rounded p-2 focus:border-primary focus:outline-none text-text-main">
+                            <option value="low">Low</option>
+                            <option value="medium">Medium</option>
+                            <option value="high">High</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-text-muted uppercase mb-1">Due Date</label>
+                        <input type="date" id="edit-date" class="w-full bg-card border border-border-main rounded p-2 focus:border-primary focus:outline-none text-text-main text-sm">
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-bold text-text-muted uppercase mb-1">Description / Notes</label>
+                    <textarea id="edit-desc" rows="4" class="w-full bg-card border border-border-main rounded p-2 focus:border-primary focus:outline-none text-text-main text-sm resize-none" placeholder="Add details..."></textarea>
+                </div>
+            </div>
+
+            <div class="p-4 border-t border-border-main flex justify-between items-center bg-card/50 rounded-b-xl">
+                <button onclick="deleteDashboardTask()" class="text-error text-sm hover:underline font-medium">Delete Task</button>
+                <div class="flex gap-2">
+                    <button onclick="closeDashboardTaskModal()" class="px-4 py-2 rounded-lg text-sm font-medium hover:bg-hover transition text-text-main">Cancel</button>
+                    <button onclick="saveDashboardTaskChanges()" class="px-4 py-2 rounded-lg bg-primary text-text-inverted text-sm font-bold hover:bg-primary/90 shadow transition">Save</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Inline Dashboard Logic -->
+    <script>
+        (() => {
+            const State = { userName: 'User', tasks: [] };
+            const DOM = id => document.getElementById(id);
+
+            // --- Time & Greeting ---
+            const updateClock = () => {
+                const now = new Date();
+                const h = now.getHours();
+                const greet = h < 12 ? 'Good Morning' : h < 18 ? 'Good Afternoon' : 'Good Evening';
+                
+                DOM('clock-display').textContent = now.toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit' });
+                DOM('date-display').textContent  = now.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
+                DOM('greeting').textContent      = `${greet}${State.userName !== 'User' ? ', ' + State.userName : '.'}`;
+            };
+
+            // --- Weather ---
+            const fetchWeather = async () => {
+                const el = DOM('weather-display');
+                if (!el) return;
+                try {
+                    const { current_weather: cw } = await fetch('https://api.open-meteo.com/v1/forecast?latitude=35.6895&longitude=139.6917&current_weather=true&timezone=Asia%2FTokyo').then(r => r.json());
+                    const wMap = [[0,'☀️','Clear'],[3,'⛅','Partly Cloudy'],[48,'🌫️','Fog'],[67,'🌧️','Rain'],[77,'❄️','Snow'],[82,'🌦️','Showers'],[99,'⛈️','Thunderstorm']];
+                    const [, icon, text] = wMap.find(([maxCode]) => cw.weathercode <= maxCode) || wMap[0];
+                    
+                    el.innerHTML = `<div class="flex flex-col items-end"><div class="flex items-center gap-2"><span class="text-xl">${icon}</span><span class="text-xl font-bold tracking-tight">${Math.round(cw.temperature)}°C</span></div><span class="text-[10px] text-text-muted uppercase tracking-wider font-bold">Tokyo • ${text}</span></div>`;
+                } catch { el.innerHTML = '<span class="text-xs text-text-muted">Weather unavailable</span>'; }
+            };
+
+            // --- Widgets ---
+            const refreshWidgets = async () => {
+                if (!window.App) return;
+
+                // Tasks Widget
+                State.tasks = await App.getTasks().catch(() => []);
+                const pOrder = { high: 0, medium: 1, low: 2 };
+                const pending = State.tasks.filter(t => t.status !== 'completed')
+                                           .sort((a, b) => (pOrder[a.priority] ?? 1) - (pOrder[b.priority] ?? 1))
+                                           .slice(0, 5);
+                
+                DOM('widget-tasks').innerHTML = pending.length ? pending.map(t => `
+                    <div class="flex items-center gap-3 p-2 rounded hover:bg-hover transition group">
+                        <button onclick="DashTask.toggle('${t.id}')" class="shrink-0 w-3.5 h-3.5 rounded-full border-2 border-text-muted hover:border-primary flex items-center justify-center transition hover:scale-110 group-hover:border-primary/50"></button>
+                        <div class="flex-1 min-w-0 cursor-pointer" onclick="DashTask.edit('${t.id}')">
+                            <span class="text-sm truncate block ${t.priority === 'high' ? 'text-error font-medium' : 'text-text-main'}">${t.title}</span>
+                            ${t.dueDate ? `<span class="text-[10px] text-text-muted font-mono opacity-70 mt-0.5 block">${t.dueDate.slice(5)}</span>` : ''}
+                        </div>
+                    </div>`).join('') : '<div class="text-text-muted text-xs italic py-2">No active tasks.</div>';
+
+                // Notes Widget
+                const notes = await App.getRecentNotes(5).catch(() => []);
+                DOM('widget-notes').innerHTML = notes.length ? notes.map(path => `
+                    <div class="flex items-center gap-2 p-2 rounded hover:bg-hover transition cursor-pointer group" onclick="AppUI.go('metaos://open/' + encodeURIComponent('${path}'))">
+                        <svg class="w-4 h-4 text-text-muted group-hover:text-primary transition" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                        <span class="text-sm text-text-main truncate font-mono opacity-90">${path.split('/').pop().replace('.md', '')}</span>
+                    </div>`).join('') : '<div class="text-text-muted text-xs italic py-2">No notes found.</div>';
+            };
+
+            // --- Task Actions API ---
+            window.DashTask = {
+                edit: id => {
+                    const t = State.tasks.find(x => x.id === id);
+                    if (!t) return;
+                    ['id','title','priority','date','desc'].forEach(k => DOM(`edit-${k}`).value = t[k === 'date' ? 'dueDate' : k === 'desc' ? 'description' : k] || '');
+                    DOM('edit-priority').value = t.priority || 'medium';
+                    DOM('edit-modal').classList.remove('hidden');
+                },
+                close: ()  => DOM('edit-modal').classList.add('hidden'),
+                save:  async () => {
+                    const [id, title, priority, dueDate, description] = ['id','title','priority','date','desc'].map(k => DOM(`edit-${k}`).value);
+                    if (title.trim()) { await App.updateTask(id, { title, priority, dueDate, description }); DashTask.close(); refreshWidgets(); }
+                },
+                del:   async () => { if (await AppUI.confirm('Delete permanently?')) { await App.deleteTask(DOM('edit-id').value); DashTask.close(); refreshWidgets(); } },
+                toggle: async id => { await App.toggleTask(id); refreshWidgets(); }
+            };
+
+            // Backwards compatibility for inline handlers
+            Object.assign(window, { openDashboardTaskModal: DashTask.edit, closeDashboardTaskModal: DashTask.close, saveDashboardTaskChanges: DashTask.save, deleteDashboardTask: DashTask.del, toggleDashboardTask: DashTask.toggle });
+
+            // --- Boot Sequence ---
+            const boot = async () => {
+                if (!window.MetaOS) return setTimeout(boot, 50);
+
+                try {
+                    // V2 API
+                    const prefs = await App.Config.get('preferences');
+                    State.userName = prefs.username?.split(" ")[0] === "Ryutaro" ? "Ryutaro" : (prefs.username || "User");
+                } catch {}
+
+                fetchWeather();
+                updateClock();
+                refreshWidgets();
+
+                setInterval(updateClock, 1000);
+                setInterval(fetchWeather, 18e5); // 30 mins
+                
+                // V2 API
+                if (window.MetaOS && MetaOS.system.on) {
+                    MetaOS.system.on('file_changed', p => p.path.startsWith('data/') && refreshWidgets());
+                }
+            };
+
+            document.readyState === 'loading' ? document.addEventListener('DOMContentLoaded', boot) : boot();
+        })();
+    </script>
+</body>
+</html>

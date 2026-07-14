@@ -214,7 +214,8 @@ export class SystemBootstrapper {
     await maintenanceDaemon.start();
 
     // ダッシュボードの起動
-    await processManager.spawn('main', 'index.html', 'foreground');
+    const fullUri = 'metaos://run/apps/home.html';
+    await processManager.spawn('main', 'apps/home.html', 'foreground', false, undefined, fullUri);
 
     logger.log('system', {
       action: 'boot',

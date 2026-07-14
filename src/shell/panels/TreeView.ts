@@ -216,7 +216,8 @@ export class TreeView {
 
     const isExpanded = this.expandedPaths.has(path);
     let icon = kind === 'directory' ? (isExpanded ? '📂' : '📁') : this._getFileIcon(name);
-    if (name === '.trash') icon = '🗑️';
+    if (name === 'trash') icon = '🗑️';
+    if (kind === 'directory' && name === 'system') icon = '⚙️';
 
     div.innerHTML = `
       <span class="mr-2 opacity-80 text-xs pointer-events-none flex-shrink-0">${icon}</span>
@@ -298,8 +299,10 @@ export class TreeView {
         const iconSpan = (e.currentTarget as HTMLElement).querySelector('span:first-child');
         if (iconSpan) {
           const name = (e.currentTarget as HTMLElement).dataset.name;
-          if (name === '.trash') {
+          if (name === 'trash') {
             iconSpan.textContent = '🗑️';
+          } else if (name === 'system') {
+            iconSpan.textContent = '⚙️';
           } else {
             iconSpan.textContent = this.expandedPaths.has(path) ? '📂' : '📁';
           }

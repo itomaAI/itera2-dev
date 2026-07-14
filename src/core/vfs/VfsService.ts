@@ -497,13 +497,13 @@ export class VfsService {
     let trashDirId: string | null = null;
     const isPermanent =
       opts.permanent ||
-      normPath === '.trash' ||
-      normPath.startsWith('.trash/') ||
-      normPath.startsWith('system/cache/') ||
+      normPath === 'trash' ||
+      normPath.startsWith('trash/') ||
+      normPath.startsWith('temp/') ||
       normPath.startsWith('system/logs/');
 
     if (!isPermanent) {
-      trashDirId = await this._ensureDir(principal, '.trash');
+      trashDirId = await this._ensureDir(principal, 'trash');
     }
 
     return this.lockManager.acquire(normPath, async () => {

@@ -112,7 +112,7 @@ export class EventOrchestrator {
   private _bindUriRouting(): void {
     // metaos://open/... (データファイルを関連付けアプリで開く)
     this.uriRouter.register('open', async (path: string, queryArgs: Record<string, string>, searchAndHash: string) => {
-      let targetPath = path || 'index.html';
+      let targetPath = path || 'apps/home.html';
       try {
         const stat = this.vfs.stat(USER_PRINCIPAL, targetPath);
         const resolvedApp = this.resolver.resolveDefault(stat);
@@ -142,7 +142,7 @@ export class EventOrchestrator {
 
     // metaos://run/... (関連付けを無視して実行ファイルとして起動)
     this.uriRouter.register('run', async (path: string, queryArgs: Record<string, string>, searchAndHash: string) => {
-      let executablePath = path || 'index.html';
+      let executablePath = path || 'apps/home.html';
       try {
         const args = { ...queryArgs };
         const fullUri = `metaos://run/${executablePath}${searchAndHash}`;
@@ -384,7 +384,7 @@ export class EventOrchestrator {
 
   private _restoreAddressBar(): void {
     const fgApp = Array.from(this.processManager.processes.values()).find((p) => p.state === 'foreground');
-    const uri = fgApp ? fgApp.currentUri : 'metaos://run/index.html';
+    const uri = fgApp ? fgApp.currentUri : 'metaos://run/apps/home.html';
     this.desktop.updateAddressBar(uri);
   }
 
@@ -392,7 +392,7 @@ export class EventOrchestrator {
    * チャットから送信されたテキストとメディアの統合処理
    */
   private async _handleChatSend(text: string, attachments: File[], vfsReferences: string[]) {
-    const CACHE_DIR = 'system/cache/media';
+    const CACHE_DIR = 'temp/media';
     const content: any[] = [];
 
     // 1. 既存VFSパスの参照

@@ -57,13 +57,13 @@ export class ProcessManager {
         if (targetProc) {
           this.spawn(targetProc.pid, targetProc.path, 'foreground', true, targetProc.args, targetProc.currentUri);
         } else {
-          this.spawn('main', 'index.html', 'foreground', true, undefined, 'metaos://open/index.html');
+          this.spawn('main', 'apps/home.html', 'foreground', true, undefined, 'metaos://run/apps/home.html');
         }
       };
     }
     if (this.els.BTN_HOME) {
       this.els.BTN_HOME.onclick = () => {
-        this.spawn('main', 'index.html', 'foreground', false, undefined, 'metaos://open/index.html');
+        this.spawn('main', 'apps/home.html', 'foreground', false, undefined, 'metaos://run/apps/home.html');
       };
     }
   }
@@ -249,7 +249,7 @@ export class ProcessManager {
         this._focusApp(apps[0].pid);
         this._updateAddressBar(apps[0].currentUri);
       } else {
-        this.spawn('main', 'index.html', 'foreground');
+        this.spawn('main', 'apps/home.html', 'foreground', false, undefined, 'metaos://run/apps/home.html');
       }
     }
 

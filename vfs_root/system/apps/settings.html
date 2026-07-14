@@ -1,657 +1,426 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Settings</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <script src="/system/lib/ui.js"></script>
-    <script src="/system/lib/std.js"></script>
+    <script src="../core/ui.js"></script>
+    <script src="../core/std.js"></script>
     <style>
-      /* Hide scrollbar for clean OS look */
-      .no-scrollbar::-webkit-scrollbar {
-        display: none;
-      }
-      .no-scrollbar {
-        -ms-overflow-style: none;
-        scrollbar-width: none;
-      }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
     </style>
-  </head>
-  <body class="bg-app text-text-main h-screen flex flex-col overflow-hidden">
+</head>
+<body class="bg-app text-text-main h-screen flex flex-col overflow-hidden">
+
     <!-- Header -->
-    <header
-      class="h-14 border-b border-border-main flex items-center justify-between px-6 bg-panel shrink-0 z-10 sticky top-0 shadow-sm"
-    >
-      <div class="flex items-center gap-4">
-        <button
-          onclick="AppUI.home()"
-          class="p-1.5 -ml-1.5 rounded-lg text-text-muted hover:text-text-main hover:bg-hover transition bg-card border border-border-main"
-        >
-          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              stroke-width="2"
-              d="M10 19l-7-7m0 0l7-7m-7 7h18"
-            ></path>
-          </svg>
-        </button>
-        <h1 class="text-lg font-bold tracking-tight">System Settings</h1>
-      </div>
-      <div class="flex items-center gap-2">
-        <span
-          id="save-status"
-          class="text-[10px] text-text-muted font-mono uppercase tracking-widest opacity-0 transition-opacity"
-          >Saved</span
-        >
-      </div>
+    <header class="h-14 border-b border-border-main flex items-center justify-between px-6 bg-panel shrink-0 z-10 sticky top-0 shadow-sm">
+        <div class="flex items-center gap-4">
+            <button onclick="AppUI.home()" class="p-1.5 -ml-1.5 rounded-lg text-text-muted hover:text-text-main hover:bg-hover transition bg-card border border-border-main">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path></svg>
+            </button>
+            <h1 class="text-lg font-bold tracking-tight">System Settings</h1>
+        </div>
+        <div class="flex items-center gap-2">
+            <span id="save-status" class="text-[10px] text-text-muted font-mono uppercase tracking-widest opacity-0 transition-opacity">Saved</span>
+        </div>
     </header>
 
     <!-- Content -->
     <main class="flex-1 overflow-y-auto no-scrollbar p-6">
-      <div class="max-w-3xl mx-auto space-y-8 pb-10">
-        <!-- Profile & Agent -->
-        <section class="bg-panel rounded-2xl border border-border-main p-6 shadow-sm">
-          <div class="flex items-center gap-3 mb-6 pb-4 border-b border-border-main/50">
-            <div class="w-8 h-8 rounded-full bg-primary/20 text-primary flex items-center justify-center">
-              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  stroke-width="2"
-                  d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
-                ></path>
-              </svg>
-            </div>
-            <div>
-              <h2 class="text-sm font-bold uppercase tracking-wider text-text-main">Identity & Localization</h2>
-              <p class="text-xs text-text-muted">User and Assistant profiles.</p>
-            </div>
-          </div>
+        <div class="max-w-3xl mx-auto space-y-8 pb-10">
 
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div>
-              <label class="block text-xs font-bold text-text-muted uppercase mb-1.5">User Name</label>
-              <input
-                type="text"
-                id="config-username"
-                data-key="preferences.username"
-                class="w-full bg-card border border-border-main rounded-lg px-3 py-2 text-sm text-text-main focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/30 transition shadow-inner"
-              />
-            </div>
-            <div>
-              <label class="block text-xs font-bold text-text-muted uppercase mb-1.5">Agent Name</label>
-              <input
-                type="text"
-                id="config-agentName"
-                data-key="preferences.agentName"
-                class="w-full bg-card border border-border-main rounded-lg px-3 py-2 text-sm text-text-main focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/30 transition shadow-inner"
-              />
-            </div>
-            <div class="md:col-span-2">
-              <label class="block text-xs font-bold text-text-muted uppercase mb-1.5">Language</label>
-              <select
-                id="config-language"
-                data-key="preferences.language"
-                class="w-full md:w-1/2 bg-card border border-border-main rounded-lg px-3 py-2 text-sm text-text-main focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/30 transition cursor-pointer"
-              >
-                <option value="English">English</option>
-                <option value="Japanese">Japanese (日本語)</option>
-                <option value="Spanish">Spanish (Español)</option>
-                <option value="French">French (Français)</option>
-                <option value="German">German (Deutsch)</option>
-                <option value="Chinese (Simplified)">Chinese Simplified (简体中文)</option>
-                <option value="Chinese (Traditional)">Chinese Traditional (繁體中文)</option>
-                <option value="Korean">Korean (한국어)</option>
-                <option value="Portuguese">Portuguese (Português)</option>
-                <option value="Russian">Russian (Русский)</option>
-                <option value="Arabic">Arabic (العربية)</option>
-                <option value="Hindi">Hindi (हिन्दी)</option>
-              </select>
-            </div>
-          </div>
-        </section>
-
-        <!-- System & LLM -->
-        <section class="bg-panel rounded-2xl border border-border-main p-6 shadow-sm">
-          <div class="flex items-center gap-3 mb-6 pb-4 border-b border-border-main/50">
-            <div class="w-8 h-8 rounded-full bg-warning/20 text-warning flex items-center justify-center">
-              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  stroke-width="2"
-                  d="M13 10V3L4 14h7v7l9-11h-7z"
-                ></path>
-              </svg>
-            </div>
-            <div>
-              <h2 class="text-sm font-bold uppercase tracking-wider text-text-main">AI Engine (LLM)</h2>
-              <p class="text-xs text-text-muted">Configure the autonomous brain of the OS.</p>
-            </div>
-          </div>
-
-          <div class="space-y-6">
-            <div>
-              <label class="block text-xs font-bold text-text-muted uppercase mb-1.5">CORS Proxy URL</label>
-              <input
-                type="text"
-                id="config-network-proxyUrl"
-                data-key="network.proxyUrl"
-                class="w-full font-mono bg-card border border-border-main rounded-lg px-3 py-2 text-sm text-text-main focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/30 transition shadow-inner"
-                placeholder="https://corsproxy.io/?"
-              />
-              <p class="text-[10px] text-text-muted mt-1.5 opacity-80">
-                Prefix used when 'useProxy' is true. Example: http://localhost:8080/?
-              </p>
-            </div>
-
-            <div class="flex items-center gap-3 bg-card/50 p-3 rounded-lg border border-border-main/50">
-              <input
-                type="checkbox"
-                id="config-network-allowCredentialsWithProxy"
-                data-key="network.allowCredentialsWithProxy"
-                class="w-4 h-4 rounded border-border-main text-primary focus:ring-primary cursor-pointer"
-              />
-              <div>
-                <label
-                  for="config-network-allowCredentialsWithProxy"
-                  class="block text-xs font-bold text-text-main cursor-pointer"
-                  >Allow Credentials with Proxy</label
-                >
-                <p class="text-[10px] text-text-muted mt-0.5">
-                  ⚠️ Enable this ONLY if you are using a trusted local proxy. Sending API keys to public proxies is
-                  dangerous.
-                </p>
-              </div>
-            </div>
-
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label class="block text-xs font-bold text-text-muted uppercase mb-1.5">Provider</label>
-                <select
-                  id="ui-provider-select"
-                  class="w-full bg-card border border-border-main rounded-lg px-3 py-2 text-sm text-text-main focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/30 transition cursor-pointer"
-                >
-                  <option value="">Loading...</option>
-                </select>
-              </div>
-              <div>
-                <label class="block text-xs font-bold text-text-muted uppercase mb-1.5">Model Name</label>
-                <input
-                  type="text"
-                  list="model-list"
-                  id="ui-model-input"
-                  class="w-full font-mono bg-card border border-border-main rounded-lg px-3 py-2 text-sm text-text-main focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/30 transition shadow-inner"
-                  placeholder="Type or select model..."
-                />
-                <datalist id="model-list"></datalist>
-              </div>
-            </div>
-
-            <div
-              id="llm-capabilities-panel"
-              class="bg-card/30 border border-border-main rounded-lg p-3 hidden transition-all"
-            >
-              <div class="flex justify-between items-start mb-2">
-                <h3 id="cap-model-name" class="text-xs font-bold text-text-main uppercase tracking-wider">
-                  Model Name
-                </h3>
-                <span
-                  id="cap-context"
-                  class="text-[10px] text-text-muted font-mono bg-panel px-1.5 py-0.5 rounded border border-border-main"
-                  >-- Tokens</span
-                >
-              </div>
-
-              <div class="flex flex-wrap gap-2 mb-3" id="cap-badges">
-                <!-- Badges injected here -->
-              </div>
-
-              <div id="cap-pricing" class="text-[10px] text-text-muted font-mono flex gap-4">
-                <!-- Pricing injected here -->
-              </div>
-            </div>
-          </div>
-        </section>
-
-        <!-- Appearance (Themes) -->
-        <section class="bg-panel rounded-2xl border border-border-main p-6 shadow-sm">
-          <div class="flex items-center gap-3 mb-6 pb-4 border-b border-border-main/50">
-            <div class="w-8 h-8 rounded-full bg-success/20 text-success flex items-center justify-center">
-              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  stroke-width="2"
-                  d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01"
-                ></path>
-              </svg>
-            </div>
-            <div>
-              <h2 class="text-sm font-bold uppercase tracking-wider text-text-main">Appearance</h2>
-              <p class="text-xs text-text-muted">Customize the visual theme of the interface.</p>
-            </div>
-          </div>
-
-          <div id="theme-list" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
-            <div class="text-text-muted text-sm animate-pulse">Loading themes...</div>
-          </div>
-
-          <div class="border-t border-border-main/50 pt-6">
-            <h3 class="text-xs font-bold text-text-main uppercase tracking-wider mb-4">Typography & Layout</h3>
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div>
-                <label class="block text-xs font-bold text-text-muted uppercase mb-1.5">UI Font</label>
-                <select
-                  id="config-app-uifont"
-                  data-key="appearance.typography.uiFont"
-                  class="w-full bg-card border border-border-main rounded-lg px-3 py-2 text-sm text-text-main focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/30 transition cursor-pointer"
-                >
-                  <option value="Inter">Inter (Default)</option>
-                  <option value="system-ui">System Default</option>
-                  <option value="Roboto">Roboto</option>
-                  <option value="Helvetica">Helvetica</option>
-                  <option value="sans-serif">Sans Serif</option>
-                </select>
-              </div>
-              <div>
-                <label class="block text-xs font-bold text-text-muted uppercase mb-1.5">Editor / Terminal Font</label>
-                <select
-                  id="config-app-monofont"
-                  data-key="appearance.typography.monoFont"
-                  class="w-full bg-card border border-border-main rounded-lg px-3 py-2 text-sm text-text-main focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/30 transition cursor-pointer"
-                >
-                  <option value="monospace">Monospace (Default)</option>
-                  <option value="Fira Code">Fira Code</option>
-                  <option value="JetBrains Mono">JetBrains Mono</option>
-                  <option value="Consolas">Consolas</option>
-                  <option value="Courier New">Courier New</option>
-                </select>
-              </div>
-              <div>
-                <label class="block text-xs font-bold text-text-muted uppercase mb-1.5">Global UI Scale</label>
-                <select
-                  id="config-app-fontsize"
-                  data-key="appearance.typography.fontSize"
-                  class="w-full bg-card border border-border-main rounded-lg px-3 py-2 text-sm text-text-main focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/30 transition cursor-pointer"
-                >
-                  <option value="small">Small</option>
-                  <option value="medium">Medium (Default)</option>
-                  <option value="large">Large</option>
-                  <option value="x-large">Extra Large</option>
-                </select>
-              </div>
-              <div class="flex items-center gap-3 pt-6">
-                <input
-                  type="checkbox"
-                  id="config-app-animations"
-                  data-key="appearance.layout.animations"
-                  class="w-4 h-4 rounded border-border-main text-primary focus:ring-primary cursor-pointer"
-                />
-                <div>
-                  <label for="config-app-animations" class="block text-xs font-bold text-text-main cursor-pointer"
-                    >Enable Animations</label
-                  >
-                  <p class="text-[10px] text-text-muted mt-0.5">Uncheck to reduce motion</p>
+            <!-- Profile & Agent -->
+            <section class="bg-panel rounded-2xl border border-border-main p-6 shadow-sm">
+                <div class="flex items-center gap-3 mb-6 pb-4 border-b border-border-main/50">
+                    <div class="w-8 h-8 rounded-full bg-primary/20 text-primary flex items-center justify-center">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path></svg>
+                    </div>
+                    <div>
+                        <h2 class="text-sm font-bold uppercase tracking-wider text-text-main">Identity & Localization</h2>
+                        <p class="text-xs text-text-muted">User and Assistant profiles.</p>
+                    </div>
                 </div>
-              </div>
-            </div>
-          </div>
-        </section>
 
-        <!-- System Info Footer -->
-        <div class="text-center pt-4 pb-8">
-          <p class="text-xs font-bold text-text-main tracking-widest uppercase">Itera OS v2</p>
-          <p class="text-[10px] text-text-muted opacity-50 mt-1 font-mono">Kernel: Guest Bridge (window.MetaOS)</p>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                        <label class="block text-xs font-bold text-text-muted uppercase mb-1.5">User Name</label>
+                        <input type="text" id="config-username" data-category="preferences" data-key="username" class="w-full bg-card border border-border-main rounded-lg px-3 py-2 text-sm text-text-main focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/30 transition shadow-inner">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-text-muted uppercase mb-1.5">Agent Name</label>
+                        <input type="text" id="config-agentName" data-category="preferences" data-key="agentName" class="w-full bg-card border border-border-main rounded-lg px-3 py-2 text-sm text-text-main focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/30 transition shadow-inner">
+                    </div>
+                    <div class="md:col-span-2">
+                        <label class="block text-xs font-bold text-text-muted uppercase mb-1.5">Language</label>
+                        <select id="config-language" data-category="preferences" data-key="language" class="w-full md:w-1/2 bg-card border border-border-main rounded-lg px-3 py-2 text-sm text-text-main focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/30 transition cursor-pointer">
+                            <option value="English">English</option>
+                            <option value="Japanese">Japanese (日本語)</option>
+                            <option value="Spanish">Spanish (Español)</option>
+                            <option value="French">French (Français)</option>
+                            <option value="German">German (Deutsch)</option>
+                            <option value="Chinese (Simplified)">Chinese Simplified (简体中文)</option>
+                            <option value="Chinese (Traditional)">Chinese Traditional (繁體中文)</option>
+                            <option value="Korean">Korean (한국어)</option>
+                            <option value="Portuguese">Portuguese (Português)</option>
+                            <option value="Russian">Russian (Русский)</option>
+                            <option value="Arabic">Arabic (العربية)</option>
+                            <option value="Hindi">Hindi (हिन्दी)</option>
+                        </select>
+                    </div>
+                </div>
+            </section>
+
+            <!-- System & LLM -->
+            <section class="bg-panel rounded-2xl border border-border-main p-6 shadow-sm">
+                <div class="flex items-center gap-3 mb-6 pb-4 border-b border-border-main/50">
+                    <div class="w-8 h-8 rounded-full bg-warning/20 text-warning flex items-center justify-center">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+                    </div>
+                    <div>
+                        <h2 class="text-sm font-bold uppercase tracking-wider text-text-main">AI Engine (LLM)</h2>
+                        <p class="text-xs text-text-muted">Configure the autonomous brain of the OS.</p>
+                    </div>
+                </div>
+
+                <div class="space-y-6">
+                    <div>
+                        <label class="block text-xs font-bold text-text-muted uppercase mb-1.5">CORS Proxy URL</label>
+                        <input type="text" id="config-network-proxyUrl" data-category="network" data-key="proxyUrl" class="w-full font-mono bg-card border border-border-main rounded-lg px-3 py-2 text-sm text-text-main focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/30 transition shadow-inner" placeholder="https://corsproxy.io/?">
+                        <p class="text-[10px] text-text-muted mt-1.5 opacity-80">Prefix used when 'useProxy' is true. Example: http://localhost:8080/?</p>
+                    </div>
+
+                    <div class="flex items-center gap-3 bg-card/50 p-3 rounded-lg border border-border-main/50">
+                        <input type="checkbox" id="config-network-allowCredentialsWithProxy" data-category="network" data-key="allowCredentialsWithProxy" class="w-4 h-4 rounded border-border-main text-primary focus:ring-primary cursor-pointer">
+                        <div>
+                            <label for="config-network-allowCredentialsWithProxy" class="block text-xs font-bold text-text-main cursor-pointer">Allow Credentials with Proxy</label>
+                            <p class="text-[10px] text-text-muted mt-0.5">⚠️ Enable this ONLY if you are using a trusted local proxy. Sending API keys to public proxies is dangerous.</p>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-xs font-bold text-text-muted uppercase mb-1.5">Provider</label>
+                            <select id="ui-provider-select" class="w-full bg-card border border-border-main rounded-lg px-3 py-2 text-sm text-text-main focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/30 transition cursor-pointer">
+                                <option value="">Loading...</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-text-muted uppercase mb-1.5">Model Name</label>
+                            <input type="text" list="model-list" id="ui-model-input" class="w-full font-mono bg-card border border-border-main rounded-lg px-3 py-2 text-sm text-text-main focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/30 transition shadow-inner" placeholder="Type or select model...">
+                            <datalist id="model-list"></datalist>
+                        </div>
+                    </div>
+
+                    <div id="llm-capabilities-panel" class="bg-card/30 border border-border-main rounded-lg p-3 hidden transition-all">
+                        <div class="flex justify-between items-start mb-2">
+                            <h3 id="cap-model-name" class="text-xs font-bold text-text-main uppercase tracking-wider">Model Name</h3>
+                            <span id="cap-context" class="text-[10px] text-text-muted font-mono bg-panel px-1.5 py-0.5 rounded border border-border-main">-- Tokens</span>
+                        </div>
+                        <div class="flex flex-wrap gap-2 mb-3" id="cap-badges"></div>
+                        <div id="cap-pricing" class="text-[10px] text-text-muted font-mono flex gap-4"></div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Appearance (Themes) -->
+            <section class="bg-panel rounded-2xl border border-border-main p-6 shadow-sm">
+                <div class="flex items-center gap-3 mb-6 pb-4 border-b border-border-main/50">
+                    <div class="w-8 h-8 rounded-full bg-success/20 text-success flex items-center justify-center">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01"></path></svg>
+                    </div>
+                    <div>
+                        <h2 class="text-sm font-bold uppercase tracking-wider text-text-main">Appearance</h2>
+                        <p class="text-xs text-text-muted">Customize the visual theme of the interface.</p>
+                    </div>
+                </div>
+
+                <div id="theme-list" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
+                    <div class="text-text-muted text-sm animate-pulse">Loading themes...</div>
+                </div>
+
+                <div class="border-t border-border-main/50 pt-6">
+                    <h3 class="text-xs font-bold text-text-main uppercase tracking-wider mb-4">Typography & Layout</h3>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div>
+                            <label class="block text-xs font-bold text-text-muted uppercase mb-1.5">UI Font</label>
+                            <select id="config-app-uifont" data-category="appearance" data-key="typography.uiFont" class="w-full bg-card border border-border-main rounded-lg px-3 py-2 text-sm text-text-main focus:outline-none focus:border-primary transition cursor-pointer">
+                                <option value="Inter">Inter (Default)</option>
+                                <option value="system-ui">System Default</option>
+                                <option value="Roboto">Roboto</option>
+                                <option value="sans-serif">Sans Serif</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-text-muted uppercase mb-1.5">Editor / Terminal Font</label>
+                            <select id="config-app-monofont" data-category="appearance" data-key="typography.monoFont" class="w-full bg-card border border-border-main rounded-lg px-3 py-2 text-sm text-text-main focus:outline-none focus:border-primary transition cursor-pointer">
+                                <option value="monospace">Monospace (Default)</option>
+                                <option value="Fira Code">Fira Code</option>
+                                <option value="JetBrains Mono">JetBrains Mono</option>
+                                <option value="Consolas">Consolas</option>
+                                <option value="Courier New">Courier New</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-text-muted uppercase mb-1.5">Global UI Scale</label>
+                            <select id="config-app-fontsize" data-category="appearance" data-key="typography.fontSize" class="w-full bg-card border border-border-main rounded-lg px-3 py-2 text-sm text-text-main focus:outline-none focus:border-primary transition cursor-pointer">
+                                <option value="small">Small</option>
+                                <option value="medium">Medium (Default)</option>
+                                <option value="large">Large</option>
+                                <option value="x-large">Extra Large</option>
+                            </select>
+                        </div>
+                        <div class="flex items-center gap-3 pt-6">
+                            <input type="checkbox" id="config-app-animations" data-category="appearance" data-key="layout.animations" class="w-4 h-4 rounded border-border-main text-primary focus:ring-primary cursor-pointer">
+                            <div>
+                                <label for="config-app-animations" class="block text-xs font-bold text-text-main cursor-pointer">Enable Animations</label>
+                                <p class="text-[10px] text-text-muted mt-0.5">Uncheck to reduce motion</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
         </div>
-      </div>
     </main>
 
     <script>
-      // V2 分散設定用の状態管理
-      let prefsConfig = {};
-      let llmConfig = {};
-      let networkConfig = {};
-      let appearanceConfig = {};
+        let configs = {
+            preferences: {},
+            llm: {},
+            network: {},
+            appearance: {}
+        };
+        let oldPrefs = {};
+        let llmProfiles = { providers: [] };
+        let currentProviderId = 'google';
 
-      // 差分検知用
-      let oldPrefsConfig = {};
+        const DOM = id => document.getElementById(id);
 
-      // LLM レジストリ状態
-      let llmProfiles = { providers: [] };
-      let currentProviderId = 'google';
+        async function init() {
+            if (!window.MetaOS) return setTimeout(init, 50);
 
-      const DOM = (id) => document.getElementById(id);
+            try {
+                configs.preferences = await App.Config.get('preferences');
+                configs.llm = await App.Config.get('llm');
+                configs.network = await App.Config.get('network');
+                configs.appearance = await App.Config.get('appearance');
+                oldPrefs = JSON.parse(JSON.stringify(configs.preferences));
 
-      // --- Boot & Load ---
-      async function init() {
-        if (!window.MetaOS) return setTimeout(init, 50);
+                // Bind UI
+                DOM('config-username').value = configs.preferences.username || '';
+                DOM('config-agentName').value = configs.preferences.agentName || '';
+                DOM('config-language').value = configs.preferences.language || 'English';
+                DOM('config-network-proxyUrl').value = configs.network.proxyUrl || '';
+                DOM('config-network-allowCredentialsWithProxy').checked = !!configs.network.allowCredentialsWithProxy;
 
-        try {
-          prefsConfig = await App.Config.get('preferences');
-          llmConfig = await App.Config.get('llm');
-          networkConfig = await App.Config.get('network');
-          appearanceConfig = await App.Config.get('appearance');
+                DOM('config-app-uifont').value = configs.appearance.typography?.uiFont || 'Inter';
+                DOM('config-app-monofont').value = configs.appearance.typography?.monoFont || 'monospace';
+                DOM('config-app-fontsize').value = configs.appearance.typography?.fontSize || 'medium';
+                DOM('config-app-animations').checked = configs.appearance.layout?.animations !== false;
 
-          oldPrefsConfig = JSON.parse(JSON.stringify(prefsConfig));
-
-          // Bind values to UI
-          DOM('config-username').value = prefsConfig.username || '';
-          DOM('config-agentName').value = prefsConfig.agentName || '';
-          DOM('config-language').value = prefsConfig.language || 'English';
-          DOM('config-network-proxyUrl').value = networkConfig.proxyUrl || '';
-          DOM('config-network-allowCredentialsWithProxy').checked = !!networkConfig.allowCredentialsWithProxy;
-
-          DOM('config-app-uifont').value = appearanceConfig.typography?.uiFont || 'Inter';
-          DOM('config-app-monofont').value = appearanceConfig.typography?.monoFont || 'monospace';
-          DOM('config-app-fontsize').value = appearanceConfig.typography?.fontSize || 'medium';
-          DOM('config-app-animations').checked = appearanceConfig.layout?.animations !== false;
-
-          await loadLlmProfiles(llmConfig.model || 'gemini-3-flash-preview');
-          await loadThemes();
-        } catch (e) {
-          console.warn('Failed to load config', e);
-        }
-      }
-
-      // --- Save & Sync ---
-      async function saveConfig() {
-        const status = DOM('save-status');
-        status.textContent = 'Saving...';
-        status.classList.remove('opacity-0');
-        status.classList.add('text-warning');
-
-        try {
-          // 各カテゴリごとに保存 (V2仕様)
-          await App.Config.update('preferences', prefsConfig);
-          await App.Config.update('llm', llmConfig);
-          await App.Config.update('network', networkConfig);
-          await App.Config.update('appearance', appearanceConfig);
-
-          // 変更があればAI履歴へイベントログを残す
-          if (prefsConfig.username !== oldPrefsConfig.username) {
-            App.AI.logEvent(`User changed their name to "${prefsConfig.username}".`, 'config_changed');
-          }
-          if (prefsConfig.agentName !== oldPrefsConfig.agentName) {
-            App.AI.logEvent(`User changed the agent's name to "${prefsConfig.agentName}".`, 'config_changed');
-          }
-          if (prefsConfig.language !== oldPrefsConfig.language) {
-            App.AI.logEvent(
-              `User changed the system language to "${prefsConfig.language}". Please communicate in this language from now on.`,
-              'config_changed',
-            );
-          }
-          oldPrefsConfig = JSON.parse(JSON.stringify(prefsConfig));
-
-          // 成功フィードバック
-          status.textContent = 'Saved';
-          status.classList.remove('text-warning');
-          status.classList.add('text-success');
-          setTimeout(() => {
-            status.classList.add('opacity-0');
-            setTimeout(() => {
-              status.classList.remove('text-success');
-              status.textContent = '';
-            }, 300);
-          }, 2000);
-        } catch (e) {
-          status.textContent = 'Error';
-          status.classList.add('text-error');
-        }
-      }
-
-      // --- Input Handlers ---
-      const handleInput = (e) => {
-        const keyPath = e.target.getAttribute('data-key');
-        if (!keyPath) return;
-
-        const val = e.target.type === 'checkbox' ? e.target.checked : e.target.value;
-        const parts = keyPath.split('.');
-        const category = parts[0];
-
-        let targetObj;
-        if (category === 'preferences') targetObj = prefsConfig;
-        else if (category === 'network') targetObj = networkConfig;
-        else if (category === 'llm') targetObj = llmConfig;
-        else if (category === 'appearance') targetObj = appearanceConfig;
-        else return;
-
-        if (parts.length === 2) {
-          targetObj[parts[1]] = val;
-        } else if (parts.length === 3) {
-          if (!targetObj[parts[1]]) targetObj[parts[1]] = {};
-          targetObj[parts[1]][parts[2]] = val;
+                await loadLlmProfiles(configs.llm.model || 'gemini-3-flash-preview');
+                await loadThemes();
+            } catch (e) {
+                console.warn("Failed to load config", e);
+            }
         }
 
-        clearTimeout(window._saveTimer);
-        window._saveTimer = setTimeout(saveConfig, 500);
-      };
+        async function saveConfig() {
+            const status = DOM('save-status');
+            status.textContent = "Saving...";
+            status.classList.remove('opacity-0');
+            status.classList.add('text-warning');
 
-      [
-        'config-username',
-        'config-agentName',
-        'config-language',
-        'config-network-proxyUrl',
-        'config-network-allowCredentialsWithProxy',
-        'config-app-uifont',
-        'config-app-monofont',
-        'config-app-fontsize',
-        'config-app-animations',
-      ].forEach((id) => {
-        const el = DOM(id);
-        if (el) el.addEventListener('input', handleInput);
-      });
+            try {
+                await App.Config.update('preferences', configs.preferences);
+                await App.Config.update('llm', configs.llm);
+                await App.Config.update('network', configs.network);
+                await App.Config.update('appearance', configs.appearance);
 
-      // --- LLM Profile UI ---
-      async function loadLlmProfiles(savedModelString) {
-        try {
-          // OS (Host) からマージ済みのプロバイダ一覧を取得する
-          const providers = await MetaOS.system.getProviders();
-          llmProfiles = { providers };
-        } catch (e) {
-          console.warn('Failed to get providers via MetaOS', e);
+                if (configs.preferences.username !== oldPrefs.username) App.AI.logEvent(`User changed their name to "${configs.preferences.username}".`, 'config_changed');
+                if (configs.preferences.agentName !== oldPrefs.agentName) App.AI.logEvent(`User changed the agent's name to "${configs.preferences.agentName}".`, 'config_changed');
+                if (configs.preferences.language !== oldPrefs.language) App.AI.logEvent(`User changed the system language to "${configs.preferences.language}".`, 'config_changed');
+                
+                oldPrefs = JSON.parse(JSON.stringify(configs.preferences));
+
+                status.textContent = "Saved";
+                status.classList.remove('text-warning');
+                status.classList.add('text-success');
+                setTimeout(() => {
+                    status.classList.add('opacity-0');
+                }, 2000);
+            } catch (e) {
+                status.textContent = "Error";
+                status.classList.add('text-error');
+            }
         }
 
-        // フォールバック（取得失敗時）
-        if (!llmProfiles.providers || llmProfiles.providers.length === 0) {
-          llmProfiles = {
-            providers: [
-              {
-                id: 'google',
-                name: 'Google (Gemini)',
-                models: [{ id: 'gemini-3-flash-preview', name: 'Gemini 3 Flash' }],
-                defaultCapabilities: { maxMediaSizeMB: 100, supportedMimes: [] },
-              },
-              {
-                id: 'openai',
-                name: 'OpenAI',
-                models: [{ id: 'gpt-4o', name: 'GPT-4o' }],
-                defaultCapabilities: { maxMediaSizeMB: 20, supportedMimes: [] },
-              },
-              {
-                id: 'anthropic',
-                name: 'Anthropic',
-                models: [{ id: 'claude-3-5-sonnet-20241022', name: 'Claude 3.5 Sonnet' }],
-                defaultCapabilities: { maxMediaSizeMB: 5, supportedMimes: [] },
-              },
-            ],
-          };
-        }
+        const handleInput = (e) => {
+            const category = e.target.getAttribute('data-category');
+            const keyPath = e.target.getAttribute('data-key');
+            if (!category || !keyPath) return;
 
-        // 現在の設定値からプロバイダとモデルを分離 (e.g. "openai/gpt-4o")
-        let initialModel = savedModelString;
-        let initialProvider = 'google';
+            const val = e.target.type === 'checkbox' ? e.target.checked : e.target.value;
+            
+            const parts = keyPath.split('.');
+            let targetObj = configs[category];
+            if (parts.length === 1) {
+                targetObj[parts[0]] = val;
+            } else if (parts.length === 2) {
+                if (!targetObj[parts[0]]) targetObj[parts[0]] = {};
+                targetObj[parts[0]][parts[1]] = val;
+            }
 
-        const slashIdx = savedModelString.indexOf('/');
-        if (slashIdx !== -1) {
-          initialProvider = savedModelString.substring(0, slashIdx).toLowerCase();
-          initialModel = savedModelString.substring(slashIdx + 1);
-        }
-        currentProviderId = initialProvider;
-
-        // プロバイダのセレクトボックスを構築
-        const providerSelect = DOM('ui-provider-select');
-        providerSelect.innerHTML = '';
-        llmProfiles.providers.forEach((p) => {
-          const opt = document.createElement('option');
-          opt.value = p.id;
-          opt.textContent = p.name;
-          if (p.id === initialProvider) opt.selected = true;
-          providerSelect.appendChild(opt);
-        });
-
-        // プロバイダ変更時のイベント
-        providerSelect.addEventListener('change', (e) => {
-          currentProviderId = e.target.value;
-          updateModelDatalist();
-          // 新しいプロバイダの最初のモデルを自動選択
-          const pData = llmProfiles.providers.find((p) => p.id === currentProviderId);
-          if (pData && pData.models && pData.models.length > 0) {
-            DOM('ui-model-input').value = pData.models[0].id;
-          } else {
-            DOM('ui-model-input').value = '';
-          }
-          saveLlmConfig();
-        });
-
-        // モデル入力のイベント
-        const modelInput = DOM('ui-model-input');
-        modelInput.value = initialModel;
-        modelInput.addEventListener('input', () => {
-          updateCapabilityPanel();
-          saveLlmConfig();
-        });
-
-        updateModelDatalist();
-      }
-
-      function updateModelDatalist() {
-        const datalist = DOM('model-list');
-        datalist.innerHTML = '';
-        const providerData = llmProfiles.providers.find((p) => p.id === currentProviderId);
-
-        if (providerData && providerData.models) {
-          providerData.models.forEach((m) => {
-            const opt = document.createElement('option');
-            opt.value = m.id;
-            opt.textContent = m.name;
-            datalist.appendChild(opt);
-          });
-        }
-        updateCapabilityPanel();
-      }
-
-      function updateCapabilityPanel() {
-        const panel = DOM('llm-capabilities-panel');
-        const modelId = DOM('ui-model-input').value.trim();
-        const providerData = llmProfiles.providers.find((p) => p.id === currentProviderId);
-
-        if (!providerData || !modelId) {
-          panel.classList.add('hidden');
-          return;
-        }
-
-        const modelData = (providerData.models || []).find((m) => m.id === modelId);
-        panel.classList.remove('hidden');
-
-        // Header (Tokens)
-        DOM('cap-model-name').textContent = modelData ? modelData.name : modelId;
-        DOM('cap-context').textContent = modelData?.contextTokens
-          ? modelData.contextTokens / 1000 + 'K Tokens'
-          : 'Custom Limits';
-
-        // Capabilities Badges (Merge with provider default)
-        const caps = { ...(providerData.defaultCapabilities || {}), ...(modelData?.capabilities || {}) };
-        const badgesEl = DOM('cap-badges');
-        badgesEl.innerHTML = '';
-
-        const createBadge = (icon, text, colorClass) => {
-          return `<span class="px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-widest border flex items-center gap-1 ${colorClass}">${icon} ${text}</span>`;
+            clearTimeout(window._saveTimer);
+            window._saveTimer = setTimeout(saveConfig, 500);
         };
 
-        const mimes = caps.supportedMimes || [];
-        if (mimes.some((m) => m.includes('image/')))
-          badgesEl.innerHTML += createBadge('🖼️', 'Vision', 'bg-primary/10 text-primary border-primary/30');
-        if (mimes.some((m) => m.includes('video/')))
-          badgesEl.innerHTML += createBadge('🎞️', 'Video', 'bg-primary/10 text-primary border-primary/30');
-        if (mimes.some((m) => m.includes('audio/')))
-          badgesEl.innerHTML += createBadge('🎙️', 'Audio', 'bg-primary/10 text-primary border-primary/30');
-        if (mimes.some((m) => m.includes('pdf')))
-          badgesEl.innerHTML += createBadge('📄', 'PDF', 'bg-success/10 text-success border-success/30');
+        ['config-username', 'config-agentName', 'config-language', 'config-network-proxyUrl', 'config-network-allowCredentialsWithProxy', 'config-app-uifont', 'config-app-monofont', 'config-app-fontsize', 'config-app-animations'].forEach(id => {
+            const el = DOM(id);
+            if (el) el.addEventListener('input', handleInput);
+        });
 
-        if (caps.maxMediaSizeMB > 0) {
-          badgesEl.innerHTML += createBadge(
-            '📦',
-            `Max ${caps.maxMediaSizeMB}MB`,
-            'bg-card text-text-muted border-border-main',
-          );
-        } else if (modelData) {
-          // 明示的にゼロの場合は非対応
-          badgesEl.innerHTML += createBadge('⚠️', 'Text Only', 'bg-warning/10 text-warning border-warning/30');
-        }
-
-        // Pricing Area
-        const pricingEl = DOM('cap-pricing');
-        pricingEl.innerHTML = '';
-        if (modelData && modelData.pricing) {
-          if (modelData.pricing.tiers) {
-            // 階層型価格 (e.g. Gemini Pro)
-            pricingEl.innerHTML = `<span class="text-success">Input: $${modelData.pricing.tiers[0].input.toFixed(2)}+</span><span class="text-warning">Output: $${modelData.pricing.tiers[0].output.toFixed(2)}+</span><span class="opacity-50">(per 1M tokens)</span>`;
-          } else {
-            // フラット価格
-            pricingEl.innerHTML = `<span class="text-success">Input: $${modelData.pricing.input.toFixed(2)}</span><span class="text-warning">Output: $${modelData.pricing.output.toFixed(2)}</span><span class="opacity-50">(per 1M tokens)</span>`;
-          }
-        } else {
-          pricingEl.innerHTML = '<span class="opacity-50">Pricing data not available</span>';
-        }
-      }
-
-      function saveLlmConfig() {
-        const provider = currentProviderId;
-        const model = DOM('ui-model-input').value.trim();
-        if (!model) return;
-
-        // Googleの場合はプレフィックスを省略する（後方互換）
-        const finalModelString = provider === 'google' ? model : `${provider}/${model}`;
-
-        llmConfig.model = finalModelString;
-
-        clearTimeout(window._saveTimer);
-        window._saveTimer = setTimeout(saveConfig, 500);
-      }
-
-      // --- Themes ---
-      async function loadThemes() {
-        const container = DOM('theme-list');
-        container.innerHTML = '';
-
-        try {
-          // V2 API
-          const files = await MetaOS.fs.list('system/themes');
-          const themeFiles = files.filter((f) => f.endsWith('.json')).sort();
-
-          for (const path of themeFiles) {
+        // --- LLM Profile UI ---
+        async function loadLlmProfiles(savedModelString) {
             try {
-              const themeData = JSON.parse(await MetaOS.fs.read(path));
-              const meta = themeData.meta || { name: path.split('/').pop().replace('.json', ''), author: 'System' };
-              const isActive = appearanceConfig.theme === path;
+                const providers = await MetaOS.system.getProviders();
+                llmProfiles = { providers };
+            } catch (e) {
+                console.warn('Failed to get providers via MetaOS', e);
+            }
 
-              const bg = themeData.colors?.bg?.app || '#1a1b26';
-              const fg = themeData.colors?.text?.main || '#c0caf5';
-              const accent = themeData.colors?.accent?.primary || '#7aa2f7';
+            let initialModel = savedModelString;
+            let initialProvider = 'google';
+            const slashIdx = savedModelString.indexOf('/');
+            if (slashIdx !== -1) {
+                initialProvider = savedModelString.substring(0, slashIdx).toLowerCase();
+                initialModel = savedModelString.substring(slashIdx + 1);
+            }
+            currentProviderId = initialProvider;
 
-              const div = document.createElement('div');
-              div.className = `cursor-pointer p-4 rounded-xl border-2 transition-all relative overflow-hidden group shadow-sm hover:shadow-md ${isActive ? 'border-primary bg-primary/5 ring-4 ring-primary/10' : 'border-border-main hover:border-text-muted bg-card'}`;
-              div.onclick = () => {
-                if (appearanceConfig.theme !== path) {
-                  appearanceConfig.theme = path;
-                  saveConfig().then(loadThemes);
+            const providerSelect = DOM('ui-provider-select');
+            providerSelect.innerHTML = '';
+            llmProfiles.providers.forEach(p => {
+                const opt = document.createElement('option');
+                opt.value = p.id;
+                opt.textContent = p.name;
+                if (p.id === initialProvider) opt.selected = true;
+                providerSelect.appendChild(opt);
+            });
+
+            providerSelect.addEventListener('change', (e) => {
+                currentProviderId = e.target.value;
+                updateModelDatalist();
+                const pData = llmProfiles.providers.find(p => p.id === currentProviderId);
+                DOM('ui-model-input').value = (pData && pData.models && pData.models.length > 0) ? pData.models[0].id : '';
+                saveLlmConfig();
+            });
+
+            const modelInput = DOM('ui-model-input');
+            modelInput.value = initialModel;
+            modelInput.addEventListener('input', () => {
+                updateCapabilityPanel();
+                saveLlmConfig();
+            });
+
+            updateModelDatalist();
+        }
+
+        function updateModelDatalist() {
+            const datalist = DOM('model-list');
+            datalist.innerHTML = '';
+            const providerData = llmProfiles.providers.find(p => p.id === currentProviderId);
+            if (providerData && providerData.models) {
+                providerData.models.forEach(m => {
+                    const opt = document.createElement('option');
+                    opt.value = m.id;
+                    opt.textContent = m.name;
+                    datalist.appendChild(opt);
+                });
+            }
+            updateCapabilityPanel();
+        }
+
+        function updateCapabilityPanel() {
+            const panel = DOM('llm-capabilities-panel');
+            const modelId = DOM('ui-model-input').value.trim();
+            const providerData = llmProfiles.providers.find(p => p.id === currentProviderId);
+
+            if (!providerData || !modelId) {
+                panel.classList.add('hidden');
+                return;
+            }
+
+            const modelData = (providerData.models || []).find(m => m.id === modelId);
+            panel.classList.remove('hidden');
+
+            DOM('cap-model-name').textContent = modelData ? modelData.name : modelId;
+            DOM('cap-context').textContent = modelData?.contextTokens ? modelData.contextTokens / 1000 + 'K Tokens' : 'Custom Limits';
+
+            const caps = { ...(providerData.defaultCapabilities || {}), ...(modelData?.capabilities || {}) };
+            const badgesEl = DOM('cap-badges');
+            badgesEl.innerHTML = '';
+
+            const createBadge = (icon, text, colorClass) => `<span class="px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-widest border flex items-center gap-1 ${colorClass}">${icon} ${text}</span>`;
+
+            const mimes = caps.supportedMimes || [];
+            if (mimes.some(m => m.includes('image/'))) badgesEl.innerHTML += createBadge('🖼️', 'Vision', 'bg-primary/10 text-primary border-primary/30');
+            if (mimes.some(m => m.includes('video/'))) badgesEl.innerHTML += createBadge('🎞️', 'Video', 'bg-primary/10 text-primary border-primary/30');
+            if (mimes.some(m => m.includes('audio/'))) badgesEl.innerHTML += createBadge('🎙️', 'Audio', 'bg-primary/10 text-primary border-primary/30');
+            if (mimes.some(m => m.includes('pdf'))) badgesEl.innerHTML += createBadge('📄', 'PDF', 'bg-success/10 text-success border-success/30');
+
+            const pricingEl = DOM('cap-pricing');
+            pricingEl.innerHTML = '';
+            if (modelData && modelData.pricing) {
+                if (modelData.pricing.tiers) {
+                    pricingEl.innerHTML = `<span class="text-success">In: $${modelData.pricing.tiers[0].input.toFixed(2)}+</span><span class="text-warning">Out: $${modelData.pricing.tiers[0].output.toFixed(2)}+</span>`;
+                } else {
+                    pricingEl.innerHTML = `<span class="text-success">In: $${modelData.pricing.input.toFixed(2)}</span><span class="text-warning">Out: $${modelData.pricing.output.toFixed(2)}</span>`;
                 }
-              };
+            } else {
+                pricingEl.innerHTML = '<span class="opacity-50">Pricing N/A</span>';
+            }
+        }
 
-              div.innerHTML = `
+        function saveLlmConfig() {
+            const provider = currentProviderId;
+            const model = DOM('ui-model-input').value.trim();
+            if (!model) return;
+            configs.llm.model = provider === 'google' ? model : `${provider}/${model}`;
+            clearTimeout(window._saveTimer);
+            window._saveTimer = setTimeout(saveConfig, 500);
+        }
+
+        // --- Themes ---
+        async function loadThemes() {
+            const container = DOM('theme-list');
+            container.innerHTML = '';
+
+            try {
+                const files = await MetaOS.fs.list('system/themes');
+                const themeFiles = files.filter(f => f.endsWith('.json')).sort();
+
+                for (const path of themeFiles) {
+                    try {
+                        const themeData = JSON.parse(await MetaOS.fs.read(path));
+                        const meta = themeData.meta || { name: path.split('/').pop().replace('.json', ''), author: 'System' };
+                        const isActive = configs.appearance.theme === path;
+
+                        const bg = themeData.colors?.bg?.app || '#1a1b26';
+                        const accent = themeData.colors?.accent?.primary || '#7aa2f7';
+
+                        const div = document.createElement('div');
+                        div.className = `cursor-pointer p-4 rounded-xl border-2 transition-all relative overflow-hidden group shadow-sm hover:shadow-md ${isActive ? 'border-primary bg-primary/5 ring-4 ring-primary/10' : 'border-border-main hover:border-text-muted bg-card'}`;
+                        div.onclick = () => {
+                            if (configs.appearance.theme !== path) {
+                                configs.appearance.theme = path;
+                                saveConfig().then(loadThemes);
+                            }
+                        };
+
+                        div.innerHTML = `
                             <div class="flex items-center gap-3 relative z-10">
                                 <div class="w-12 h-12 rounded-full border border-gray-600 shadow-inner shrink-0 flex items-center justify-center transition-transform group-hover:scale-105" style="background:${bg}">
                                     <div class="w-5 h-5 rounded-full shadow-[0_0_10px_rgba(0,0,0,0.5)]" style="background:${accent}"></div>
@@ -665,18 +434,13 @@
                                 </div>
                             </div>
                         `;
-              container.appendChild(div);
-            } catch (err) {
-              console.warn('Invalid theme file', path);
-            }
-          }
-        } catch (e) {
-          container.innerHTML = `<div class="text-error text-sm">Failed to load themes.</div>`;
+                        container.appendChild(div);
+                    } catch(err) {}
+                }
+            } catch(e) { container.innerHTML = `<div class="text-error text-sm">Failed to load themes.</div>`; }
         }
-      }
 
-      // Boot
-      document.readyState === 'loading' ? document.addEventListener('DOMContentLoaded', init) : init();
+        document.readyState === 'loading' ? document.addEventListener('DOMContentLoaded', init) : init();
     </script>
-  </body>
+</body>
 </html>
