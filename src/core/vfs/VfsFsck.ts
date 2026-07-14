@@ -3,9 +3,9 @@
  * Itera OS v2: File System Consistency Checker
  */
 
-import type { NodeStore } from "./NodeStore";
-import type { ContentStore } from "./ContentStore";
-import type { VfsNode } from "./types";
+import type { NodeStore } from './NodeStore';
+import type { ContentStore } from './ContentStore';
+import type { VfsNode } from './types';
 
 export interface FsckReport {
   circularReferencesFixed: number;
@@ -25,12 +25,8 @@ export class VfsFsck {
   }
 
   private _generateId(): string {
-    if (typeof crypto !== "undefined" && crypto.randomUUID)
-      return crypto.randomUUID();
-    return (
-      Math.random().toString(36).substring(2, 15) +
-      Math.random().toString(36).substring(2, 15)
-    );
+    if (typeof crypto !== 'undefined' && crypto.randomUUID) return crypto.randomUUID();
+    return Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
   }
 
   /**
@@ -54,12 +50,7 @@ export class VfsFsck {
     let lostAndFoundId: string | null = null;
     const getLostAndFoundId = async () => {
       if (lostAndFoundId) return lostAndFoundId;
-      const existing = allNodes.find(
-        (n) =>
-          n.parentId === null &&
-          n.name === ".lost+found" &&
-          n.kind === "directory",
-      );
+      const existing = allNodes.find((n) => n.parentId === null && n.name === '.lost+found' && n.kind === 'directory');
       if (existing) {
         lostAndFoundId = existing.id;
         return existing.id;
@@ -67,9 +58,9 @@ export class VfsFsck {
       lostAndFoundId = this._generateId();
       const lfNode: VfsNode = {
         id: lostAndFoundId,
-        name: ".lost+found",
+        name: '.lost+found',
         parentId: null,
-        kind: "directory",
+        kind: 'directory',
         flags: { isSystem: true, isTrashed: false, isHidden: true },
         meta: {
           size: 0,
@@ -78,11 +69,11 @@ export class VfsFsck {
           version: 1,
         },
         acl: {
-          owner: { type: "system", id: "fsck" },
+          owner: { type: 'system', id: 'fsck' },
           rules: [
             {
-              principal: { type: "any", id: "*" },
-              permissions: ["read", "write", "manage"],
+              principal: { type: 'any', id: '*' },
+              permissions: ['read', 'write', 'manage'],
             },
           ],
         },
@@ -132,26 +123,24 @@ export class VfsFsck {
     const referencedKeys = new Set<string>();
 
     // 現在アクティブなストレージバックエンド（opfs or memory）を判定
-    let activeBackend: "opfs" | "memory" = "memory";
+    let activeBackend: 'opfs' | 'memory' = 'memory';
     try {
-      const testRef = await this.contentStore.write("__fsck_test__", "test");
+      const testRef = await this.contentStore.write('__fsck_test__', 'test');
       activeBackend = testRef.backend;
       await this.contentStore.delete(testRef);
-      contentKeySet.delete("__fsck_test__"); // 念のためリストから除外
+      contentKeySet.delete('__fsck_test__'); // 念のためリストから除外
     } catch (e) {
-      console.warn(
-        "[VfsFsck] Failed to detect active backend, falling back to memory.",
-      );
+      console.warn('[VfsFsck] Failed to detect active backend, falling back to memory.');
     }
 
     for (const node of nodesMap.values()) {
-      if (node.kind === "file" && node.contentRef) {
+      if (node.kind === 'file' && node.contentRef) {
         referencedKeys.add(node.contentRef.key);
 
         // A. インデックスはあるが実体がない場合（Missing Content）
         if (!contentKeySet.has(node.contentRef.key)) {
           // エラークラッシュを防ぐため、空ファイルとして実体を再生成してリンクし直す
-          const newRef = await this.contentStore.write(node.id, "");
+          const newRef = await this.contentStore.write(node.id, '');
           node.contentRef = newRef;
           node.meta.size = 0;
           await this.nodeStore.putNode(node);
@@ -171,7 +160,7 @@ export class VfsFsck {
           id: newFileId,
           name: `recovered_file_${key}`,
           parentId: lfId,
-          kind: "file",
+          kind: 'file',
           contentRef: { backend: activeBackend, key },
           flags: { isSystem: false, isTrashed: false },
           meta: {
@@ -181,11 +170,11 @@ export class VfsFsck {
             version: 1,
           },
           acl: {
-            owner: { type: "system", id: "fsck" },
+            owner: { type: 'system', id: 'fsck' },
             rules: [
               {
-                principal: { type: "any", id: "*" },
-                permissions: ["read", "write", "manage"],
+                principal: { type: 'any', id: '*' },
+                permissions: ['read', 'write', 'manage'],
               },
             ],
           },
@@ -206,10 +195,7 @@ export class VfsFsck {
     if (report.totalErrorsFixed > 0) {
       // 修復が行われた場合、インデックスと実データの不整合を防ぐため再構築する
       this.nodeStore.rebuildIndex();
-      console.warn(
-        `[VfsFsck] Repair complete. Fixed ${report.totalErrorsFixed} issues.`,
-        report,
-      );
+      console.warn(`[VfsFsck] Repair complete. Fixed ${report.totalErrorsFixed} issues.`, report);
     } else {
       console.log(`[VfsFsck] File system is clean. No errors found.`);
     }

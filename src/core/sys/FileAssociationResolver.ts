@@ -3,13 +3,13 @@
  * Itera OS v2: File to App Association Resolver
  */
 
-import type { ConfigManager } from "./ConfigManager";
-import type { AppRegistry } from "./AppRegistry";
-import type { VfsStat } from "../vfs/types";
+import type { ConfigManager } from './ConfigManager';
+import type { AppRegistry } from './AppRegistry';
+import type { VfsStat } from '../vfs/types';
 
 export interface ResolvedApp {
   /** 起動すべきアプリのID。Host内蔵機能を使用する場合は特殊なIDを返す */
-  appId: string | "HostEditor" | "HostMediaViewer" | "HostRunner";
+  appId: string | 'HostEditor' | 'HostMediaViewer' | 'HostRunner';
   /** Guestアプリの場合、そのエントリーポイントとなるHTMLパス */
   appPath?: string;
   /** アプリの表示名（UIメニュー用） */
@@ -33,10 +33,9 @@ export class FileAssociationResolver {
     const mimeType = stat.mimeType || this._guessMimeType(stat.name);
 
     // 1. ユーザーの明示的な設定 (associations.json) をチェック
-    const userAssoc = this.configManager.get("associations");
+    const userAssoc = this.configManager.get('associations');
     // Optional chaining を使用して、設定が空でもエラーにならないように保護
-    const userPreferredAppId =
-      userAssoc?.extensions?.[extension] || userAssoc?.mimeTypes?.[mimeType];
+    const userPreferredAppId = userAssoc?.extensions?.[extension] || userAssoc?.mimeTypes?.[mimeType];
 
     if (userPreferredAppId) {
       const app = this.appRegistry.getApp(userPreferredAppId);
@@ -50,10 +49,7 @@ export class FileAssociationResolver {
     for (const app of allApps) {
       if (app.fileHandlers) {
         for (const handler of app.fileHandlers) {
-          if (
-            handler.extensions?.includes(extension) ||
-            handler.mimeTypes?.includes(mimeType)
-          ) {
+          if (handler.extensions?.includes(extension) || handler.mimeTypes?.includes(mimeType)) {
             return { appId: app.id, appPath: app.path, appName: app.name };
           }
         }
@@ -61,12 +57,12 @@ export class FileAssociationResolver {
     }
 
     // 3. どのGuestアプリも対応していない場合は、HostのフォールバックUIへ
-    if (extension === "html") {
-      return { appId: "HostRunner", appName: "Executable (Run)" };
+    if (extension === 'html') {
+      return { appId: 'HostRunner', appName: 'Executable (Run)' };
     } else if (this._isBinary(stat.name, mimeType)) {
-      return { appId: "HostMediaViewer", appName: "Media Viewer (Host)" };
+      return { appId: 'HostMediaViewer', appName: 'Media Viewer (Host)' };
     } else {
-      return { appId: "HostEditor", appName: "Code Editor (Host)" };
+      return { appId: 'HostEditor', appName: 'Code Editor (Host)' };
     }
   }
 
@@ -83,9 +79,7 @@ export class FileAssociationResolver {
     for (const app of allApps) {
       if (app.fileHandlers) {
         const canHandle = app.fileHandlers.some(
-          (h) =>
-            h.extensions?.includes(extension) ||
-            h.mimeTypes?.includes(mimeType),
+          (h) => h.extensions?.includes(extension) || h.mimeTypes?.includes(mimeType),
         );
         if (canHandle) {
           available.push({
@@ -98,16 +92,16 @@ export class FileAssociationResolver {
     }
 
     // Hostフォールバックは常に末尾に提供する
-    if (extension === "html") {
-      available.push({ appId: "HostRunner", appName: "Executable (Run)" });
+    if (extension === 'html') {
+      available.push({ appId: 'HostRunner', appName: 'Executable (Run)' });
     }
     if (this._isBinary(stat.name, mimeType)) {
       available.push({
-        appId: "HostMediaViewer",
-        appName: "Media Viewer (Host)",
+        appId: 'HostMediaViewer',
+        appName: 'Media Viewer (Host)',
       });
     } else {
-      available.push({ appId: "HostEditor", appName: "Code Editor (Host)" });
+      available.push({ appId: 'HostEditor', appName: 'Code Editor (Host)' });
     }
 
     return available;
@@ -116,51 +110,34 @@ export class FileAssociationResolver {
   // --- Helpers ---
 
   private _getExtension(filename: string): string {
-    const parts = filename.split(".");
-    return parts.length > 1 ? parts.pop()!.toLowerCase() : "";
+    const parts = filename.split('.');
+    return parts.length > 1 ? parts.pop()!.toLowerCase() : '';
   }
 
   private _guessMimeType(filename: string): string {
     const ext = this._getExtension(filename);
     const map: Record<string, string> = {
-      png: "image/png",
-      jpg: "image/jpeg",
-      jpeg: "image/jpeg",
-      gif: "image/gif",
-      webp: "image/webp",
-      svg: "image/svg+xml",
-      pdf: "application/pdf",
-      zip: "application/zip",
-      json: "application/json",
-      md: "text/markdown",
-      txt: "text/plain",
-      html: "text/html",
-      css: "text/css",
-      js: "application/javascript",
+      png: 'image/png',
+      jpg: 'image/jpeg',
+      jpeg: 'image/jpeg',
+      gif: 'image/gif',
+      webp: 'image/webp',
+      svg: 'image/svg+xml',
+      pdf: 'application/pdf',
+      zip: 'application/zip',
+      json: 'application/json',
+      md: 'text/markdown',
+      txt: 'text/plain',
+      html: 'text/html',
+      css: 'text/css',
+      js: 'application/javascript',
     };
-    return map[ext] || "application/octet-stream";
+    return map[ext] || 'application/octet-stream';
   }
 
   private _isBinary(filename: string, mimeType: string): boolean {
-    if (
-      mimeType.startsWith("image/") ||
-      mimeType === "application/pdf" ||
-      mimeType === "application/zip"
-    )
-      return true;
+    if (mimeType.startsWith('image/') || mimeType === 'application/pdf' || mimeType === 'application/zip') return true;
     const ext = this._getExtension(filename);
-    return [
-      "png",
-      "jpg",
-      "jpeg",
-      "gif",
-      "webp",
-      "svg",
-      "ico",
-      "pdf",
-      "zip",
-      "mp3",
-      "mp4",
-    ].includes(ext);
+    return ['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'ico', 'pdf', 'zip', 'mp3', 'mp4'].includes(ext);
   }
 }

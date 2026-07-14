@@ -3,8 +3,8 @@
  * Itera OS v2: Host side postMessage Transport
  */
 
-import { IpcMessage } from "./Message";
-import { RpcManager } from "./RpcManager";
+import { IpcMessage } from './Message';
+import { RpcManager } from './RpcManager';
 
 export type RequestHandler = (payload: any, sourcePid: string) => Promise<any>;
 export type SourceValidator = (pid: string, sourceWindow: Window) => boolean;
@@ -37,23 +37,16 @@ export class HostTransport {
   /**
    * Guestへリクエストを送信し、結果を待機する（逆方向RPC）
    */
-  async invokeGuest(
-    pid: string,
-    action: string,
-    payload: any,
-    targetWindow: Window,
-  ): Promise<any> {
+  async invokeGuest(pid: string, action: string, payload: any, targetWindow: Window): Promise<any> {
     if (!targetWindow) {
-      throw new Error(
-        `[HostTransport] Target window for PID '${pid}' is missing.`,
-      );
+      throw new Error(`[HostTransport] Target window for PID '${pid}' is missing.`);
     }
 
-    const req = IpcMessage.createRequest("host", pid, action, payload);
+    const req = IpcMessage.createRequest('host', pid, action, payload);
     const promise = this.rpc.waitFor(req.id);
 
     // サンドボックス内のiframeに向けて送信
-    targetWindow.postMessage(req, "*");
+    targetWindow.postMessage(req, '*');
 
     return promise;
   }
@@ -61,36 +54,28 @@ export class HostTransport {
   /**
    * Guestへ一方通行のイベントを送信する（ブロードキャスト等）
    */
-  sendEvent(
-    pid: string,
-    action: string,
-    payload: any,
-    targetWindow: Window,
-  ): void {
+  sendEvent(pid: string, action: string, payload: any, targetWindow: Window): void {
     if (!targetWindow) return;
-    const evt = IpcMessage.createEvent("host", pid, action, payload);
-    targetWindow.postMessage(evt, "*");
+    const evt = IpcMessage.createEvent('host', pid, action, payload);
+    targetWindow.postMessage(evt, '*');
   }
 
   private _initListener(): void {
-    window.addEventListener("message", async (e: MessageEvent) => {
+    window.addEventListener('message', async (e: MessageEvent) => {
       const msg = e.data;
 
       if (!IpcMessage.isValid(msg)) return;
 
       // Host宛てのメッセージ以外は無視
-      if (msg.target !== "host") return;
+      if (msg.target !== 'host') return;
 
-      if (msg.type === "req") {
+      if (msg.type === 'req') {
         // Guestからのリクエスト処理
         let result: any = null;
         let error: string | null = null;
 
         // セキュリティ: 送信元の厳密な検証
-        if (
-          this.sourceValidator &&
-          !this.sourceValidator(msg.source, e.source as Window)
-        ) {
+        if (this.sourceValidator && !this.sourceValidator(msg.source, e.source as Window)) {
           error = `[SecurityError] PID spoofing detected or invalid source window for PID: ${msg.source}`;
           console.error(error);
         } else {
@@ -108,10 +93,10 @@ export class HostTransport {
 
         // レスポンスの返送
         const res = IpcMessage.createResponse(msg, result, error);
-        if (e.source && typeof (e.source as any).postMessage === "function") {
-          (e.source as Window).postMessage(res, "*");
+        if (e.source && typeof (e.source as any).postMessage === 'function') {
+          (e.source as Window).postMessage(res, '*');
         }
-      } else if (msg.type === "res") {
+      } else if (msg.type === 'res') {
         // Guestからのレスポンス受け取り（待機中のPromiseを解決）
         this.rpc.resolve(msg.id, msg.payload, msg.error);
       }

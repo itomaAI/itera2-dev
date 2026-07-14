@@ -3,21 +3,18 @@
  * Itera OS v2: IPC Message Definitions
  */
 
-export const PROTOCOL_VERSION = "itera:ipc:v2";
+export const PROTOCOL_VERSION = 'itera:ipc:v2';
 
 export function generateId(): string {
-  if (typeof crypto !== "undefined" && crypto.randomUUID) {
+  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
     return crypto.randomUUID();
   }
-  return (
-    Math.random().toString(36).substring(2, 15) +
-    Math.random().toString(36).substring(2, 15)
-  );
+  return Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
 }
 
 export interface IpcMessageData {
   protocol: string;
-  type: "req" | "res" | "event";
+  type: 'req' | 'res' | 'event';
   id: string;
   source: string;
   target: string;
@@ -27,15 +24,10 @@ export interface IpcMessageData {
 }
 
 export class IpcMessage {
-  static createRequest(
-    source: string,
-    target: string,
-    action: string,
-    payload: any = {},
-  ): IpcMessageData {
+  static createRequest(source: string, target: string, action: string, payload: any = {}): IpcMessageData {
     return {
       protocol: PROTOCOL_VERSION,
-      type: "req",
+      type: 'req',
       id: generateId(),
       source,
       target,
@@ -45,14 +37,10 @@ export class IpcMessage {
     };
   }
 
-  static createResponse(
-    reqMessage: IpcMessageData,
-    result: any,
-    error: string | null = null,
-  ): IpcMessageData {
+  static createResponse(reqMessage: IpcMessageData, result: any, error: string | null = null): IpcMessageData {
     return {
       protocol: PROTOCOL_VERSION,
-      type: "res",
+      type: 'res',
       id: reqMessage.id,
       source: reqMessage.target, // 返信元
       target: reqMessage.source, // 返信先
@@ -62,15 +50,10 @@ export class IpcMessage {
     };
   }
 
-  static createEvent(
-    source: string,
-    target: string,
-    action: string,
-    payload: any = {},
-  ): IpcMessageData {
+  static createEvent(source: string, target: string, action: string, payload: any = {}): IpcMessageData {
     return {
       protocol: PROTOCOL_VERSION,
-      type: "event",
+      type: 'event',
       id: generateId(),
       source,
       target,
@@ -81,12 +64,6 @@ export class IpcMessage {
   }
 
   static isValid(msg: any): msg is IpcMessageData {
-    return !!(
-      msg &&
-      msg.protocol === PROTOCOL_VERSION &&
-      msg.type &&
-      msg.source &&
-      msg.target
-    );
+    return !!(msg && msg.protocol === PROTOCOL_VERSION && msg.type && msg.source && msg.target);
   }
 }

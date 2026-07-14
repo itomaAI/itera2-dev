@@ -4,10 +4,10 @@
  */
 
 const DOM_IDS = {
-  OVERLAY: "media-overlay",
-  IMAGE: "media-image",
-  FILENAME: "media-filename",
-  BTN_CLOSE: "btn-close-media",
+  OVERLAY: 'media-overlay',
+  IMAGE: 'media-image',
+  FILENAME: 'media-filename',
+  BTN_CLOSE: 'btn-close-media',
 };
 
 export class MediaViewer {
@@ -51,36 +51,32 @@ export class MediaViewer {
     const mime = mimeType || blob.type || this._guessMime(path);
 
     if (this.els.IMAGE) {
-      this.els.IMAGE.classList.add("hidden");
-      (this.els.IMAGE as HTMLImageElement).src = "";
+      this.els.IMAGE.classList.add('hidden');
+      (this.els.IMAGE as HTMLImageElement).src = '';
     }
 
     // 動的に生成したiframe等の要素をクリーンアップ
-    this.els.OVERLAY.querySelectorAll(".dynamic-content").forEach((el) =>
-      el.remove(),
-    );
+    this.els.OVERLAY.querySelectorAll('.dynamic-content').forEach((el) => el.remove());
 
-    if (mime === "application/pdf") {
+    if (mime === 'application/pdf') {
       this._renderPdf(blob);
-    } else if (mime.startsWith("image/")) {
+    } else if (mime.startsWith('image/')) {
       this._renderImage(blob);
     } else {
       this._renderFallback(path, blob, mime);
     }
 
-    this.els.OVERLAY.classList.remove("hidden");
+    this.els.OVERLAY.classList.remove('hidden');
   }
 
   close(): void {
     if (this.els.OVERLAY) {
-      this.els.OVERLAY.classList.add("hidden");
-      this.els.OVERLAY.querySelectorAll(".dynamic-content").forEach((el) =>
-        el.remove(),
-      );
+      this.els.OVERLAY.classList.add('hidden');
+      this.els.OVERLAY.querySelectorAll('.dynamic-content').forEach((el) => el.remove());
     }
     if (this.els.IMAGE) {
-      (this.els.IMAGE as HTMLImageElement).src = "";
-      this.els.IMAGE.classList.add("hidden");
+      (this.els.IMAGE as HTMLImageElement).src = '';
+      this.els.IMAGE.classList.add('hidden');
     }
     this._closeResource();
   }
@@ -95,10 +91,9 @@ export class MediaViewer {
   private _renderPdf(blob: Blob): void {
     this.currentObjectUrl = URL.createObjectURL(blob);
 
-    const iframe = document.createElement("iframe");
+    const iframe = document.createElement('iframe');
     iframe.src = this.currentObjectUrl;
-    iframe.className =
-      "dynamic-content w-[90%] h-[80%] rounded shadow-lg border border-border-main bg-card";
+    iframe.className = 'dynamic-content w-[90%] h-[80%] rounded shadow-lg border border-border-main bg-card';
     this.els.OVERLAY!.appendChild(iframe);
   }
 
@@ -107,30 +102,30 @@ export class MediaViewer {
 
     if (this.els.IMAGE) {
       (this.els.IMAGE as HTMLImageElement).src = this.currentObjectUrl;
-      this.els.IMAGE.classList.remove("hidden");
+      this.els.IMAGE.classList.remove('hidden');
     }
   }
 
   private _renderFallback(path: string, blob: Blob, mime: string): void {
-    const div = document.createElement("div");
+    const div = document.createElement('div');
     div.className =
-      "dynamic-content bg-card p-8 rounded-lg border border-border-main flex flex-col items-center text-center shadow-xl";
+      'dynamic-content bg-card p-8 rounded-lg border border-border-main flex flex-col items-center text-center shadow-xl';
 
     div.innerHTML = `
       <div class="text-4xl mb-4">📦</div>
       <div class="text-lg font-bold text-text-main mb-2">Preview Not Available</div>
-      <div class="text-sm text-text-muted mb-6 font-mono">${mime || "Unknown Type"}</div>
+      <div class="text-sm text-text-muted mb-6 font-mono">${mime || 'Unknown Type'}</div>
     `;
 
-    const btn = document.createElement("button");
+    const btn = document.createElement('button');
     btn.className =
-      "bg-primary hover:bg-primary/80 text-white px-4 py-2 rounded text-sm transition flex items-center gap-2";
-    btn.innerHTML = "Download File";
+      'bg-primary hover:bg-primary/80 text-white px-4 py-2 rounded text-sm transition flex items-center gap-2';
+    btn.innerHTML = 'Download File';
     btn.onclick = () => {
       const url = URL.createObjectURL(blob);
-      const link = document.createElement("a");
+      const link = document.createElement('a');
       link.href = url;
-      link.download = path.split("/").pop() || "download";
+      link.download = path.split('/').pop() || 'download';
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
@@ -144,15 +139,14 @@ export class MediaViewer {
 
   private _guessMime(path: string): string {
     const lowerPath = path.toLowerCase();
-    if (lowerPath.endsWith(".svg")) return "image/svg+xml";
-    if (lowerPath.endsWith(".jpg") || lowerPath.endsWith(".jpeg"))
-      return "image/jpeg";
-    if (lowerPath.endsWith(".gif")) return "image/gif";
-    if (lowerPath.endsWith(".webp")) return "image/webp";
-    if (lowerPath.endsWith(".png")) return "image/png";
-    if (lowerPath.endsWith(".pdf")) return "application/pdf";
-    if (lowerPath.endsWith(".mp3")) return "audio/mpeg";
-    if (lowerPath.endsWith(".mp4")) return "video/mp4";
-    return "";
+    if (lowerPath.endsWith('.svg')) return 'image/svg+xml';
+    if (lowerPath.endsWith('.jpg') || lowerPath.endsWith('.jpeg')) return 'image/jpeg';
+    if (lowerPath.endsWith('.gif')) return 'image/gif';
+    if (lowerPath.endsWith('.webp')) return 'image/webp';
+    if (lowerPath.endsWith('.png')) return 'image/png';
+    if (lowerPath.endsWith('.pdf')) return 'application/pdf';
+    if (lowerPath.endsWith('.mp3')) return 'audio/mpeg';
+    if (lowerPath.endsWith('.mp4')) return 'video/mp4';
+    return '';
   }
 }

@@ -211,7 +211,7 @@ export class GuestBridgeBuilder {
 })(window);
     `.trim();
 
-    const blob = new Blob([bundleCode], { type: "application/javascript" });
+    const blob = new Blob([bundleCode], { type: 'application/javascript' });
     this.cachedUrl = URL.createObjectURL(blob);
     return this.cachedUrl;
   }

@@ -58,16 +58,11 @@ export class VfsLockManager {
    * @param task ロック取得後に実行する非同期処理
    * @returns タスクの実行結果
    */
-  async acquireMultiple<T>(
-    paths: string[],
-    task: () => Promise<T>,
-  ): Promise<T> {
+  async acquireMultiple<T>(paths: string[], task: () => Promise<T>): Promise<T> {
     // デッドロック回避の最重要ロジック:
     // A→B の移動と、B→A の移動が同時に起きた時にお互いが永遠に待ち合うのを防ぐため、
     // 重複を排除した上で、必ず「アルファベット順にパスをソート」してから順番にロックを取得する。
-    const uniquePaths = Array.from(
-      new Set(paths.map((p) => this._normalize(p))),
-    ).sort();
+    const uniquePaths = Array.from(new Set(paths.map((p) => this._normalize(p)))).sort();
 
     // ソートされたパスを再帰的に順番にロックしていく
     const acquireRecursive = async (index: number): Promise<T> => {
@@ -75,9 +70,7 @@ export class VfsLockManager {
       if (index >= uniquePaths.length) {
         return await task();
       }
-      return this.acquire(uniquePaths[index], () =>
-        acquireRecursive(index + 1),
-      );
+      return this.acquire(uniquePaths[index], () => acquireRecursive(index + 1));
     };
 
     return acquireRecursive(0);
@@ -87,7 +80,7 @@ export class VfsLockManager {
    * パスの正規化（ロック判定の揺れを防ぐため）
    */
   private _normalize(path: string): string {
-    if (!path) return "";
-    return path.replace(/\\/g, "/").replace(/\/+/g, "/").trim();
+    if (!path) return '';
+    return path.replace(/\\/g, '/').replace(/\/+/g, '/').trim();
   }
 }

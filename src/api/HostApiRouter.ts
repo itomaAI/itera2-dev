@@ -3,10 +3,10 @@
  * Itera OS v2: Host API Router
  */
 
-import type { HostTransport } from "../ipc/HostTransport";
-import type { VfsService } from "../core/vfs/VfsService";
-import type { ConfigManager } from "../core/sys/ConfigManager";
-import { USER_PRINCIPAL } from "../core/vfs/types";
+import type { HostTransport } from '../ipc/HostTransport';
+import type { VfsService } from '../core/vfs/VfsService';
+import type { ConfigManager } from '../core/sys/ConfigManager';
+import { USER_PRINCIPAL } from '../core/vfs/types';
 
 // 依存モジュールのダックタイピング・インターフェース (未実装モジュール用)
 export interface IHistoryManager {
@@ -73,8 +73,8 @@ export class HostApiRouter {
 
     if (shouldEmit && this.deps.history && this.deps.shell) {
       const lpml = `<event type="${type}">\n${desc}\n</event>`;
-      const turn = this.deps.history.append("system", lpml, {
-        type: "event_log",
+      const turn = this.deps.history.append('system', lpml, {
+        type: 'event_log',
         trigger_llm: false,
       });
       this.deps.shell.panels.chat.appendTurn(turn);
@@ -90,10 +90,7 @@ export class HostApiRouter {
     // ==========================================
 
     // ヘルパー: 明示的なエンコーディング指定に従って文字列をバイナリに変換する
-    const prepareWriteContent = (
-      content: any,
-      encoding?: string,
-    ): Blob | string | Uint8Array => {
+    const prepareWriteContent = (content: any, encoding?: string): Blob | string | Uint8Array => {
       if (content instanceof Uint8Array || content instanceof Blob) {
         return content;
       }
@@ -101,19 +98,19 @@ export class HostApiRouter {
         return new Uint8Array(content);
       }
 
-      if (typeof content === "string") {
-        if (encoding === "base64") {
+      if (typeof content === 'string') {
+        if (encoding === 'base64') {
           const bstr = atob(content);
           let n = bstr.length;
           const u8arr = new Uint8Array(n);
           while (n--) {
             u8arr[n] = bstr.charCodeAt(n);
           }
-          return new Blob([u8arr], { type: "application/octet-stream" });
-        } else if (encoding === "dataurl") {
-          const parts = content.split(",");
+          return new Blob([u8arr], { type: 'application/octet-stream' });
+        } else if (encoding === 'dataurl') {
+          const parts = content.split(',');
           const mimeMatch = parts[0] ? parts[0].match(/:(.*?);/) : null;
-          const mime = mimeMatch ? mimeMatch[1] : "application/octet-stream";
+          const mime = mimeMatch ? mimeMatch[1] : 'application/octet-stream';
           const base64Data = parts.length > 1 ? parts[1] : parts[0];
 
           const bstr = atob(base64Data);
@@ -130,14 +127,14 @@ export class HostApiRouter {
       return content;
     };
 
-    t.registerHandler("fs:read", async ({ path, opts }) => {
+    t.registerHandler('fs:read', async ({ path, opts }) => {
       if (opts && opts.encoding) {
-        if (opts.encoding === "binary") {
+        if (opts.encoding === 'binary') {
           const blob = await d.vfs.readBlob(USER_PRINCIPAL, path);
           const buffer = await blob.arrayBuffer();
           // postMessageでそのまま送受信可能な Uint8Array として返す
           return new Uint8Array(buffer);
-        } else if (opts.encoding === "base64" || opts.encoding === "dataurl") {
+        } else if (opts.encoding === 'base64' || opts.encoding === 'dataurl') {
           const blob = await d.vfs.readBlob(USER_PRINCIPAL, path);
           const dataUrl = await new Promise<string>((resolve, reject) => {
             const reader = new FileReader();
@@ -145,127 +142,86 @@ export class HostApiRouter {
             reader.onerror = reject;
             reader.readAsDataURL(blob);
           });
-          if (opts.encoding === "dataurl") {
+          if (opts.encoding === 'dataurl') {
             return dataUrl;
           }
-          return dataUrl.split(",")[1] || "";
+          return dataUrl.split(',')[1] || '';
         }
       }
       return await d.vfs.readFile(USER_PRINCIPAL, path);
     });
 
-    t.registerHandler("fs:write", async ({ path, content, opts }) => {
+    t.registerHandler('fs:write', async ({ path, content, opts }) => {
       const finalContent = prepareWriteContent(content, opts?.encoding);
-      const res = await d.vfs.writeFile(
-        USER_PRINCIPAL,
-        path,
-        finalContent,
-        opts,
-      );
-      this._checkAndEmitEvent(
-        opts,
-        "file_edited",
-        `User App edited file: ${path}`,
-      );
+      const res = await d.vfs.writeFile(USER_PRINCIPAL, path, finalContent, opts);
+      this._checkAndEmitEvent(opts, 'file_edited', `User App edited file: ${path}`);
       return res;
     });
 
-    t.registerHandler("fs:append", async ({ path, content, opts }) => {
+    t.registerHandler('fs:append', async ({ path, content, opts }) => {
       const res = await d.vfs.appendFile(USER_PRINCIPAL, path, content, {
         system: opts?.system,
       });
-      this._checkAndEmitEvent(
-        opts,
-        "file_edited",
-        `User App appended to file: ${path}`,
-      );
+      this._checkAndEmitEvent(opts, 'file_edited', `User App appended to file: ${path}`);
       return res;
     });
 
-    t.registerHandler("fs:delete", async ({ path, opts }) => {
+    t.registerHandler('fs:delete', async ({ path, opts }) => {
       const res = await d.vfs.deleteFile(USER_PRINCIPAL, path, opts);
-      this._checkAndEmitEvent(
-        opts,
-        "file_deleted",
-        `User App deleted file: ${path}`,
-      );
+      this._checkAndEmitEvent(opts, 'file_deleted', `User App deleted file: ${path}`);
       return res;
     });
 
-    t.registerHandler("fs:rename", async ({ oldPath, newPath, opts }) => {
+    t.registerHandler('fs:rename', async ({ oldPath, newPath, opts }) => {
       const res = await d.vfs.rename(USER_PRINCIPAL, oldPath, newPath);
-      this._checkAndEmitEvent(
-        opts,
-        "file_moved",
-        `User App renamed file: ${oldPath} -> ${newPath}`,
-      );
+      this._checkAndEmitEvent(opts, 'file_moved', `User App renamed file: ${oldPath} -> ${newPath}`);
       return res;
     });
 
-    t.registerHandler("fs:copy", async ({ srcPath, destPath, opts }) => {
+    t.registerHandler('fs:copy', async ({ srcPath, destPath, opts }) => {
       const res = await d.vfs.copyFile(USER_PRINCIPAL, srcPath, destPath);
-      this._checkAndEmitEvent(
-        opts,
-        "file_copied",
-        `User App copied file: ${srcPath} -> ${destPath}`,
-      );
+      this._checkAndEmitEvent(opts, 'file_copied', `User App copied file: ${srcPath} -> ${destPath}`);
       return res;
     });
 
-    t.registerHandler("fs:mkdir", async ({ path, opts }) => {
+    t.registerHandler('fs:mkdir', async ({ path, opts }) => {
       const res = await d.vfs.mkdir(USER_PRINCIPAL, path);
-      this._checkAndEmitEvent(
-        opts,
-        "folder_created",
-        `User App created folder: ${path}`,
-      );
+      this._checkAndEmitEvent(opts, 'folder_created', `User App created folder: ${path}`);
       return res;
     });
 
-    t.registerHandler("fs:stat", async ({ path }) =>
-      d.vfs.stat(USER_PRINCIPAL, path),
-    );
-    t.registerHandler("fs:list", async ({ path, opts }) =>
-      d.vfs.listFiles(USER_PRINCIPAL, { path, ...opts }),
-    );
-    t.registerHandler("fs:exists", async ({ path }) =>
-      d.vfs.exists(USER_PRINCIPAL, path),
-    );
-    t.registerHandler("fs:resolve_url", async ({ path }, sourcePid) => {
-      if (!d.processManager) throw new Error("ProcessManager not connected.");
+    t.registerHandler('fs:stat', async ({ path }) => d.vfs.stat(USER_PRINCIPAL, path));
+    t.registerHandler('fs:list', async ({ path, opts }) => d.vfs.listFiles(USER_PRINCIPAL, { path, ...opts }));
+    t.registerHandler('fs:exists', async ({ path }) => d.vfs.exists(USER_PRINCIPAL, path));
+    t.registerHandler('fs:resolve_url', async ({ path }, sourcePid) => {
+      if (!d.processManager) throw new Error('ProcessManager not connected.');
       return d.processManager.resolveUrl(path, sourcePid);
     });
 
     // ★ 追加: ACLの取得と更新
-    t.registerHandler("fs:get_acl", async ({ path }) => {
+    t.registerHandler('fs:get_acl', async ({ path }) => {
       return d.vfs.getAcl(USER_PRINCIPAL, path);
     });
 
-    t.registerHandler("fs:set_acl", async ({ path, acl, opts }) => {
+    t.registerHandler('fs:set_acl', async ({ path, acl, opts }) => {
       if (opts?.recursive) {
         await d.vfs.setAclRecursive(USER_PRINCIPAL, path, acl);
       } else {
         await d.vfs.setAcl(USER_PRINCIPAL, path, acl);
       }
-      this._checkAndEmitEvent(
-        opts,
-        "permission_changed",
-        `User App changed permissions for: ${path}`,
-      );
+      this._checkAndEmitEvent(opts, 'permission_changed', `User App changed permissions for: ${path}`);
       return true;
     });
 
     // ==========================================
     // 2. AI & History (ai)
     // ==========================================
-    t.registerHandler("ai:ask", async ({ text, opts }) => {
+    t.registerHandler('ai:ask', async ({ text, opts }) => {
       if (!d.engine || !d.shell) return false;
       const attachments =
         opts && opts.attachments
           ? opts.attachments.map((p: string) => {
-              const mime = p.match(/\.(png|jpg|jpeg|gif|webp)$/i)
-                ? "image/png"
-                : "application/octet-stream";
+              const mime = p.match(/\.(png|jpg|jpeg|gif|webp)$/i) ? 'image/png' : 'application/octet-stream';
               return { media: { path: p, mimeType: mime, metadata: {} } };
             })
           : [];
@@ -286,14 +242,14 @@ export class HostApiRouter {
       return true;
     });
 
-    t.registerHandler("ai:task", async ({ instruction, context, opts }) => {
+    t.registerHandler('ai:task', async ({ instruction, context, opts }) => {
       if (!d.history || !d.shell) return false;
       let text = `[System Task Request]\n${instruction}`;
       if (context) text += `\n\n[Context]\n${JSON.stringify(context, null, 2)}`;
       const lpml = `<event type="system_task">\n${text}\n</event>`;
 
-      const turn = d.history.append("system", lpml, {
-        type: "event_log",
+      const turn = d.history.append('system', lpml, {
+        type: 'event_log',
         visible: !opts?.silent,
         trigger_llm: true,
       });
@@ -305,12 +261,12 @@ export class HostApiRouter {
       return true;
     });
 
-    t.registerHandler("ai:log", async ({ message, type, opts }) => {
+    t.registerHandler('ai:log', async ({ message, type, opts }) => {
       if (!d.history || !d.shell) return false;
       const triggerLlm = opts?.trigger_llm === true;
-      const lpml = `<event type="${type || "app_event"}">\n${message}\n</event>`;
-      const turn = d.history.append("system", lpml, {
-        type: "event_log",
+      const lpml = `<event type="${type || 'app_event'}">\n${message}\n</event>`;
+      const turn = d.history.append('system', lpml, {
+        type: 'event_log',
         trigger_llm: triggerLlm,
       });
       d.shell.panels.chat.appendTurn(turn);
@@ -321,7 +277,7 @@ export class HostApiRouter {
       return true;
     });
 
-    t.registerHandler("ai:stop", async () => {
+    t.registerHandler('ai:stop', async () => {
       if (d.engine) d.engine.stop();
       return true;
     });
@@ -329,45 +285,41 @@ export class HostApiRouter {
     // ==========================================
     // 3. System & Process (sys)
     // ==========================================
-    t.registerHandler("sys:spawn", async ({ path, opts }) => {
+    t.registerHandler('sys:spawn', async ({ path, opts }) => {
       if (!d.processManager) return false;
-      const pid = opts?.pid || "main";
-      const mode = opts?.mode || "background";
+      const pid = opts?.pid || 'main';
+      const mode = opts?.mode || 'background';
       const force = opts?.forceReload || false;
       const args = opts?.args; // V2 新機能: args渡し
       const currentUri = `metaos://run/${path}`;
       await d.processManager.spawn(pid, path, mode, force, args, currentUri);
-      if (mode === "foreground" && d.shell) d.shell._closeMobileDrawers();
+      if (mode === 'foreground' && d.shell) d.shell._closeMobileDrawers();
       return true;
     });
 
-    t.registerHandler("sys:kill", async ({ pid }) =>
-      d.processManager ? d.processManager.kill(pid) : false,
-    );
-    t.registerHandler("sys:ps", async () =>
-      d.processManager ? d.processManager.list() : [],
-    );
-    t.registerHandler("sys:info", async (_, sourcePid) => {
+    t.registerHandler('sys:kill', async ({ pid }) => (d.processManager ? d.processManager.kill(pid) : false));
+    t.registerHandler('sys:ps', async () => (d.processManager ? d.processManager.list() : []));
+    t.registerHandler('sys:info', async (_, sourcePid) => {
       if (!d.processManager) return null;
       const p = d.processManager.processes.get(sourcePid);
       return p ? { pid: p.pid, path: p.path, mode: p.mode } : null;
     });
-    t.registerHandler("sys:broadcast", async ({ eventName, payload }) => {
+    t.registerHandler('sys:broadcast', async ({ eventName, payload }) => {
       if (d.processManager) d.processManager.broadcast(eventName, payload);
       return true;
     });
-    t.registerHandler("sys:capture", async ({ pid }) => {
-      if (!d.processManager) throw new Error("ProcessManager not connected");
+    t.registerHandler('sys:capture', async ({ pid }) => {
+      if (!d.processManager) throw new Error('ProcessManager not connected');
       return await d.processManager.captureScreenshot(pid);
     });
 
     // ★ V2 新機能: 起動引数の取得
-    t.registerHandler("sys:get_args", async (_, sourcePid) => {
+    t.registerHandler('sys:get_args', async (_, sourcePid) => {
       if (!d.processManager) return null;
       return d.processManager.getArgs(sourcePid);
     });
 
-    t.registerHandler("sys:get_providers", async () => {
+    t.registerHandler('sys:get_providers', async () => {
       if (!d.shell || !d.shell.getMergedProviders) return [];
       return await d.shell.getMergedProviders();
     });
@@ -375,35 +327,33 @@ export class HostApiRouter {
     // ==========================================
     // 4. Host UI & Native (host)
     // ==========================================
-    t.registerHandler("host:open_editor", async ({ path }) => {
+    t.registerHandler('host:open_editor', async ({ path }) => {
       if (!d.shell || !d.shell.modals.editor) return false;
       const content = await d.vfs.readFile(USER_PRINCIPAL, path);
       d.shell.modals.editor.open(path, content);
       d.shell._closeMobileDrawers();
       return true;
     });
-    t.registerHandler("host:notify", async ({ message, title }) => {
+    t.registerHandler('host:notify', async ({ message, title }) => {
       if (window.AppUI) window.AppUI.notify(`${title}: ${message}`);
       return true;
     });
-    t.registerHandler("host:copy", async ({ text }) => {
+    t.registerHandler('host:copy', async ({ text }) => {
       await navigator.clipboard.writeText(text);
       return true;
     });
-    t.registerHandler("host:open_url", async ({ url }) => {
-      window.open(url, "_blank", "noopener,noreferrer");
+    t.registerHandler('host:open_url', async ({ url }) => {
+      window.open(url, '_blank', 'noopener,noreferrer');
       return true;
     });
-    t.registerHandler("host:address_bar", async ({ path }) => {
+    t.registerHandler('host:address_bar', async ({ path }) => {
       if (!d.processManager) return false;
-      const fgApp = Array.from(d.processManager.processes.values()).find(
-        (p) => p.state === "foreground",
-      );
+      const fgApp = Array.from(d.processManager.processes.values()).find((p) => p.state === 'foreground');
       if (fgApp) {
         const oldBasePath = fgApp.path.split(/[?#]/)[0];
 
         let newPath = path;
-        if (path.startsWith("?") || path.startsWith("#")) {
+        if (path.startsWith('?') || path.startsWith('#')) {
           newPath = oldBasePath + path;
         }
 
@@ -411,7 +361,7 @@ export class HostApiRouter {
 
         // 既存のURIからIntentを抽出して新しいURIを組み立てる
         const intentMatch = fgApp.currentUri.match(/^metaos:\/\/([^\/]+)/);
-        const intent = intentMatch ? intentMatch[1] : "open";
+        const intent = intentMatch ? intentMatch[1] : 'open';
 
         fgApp.currentUri = `metaos://${intent}/${newPath}`;
         d.processManager._updateAddressBar(fgApp.currentUri);
@@ -425,19 +375,15 @@ export class HostApiRouter {
     const prepareFetchOptions = (url: string, options: any) => {
       let targetUrl = url;
       const fetchOpts: RequestInit = {
-        method: options?.method || "GET",
+        method: options?.method || 'GET',
         headers: options?.headers || {},
       };
 
       if (options?.body) {
         // Uint8Array や Blob などのバイナリデータは JSON.stringify せずにそのまま送る
-        if (
-          options.body instanceof Uint8Array ||
-          options.body instanceof Blob ||
-          options.body instanceof ArrayBuffer
-        ) {
+        if (options.body instanceof Uint8Array || options.body instanceof Blob || options.body instanceof ArrayBuffer) {
           fetchOpts.body = options.body;
-        } else if (typeof options.body === "object") {
+        } else if (typeof options.body === 'object') {
           fetchOpts.body = JSON.stringify(options.body);
         } else {
           fetchOpts.body = options.body;
@@ -445,32 +391,28 @@ export class HostApiRouter {
       }
 
       if (options?.credentialId) {
-        const netConf = d.configManager.get("network");
+        const netConf = d.configManager.get('network');
         if (options.useProxy && !netConf?.allowCredentialsWithProxy) {
-          throw new Error(
-            "Security Error: Cannot use public proxy with credentials.",
-          );
+          throw new Error('Security Error: Cannot use public proxy with credentials.');
         }
-        const creds = d.configManager.get("credentials") || {};
+        const creds = d.configManager.get('credentials') || {};
         const cred = creds[options.credentialId];
-        if (!cred)
-          throw new Error(`Credential ID '${options.credentialId}' not found.`);
-        if (cred.type === "query") {
-          targetUrl += `${targetUrl.includes("?") ? "&" : "?"}${encodeURIComponent(cred.key)}=${encodeURIComponent(cred.value)}`;
-        } else if (cred.type === "header") {
+        if (!cred) throw new Error(`Credential ID '${options.credentialId}' not found.`);
+        if (cred.type === 'query') {
+          targetUrl += `${targetUrl.includes('?') ? '&' : '?'}${encodeURIComponent(cred.key)}=${encodeURIComponent(cred.value)}`;
+        } else if (cred.type === 'header') {
           (fetchOpts.headers as any)[cred.key] = cred.value;
         }
       }
 
       if (options?.useProxy) {
-        const proxyPrefix =
-          d.configManager.get("network")?.proxyUrl || "https://corsproxy.io/?";
+        const proxyPrefix = d.configManager.get('network')?.proxyUrl || 'https://corsproxy.io/?';
         targetUrl = `${proxyPrefix}${encodeURIComponent(targetUrl)}`;
       }
       return { targetUrl, fetchOpts };
     };
 
-    t.registerHandler("net:fetch", async ({ url, options }) => {
+    t.registerHandler('net:fetch', async ({ url, options }) => {
       const { targetUrl, fetchOpts } = prepareFetchOptions(url, options);
       const res = await fetch(targetUrl, fetchOpts);
 
@@ -487,10 +429,10 @@ export class HostApiRouter {
         data: null,
       };
 
-      const responseType = options?.responseType || "text";
-      if (responseType === "json") {
+      const responseType = options?.responseType || 'text';
+      if (responseType === 'json') {
         responseObj.data = await res.json();
-      } else if (responseType === "dataURL") {
+      } else if (responseType === 'dataURL') {
         const blob = await res.blob();
         responseObj.data = await new Promise((r, j) => {
           const reader = new FileReader();
@@ -498,7 +440,7 @@ export class HostApiRouter {
           reader.onerror = j;
           reader.readAsDataURL(blob);
         });
-      } else if (responseType === "arraybuffer" || responseType === "binary") {
+      } else if (responseType === 'arraybuffer' || responseType === 'binary') {
         const arrayBuffer = await res.arrayBuffer();
         responseObj.data = new Uint8Array(arrayBuffer);
       } else {
@@ -507,7 +449,7 @@ export class HostApiRouter {
       return responseObj;
     });
 
-    t.registerHandler("net:download", async ({ url, destPath, options }) => {
+    t.registerHandler('net:download', async ({ url, destPath, options }) => {
       // V1のハックを維持：巨大ファイルをIPCで送らず、Host側でフェッチしてBlobを直接VFS（OPFS）に書き込む
       const { targetUrl, fetchOpts } = prepareFetchOptions(url, options);
       const res = await fetch(targetUrl, fetchOpts);
@@ -519,37 +461,30 @@ export class HostApiRouter {
       return { path: destPath, size: blob.size };
     });
 
-    t.registerHandler(
-      "net:oauth",
-      async ({ providerId, authUrl, instructions }) => {
-        window.open(authUrl, "_blank", "noopener,noreferrer");
-        if (window.AppUI) {
-          const token = await window.AppUI.prompt(
-            instructions || `Paste access token for '${providerId}':`,
-            providerId,
-          );
-          if (token && token.trim()) {
-            const creds = d.configManager.get("credentials") || {};
-            creds[providerId] = {
-              type: "header",
-              key: "Authorization",
-              value: `Bearer ${token.trim()}`,
-            };
-            await d.configManager.update("credentials", creds);
-            return true;
-          }
+    t.registerHandler('net:oauth', async ({ providerId, authUrl, instructions }) => {
+      window.open(authUrl, '_blank', 'noopener,noreferrer');
+      if (window.AppUI) {
+        const token = await window.AppUI.prompt(instructions || `Paste access token for '${providerId}':`, providerId);
+        if (token && token.trim()) {
+          const creds = d.configManager.get('credentials') || {};
+          creds[providerId] = {
+            type: 'header',
+            key: 'Authorization',
+            value: `Bearer ${token.trim()}`,
+          };
+          await d.configManager.update('credentials', creds);
+          return true;
         }
-        return false;
-      },
-    );
+      }
+      return false;
+    });
 
     // ==========================================
     // 6. Device & Hardware (dev)
     // ==========================================
-    t.registerHandler("dev:location", async ({ options }) => {
+    t.registerHandler('dev:location', async ({ options }) => {
       return new Promise((resolve, reject) => {
-        if (!navigator.geolocation)
-          return reject(new Error("Geolocation not supported."));
+        if (!navigator.geolocation) return reject(new Error('Geolocation not supported.'));
         navigator.geolocation.getCurrentPosition(
           (pos) =>
             resolve({
@@ -563,21 +498,21 @@ export class HostApiRouter {
       });
     });
 
-    t.registerHandler("dev:vibrate", async ({ pattern }) => {
+    t.registerHandler('dev:vibrate', async ({ pattern }) => {
       if (navigator.vibrate) return navigator.vibrate(pattern);
       return false;
     });
 
-    t.registerHandler("dev:photo", async ({ options }) => {
+    t.registerHandler('dev:photo', async ({ options }) => {
       if (!d.shell || !d.shell.modals.camera) {
-        throw new Error("Camera modal is not available in the shell.");
+        throw new Error('Camera modal is not available in the shell.');
       }
       return await d.shell.modals.camera.open(options);
     });
 
-    t.registerHandler("dev:audio", async ({ options }) => {
+    t.registerHandler('dev:audio', async ({ options }) => {
       if (!d.shell || !d.shell.modals.audio) {
-        throw new Error("Audio modal is not available in the shell.");
+        throw new Error('Audio modal is not available in the shell.');
       }
       return await d.shell.modals.audio.open(options);
     });
@@ -585,12 +520,11 @@ export class HostApiRouter {
     // ==========================================
     // 7. Dynamic Tools (tools)
     // ==========================================
-    t.registerHandler("tools:register", async (payload, sourcePid) => {
-      if (d.toolRegistry)
-        d.toolRegistry.registerDynamicTool(payload.name, sourcePid, payload);
+    t.registerHandler('tools:register', async (payload, sourcePid) => {
+      if (d.toolRegistry) d.toolRegistry.registerDynamicTool(payload.name, sourcePid, payload);
       return true;
     });
-    t.registerHandler("tools:unregister", async ({ name }, sourcePid) => {
+    t.registerHandler('tools:unregister', async ({ name }, sourcePid) => {
       if (d.toolRegistry) d.toolRegistry.unregisterDynamicTool(name, sourcePid);
       return true;
     });

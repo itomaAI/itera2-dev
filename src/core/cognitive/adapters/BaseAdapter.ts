@@ -3,7 +3,7 @@
  * Itera OS v2: Base LLM Adapter Interface
  */
 
-import type { SystemLogger } from "../../state/SystemLogger";
+import type { SystemLogger } from '../../state/SystemLogger';
 
 export interface LlmConfig {
   temperature?: number;
@@ -25,9 +25,5 @@ export abstract class BaseLLMAdapter {
    * @param onChunk - テキストのチャンクを受信した際のコールバック
    * @param signal - 中断用のAbortSignal
    */
-  abstract generateStream(
-    messages: any,
-    onChunk: (text: string) => void,
-    signal?: AbortSignal,
-  ): Promise<void>;
+  abstract generateStream(messages: any, onChunk: (text: string) => void, signal?: AbortSignal): Promise<void>;
 }

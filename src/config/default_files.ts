@@ -4,7 +4,7 @@
  */
 
 export const DEFAULT_FILES: Record<string, string> = {
-  "apps/notes.html": `
+  'apps/notes.html': `
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -433,11 +433,11 @@ export const DEFAULT_FILES: Record<string, string> = {
 </body>
 </html>`.trim(),
 
-  "data/": "",
+  'data/': '',
 
-  "docs/": "",
+  'docs/': '',
 
-  "index.html": `
+  'index.html': `
 <!-- vfs_root/index.html -->
 <!DOCTYPE html>
 <html lang="en">
@@ -453,7 +453,7 @@ export const DEFAULT_FILES: Record<string, string> = {
 </body>
 </html>`.trim(),
 
-  "system/apps/settings.html": `
+  'system/apps/settings.html': `
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -990,13 +990,13 @@ export const DEFAULT_FILES: Record<string, string> = {
 </body>
 </html>`.trim(),
 
-  "system/config/appearance.json": JSON.stringify(
+  'system/config/appearance.json': JSON.stringify(
     {
-      theme: "system/themes/light.json",
+      theme: 'system/themes/light.json',
       typography: {
-        uiFont: "Inter",
-        monoFont: "monospace",
-        fontSize: "medium",
+        uiFont: 'Inter',
+        monoFont: 'monospace',
+        fontSize: 'medium',
       },
       layout: {
         animations: true,
@@ -1006,36 +1006,36 @@ export const DEFAULT_FILES: Record<string, string> = {
     2,
   ),
 
-  "system/config/llm.json": JSON.stringify(
+  'system/config/llm.json': JSON.stringify(
     {
-      model: "gemini-3-flash-preview",
+      model: 'gemini-3-flash-preview',
       temperature: 1,
     },
     null,
     2,
   ),
 
-  "system/config/network.json": JSON.stringify(
+  'system/config/network.json': JSON.stringify(
     {
-      proxyUrl: "https://corsproxy.io/?",
+      proxyUrl: 'https://corsproxy.io/?',
       allowCredentialsWithProxy: false,
     },
     null,
     2,
   ),
 
-  "system/config/preferences.json": JSON.stringify(
+  'system/config/preferences.json': JSON.stringify(
     {
-      username: "User",
-      agentName: "Itera",
-      language: "English",
+      username: 'User',
+      agentName: 'Itera',
+      language: 'English',
       autoUpdateSystemFiles: true,
     },
     null,
     2,
   ),
 
-  "system/lib/std.js": `
+  'system/lib/std.js': `
 /**
  * Itera OS v2 Guest Standard Library (std.js)
  * Clean, generic VFS and OS utilities for Guest Applications.
@@ -1155,7 +1155,7 @@ export const DEFAULT_FILES: Record<string, string> = {
 
 })(window);`.trim(),
 
-  "system/lib/ui.js": `
+  'system/lib/ui.js': `
 /**
  * Itera Guest UI Kit (ui.js) v2
  * Provides theme configuration, shared UI utilities, and OS-native dialogs.
@@ -1362,70 +1362,65 @@ export const DEFAULT_FILES: Record<string, string> = {
     };
 })(window);`.trim(),
 
-  "system/registry/apps.json": JSON.stringify(
+  'system/registry/apps.json': JSON.stringify(
     [
       {
-        id: "notes",
-        name: "Notes",
-        icon: "📝",
-        path: "apps/notes.html",
-        description: "Markdown text editor",
+        id: 'notes',
+        name: 'Notes',
+        icon: '📝',
+        path: 'apps/notes.html',
+        description: 'Markdown text editor',
         fileHandlers: [
           {
-            action: "view",
-            extensions: ["md", "txt"],
-            mimeTypes: ["text/markdown", "text/plain"],
+            action: 'view',
+            extensions: ['md', 'txt'],
+            mimeTypes: ['text/markdown', 'text/plain'],
           },
         ],
       },
       {
-        id: "settings",
-        name: "Settings",
-        icon: "⚙️",
-        path: "system/apps/settings.html",
-        description: "System configuration",
+        id: 'settings',
+        name: 'Settings',
+        icon: '⚙️',
+        path: 'system/apps/settings.html',
+        description: 'System configuration',
       },
     ],
     null,
     2,
   ),
 
-  "system/registry/associations.json": JSON.stringify(
+  'system/registry/associations.json': JSON.stringify(
     {
       extensions: {
-        md: "notes",
-        txt: "notes",
+        md: 'notes',
+        txt: 'notes',
       },
       mimeTypes: {
-        "text/markdown": "notes",
-        "text/plain": "notes",
+        'text/markdown': 'notes',
+        'text/plain': 'notes',
       },
     },
     null,
     2,
   ),
 
-  "system/registry/llm_profiles.json": JSON.stringify(
+  'system/registry/llm_profiles.json': JSON.stringify(
     {
       providers: [
         {
-          id: "google",
-          name: "Google (Gemini)",
-          placeholder: "AIzaSy...",
+          id: 'google',
+          name: 'Google (Gemini)',
+          placeholder: 'AIzaSy...',
           requiresUrl: false,
           defaultCapabilities: {
             maxMediaSizeMB: 100,
-            supportedMimes: [
-              "application/pdf",
-              "image/*",
-              "video/*",
-              "audio/*",
-            ],
+            supportedMimes: ['application/pdf', 'image/*', 'video/*', 'audio/*'],
           },
           models: [
             {
-              id: "gemini-3.5-flash",
-              name: "Gemini 3.5 Flash",
+              id: 'gemini-3.5-flash',
+              name: 'Gemini 3.5 Flash',
               contextTokens: 1048576,
               pricing: {
                 input: 1.5,
@@ -1433,17 +1428,12 @@ export const DEFAULT_FILES: Record<string, string> = {
               },
               capabilities: {
                 maxMediaSizeMB: 100,
-                supportedMimes: [
-                  "application/pdf",
-                  "image/*",
-                  "video/*",
-                  "audio/*",
-                ],
+                supportedMimes: ['application/pdf', 'image/*', 'video/*', 'audio/*'],
               },
             },
             {
-              id: "gemini-3.1-pro-preview",
-              name: "Gemini 3.1 Pro",
+              id: 'gemini-3.1-pro-preview',
+              name: 'Gemini 3.1 Pro',
               contextTokens: 1048576,
               pricing: {
                 tiers: [
@@ -1461,17 +1451,12 @@ export const DEFAULT_FILES: Record<string, string> = {
               },
               capabilities: {
                 maxMediaSizeMB: 100,
-                supportedMimes: [
-                  "application/pdf",
-                  "image/*",
-                  "video/*",
-                  "audio/*",
-                ],
+                supportedMimes: ['application/pdf', 'image/*', 'video/*', 'audio/*'],
               },
             },
             {
-              id: "gemini-3.1-flash-lite",
-              name: "Gemini 3.1 Flash Lite",
+              id: 'gemini-3.1-flash-lite',
+              name: 'Gemini 3.1 Flash Lite',
               contextTokens: 1048576,
               pricing: {
                 input: 0.25,
@@ -1479,8 +1464,8 @@ export const DEFAULT_FILES: Record<string, string> = {
               },
             },
             {
-              id: "gemini-3-flash-preview",
-              name: "Gemini 3 Flash",
+              id: 'gemini-3-flash-preview',
+              name: 'Gemini 3 Flash',
               contextTokens: 1048576,
               pricing: {
                 input: 0.5,
@@ -1490,24 +1475,24 @@ export const DEFAULT_FILES: Record<string, string> = {
           ],
         },
         {
-          id: "openai",
-          name: "OpenAI",
-          placeholder: "sk-proj-...",
+          id: 'openai',
+          name: 'OpenAI',
+          placeholder: 'sk-proj-...',
           requiresUrl: false,
           defaultCapabilities: {
             maxMediaSizeMB: 50,
             supportedMimes: [
-              "image/*",
-              "application/pdf",
-              "application/vnd.openxmlformats-officedocument.*",
-              "text/*",
-              "application/json",
+              'image/*',
+              'application/pdf',
+              'application/vnd.openxmlformats-officedocument.*',
+              'text/*',
+              'application/json',
             ],
           },
           models: [
             {
-              id: "gpt-5.5",
-              name: "GPT-5.5",
+              id: 'gpt-5.5',
+              name: 'GPT-5.5',
               contextTokens: 1050000,
               pricing: {
                 input: 5,
@@ -1515,8 +1500,8 @@ export const DEFAULT_FILES: Record<string, string> = {
               },
             },
             {
-              id: "gpt-5.5-pro",
-              name: "GPT-5.5 Pro",
+              id: 'gpt-5.5-pro',
+              name: 'GPT-5.5 Pro',
               contextTokens: 1050000,
               pricing: {
                 input: 30,
@@ -1524,8 +1509,8 @@ export const DEFAULT_FILES: Record<string, string> = {
               },
             },
             {
-              id: "gpt-5.4",
-              name: "GPT-5.4",
+              id: 'gpt-5.4',
+              name: 'GPT-5.4',
               contextTokens: 1050000,
               pricing: {
                 input: 2.5,
@@ -1533,8 +1518,8 @@ export const DEFAULT_FILES: Record<string, string> = {
               },
             },
             {
-              id: "gpt-5.4-mini",
-              name: "GPT-5.4 Mini",
+              id: 'gpt-5.4-mini',
+              name: 'GPT-5.4 Mini',
               contextTokens: 400000,
               pricing: {
                 input: 0.75,
@@ -1544,18 +1529,18 @@ export const DEFAULT_FILES: Record<string, string> = {
           ],
         },
         {
-          id: "anthropic",
-          name: "Anthropic",
-          placeholder: "sk-ant-...",
+          id: 'anthropic',
+          name: 'Anthropic',
+          placeholder: 'sk-ant-...',
           requiresUrl: false,
           defaultCapabilities: {
             maxMediaSizeMB: 500,
-            supportedMimes: ["image/*", "application/pdf", "text/plain"],
+            supportedMimes: ['image/*', 'application/pdf', 'text/plain'],
           },
           models: [
             {
-              id: "claude-fable-5",
-              name: "Claude Fable 5",
+              id: 'claude-fable-5',
+              name: 'Claude Fable 5',
               contextTokens: 1000000,
               pricing: {
                 input: 10,
@@ -1563,8 +1548,8 @@ export const DEFAULT_FILES: Record<string, string> = {
               },
             },
             {
-              id: "claude-opus-4-8",
-              name: "Claude Opus 4.8",
+              id: 'claude-opus-4-8',
+              name: 'Claude Opus 4.8',
               contextTokens: 1000000,
               pricing: {
                 input: 5,
@@ -1572,8 +1557,8 @@ export const DEFAULT_FILES: Record<string, string> = {
               },
             },
             {
-              id: "claude-sonnet-5",
-              name: "Claude Sonnet 5",
+              id: 'claude-sonnet-5',
+              name: 'Claude Sonnet 5',
               contextTokens: 1000000,
               pricing: {
                 input: 3,
@@ -1581,8 +1566,8 @@ export const DEFAULT_FILES: Record<string, string> = {
               },
             },
             {
-              id: "claude-haiku-4-5",
-              name: "Claude Haiku 4.5",
+              id: 'claude-haiku-4-5',
+              name: 'Claude Haiku 4.5',
               contextTokens: 200000,
               pricing: {
                 input: 1,
@@ -1592,35 +1577,25 @@ export const DEFAULT_FILES: Record<string, string> = {
           ],
         },
         {
-          id: "openrouter",
-          name: "OpenRouter",
-          placeholder: "sk-or-v1-...",
+          id: 'openrouter',
+          name: 'OpenRouter',
+          placeholder: 'sk-or-v1-...',
           requiresUrl: false,
           defaultCapabilities: {
             maxMediaSizeMB: 20,
-            supportedMimes: [
-              "image/*",
-              "application/pdf",
-              "text/*",
-              "application/json",
-            ],
+            supportedMimes: ['image/*', 'application/pdf', 'text/*', 'application/json'],
           },
           models: [],
         },
         {
-          id: "custom",
-          name: "Local / Custom (OpenAI Compatible)",
-          placeholder: "API Key (Optional)",
-          urlPlaceholder: "http://localhost:11434/v1",
+          id: 'custom',
+          name: 'Local / Custom (OpenAI Compatible)',
+          placeholder: 'API Key (Optional)',
+          urlPlaceholder: 'http://localhost:11434/v1',
           requiresUrl: true,
           defaultCapabilities: {
             maxMediaSizeMB: 20,
-            supportedMimes: [
-              "image/*",
-              "application/pdf",
-              "text/*",
-              "application/json",
-            ],
+            supportedMimes: ['image/*', 'application/pdf', 'text/*', 'application/json'],
           },
           models: [],
         },
@@ -1630,45 +1605,45 @@ export const DEFAULT_FILES: Record<string, string> = {
     2,
   ),
 
-  "system/registry/services.json": JSON.stringify([], null, 2),
+  'system/registry/services.json': JSON.stringify([], null, 2),
 
-  "system/themes/dark.json": JSON.stringify(
+  'system/themes/dark.json': JSON.stringify(
     {
       meta: {
-        name: "Itera Dark",
-        author: "System",
+        name: 'Itera Dark',
+        author: 'System',
       },
       colors: {
         bg: {
-          app: "#0f172a",
-          panel: "#1e293b",
-          card: "#334155",
-          hover: "#475569",
-          overlay: "#000000",
+          app: '#0f172a',
+          panel: '#1e293b',
+          card: '#334155',
+          hover: '#475569',
+          overlay: '#000000',
         },
         border: {
-          main: "#334155",
-          highlight: "#3b82f6",
+          main: '#334155',
+          highlight: '#3b82f6',
         },
         text: {
-          main: "#f1f5f9",
-          muted: "#94a3b8",
-          inverted: "#0f172a",
-          system: "#60a5fa",
-          tag_attr: "#94a3b8",
-          tag_content: "#cbd5e1",
+          main: '#f1f5f9',
+          muted: '#94a3b8',
+          inverted: '#0f172a',
+          system: '#60a5fa',
+          tag_attr: '#94a3b8',
+          tag_content: '#cbd5e1',
         },
         accent: {
-          primary: "#3b82f6",
-          success: "#10b981",
-          warning: "#f59e0b",
-          error: "#ef4444",
+          primary: '#3b82f6',
+          success: '#10b981',
+          warning: '#f59e0b',
+          error: '#ef4444',
         },
         tags: {
-          thinking: "#1e3a8a",
-          plan: "#064e3b",
-          report: "#312e81",
-          error: "#7f1d1d",
+          thinking: '#1e3a8a',
+          plan: '#064e3b',
+          report: '#312e81',
+          error: '#7f1d1d',
         },
       },
     },
@@ -1676,43 +1651,43 @@ export const DEFAULT_FILES: Record<string, string> = {
     2,
   ),
 
-  "system/themes/light.json": JSON.stringify(
+  'system/themes/light.json': JSON.stringify(
     {
       meta: {
-        name: "Itera Light",
-        author: "System",
+        name: 'Itera Light',
+        author: 'System',
       },
       colors: {
         bg: {
-          app: "#f9fafb",
-          panel: "#ffffff",
-          card: "#f3f4f6",
-          hover: "#e5e7eb",
-          overlay: "#000000",
+          app: '#f9fafb',
+          panel: '#ffffff',
+          card: '#f3f4f6',
+          hover: '#e5e7eb',
+          overlay: '#000000',
         },
         border: {
-          main: "#e5e7eb",
-          highlight: "#3b82f6",
+          main: '#e5e7eb',
+          highlight: '#3b82f6',
         },
         text: {
-          main: "#1f2937",
-          muted: "#6b7280",
-          inverted: "#ffffff",
-          system: "#2563eb",
-          tag_attr: "#6b7280",
-          tag_content: "#374151",
+          main: '#1f2937',
+          muted: '#6b7280',
+          inverted: '#ffffff',
+          system: '#2563eb',
+          tag_attr: '#6b7280',
+          tag_content: '#374151',
         },
         accent: {
-          primary: "#2563eb",
-          success: "#059669",
-          warning: "#d97706",
-          error: "#dc2626",
+          primary: '#2563eb',
+          success: '#059669',
+          warning: '#d97706',
+          error: '#dc2626',
         },
         tags: {
-          thinking: "#1d4ed8",
-          plan: "#047857",
-          report: "#4338ca",
-          error: "#b91c1c",
+          thinking: '#1d4ed8',
+          plan: '#047857',
+          report: '#4338ca',
+          error: '#b91c1c',
         },
       },
     },
@@ -1720,43 +1695,43 @@ export const DEFAULT_FILES: Record<string, string> = {
     2,
   ),
 
-  "system/themes/midnight.json": JSON.stringify(
+  'system/themes/midnight.json': JSON.stringify(
     {
       meta: {
-        name: "Midnight Protocol",
-        author: "System",
+        name: 'Midnight Protocol',
+        author: 'System',
       },
       colors: {
         bg: {
-          app: "#020617",
-          panel: "#0f172a",
-          card: "#1e293b",
-          hover: "#334155",
-          overlay: "#000000",
+          app: '#020617',
+          panel: '#0f172a',
+          card: '#1e293b',
+          hover: '#334155',
+          overlay: '#000000',
         },
         border: {
-          main: "#1e293b",
-          highlight: "#6366f1",
+          main: '#1e293b',
+          highlight: '#6366f1',
         },
         text: {
-          main: "#e2e8f0",
-          muted: "#64748b",
-          inverted: "#020617",
-          system: "#818cf8",
-          tag_attr: "#94a3b8",
-          tag_content: "#cbd5e1",
+          main: '#e2e8f0',
+          muted: '#64748b',
+          inverted: '#020617',
+          system: '#818cf8',
+          tag_attr: '#94a3b8',
+          tag_content: '#cbd5e1',
         },
         accent: {
-          primary: "#6366f1",
-          success: "#10b981",
-          warning: "#f59e0b",
-          error: "#f43f5e",
+          primary: '#6366f1',
+          success: '#10b981',
+          warning: '#f59e0b',
+          error: '#f43f5e',
         },
         tags: {
-          thinking: "#312e81",
-          plan: "#064e3b",
-          report: "#4338ca",
-          error: "#881337",
+          thinking: '#312e81',
+          plan: '#064e3b',
+          report: '#4338ca',
+          error: '#881337',
         },
       },
     },

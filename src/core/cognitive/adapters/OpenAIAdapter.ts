@@ -3,8 +3,8 @@
  * Itera OS v2: OpenAI / Local (Ollama, LM Studio) API Adapter
  */
 
-import { BaseLLMAdapter, type LlmConfig } from "./BaseAdapter";
-import type { SystemLogger } from "../../state/SystemLogger";
+import { BaseLLMAdapter, type LlmConfig } from './BaseAdapter';
+import type { SystemLogger } from '../../state/SystemLogger';
 
 export class OpenAIAdapter extends BaseLLMAdapter {
   private apiKey: string;
@@ -13,34 +13,30 @@ export class OpenAIAdapter extends BaseLLMAdapter {
 
   constructor(
     apiKey: string,
-    modelName: string = "gpt-4o",
-    baseUrl: string = "https://api.openai.com/v1",
+    modelName: string = 'gpt-4o',
+    baseUrl: string = 'https://api.openai.com/v1',
     config: LlmConfig = {},
     logger: SystemLogger | null = null,
   ) {
     super(config, logger);
     this.apiKey = apiKey;
     this.modelName = modelName;
-    this.baseUrl = baseUrl.replace(/\/$/, "");
+    this.baseUrl = baseUrl.replace(/\/$/, '');
   }
 
-  async generateStream(
-    messages: any,
-    onChunk: (text: string) => void,
-    signal?: AbortSignal,
-  ): Promise<void> {
+  async generateStream(messages: any, onChunk: (text: string) => void, signal?: AbortSignal): Promise<void> {
     const url = `${this.baseUrl}/chat/completions`;
     const headers: Record<string, string> = {
-      "Content-Type": "application/json",
+      'Content-Type': 'application/json',
     };
 
     if (this.apiKey) {
-      headers["Authorization"] = `Bearer ${this.apiKey}`;
+      headers['Authorization'] = `Bearer ${this.apiKey}`;
     }
 
-    if (this.baseUrl.includes("openrouter.ai")) {
-      headers["HTTP-Referer"] = window.location.href;
-      headers["X-Title"] = "Itera OS v2";
+    if (this.baseUrl.includes('openrouter.ai')) {
+      headers['HTTP-Referer'] = window.location.href;
+      headers['X-Title'] = 'Itera OS v2';
     }
 
     const payload: any = {
@@ -56,7 +52,7 @@ export class OpenAIAdapter extends BaseLLMAdapter {
     }
 
     const response = await fetch(url, {
-      method: "POST",
+      method: 'POST',
       headers: headers,
       body: JSON.stringify(payload),
       signal,
@@ -72,13 +68,13 @@ export class OpenAIAdapter extends BaseLLMAdapter {
     }
 
     const reader = response.body!.getReader();
-    const decoder = new TextDecoder("utf-8");
-    let buffer = "";
+    const decoder = new TextDecoder('utf-8');
+    let buffer = '';
 
     const onAbort = () => {
-      reader.cancel(new DOMException("Aborted", "AbortError")).catch(() => {});
+      reader.cancel(new DOMException('Aborted', 'AbortError')).catch(() => {});
     };
-    if (signal) signal.addEventListener("abort", onAbort);
+    if (signal) signal.addEventListener('abort', onAbort);
 
     let idleTimeout: ReturnType<typeof setTimeout>;
     let isIdleTimeout = false;
@@ -86,7 +82,7 @@ export class OpenAIAdapter extends BaseLLMAdapter {
       clearTimeout(idleTimeout);
       idleTimeout = setTimeout(() => {
         isIdleTimeout = true;
-        reader.cancel(new Error("Stream Idle Timeout"));
+        reader.cancel(new Error('Stream Idle Timeout'));
       }, 15000);
     };
 
@@ -94,14 +90,11 @@ export class OpenAIAdapter extends BaseLLMAdapter {
 
     try {
       while (true) {
-        if (signal && signal.aborted)
-          throw new DOMException("Aborted", "AbortError");
+        if (signal && signal.aborted) throw new DOMException('Aborted', 'AbortError');
         const { done, value } = await reader.read();
 
         if (isIdleTimeout) {
-          throw new Error(
-            "Stream Idle Timeout: No response from API for 15 seconds.",
-          );
+          throw new Error('Stream Idle Timeout: No response from API for 15 seconds.');
         }
 
         resetIdleTimeout();
@@ -109,25 +102,25 @@ export class OpenAIAdapter extends BaseLLMAdapter {
         if (done) break;
 
         buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split("\n");
+        const lines = buffer.split('\n');
 
-        buffer = lines.pop() || "";
+        buffer = lines.pop() || '';
 
         for (const line of lines) {
           const trimmedLine = line.trim();
-          if (!trimmedLine || !trimmedLine.startsWith("data: ")) continue;
+          if (!trimmedLine || !trimmedLine.startsWith('data: ')) continue;
 
           const dataStr = trimmedLine.substring(6);
 
-          if (dataStr === "[DONE]") break;
+          if (dataStr === '[DONE]') break;
 
           try {
             const data = JSON.parse(dataStr);
 
             // ★ OpenAIの include_usage: true 時のトークン消費量抽出
             if (data.usage && this.logger) {
-              this.logger.log("usage", {
-                provider: "openai_compatible",
+              this.logger.log('usage', {
+                provider: 'openai_compatible',
                 model: this.modelName,
                 tokens: {
                   input: data.usage.prompt_tokens,
@@ -142,16 +135,16 @@ export class OpenAIAdapter extends BaseLLMAdapter {
               onChunk(delta.content);
             }
           } catch (e) {
-            console.warn("[OpenAIAdapter] Stream Parse Warning:", e, dataStr);
+            console.warn('[OpenAIAdapter] Stream Parse Warning:', e, dataStr);
           }
         }
       }
     } catch (e: any) {
-      if (e.name === "AbortError") throw e;
+      if (e.name === 'AbortError') throw e;
       throw e;
     } finally {
       clearTimeout(idleTimeout!);
-      if (signal) signal.removeEventListener("abort", onAbort);
+      if (signal) signal.removeEventListener('abort', onAbort);
     }
   }
 }

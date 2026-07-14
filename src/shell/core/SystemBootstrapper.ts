@@ -4,48 +4,48 @@
  */
 
 // VFS Subsystem
-import { NodeStore } from "../../core/vfs/NodeStore";
-import { ContentStore } from "../../core/vfs/ContentStore";
-import { PathResolver } from "../../core/vfs/PathResolver";
-import { VfsEventBus } from "../../core/vfs/VfsEventBus";
-import { VfsService } from "../../core/vfs/VfsService";
-import { VfsInitializer } from "../../core/vfs/VfsInitializer";
+import { NodeStore } from '../../core/vfs/NodeStore';
+import { ContentStore } from '../../core/vfs/ContentStore';
+import { PathResolver } from '../../core/vfs/PathResolver';
+import { VfsEventBus } from '../../core/vfs/VfsEventBus';
+import { VfsService } from '../../core/vfs/VfsService';
+import { VfsInitializer } from '../../core/vfs/VfsInitializer';
 
 // System Core & State
-import { ConfigManager } from "../../core/sys/ConfigManager";
-import { AppRegistry } from "../../core/sys/AppRegistry";
-import { FileAssociationResolver } from "../../core/sys/FileAssociationResolver";
-import { HistoryManager } from "../../core/state/HistoryManager";
-import { SystemLogger } from "../../core/state/SystemLogger";
+import { ConfigManager } from '../../core/sys/ConfigManager';
+import { AppRegistry } from '../../core/sys/AppRegistry';
+import { FileAssociationResolver } from '../../core/sys/FileAssociationResolver';
+import { HistoryManager } from '../../core/state/HistoryManager';
+import { SystemLogger } from '../../core/state/SystemLogger';
 
 // Control & Cognitive
-import { ToolRegistry } from "../../core/control/ToolRegistry";
-import { Engine } from "../../core/control/Engine";
-import { Translator } from "../../core/cognitive/Translator";
-import { registerBasicTools } from "../../core/control/tools/basic_tools";
-import { registerFSTools } from "../../core/control/tools/fs_tools";
-import { registerSearchTools } from "../../core/control/tools/search_tools";
-import { registerSysTools } from "../../core/control/tools/sys_tools";
-import { registerUITools } from "../../core/control/tools/ui_tools";
+import { ToolRegistry } from '../../core/control/ToolRegistry';
+import { Engine } from '../../core/control/Engine';
+import { Translator } from '../../core/cognitive/Translator';
+import { registerBasicTools } from '../../core/control/tools/basic_tools';
+import { registerFSTools } from '../../core/control/tools/fs_tools';
+import { registerSearchTools } from '../../core/control/tools/search_tools';
+import { registerSysTools } from '../../core/control/tools/sys_tools';
+import { registerUITools } from '../../core/control/tools/ui_tools';
 
 // Windowing & IPC
-import { ProcessManager } from "../windowing/ProcessManager";
-import { HostTransport } from "../../ipc/HostTransport";
-import { HostApiRouter } from "../../api/HostApiRouter";
+import { ProcessManager } from '../windowing/ProcessManager';
+import { HostTransport } from '../../ipc/HostTransport';
+import { HostApiRouter } from '../../api/HostApiRouter';
 
 // Shell Core & Services
-import { UriRouter } from "./UriRouter";
-import { DesktopEnvironment } from "./DesktopEnvironment";
-import { EventOrchestrator } from "./EventOrchestrator";
-import { CognitiveManager } from "../services/CognitiveManager";
-import { SessionManager } from "../services/SessionManager";
-import { ThemeService } from "../services/ThemeService";
-import { MaintenanceDaemon } from "../services/MaintenanceDaemon";
-import { DialogService } from "../services/DialogService";
+import { UriRouter } from './UriRouter';
+import { DesktopEnvironment } from './DesktopEnvironment';
+import { EventOrchestrator } from './EventOrchestrator';
+import { CognitiveManager } from '../services/CognitiveManager';
+import { SessionManager } from '../services/SessionManager';
+import { ThemeService } from '../services/ThemeService';
+import { MaintenanceDaemon } from '../services/MaintenanceDaemon';
+import { DialogService } from '../services/DialogService';
 
 export class SystemBootstrapper {
   public static async boot(): Promise<void> {
-    console.log("[Itera] Booting OS v2...");
+    console.log('[Itera] Booting OS v2...');
 
     // ==========================================
     // 0. UI Dialog Service Initialization
@@ -95,40 +95,18 @@ export class SystemBootstrapper {
 
     const translator = new Translator();
     const processManager = new ProcessManager(vfs);
-    const uriRouter = new UriRouter("open");
+    const uriRouter = new UriRouter('open');
 
     // ==========================================
     // 4. Shell Services & UI Layer
     // ==========================================
     // Engineの初期化 (AdapterとProjectorはCognitiveManagerが後で注入)
-    const engine = new Engine(
-      { history, vfs, configManager },
-      null,
-      null,
-      translator,
-      toolRegistry,
-      {},
-    );
+    const engine = new Engine({ history, vfs, configManager }, null, null, translator, toolRegistry, {});
 
-    const cognitiveManager = new CognitiveManager(
-      configManager,
-      engine,
-      logger,
-      vfs,
-    );
-    const sessionManager = new SessionManager(
-      vfs,
-      history,
-      logger,
-      toolRegistry,
-    );
+    const cognitiveManager = new CognitiveManager(configManager, engine, logger, vfs);
+    const sessionManager = new SessionManager(vfs, history, logger, toolRegistry);
     const themeService = new ThemeService(configManager, vfs);
-    const maintenanceDaemon = new MaintenanceDaemon(
-      processManager,
-      logger,
-      vfs,
-      nodeStore,
-    );
+    const maintenanceDaemon = new MaintenanceDaemon(processManager, logger, vfs, nodeStore);
 
     const desktop = new DesktopEnvironment(
       vfs,
@@ -198,32 +176,29 @@ export class SystemBootstrapper {
     // ==========================================
 
     // システムリセットなどの特殊なクリーンアップバインディング
-    desktop.modals.system.on("reset", async () => {
+    desktop.modals.system.on('reset', async () => {
       try {
         // メタデータ（IndexedDB）を消す前に、ファイル実体（OPFS）を全削除してリソースリークを防ぐ
         await contentStore.clearAll();
         await nodeStore.clearAll();
         window.location.reload();
       } catch (e) {
-        console.error("System reset failed:", e);
+        console.error('System reset failed:', e);
       }
     });
 
-    processManager.on("process_killed", (pid: string) => {
+    processManager.on('process_killed', (pid: string) => {
       toolRegistry.removeToolsByPid(pid);
     });
 
     cognitiveManager.setStatusCallback((modelString) => {
-      const statusEl = document.getElementById("model-status");
+      const statusEl = document.getElementById('model-status');
       if (statusEl) statusEl.textContent = modelString;
     });
 
     themeService.setOnThemeAppliedCallback((payload) => {
-      desktop.modals.editor.setTheme(payload.isDark ? "dark" : "light");
-      desktop.modals.editor.updateTypography(
-        payload.fontSize,
-        payload.monoFont,
-      );
+      desktop.modals.editor.setTheme(payload.isDark ? 'dark' : 'light');
+      desktop.modals.editor.updateTypography(payload.fontSize, payload.monoFont);
     });
 
     // ルーティングとイベントの活性化
@@ -231,22 +206,20 @@ export class SystemBootstrapper {
     themeService.start();
 
     // 初期化タスクの実行
-    await themeService.applyAppearance(
-      configManager.get("appearance") || { theme: "system/themes/dark.json" },
-    );
+    await themeService.applyAppearance(configManager.get('appearance') || { theme: 'system/themes/dark.json' });
     desktop.panels.chat.renderHistory(history.get());
-    desktop.updateStorageUI(vfs.getUsage({ type: "user", id: "local_user" }));
+    desktop.updateStorageUI(vfs.getUsage({ type: 'user', id: 'local_user' }));
 
     await cognitiveManager.refreshEngineConfig();
     await maintenanceDaemon.start();
 
     // ダッシュボードの起動
-    await processManager.spawn("main", "index.html", "foreground");
+    await processManager.spawn('main', 'index.html', 'foreground');
 
-    logger.log("system", {
-      action: "boot",
-      message: "System booted successfully",
+    logger.log('system', {
+      action: 'boot',
+      message: 'System booted successfully',
     });
-    console.log("[Itera] OS Ready.");
+    console.log('[Itera] OS Ready.');
   }
 }

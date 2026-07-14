@@ -3,8 +3,8 @@
  * Itera OS VFS v2: Path to NodeID Resolution and Tree Building
  */
 
-import type { VfsNode, TreeNode } from "./types";
-import type { NodeStore } from "./NodeStore";
+import type { VfsNode, TreeNode } from './types';
+import type { NodeStore } from './NodeStore';
 
 export class PathResolver {
   private nodeStore: NodeStore;
@@ -14,28 +14,28 @@ export class PathResolver {
   }
 
   normalizePath(path: string): string {
-    if (!path) return "";
+    if (!path) return '';
     const parts = path
-      .replace(/\\/g, "/")
-      .split("/")
-      .filter((p) => p !== "." && p !== "");
+      .replace(/\\/g, '/')
+      .split('/')
+      .filter((p) => p !== '.' && p !== '');
     const stack: string[] = [];
 
     for (const part of parts) {
-      if (part === "..") {
+      if (part === '..') {
         if (stack.length > 0) stack.pop();
       } else {
         stack.push(part);
       }
     }
-    return stack.join("/");
+    return stack.join('/');
   }
 
   getIdByPath(path: string): string | null | undefined {
     const normPath = this.normalizePath(path);
-    if (normPath === "") return null; // ルートを示す
+    if (normPath === '') return null; // ルートを示す
 
-    const parts = normPath.split("/");
+    const parts = normPath.split('/');
     let currentParentId: string | null = null;
 
     for (const part of parts) {
@@ -51,7 +51,7 @@ export class PathResolver {
   }
 
   getPathById(nodeId: string | null): string {
-    if (nodeId === null) return "";
+    if (nodeId === null) return '';
 
     const parts: string[] = [];
     let currentId: string | null = nodeId;
@@ -59,25 +59,21 @@ export class PathResolver {
 
     while (currentId !== null) {
       if (visited.has(currentId)) {
-        console.error(
-          `[PathResolver] Circular reference detected at NodeID: ${currentId}`,
-        );
+        console.error(`[PathResolver] Circular reference detected at NodeID: ${currentId}`);
         break;
       }
       visited.add(currentId);
 
       const node = this.nodeStore.getNode(currentId);
       if (!node) {
-        console.warn(
-          `[PathResolver] Broken link detected at NodeID: ${currentId}`,
-        );
+        console.warn(`[PathResolver] Broken link detected at NodeID: ${currentId}`);
         break;
       }
       parts.unshift(node.name);
       currentId = node.parentId;
     }
 
-    return parts.join("/");
+    return parts.join('/');
   }
 
   buildTree(): TreeNode[] {
@@ -91,12 +87,12 @@ export class PathResolver {
         meta: node.meta,
       };
 
-      if (node.kind === "directory") {
+      if (node.kind === 'directory') {
         const children = this.nodeStore.getChildren(node.id);
         treeNode.children = children.map((child) => buildNode(child, fullPath));
 
         treeNode.children.sort((a, b) => {
-          if (a.kind !== b.kind) return a.kind === "directory" ? -1 : 1;
+          if (a.kind !== b.kind) return a.kind === 'directory' ? -1 : 1;
           return a.name.localeCompare(b.name);
         });
       }
@@ -105,10 +101,10 @@ export class PathResolver {
     };
 
     const rootNodes = this.nodeStore.getChildren(null);
-    const result = rootNodes.map((node) => buildNode(node, ""));
+    const result = rootNodes.map((node) => buildNode(node, ''));
 
     result.sort((a, b) => {
-      if (a.kind !== b.kind) return a.kind === "directory" ? -1 : 1;
+      if (a.kind !== b.kind) return a.kind === 'directory' ? -1 : 1;
       return a.name.localeCompare(b.name);
     });
 

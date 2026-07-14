@@ -3,10 +3,10 @@
  * Itera OS v2: Command Palette Modal
  */
 
-import type { VfsService } from "../../core/vfs/VfsService";
-import type { AppRegistry } from "../../core/sys/AppRegistry";
-import type { UriRouter } from "../core/UriRouter";
-import { USER_PRINCIPAL } from "../../core/vfs/types";
+import type { VfsService } from '../../core/vfs/VfsService';
+import type { AppRegistry } from '../../core/sys/AppRegistry';
+import type { UriRouter } from '../core/UriRouter';
+import { USER_PRINCIPAL } from '../../core/vfs/types';
 
 export interface CommandItem {
   id: string;
@@ -44,47 +44,44 @@ export class CommandPaletteModal {
   private _createDOM() {
     if (this.overlay) return;
 
-    this.overlay = document.createElement("div");
+    this.overlay = document.createElement('div');
     this.overlay.className =
-      "fixed inset-0 bg-black/60 backdrop-blur-sm z-[10001] flex items-start justify-center pt-[15vh] itera-animate-fade select-none";
+      'fixed inset-0 bg-black/60 backdrop-blur-sm z-[10001] flex items-start justify-center pt-[15vh] itera-animate-fade select-none';
 
     this.overlay.onclick = (e) => {
       if (e.target === this.overlay) this.close();
     };
 
-    const box = document.createElement("div");
+    const box = document.createElement('div');
     box.className =
-      "bg-panel border border-border-main rounded-2xl shadow-2xl w-full max-w-2xl flex flex-col overflow-hidden";
+      'bg-panel border border-border-main rounded-2xl shadow-2xl w-full max-w-2xl flex flex-col overflow-hidden';
 
     // Header (Input)
-    const header = document.createElement("div");
-    header.className =
-      "flex items-center px-5 border-b border-border-main bg-card/50";
+    const header = document.createElement('div');
+    header.className = 'flex items-center px-5 border-b border-border-main bg-card/50';
 
-    const searchIcon = document.createElement("div");
-    searchIcon.className = "text-text-muted text-xl mr-3";
-    searchIcon.innerHTML = "🔍";
+    const searchIcon = document.createElement('div');
+    searchIcon.className = 'text-text-muted text-xl mr-3';
+    searchIcon.innerHTML = '🔍';
 
-    this.input = document.createElement("input");
-    this.input.type = "text";
-    this.input.placeholder = "Search files, apps, or ask AI...";
+    this.input = document.createElement('input');
+    this.input.type = 'text';
+    this.input.placeholder = 'Search files, apps, or ask AI...';
     this.input.className =
-      "w-full bg-transparent border-none py-5 text-xl font-bold text-text-main focus:outline-none placeholder-text-muted/50";
-    this.input.setAttribute("spellcheck", "false");
-    this.input.setAttribute("autocomplete", "off");
+      'w-full bg-transparent border-none py-5 text-xl font-bold text-text-main focus:outline-none placeholder-text-muted/50';
+    this.input.setAttribute('spellcheck', 'false');
+    this.input.setAttribute('autocomplete', 'off');
 
     header.appendChild(searchIcon);
     header.appendChild(this.input);
 
     // List Container
-    this.listContainer = document.createElement("div");
-    this.listContainer.className =
-      "max-h-[50vh] overflow-y-auto flex flex-col p-2 bg-app";
+    this.listContainer = document.createElement('div');
+    this.listContainer.className = 'max-h-[50vh] overflow-y-auto flex flex-col p-2 bg-app';
 
     // Footer
-    const footer = document.createElement("div");
-    footer.className =
-      "px-5 py-3 border-t border-border-main bg-card flex items-center justify-between shrink-0";
+    const footer = document.createElement('div');
+    footer.className = 'px-5 py-3 border-t border-border-main bg-card flex items-center justify-between shrink-0';
     footer.innerHTML = `
       <div class="text-[10px] text-text-muted font-bold tracking-wider flex items-center gap-4">
         <span><kbd class="bg-panel px-1.5 py-0.5 rounded border border-border-main font-mono text-text-main shadow-sm">↑</kbd> <kbd class="bg-panel px-1.5 py-0.5 rounded border border-border-main font-mono text-text-main shadow-sm">↓</kbd> Navigate</span>
@@ -106,29 +103,26 @@ export class CommandPaletteModal {
   private _bindInputEvents() {
     if (!this.input) return;
 
-    this.input.addEventListener("input", () => {
+    this.input.addEventListener('input', () => {
       this._updateSearch();
     });
 
-    this.input.addEventListener("keydown", (e) => {
-      if (e.key === "ArrowDown") {
+    this.input.addEventListener('keydown', (e) => {
+      if (e.key === 'ArrowDown') {
         e.preventDefault();
-        this.selectedIndex = Math.min(
-          this.selectedIndex + 1,
-          this.currentItems.length - 1,
-        );
+        this.selectedIndex = Math.min(this.selectedIndex + 1, this.currentItems.length - 1);
         this._renderList();
-      } else if (e.key === "ArrowUp") {
+      } else if (e.key === 'ArrowUp') {
         e.preventDefault();
         this.selectedIndex = Math.max(this.selectedIndex - 1, 0);
         this._renderList();
-      } else if (e.key === "Enter") {
+      } else if (e.key === 'Enter') {
         e.preventDefault();
         if (this.currentItems[this.selectedIndex]) {
           this.currentItems[this.selectedIndex].action();
           this.close();
         }
-      } else if (e.key === "Escape") {
+      } else if (e.key === 'Escape') {
         e.preventDefault();
         this.close();
       }
@@ -143,9 +137,9 @@ export class CommandPaletteModal {
   open() {
     this._createDOM();
     if (this.overlay && this.input) {
-      this.input.value = "";
+      this.input.value = '';
       this._updateSearch();
-      this.overlay.classList.remove("hidden");
+      this.overlay.classList.remove('hidden');
       this.input.focus();
       this.isOpen = true;
     }
@@ -153,7 +147,7 @@ export class CommandPaletteModal {
 
   close() {
     if (this.overlay) {
-      this.overlay.classList.add("hidden");
+      this.overlay.classList.add('hidden');
       this.isOpen = false;
       if (this.input) this.input.blur();
     }
@@ -181,28 +175,28 @@ export class CommandPaletteModal {
 
     // System commands
     items.push({
-      id: "sys-settings",
-      title: "System Settings",
-      subtitle: "Preferences, Theme, LLM, Network",
-      icon: "⚙️",
+      id: 'sys-settings',
+      title: 'System Settings',
+      subtitle: 'Preferences, Theme, LLM, Network',
+      icon: '⚙️',
       score: 100,
-      action: () => this.uriRouter.dispatch("metaos://system/settings"),
+      action: () => this.uriRouter.dispatch('metaos://system/settings'),
     });
     items.push({
-      id: "sys-api-keys",
-      title: "API Keys",
-      subtitle: "Manage LLM API Secrets",
-      icon: "🔑",
+      id: 'sys-api-keys',
+      title: 'API Keys',
+      subtitle: 'Manage LLM API Secrets',
+      icon: '🔑',
       score: 99,
-      action: () => this.uriRouter.dispatch("metaos://system/api_keys"),
+      action: () => this.uriRouter.dispatch('metaos://system/api_keys'),
     });
     items.push({
-      id: "sys-monitor",
-      title: "Activity Monitor",
-      subtitle: "View background processes",
-      icon: "📊",
+      id: 'sys-monitor',
+      title: 'Activity Monitor',
+      subtitle: 'View background processes',
+      icon: '📊',
       score: 98,
-      action: () => this.uriRouter.dispatch("metaos://system/monitor"),
+      action: () => this.uriRouter.dispatch('metaos://system/monitor'),
     });
 
     // Apps
@@ -212,7 +206,7 @@ export class CommandPaletteModal {
         id: `app-${app.id}`,
         title: app.name,
         subtitle: `App • ${app.path}`,
-        icon: app.icon || "📱",
+        icon: app.icon || '📱',
         score: 90,
         action: () => this.uriRouter.dispatch(`metaos://run/${app.path}`),
       });
@@ -239,36 +233,36 @@ export class CommandPaletteModal {
     // 1. System Commands
     const sysCmds = [
       {
-        id: "sys-settings",
-        title: "System Settings",
-        sub: "Preferences, Theme, LLM, Network",
-        icon: "⚙️",
-        uri: "metaos://system/settings",
+        id: 'sys-settings',
+        title: 'System Settings',
+        sub: 'Preferences, Theme, LLM, Network',
+        icon: '⚙️',
+        uri: 'metaos://system/settings',
       },
       {
-        id: "sys-api-keys",
-        title: "API Keys",
-        sub: "Manage LLM API Secrets",
-        icon: "🔑",
-        uri: "metaos://system/api_keys",
+        id: 'sys-api-keys',
+        title: 'API Keys',
+        sub: 'Manage LLM API Secrets',
+        icon: '🔑',
+        uri: 'metaos://system/api_keys',
       },
       {
-        id: "sys-sync",
-        title: "Cloud Sync",
-        sub: "Backup and sync to Google Drive",
-        icon: "☁️",
-        uri: "metaos://system/sync",
+        id: 'sys-sync',
+        title: 'Cloud Sync',
+        sub: 'Backup and sync to Google Drive',
+        icon: '☁️',
+        uri: 'metaos://system/sync',
       },
       {
-        id: "sys-monitor",
-        title: "Activity Monitor",
-        sub: "View background processes",
-        icon: "📊",
-        uri: "metaos://system/monitor",
+        id: 'sys-monitor',
+        title: 'Activity Monitor',
+        sub: 'View background processes',
+        icon: '📊',
+        uri: 'metaos://system/monitor',
       },
     ];
     sysCmds.forEach((cmd) => {
-      const score = scoreMatch(cmd.title + " " + cmd.sub, queryTerms);
+      const score = scoreMatch(cmd.title + ' ' + cmd.sub, queryTerms);
       if (score > 0) {
         items.push({
           id: cmd.id,
@@ -284,16 +278,13 @@ export class CommandPaletteModal {
     // 2. Apps
     const apps = this.appRegistry.getAllApps();
     apps.forEach((app) => {
-      const score = scoreMatch(
-        app.name + " " + app.path + " " + (app.description || ""),
-        queryTerms,
-      );
+      const score = scoreMatch(app.name + ' ' + app.path + ' ' + (app.description || ''), queryTerms);
       if (score > 0) {
         items.push({
           id: `app-${app.id}`,
           title: app.name,
           subtitle: `App • ${app.path}`,
-          icon: app.icon || "📱",
+          icon: app.icon || '📱',
           score: score + 40,
           action: () => this.uriRouter.dispatch(`metaos://run/${app.path}`),
         });
@@ -304,19 +295,17 @@ export class CommandPaletteModal {
     const files = this.vfs.listFiles(USER_PRINCIPAL, {
       recursive: true,
       detail: true,
-    }) as import("../../core/vfs/types").VfsStat[];
+    }) as import('../../core/vfs/types').VfsStat[];
     files.forEach((stat) => {
-      if (stat.kind === "directory") return; // ファイルのみ検索
-      const score = scoreMatch(stat.name + " " + stat.path, queryTerms);
+      if (stat.kind === 'directory') return; // ファイルのみ検索
+      const score = scoreMatch(stat.name + ' ' + stat.path, queryTerms);
       if (score > 0) {
-        let icon = "📄";
-        if (stat.name.endsWith(".md")) icon = "📝";
-        else if (stat.name.endsWith(".json")) icon = "🔧";
-        else if (stat.name.endsWith(".html")) icon = "🌐";
-        else if (stat.name.endsWith(".js") || stat.name.endsWith(".ts"))
-          icon = "📜";
-        else if (stat.name.match(/\.(png|jpg|jpeg|svg|gif|webp)$/i))
-          icon = "🖼️";
+        let icon = '📄';
+        if (stat.name.endsWith('.md')) icon = '📝';
+        else if (stat.name.endsWith('.json')) icon = '🔧';
+        else if (stat.name.endsWith('.html')) icon = '🌐';
+        else if (stat.name.endsWith('.js') || stat.name.endsWith('.ts')) icon = '📜';
+        else if (stat.name.match(/\.(png|jpg|jpeg|svg|gif|webp)$/i)) icon = '🖼️';
 
         items.push({
           id: `file-${stat.id}`,
@@ -331,14 +320,13 @@ export class CommandPaletteModal {
 
     // 4. AI Ask
     items.push({
-      id: "ai-ask",
+      id: 'ai-ask',
       title: `Ask AI: "${this.input!.value.trim()}"`,
-      subtitle: "Itera Agent",
-      icon: "✨",
+      subtitle: 'Itera Agent',
+      icon: '✨',
       score: 1000, // 常にトップに出す
       action: () => {
-        if (this.events["ask_ai"])
-          this.events["ask_ai"](this.input!.value.trim());
+        if (this.events['ask_ai']) this.events['ask_ai'](this.input!.value.trim());
       },
     });
 
@@ -347,7 +335,7 @@ export class CommandPaletteModal {
 
   private _renderList() {
     if (!this.listContainer) return;
-    this.listContainer.innerHTML = "";
+    this.listContainer.innerHTML = '';
 
     if (this.currentItems.length === 0) {
       this.listContainer.innerHTML = `<div class="p-4 text-center text-sm text-text-muted">No results found.</div>`;
@@ -355,28 +343,21 @@ export class CommandPaletteModal {
     }
 
     this.currentItems.forEach((item, index) => {
-      const el = document.createElement("div");
+      const el = document.createElement('div');
       const isSelected = index === this.selectedIndex;
-      el.className = `flex items-center gap-4 p-3 rounded-lg cursor-pointer transition ${isSelected ? "bg-primary text-white shadow-md" : "text-text-main hover:bg-hover"}`;
+      el.className = `flex items-center gap-4 p-3 rounded-lg cursor-pointer transition ${isSelected ? 'bg-primary text-white shadow-md' : 'text-text-main hover:bg-hover'}`;
 
       // アイコンにAI Ask専用の特別スタイルを当てる
-      const iconClass =
-        item.id === "ai-ask"
-          ? "text-warning animate-pulse text-2xl"
-          : "text-2xl";
-      const titleClass = isSelected
-        ? "text-white"
-        : item.id === "ai-ask"
-          ? "text-primary"
-          : "text-text-main";
+      const iconClass = item.id === 'ai-ask' ? 'text-warning animate-pulse text-2xl' : 'text-2xl';
+      const titleClass = isSelected ? 'text-white' : item.id === 'ai-ask' ? 'text-primary' : 'text-text-main';
 
       el.innerHTML = `
         <div class="${iconClass}">${item.icon}</div>
         <div class="flex flex-col min-w-0">
           <div class="text-sm font-bold truncate ${titleClass}">${item.title}</div>
-          <div class="text-[10px] font-mono truncate opacity-80 ${isSelected ? "text-white/80" : "text-text-muted"}">${item.subtitle}</div>
+          <div class="text-[10px] font-mono truncate opacity-80 ${isSelected ? 'text-white/80' : 'text-text-muted'}">${item.subtitle}</div>
         </div>
-        ${isSelected ? '<div class="ml-auto text-xs opacity-70">↵</div>' : ""}
+        ${isSelected ? '<div class="ml-auto text-xs opacity-70">↵</div>' : ''}
       `;
 
       el.onclick = () => {
@@ -387,7 +368,7 @@ export class CommandPaletteModal {
       this.listContainer!.appendChild(el);
 
       if (isSelected) {
-        el.scrollIntoView({ block: "nearest", behavior: "smooth" });
+        el.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
       }
     });
   }

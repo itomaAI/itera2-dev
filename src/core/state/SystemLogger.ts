@@ -3,12 +3,12 @@
  * Itera OS v2: System Logger
  */
 
-import type { VfsService } from "../vfs/VfsService";
-import { SYSTEM_PRINCIPAL, type VfsStat } from "../vfs/types";
+import type { VfsService } from '../vfs/VfsService';
+import { SYSTEM_PRINCIPAL, type VfsStat } from '../vfs/types';
 
 export class SystemLogger {
   private vfs: VfsService;
-  private baseDir = "system/logs";
+  private baseDir = 'system/logs';
 
   constructor(vfs: VfsService) {
     this.vfs = vfs;
@@ -64,7 +64,7 @@ export class SystemLogger {
       }) as VfsStat[];
 
       for (const file of files) {
-        if (file.kind === "file" && file.path.endsWith(".jsonl")) {
+        if (file.kind === 'file' && file.path.endsWith('.jsonl')) {
           if (file.updatedAt < threshold) {
             try {
               // permanent: true でゴミ箱を経由せず完全削除
@@ -73,10 +73,7 @@ export class SystemLogger {
               });
               count++;
             } catch (e) {
-              console.warn(
-                `[SystemLogger] Failed to purge log: ${file.path}`,
-                e,
-              );
+              console.warn(`[SystemLogger] Failed to purge log: ${file.path}`, e);
             }
           }
         }
@@ -86,7 +83,7 @@ export class SystemLogger {
         console.log(`[SystemLogger] Purged ${count} old log files.`);
       }
     } catch (e) {
-      console.warn("[SystemLogger] Purge failed:", e);
+      console.warn('[SystemLogger] Purge failed:', e);
     }
     return count;
   }

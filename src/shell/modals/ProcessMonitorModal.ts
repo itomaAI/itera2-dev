@@ -5,7 +5,7 @@
  * ※ index.html を汚さないよう、DOM は TypeScript から動的に生成します。
  */
 
-import type { ProcessManager } from "../windowing/ProcessManager";
+import type { ProcessManager } from '../windowing/ProcessManager';
 
 export class ProcessMonitorModal {
   private processManager: ProcessManager;
@@ -24,23 +24,22 @@ export class ProcessMonitorModal {
   private _createDOM(): void {
     if (this.overlay) return;
 
-    this.overlay = document.createElement("div");
+    this.overlay = document.createElement('div');
     this.overlay.className =
-      "fixed inset-0 bg-black/60 backdrop-blur-sm z-[10000] flex items-center justify-center p-4 itera-animate-fade select-none";
+      'fixed inset-0 bg-black/60 backdrop-blur-sm z-[10000] flex items-center justify-center p-4 itera-animate-fade select-none';
 
     // 背景クリックで閉じる
     this.overlay.onclick = (e) => {
       if (e.target === this.overlay) this.close();
     };
 
-    const box = document.createElement("div");
+    const box = document.createElement('div');
     box.className =
-      "bg-panel border border-border-main rounded-2xl shadow-2xl w-full max-w-3xl flex flex-col overflow-hidden max-h-[85vh] itera-animate-modal";
+      'bg-panel border border-border-main rounded-2xl shadow-2xl w-full max-w-3xl flex flex-col overflow-hidden max-h-[85vh] itera-animate-modal';
 
     // Header
-    const header = document.createElement("div");
-    header.className =
-      "px-6 py-4 border-b border-border-main bg-card/50 flex items-center justify-between shrink-0";
+    const header = document.createElement('div');
+    header.className = 'px-6 py-4 border-b border-border-main bg-card/50 flex items-center justify-between shrink-0';
     header.innerHTML = `
       <div class="flex items-center gap-3">
         <div class="w-8 h-8 rounded-lg bg-primary/20 text-primary flex items-center justify-center text-lg">📊</div>
@@ -51,40 +50,35 @@ export class ProcessMonitorModal {
       </div>
     `;
 
-    const btnClose = document.createElement("button");
+    const btnClose = document.createElement('button');
     btnClose.className =
-      "w-8 h-8 flex items-center justify-center rounded-full bg-card hover:bg-hover border border-border-main text-text-muted hover:text-text-main transition";
-    btnClose.innerHTML = "✕";
+      'w-8 h-8 flex items-center justify-center rounded-full bg-card hover:bg-hover border border-border-main text-text-muted hover:text-text-main transition';
+    btnClose.innerHTML = '✕';
     btnClose.onclick = () => this.close();
     header.appendChild(btnClose);
 
     // List Container
-    this.listContainer = document.createElement("div");
-    this.listContainer.className =
-      "flex-1 overflow-y-auto p-4 space-y-2 bg-app";
+    this.listContainer = document.createElement('div');
+    this.listContainer.className = 'flex-1 overflow-y-auto p-4 space-y-2 bg-app';
 
     // Footer
-    const footer = document.createElement("div");
-    footer.className =
-      "px-6 py-3 border-t border-border-main bg-card flex justify-between items-center shrink-0";
+    const footer = document.createElement('div');
+    footer.className = 'px-6 py-3 border-t border-border-main bg-card flex justify-between items-center shrink-0';
 
-    const statusText = document.createElement("div");
-    statusText.className =
-      "text-xs font-mono text-text-muted flex items-center gap-2";
+    const statusText = document.createElement('div');
+    statusText.className = 'text-xs font-mono text-text-muted flex items-center gap-2';
     statusText.innerHTML = `<span class="w-2 h-2 rounded-full bg-success animate-pulse"></span> Auto-updating (1s)`;
 
-    const btnKillAll = document.createElement("button");
+    const btnKillAll = document.createElement('button');
     btnKillAll.className =
-      "px-4 py-2 rounded-lg text-xs font-bold text-error hover:text-white border border-error/50 hover:bg-error transition";
-    btnKillAll.innerText = "Kill All Daemons";
+      'px-4 py-2 rounded-lg text-xs font-bold text-error hover:text-white border border-error/50 hover:bg-error transition';
+    btnKillAll.innerText = 'Kill All Daemons';
     btnKillAll.onclick = async () => {
-      const confirmed = await window.AppUI?.confirm(
-        "Are you sure you want to kill all background daemons?",
-      );
+      const confirmed = await window.AppUI?.confirm('Are you sure you want to kill all background daemons?');
       if (confirmed) {
         const procs = this.processManager.list();
         procs.forEach((p) => {
-          if (p.type === "daemon") this.processManager.kill(p.pid);
+          if (p.type === 'daemon') this.processManager.kill(p.pid);
         });
         this._renderList();
       }
@@ -108,12 +102,11 @@ export class ProcessMonitorModal {
 
     // Sort: Foreground -> Background App -> Daemon
     processes.sort((a, b) => {
-      const getScore = (p: any) =>
-        p.state === "foreground" ? 3 : p.type === "app" ? 2 : 1;
+      const getScore = (p: any) => (p.state === 'foreground' ? 3 : p.type === 'app' ? 2 : 1);
       return getScore(b) - getScore(a);
     });
 
-    this.listContainer.innerHTML = "";
+    this.listContainer.innerHTML = '';
 
     if (processes.length === 0) {
       this.listContainer.innerHTML = `<div class="flex items-center justify-center h-32 text-sm text-text-muted">No processes running.</div>`;
@@ -121,19 +114,19 @@ export class ProcessMonitorModal {
     }
 
     processes.forEach((proc) => {
-      const isForeground = proc.state === "foreground";
-      const isDaemon = proc.type === "daemon";
+      const isForeground = proc.state === 'foreground';
+      const isDaemon = proc.type === 'daemon';
 
       const badgeColor = isForeground
-        ? "bg-primary/20 text-primary border-primary/30"
+        ? 'bg-primary/20 text-primary border-primary/30'
         : isDaemon
-          ? "bg-warning/20 text-warning border-warning/30"
-          : "bg-success/20 text-success border-success/30";
+          ? 'bg-warning/20 text-warning border-warning/30'
+          : 'bg-success/20 text-success border-success/30';
 
-      const icon = isDaemon ? "⚙️" : "🖥️";
+      const icon = isDaemon ? '⚙️' : '🖥️';
 
-      const row = document.createElement("div");
-      row.className = `flex items-center justify-between p-3 rounded-xl border transition ${isForeground ? "border-primary/50 bg-primary/5 shadow-sm" : "border-border-main bg-panel hover:border-primary/30"}`;
+      const row = document.createElement('div');
+      row.className = `flex items-center justify-between p-3 rounded-xl border transition ${isForeground ? 'border-primary/50 bg-primary/5 shadow-sm' : 'border-border-main bg-panel hover:border-primary/30'}`;
 
       row.innerHTML = `
         <div class="flex items-center gap-4 overflow-hidden">
@@ -148,10 +141,10 @@ export class ProcessMonitorModal {
         </div>
       `;
 
-      const btnKill = document.createElement("button");
+      const btnKill = document.createElement('button');
       btnKill.className =
-        "shrink-0 w-8 h-8 flex items-center justify-center rounded-lg bg-card hover:bg-error/20 text-text-muted hover:text-error border border-border-main transition";
-      btnKill.innerHTML = "✕";
+        'shrink-0 w-8 h-8 flex items-center justify-center rounded-lg bg-card hover:bg-error/20 text-text-muted hover:text-error border border-border-main transition';
+      btnKill.innerHTML = '✕';
       btnKill.onclick = () => {
         this.processManager.kill(proc.pid);
         this._renderList(); // 即時反映
@@ -181,14 +174,14 @@ export class ProcessMonitorModal {
     if (this.isOpen) return;
     this.isOpen = true;
     this._createDOM();
-    this.overlay?.classList.remove("hidden");
+    this.overlay?.classList.remove('hidden');
     this._startPolling();
   }
 
   close(): void {
     if (!this.isOpen) return;
     this.isOpen = false;
-    this.overlay?.classList.add("hidden");
+    this.overlay?.classList.add('hidden');
     this._stopPolling();
   }
 }

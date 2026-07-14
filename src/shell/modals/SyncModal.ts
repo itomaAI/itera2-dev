@@ -4,9 +4,9 @@
  */
 
 const DOM_IDS = {
-  MODAL: "sync-modal",
-  BTN_OPEN: "btn-sync",
-  BTN_CLOSE: "btn-close-sync",
+  MODAL: 'sync-modal',
+  BTN_OPEN: 'btn-sync',
+  BTN_CLOSE: 'btn-close-sync',
 };
 
 export class SyncModal {
@@ -34,13 +34,13 @@ export class SyncModal {
 
   open(): void {
     if (this.els.MODAL) {
-      this.els.MODAL.classList.remove("hidden");
+      this.els.MODAL.classList.remove('hidden');
     }
   }
 
   close(): void {
     if (this.els.MODAL) {
-      this.els.MODAL.classList.add("hidden");
+      this.els.MODAL.classList.add('hidden');
     }
   }
 }

@@ -3,7 +3,7 @@
  * Itera OS VFS v2: Content Storage Manager (OPFS Wrapper)
  */
 
-import type { ContentRef } from "./types";
+import type { ContentRef } from './types';
 
 export class ContentStore {
   private useOpfs: boolean = false;
@@ -11,25 +11,18 @@ export class ContentStore {
   private memoryStore: Map<string, Blob> = new Map();
 
   constructor() {
-    if (
-      typeof navigator !== "undefined" &&
-      navigator.storage &&
-      navigator.storage.getDirectory
-    ) {
+    if (typeof navigator !== 'undefined' && navigator.storage && navigator.storage.getDirectory) {
       this.useOpfs = true;
       this.rootHandlePromise = navigator.storage.getDirectory();
     } else {
       console.warn(
-        "[ContentStore] OPFS is not supported in this environment. Falling back to volatile in-memory storage.",
+        '[ContentStore] OPFS is not supported in this environment. Falling back to volatile in-memory storage.',
       );
     }
   }
 
-  async write(
-    key: string,
-    content: string | Uint8Array | Blob,
-  ): Promise<ContentRef> {
-    const backend = this.useOpfs ? "opfs" : "memory";
+  async write(key: string, content: string | Uint8Array | Blob): Promise<ContentRef> {
+    const backend = this.useOpfs ? 'opfs' : 'memory';
 
     if (!this.useOpfs) {
       let blob: Blob;
@@ -38,7 +31,7 @@ export class ContentStore {
       } else if (content instanceof Uint8Array) {
         blob = new Blob([content as any]);
       } else {
-        blob = new Blob([content], { type: "text/plain" });
+        blob = new Blob([content], { type: 'text/plain' });
       }
       this.memoryStore.set(key, blob);
       return { backend, key };
@@ -60,7 +53,7 @@ export class ContentStore {
   }
 
   async readText(ref: ContentRef): Promise<string> {
-    if (ref.backend === "memory") {
+    if (ref.backend === 'memory') {
       const blob = this.memoryStore.get(ref.key);
       if (!blob) throw new Error(`Content not found in memory: ${ref.key}`);
       return await blob.text();
@@ -72,8 +65,7 @@ export class ContentStore {
       const file = await fileHandle.getFile();
       return await file.text();
     } catch (e: any) {
-      if (e.name === "NotFoundError")
-        throw new Error(`Content not found in OPFS: ${ref.key}`);
+      if (e.name === 'NotFoundError') throw new Error(`Content not found in OPFS: ${ref.key}`);
       throw new Error(`OPFS Read Error: ${e.message || String(e)}`);
     }
   }
@@ -85,7 +77,7 @@ export class ContentStore {
   }
 
   async readBlob(ref: ContentRef): Promise<Blob> {
-    if (ref.backend === "memory") {
+    if (ref.backend === 'memory') {
       const blob = this.memoryStore.get(ref.key);
       if (!blob) throw new Error(`Content not found in memory: ${ref.key}`);
       return blob;
@@ -96,14 +88,13 @@ export class ContentStore {
       const fileHandle = await root.getFileHandle(ref.key);
       return await fileHandle.getFile();
     } catch (e: any) {
-      if (e.name === "NotFoundError")
-        throw new Error(`Content not found in OPFS: ${ref.key}`);
+      if (e.name === 'NotFoundError') throw new Error(`Content not found in OPFS: ${ref.key}`);
       throw new Error(`OPFS Read Error: ${e.message || String(e)}`);
     }
   }
 
   async delete(ref: ContentRef): Promise<void> {
-    if (ref.backend === "memory") {
+    if (ref.backend === 'memory') {
       this.memoryStore.delete(ref.key);
       return;
     }
@@ -112,18 +103,15 @@ export class ContentStore {
       const root = await this.rootHandlePromise!;
       await root.removeEntry(ref.key);
     } catch (e: any) {
-      if (e.name !== "NotFoundError") {
-        console.warn(
-          `[ContentStore] Failed to delete file in OPFS: ${ref.key}`,
-          e,
-        );
+      if (e.name !== 'NotFoundError') {
+        console.warn(`[ContentStore] Failed to delete file in OPFS: ${ref.key}`, e);
         throw new Error(`OPFS Delete Error: ${e.message || String(e)}`);
       }
     }
   }
 
   async exists(ref: ContentRef): Promise<boolean> {
-    if (ref.backend === "memory") {
+    if (ref.backend === 'memory') {
       return this.memoryStore.has(ref.key);
     }
 
@@ -132,7 +120,7 @@ export class ContentStore {
       await root.getFileHandle(ref.key);
       return true;
     } catch (e: any) {
-      if (e.name === "NotFoundError") return false;
+      if (e.name === 'NotFoundError') return false;
       throw e;
     }
   }
@@ -177,9 +165,7 @@ export class ContentStore {
       for await (const key of root.keys()) {
         await root.removeEntry(key, { recursive: true });
       }
-      console.log(
-        `[ContentStore] All OPFS contents have been successfully cleared.`,
-      );
+      console.log(`[ContentStore] All OPFS contents have been successfully cleared.`);
     } catch (e: any) {
       console.error(`[ContentStore] Failed to clear OPFS contents:`, e);
       throw new Error(`OPFS Clear Error: ${e.message || String(e)}`);

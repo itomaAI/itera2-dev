@@ -3,32 +3,32 @@
  * Itera OS v2: UI & Process Tools
  */
 
-import type { ToolRegistry } from "../ToolRegistry";
-import type { VfsService } from "../../vfs/VfsService";
-import { SYSTEM_PRINCIPAL, USER_PRINCIPAL } from "../../vfs/types";
+import type { ToolRegistry } from '../ToolRegistry';
+import type { VfsService } from '../../vfs/VfsService';
+import { SYSTEM_PRINCIPAL, USER_PRINCIPAL } from '../../vfs/types';
 
 export function registerUITools(registry: ToolRegistry): void {
-  const setId = "system:ui";
-  const setName = "System: Process & UI";
+  const setId = 'system:ui';
+  const setName = 'System: Process & UI';
 
   registry.registerSystemTool(setId, setName, {
-    name: "spawn",
-    description: "Spawn process.",
+    name: 'spawn',
+    description: 'Spawn process.',
     impl: async (params: any, context: any) => {
-      let pid = params.pid || "main";
-      const path = params.path || "index.html";
-      let mode = params.mode || "background";
-      const forceReload = params.force === "true";
+      let pid = params.pid || 'main';
+      const path = params.path || 'index.html';
+      let mode = params.mode || 'background';
+      const forceReload = params.force === 'true';
 
-      if (pid === "main") {
-        mode = "foreground";
+      if (pid === 'main') {
+        mode = 'foreground';
         const basePath = path.split(/[?#]/)[0];
-        pid = `app_${basePath.replace(/[^a-zA-Z0-9_-]/g, "_")}`;
+        pid = `app_${basePath.replace(/[^a-zA-Z0-9_-]/g, '_')}`;
       }
 
       const args: Record<string, string> = {};
       for (const [k, v] of Object.entries(params)) {
-        if (!["pid", "path", "mode", "force", "content"].includes(k)) {
+        if (!['pid', 'path', 'mode', 'force', 'content'].includes(k)) {
           args[k] = String(v);
         }
       }
@@ -36,23 +36,16 @@ export function registerUITools(registry: ToolRegistry): void {
       const currentUri = `metaos://run/${path}`;
 
       if (context.shell?.processManager) {
-        await context.shell.processManager.spawn(
-          pid,
-          path,
-          mode,
-          forceReload,
-          args,
-          currentUri,
-        );
+        await context.shell.processManager.spawn(pid, path, mode, forceReload, args, currentUri);
         return { log: `Process started.`, ui: `🚀 Spawned [${pid}]` };
       }
-      return { log: "ProcessManager not available.", error: true };
+      return { log: 'ProcessManager not available.', error: true };
     },
   });
 
   registry.registerSystemTool(setId, setName, {
-    name: "open",
-    description: "Open a file using default app.",
+    name: 'open',
+    description: 'Open a file using default app.',
     impl: async (params: any, context: any) => {
       const path = params.path;
       if (!path) throw new Error("Attribute 'path' is required.");
@@ -62,14 +55,14 @@ export function registerUITools(registry: ToolRegistry): void {
           const stat = context.vfs.stat(USER_PRINCIPAL, path);
           const resolvedApp = context.shell.resolver.resolveDefault(stat);
 
-          if (resolvedApp.appId === "HostEditor") {
+          if (resolvedApp.appId === 'HostEditor') {
             const content = await context.vfs.readFile(USER_PRINCIPAL, path);
             context.shell.modals.editor.open(path, content);
             return {
               log: `Opened ${path} in Host Editor`,
               ui: `📝 Opened Editor`,
             };
-          } else if (resolvedApp.appId === "HostMediaViewer") {
+          } else if (resolvedApp.appId === 'HostMediaViewer') {
             const blob = await context.vfs.readBlob(USER_PRINCIPAL, path);
             context.shell.modals.media.open(path, blob);
             return {
@@ -82,7 +75,7 @@ export function registerUITools(registry: ToolRegistry): void {
             await context.shell.processManager.spawn(
               resolvedApp.appId,
               resolvedApp.appPath,
-              "foreground",
+              'foreground',
               false,
               args,
               fullUri,
@@ -96,52 +89,50 @@ export function registerUITools(registry: ToolRegistry): void {
           throw new Error(`Failed to open: ${e.message}`);
         }
       }
-      return { log: "Shell not available.", error: true };
+      return { log: 'Shell not available.', error: true };
     },
   });
 
   registry.registerSystemTool(setId, setName, {
-    name: "kill",
-    description: "Kill process.",
+    name: 'kill',
+    description: 'Kill process.',
     impl: async (params: any, context: any) => {
       const pid = params.pid;
       if (!pid) throw new Error("Attribute 'pid' is required.");
 
       if (context.shell?.processManager) {
         const success = context.shell.processManager.kill(pid);
-        if (success)
-          return { log: `Process terminated.`, ui: `🛑 Killed [${pid}]` };
+        if (success) return { log: `Process terminated.`, ui: `🛑 Killed [${pid}]` };
         return { log: `Process not found or already stopped.`, error: true };
       }
-      return { log: "ProcessManager not available.", error: true };
+      return { log: 'ProcessManager not available.', error: true };
     },
   });
 
   registry.registerSystemTool(setId, setName, {
-    name: "ps",
-    description: "List processes.",
+    name: 'ps',
+    description: 'List processes.',
     impl: async (_params: any, context: any) => {
       if (context.shell?.processManager) {
         const list = context.shell.processManager.list();
-        if (list.length === 0)
-          return { log: "No processes running.", ui: `📊 Process List (0)` };
+        if (list.length === 0) return { log: 'No processes running.', ui: `📊 Process List (0)` };
 
         const logStr = list
           .map(
             (p: any) =>
               `PID: ${p.pid.padEnd(15)} | Type: ${p.type.padEnd(6)} | State: ${p.state.padEnd(10)} | Path: ${p.path}`,
           )
-          .join("\n");
+          .join('\n');
 
         return { log: logStr, ui: `📊 Process List (${list.length})` };
       }
-      return { log: "ProcessManager not available.", error: true };
+      return { log: 'ProcessManager not available.', error: true };
     },
   });
 
   registry.registerSystemTool(setId, setName, {
-    name: "take_screenshot",
-    description: "Capture screenshot.",
+    name: 'take_screenshot',
+    description: 'Capture screenshot.',
     impl: async (_params: any, context: { shell: any; vfs: VfsService }) => {
       if (context.shell?.processManager) {
         await new Promise((r) => setTimeout(r, 1000)); // Render wait
@@ -160,7 +151,7 @@ export function registerUITools(registry: ToolRegistry): void {
           while (n--) {
             u8arr[n] = byteString.charCodeAt(n);
           }
-          const blob = new Blob([u8arr], { type: "image/png" });
+          const blob = new Blob([u8arr], { type: 'image/png' });
 
           // システムのキャッシュディレクトリへの書き込みなので SYSTEM_PRINCIPAL を使用
           await context.vfs.writeFile(SYSTEM_PRINCIPAL, path, blob, {
@@ -171,33 +162,33 @@ export function registerUITools(registry: ToolRegistry): void {
           return {
             log: `Captured main process and saved to ${path}`,
             ui: `📸 Screenshot Saved`,
-            media: { path: path, mimeType: "image/png", metadata: {} },
+            media: { path: path, mimeType: 'image/png', metadata: {} },
           };
         } catch (e: any) {
           return { log: e.message, ui: `⚠️ Screenshot Failed`, error: true };
         }
       }
-      return { log: "ProcessManager not available.", error: true };
+      return { log: 'ProcessManager not available.', error: true };
     },
   });
 
   registry.registerSystemTool(setId, setName, {
-    name: "inject_js",
-    description: "Inject JS to process.",
+    name: 'inject_js',
+    description: 'Inject JS to process.',
     impl: async (params: any, context: any) => {
       let pid = params.pid;
-      const code = params.content || "";
+      const code = params.content || '';
 
-      if (!pid || pid === "main") {
+      if (!pid || pid === 'main') {
         if (context.shell?.processManager) {
-          const fg = Array.from(
-            context.shell.processManager.processes.values(),
-          ).find((p: any) => p.state === "foreground");
+          const fg = Array.from(context.shell.processManager.processes.values()).find(
+            (p: any) => p.state === 'foreground',
+          );
           if (fg) pid = (fg as any).pid;
-          else pid = "app_index_html";
+          else pid = 'app_index_html';
         }
       }
-      if (!code.trim()) throw new Error("No code provided.");
+      if (!code.trim()) throw new Error('No code provided.');
 
       if (context.shell?.processManager) {
         const pm = context.shell.processManager;
@@ -208,22 +199,17 @@ export function registerUITools(registry: ToolRegistry): void {
         }
 
         try {
-          const transport = context.shell["transport"];
-          let result = await transport.invokeGuest(
-            pid,
-            "eval_js",
-            { code },
-            proc.iframe.contentWindow,
-          );
+          const transport = context.shell['transport'];
+          let result = await transport.invokeGuest(pid, 'eval_js', { code }, proc.iframe.contentWindow);
 
           let logResult = result;
-          if (typeof result === "object" && result !== null) {
+          if (typeof result === 'object' && result !== null) {
             try {
               logResult = JSON.stringify(result, null, 2);
             } catch (e) {
               logResult = String(result);
             }
-          } else if (result === undefined) logResult = "undefined";
+          } else if (result === undefined) logResult = 'undefined';
 
           return {
             log: `Execution result:\n${logResult}`,
@@ -237,7 +223,7 @@ export function registerUITools(registry: ToolRegistry): void {
           };
         }
       }
-      return { log: "ProcessManager not available.", error: true };
+      return { log: 'ProcessManager not available.', error: true };
     },
   });
 }

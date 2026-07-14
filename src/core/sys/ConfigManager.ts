@@ -3,9 +3,9 @@
  * Itera OS v2: System Configuration Manager
  */
 
-import type { VfsService } from "../vfs/VfsService";
-import type { VfsEventBus } from "../vfs/VfsEventBus";
-import { SYSTEM_PRINCIPAL } from "../vfs/types";
+import type { VfsService } from '../vfs/VfsService';
+import type { VfsEventBus } from '../vfs/VfsEventBus';
+import { SYSTEM_PRINCIPAL } from '../vfs/types';
 
 export interface OsConfig {
   preferences: {
@@ -30,19 +30,19 @@ export interface OsConfig {
 
 const DEFAULT_CONFIG: OsConfig = {
   preferences: {
-    username: "User",
-    agentName: "Itera",
-    language: "English",
+    username: 'User',
+    agentName: 'Itera',
+    language: 'English',
     autoUpdateSystemFiles: true,
   },
   appearance: {
-    theme: "system/themes/light.json",
-    typography: { uiFont: "Inter", monoFont: "monospace", fontSize: "medium" },
+    theme: 'system/themes/light.json',
+    typography: { uiFont: 'Inter', monoFont: 'monospace', fontSize: 'medium' },
     layout: { animations: true },
   },
-  llm: { model: "gemini-3-flash-preview", temperature: 1.0 },
+  llm: { model: 'gemini-3-flash-preview', temperature: 1.0 },
   network: {
-    proxyUrl: "https://corsproxy.io/?",
+    proxyUrl: 'https://corsproxy.io/?',
     allowCredentialsWithProxy: false,
   },
   associations: { extensions: {}, mimeTypes: {} },
@@ -51,7 +51,7 @@ const DEFAULT_CONFIG: OsConfig = {
 export class ConfigManager {
   private vfs: VfsService;
   private cache: OsConfig;
-  private configDir = "system/config";
+  private configDir = 'system/config';
   private listeners: ((config: OsConfig) => void)[] = [];
 
   constructor(vfs: VfsService, eventBus: VfsEventBus) {
@@ -64,14 +64,10 @@ export class ConfigManager {
       let configChanged = false;
       const loadPromises: Promise<void>[] = [];
       for (const event of events) {
-        if (
-          event.path.startsWith(`${this.configDir}/`) &&
-          event.path.endsWith(".json")
-        ) {
+        if (event.path.startsWith(`${this.configDir}/`) && event.path.endsWith('.json')) {
           // apps.json と services.json は別のマネージャが扱うので無視
-          const filename = event.path.split("/").pop();
-          if (filename === "apps.json" || filename === "services.json")
-            continue;
+          const filename = event.path.split('/').pop();
+          if (filename === 'apps.json' || filename === 'services.json') continue;
 
           loadPromises.push(this._loadCategory(filename!));
           configChanged = true;
@@ -98,13 +94,11 @@ export class ConfigManager {
    * 単一のカテゴリ（ファイル）を非同期でロードし、キャッシュを更新する
    */
   private async _loadCategory(filename: string): Promise<void> {
-    const category = filename.replace(".json", "");
+    const category = filename.replace('.json', '');
     const path = `${this.configDir}/${filename}`;
 
     // デフォルトのカテゴリ設定をディープコピーしてベースにする
-    const defaultData = DEFAULT_CONFIG[category]
-      ? JSON.parse(JSON.stringify(DEFAULT_CONFIG[category]))
-      : {};
+    const defaultData = DEFAULT_CONFIG[category] ? JSON.parse(JSON.stringify(DEFAULT_CONFIG[category])) : {};
 
     try {
       if (this.vfs.exists(SYSTEM_PRINCIPAL, path)) {
@@ -115,10 +109,7 @@ export class ConfigManager {
         this.cache[category] = defaultData;
       }
     } catch (e) {
-      console.warn(
-        `[ConfigManager] Failed to load or parse ${path}, using defaults.`,
-        e,
-      );
+      console.warn(`[ConfigManager] Failed to load or parse ${path}, using defaults.`, e);
       this.cache[category] = defaultData;
     }
   }
@@ -145,20 +136,15 @@ export class ConfigManager {
    */
   async update(category: keyof OsConfig, updates: any): Promise<void> {
     // ディープマージを使用して安全に更新
-    const newCategoryData = this._deepMerge(
-      this.cache[category] || {},
-      updates,
-    );
+    const newCategoryData = this._deepMerge(this.cache[category] || {}, updates);
     this.cache[category] = newCategoryData;
 
     const path = `${this.configDir}/${String(category)}.json`;
     try {
-      await this.vfs.writeFile(
-        SYSTEM_PRINCIPAL,
-        path,
-        JSON.stringify(newCategoryData, null, 2),
-        { overwrite: true, system: true },
-      );
+      await this.vfs.writeFile(SYSTEM_PRINCIPAL, path, JSON.stringify(newCategoryData, null, 2), {
+        overwrite: true,
+        system: true,
+      });
     } catch (e) {
       console.error(`[ConfigManager] Failed to save config to ${path}`, e);
       throw e;
@@ -187,6 +173,6 @@ export class ConfigManager {
   }
 
   private _isObject(item: any): boolean {
-    return item && typeof item === "object" && !Array.isArray(item);
+    return item && typeof item === 'object' && !Array.isArray(item);
   }
 }

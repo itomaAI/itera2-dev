@@ -3,12 +3,12 @@
  * Itera OS v2: Application Registry Manager
  */
 
-import type { VfsService } from "../vfs/VfsService";
-import type { VfsEventBus } from "../vfs/VfsEventBus";
-import { SYSTEM_PRINCIPAL } from "../vfs/types";
+import type { VfsService } from '../vfs/VfsService';
+import type { VfsEventBus } from '../vfs/VfsEventBus';
+import { SYSTEM_PRINCIPAL } from '../vfs/types';
 
 export interface FileHandler {
-  action: "view" | "edit";
+  action: 'view' | 'edit';
   extensions?: string[];
   mimeTypes?: string[];
 }
@@ -25,7 +25,7 @@ export interface AppManifest {
 export class AppRegistry {
   private vfs: VfsService;
   private apps: Map<string, AppManifest> = new Map();
-  private registryPath = "system/registry/apps.json";
+  private registryPath = 'system/registry/apps.json';
   private listeners: (() => void)[] = [];
 
   constructor(vfs: VfsService, eventBus: VfsEventBus) {
@@ -48,10 +48,7 @@ export class AppRegistry {
       this.apps.clear(); // 常に一度クリアする
 
       if (this.vfs.exists(SYSTEM_PRINCIPAL, this.registryPath)) {
-        const content = await this.vfs.readFile(
-          SYSTEM_PRINCIPAL,
-          this.registryPath,
-        );
+        const content = await this.vfs.readFile(SYSTEM_PRINCIPAL, this.registryPath);
         const parsed: AppManifest[] = JSON.parse(content);
 
         for (const app of parsed) {
@@ -59,15 +56,10 @@ export class AppRegistry {
         }
         console.log(`[AppRegistry] Loaded ${this.apps.size} apps.`);
       } else {
-        console.log(
-          `[AppRegistry] Registry file not found. Apps list is now empty.`,
-        );
+        console.log(`[AppRegistry] Registry file not found. Apps list is now empty.`);
       }
     } catch (e) {
-      console.warn(
-        `[AppRegistry] Failed to load or parse ${this.registryPath}. Apps list is now empty.`,
-        e,
-      );
+      console.warn(`[AppRegistry] Failed to load or parse ${this.registryPath}. Apps list is now empty.`, e);
     }
   }
 

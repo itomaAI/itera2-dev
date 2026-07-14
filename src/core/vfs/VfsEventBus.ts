@@ -3,7 +3,7 @@
  * Itera OS VFS v2: Event Batching and Pub/Sub System
  */
 
-import type { VfsEvent } from "./types";
+import type { VfsEvent } from './types';
 
 export type VfsEventSubscriber = (events: VfsEvent[]) => void;
 
@@ -42,7 +42,7 @@ export class VfsEventBus {
       try {
         subscriber(eventsToDispatch);
       } catch (e) {
-        console.error("[VfsEventBus] Error in subscriber callback:", e);
+        console.error('[VfsEventBus] Error in subscriber callback:', e);
       }
     }
   }

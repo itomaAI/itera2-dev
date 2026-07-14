@@ -14,7 +14,7 @@ export class UriRouter {
   private routes: Map<string, Function> = new Map();
   private defaultIntent: string;
 
-  constructor(defaultIntent: string = "open") {
+  constructor(defaultIntent: string = 'open') {
     this.defaultIntent = defaultIntent;
   }
 
@@ -27,7 +27,7 @@ export class UriRouter {
   }
 
   dispatch(uriString: string): boolean {
-    if (!uriString || typeof uriString !== "string") return false;
+    if (!uriString || typeof uriString !== 'string') return false;
 
     const parsed = this._parse(uriString.trim());
     if (!parsed) {
@@ -48,7 +48,7 @@ export class UriRouter {
     let normalized = uri;
 
     // metaos:// プレフィックスがない場合は補完
-    if (!normalized.startsWith("metaos://")) {
+    if (!normalized.startsWith('metaos://')) {
       normalized = `metaos://${normalized}`;
     }
 
@@ -57,9 +57,9 @@ export class UriRouter {
     if (!match) return null;
 
     const fullPath = match[1]; // 例: "open/data/notes.md" または "data/notes.md"
-    const searchAndHash = match[2] || "";
+    const searchAndHash = match[2] || '';
 
-    const segments = fullPath.split("/");
+    const segments = fullPath.split('/');
     const firstSegment = segments[0].toLowerCase();
 
     let intent = this.defaultIntent;
@@ -71,15 +71,14 @@ export class UriRouter {
       pathSegments = segments.slice(1);
     }
 
-    const path = decodeURIComponent(pathSegments.join("/"));
+    const path = decodeURIComponent(pathSegments.join('/'));
 
     // クエリパラメータの抽出
     const queryArgs: Record<string, string> = {};
-    const hashIndex = searchAndHash.indexOf("#");
-    const searchString =
-      hashIndex !== -1 ? searchAndHash.substring(0, hashIndex) : searchAndHash;
+    const hashIndex = searchAndHash.indexOf('#');
+    const searchString = hashIndex !== -1 ? searchAndHash.substring(0, hashIndex) : searchAndHash;
 
-    if (searchString.startsWith("?")) {
+    if (searchString.startsWith('?')) {
       const params = new URLSearchParams(searchString.substring(1));
       params.forEach((value, key) => {
         queryArgs[key] = value;

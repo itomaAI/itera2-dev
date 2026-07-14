@@ -3,11 +3,11 @@
  * Itera OS VFS v2: Metadata Storage Manager (IndexedDB + In-Memory Cache)
  */
 
-import type { VfsNode } from "./types";
+import type { VfsNode } from './types';
 
 export class NodeStore {
-  private dbName = "itera_vfs_v2";
-  private storeName = "nodes";
+  private dbName = 'itera_vfs_v2';
+  private storeName = 'nodes';
 
   private memoryMap: Map<string, VfsNode> = new Map();
   private dbPromise: Promise<IDBDatabase>;
@@ -24,17 +24,14 @@ export class NodeStore {
       const request = indexedDB.open(this.dbName, 1);
 
       request.onerror = (e) => {
-        console.error(
-          "[NodeStore] IndexedDB Open Error:",
-          (e.target as any).error,
-        );
+        console.error('[NodeStore] IndexedDB Open Error:', (e.target as any).error);
         reject((e.target as any).error);
       };
 
       request.onupgradeneeded = (e) => {
         const db = (e.target as any).result as IDBDatabase;
         if (!db.objectStoreNames.contains(this.storeName)) {
-          db.createObjectStore(this.storeName, { keyPath: "id" });
+          db.createObjectStore(this.storeName, { keyPath: 'id' });
         }
       };
 
@@ -44,10 +41,7 @@ export class NodeStore {
     });
   }
 
-  private async _tx(
-    mode: IDBTransactionMode,
-    callback: (store: IDBObjectStore) => IDBRequest,
-  ): Promise<any> {
+  private async _tx(mode: IDBTransactionMode, callback: (store: IDBObjectStore) => IDBRequest): Promise<any> {
     const db = await this.dbPromise;
     return new Promise((resolve, reject) => {
       const transaction = db.transaction([this.storeName], mode);
@@ -68,7 +62,7 @@ export class NodeStore {
   async loadAll(): Promise<void> {
     const db = await this.dbPromise;
     return new Promise((resolve, reject) => {
-      const transaction = db.transaction([this.storeName], "readonly");
+      const transaction = db.transaction([this.storeName], 'readonly');
       const store = transaction.objectStore(this.storeName);
       const request = store.getAll();
 
@@ -82,17 +76,12 @@ export class NodeStore {
         // メモリマップのロード完了後にインデックスを構築
         this.rebuildIndex();
 
-        console.log(
-          `[NodeStore] Boot complete. Loaded ${this.memoryMap.size} metadata nodes into memory.`,
-        );
+        console.log(`[NodeStore] Boot complete. Loaded ${this.memoryMap.size} metadata nodes into memory.`);
         resolve();
       };
 
       request.onerror = (e) => {
-        console.error(
-          "[NodeStore] Failed to load metadata:",
-          (e.target as any).error,
-        );
+        console.error('[NodeStore] Failed to load metadata:', (e.target as any).error);
         reject((e.target as any).error);
       };
     });
@@ -162,7 +151,7 @@ export class NodeStore {
     this._addToIndex(node);
 
     try {
-      await this._tx("readwrite", (store) => store.put(node));
+      await this._tx('readwrite', (store) => store.put(node));
     } catch (e) {
       console.error(
         `[NodeStore] Failed to persist node ${node.id} to IndexedDB. Memory state might be out of sync.`,
@@ -181,12 +170,9 @@ export class NodeStore {
     this.memoryMap.delete(id);
 
     try {
-      await this._tx("readwrite", (store) => store.delete(id));
+      await this._tx('readwrite', (store) => store.delete(id));
     } catch (e) {
-      console.error(
-        `[NodeStore] Failed to delete node ${id} from IndexedDB. Memory state might be out of sync.`,
-        e,
-      );
+      console.error(`[NodeStore] Failed to delete node ${id} from IndexedDB. Memory state might be out of sync.`, e);
       throw e;
     }
   }
@@ -194,8 +180,8 @@ export class NodeStore {
   async clearAll(): Promise<void> {
     this.memoryMap.clear();
     this.childrenIndex.clear();
-    await this._tx("readwrite", (store) => store.clear());
-    console.log("[NodeStore] All metadata cleared.");
+    await this._tx('readwrite', (store) => store.clear());
+    console.log('[NodeStore] All metadata cleared.');
   }
 
   /**
@@ -213,7 +199,7 @@ export class NodeStore {
     try {
       const nodes: VfsNode[] = JSON.parse(jsonStr);
       if (!Array.isArray(nodes)) {
-        throw new Error("Invalid index format: expected an array of nodes.");
+        throw new Error('Invalid index format: expected an array of nodes.');
       }
 
       // 既存のデータを全クリア
@@ -222,7 +208,7 @@ export class NodeStore {
       // トランザクションを使って安全かつ一気に挿入する
       const db = await this.dbPromise;
       await new Promise<void>((resolve, reject) => {
-        const transaction = db.transaction([this.storeName], "readwrite");
+        const transaction = db.transaction([this.storeName], 'readwrite');
         const store = transaction.objectStore(this.storeName);
 
         transaction.oncomplete = () => {
@@ -234,9 +220,7 @@ export class NodeStore {
           // 一括インポート後にインデックスを再構築
           this.rebuildIndex();
 
-          console.log(
-            `[NodeStore] Successfully imported ${nodes.length} nodes from backup.`,
-          );
+          console.log(`[NodeStore] Successfully imported ${nodes.length} nodes from backup.`);
           resolve();
         };
 

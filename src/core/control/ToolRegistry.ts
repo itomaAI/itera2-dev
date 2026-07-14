@@ -3,7 +3,7 @@
  * Itera OS v2: Tool and ToolSet Registry
  */
 
-import type { AppRegistry } from "../sys/AppRegistry";
+import type { AppRegistry } from '../sys/AppRegistry';
 
 export interface ToolDef {
   name: string;
@@ -36,11 +36,7 @@ export class ToolRegistry {
   /**
    * システムツールセット（カテゴリ）を作成または取得する
    */
-  private _getOrCreateSystemToolSet(
-    setId: string,
-    setName: string,
-    description?: string,
-  ): ToolSet {
+  private _getOrCreateSystemToolSet(setId: string, setName: string, description?: string): ToolSet {
     if (!this.toolSets.has(setId)) {
       this.toolSets.set(setId, {
         id: setId,
@@ -85,10 +81,7 @@ export class ToolRegistry {
           .getAllApps()
           .find(
             (a) =>
-              sourcePid.includes(a.id) ||
-              sourcePid.includes(
-                a.path.split(/[?#]/)[0].replace(/[^a-zA-Z0-9_-]/g, "_"),
-              ),
+              sourcePid.includes(a.id) || sourcePid.includes(a.path.split(/[?#]/)[0].replace(/[^a-zA-Z0-9_-]/g, '_')),
           );
         if (appInfo) {
           setName = `App: ${appInfo.name} (${appInfo.icon})`;
@@ -102,13 +95,11 @@ export class ToolRegistry {
 
     toolSet.tools.set(toolName, {
       name: toolName,
-      description: payload.description || "",
+      description: payload.description || '',
       definition: payload.definition,
     });
 
-    console.log(
-      `[ToolRegistry] Registered dynamic tool: <${toolName}> into ToolSet: [${toolSet.name}]`,
-    );
+    console.log(`[ToolRegistry] Registered dynamic tool: <${toolName}> into ToolSet: [${toolSet.name}]`);
   }
 
   /**
@@ -118,9 +109,7 @@ export class ToolRegistry {
     const toolSet = this.toolSets.get(sourcePid);
     if (toolSet && toolSet.tools.has(toolName)) {
       toolSet.tools.delete(toolName);
-      console.log(
-        `[ToolRegistry] Unregistered dynamic tool: <${toolName}> from PID: ${sourcePid}`,
-      );
+      console.log(`[ToolRegistry] Unregistered dynamic tool: <${toolName}> from PID: ${sourcePid}`);
 
       // グループが空になったらToolsetごと消す
       if (toolSet.tools.size === 0) {
@@ -138,9 +127,7 @@ export class ToolRegistry {
       const count = toolSet.tools.size;
       this.toolSets.delete(pid);
       if (count > 0) {
-        console.log(
-          `[ToolRegistry] Removed ToolSet [${toolSet.name}] (${count} tools) due to process termination.`,
-        );
+        console.log(`[ToolRegistry] Removed ToolSet [${toolSet.name}] (${count} tools) due to process termination.`);
       }
     }
   }
@@ -158,18 +145,18 @@ export class ToolRegistry {
 
     for (const toolSet of this.toolSets.values()) {
       // システムツール（"system:" 始まり）は除外し、動的ツールのみを抽出
-      if (toolSet.id.startsWith("system:")) continue;
+      if (toolSet.id.startsWith('system:')) continue;
       if (toolSet.tools.size === 0) continue;
 
-      let block = `<toolset name="${toolSet.name}" pid="${toolSet.id}"${toolSet.description ? ` description="${toolSet.description}"` : ""}>\n`;
+      let block = `<toolset name="${toolSet.name}" pid="${toolSet.id}"${toolSet.description ? ` description="${toolSet.description}"` : ''}>\n`;
       for (const tool of toolSet.tools.values()) {
         if (tool.definition) {
           // インデントをつけて整形
           block +=
             tool.definition
-              .split("\n")
+              .split('\n')
               .map((line) => `  ${line}`)
-              .join("\n") + "\n";
+              .join('\n') + '\n';
         }
       }
       block += `</toolset>`;
@@ -212,28 +199,21 @@ export class ToolRegistry {
     }
 
     if (!foundTool || !foundSetId) {
-      const err: any = new Error(
-        `Unknown Tool: <${action.type}> is not registered or not available.`,
-      );
-      err.code = "UNKNOWN_TOOL";
+      const err: any = new Error(`Unknown Tool: <${action.type}> is not registered or not available.`);
+      err.code = 'UNKNOWN_TOOL';
       err.actionType = action.type;
       throw err;
     }
 
     // 2. システムツールの実行
-    if (foundSetId.startsWith("system:")) {
+    if (foundSetId.startsWith('system:')) {
       if (!foundTool.impl) {
-        throw new Error(
-          `[ToolRegistry] System tool <${action.type}> has no implementation.`,
-        );
+        throw new Error(`[ToolRegistry] System tool <${action.type}> has no implementation.`);
       }
       try {
         return await foundTool.impl(action.params, context);
       } catch (err: any) {
-        console.error(
-          `[ToolRegistry] Error executing system tool <${action.type}>:`,
-          err,
-        );
+        console.error(`[ToolRegistry] Error executing system tool <${action.type}>:`, err);
         return {
           log: `Error executing <${action.type}>: ${err.message}`,
           ui: `❌ Error: ${err.message}`,
@@ -245,10 +225,9 @@ export class ToolRegistry {
     // 3. ゲストツールの実行 (逆方向RPC)
     try {
       const pid = foundSetId; // ゲストツールの場合は SetID が PID そのもの
-      const pm = context.shell["processManager"]; // Privateアクセスを回避するためブラケット記法
+      const pm = context.shell['processManager']; // Privateアクセスを回避するためブラケット記法
 
-      if (!pm)
-        throw new Error("ProcessManager not connected to Shell context.");
+      if (!pm) throw new Error('ProcessManager not connected to Shell context.');
 
       const proc = pm.processes.get(pid);
       if (!proc || !proc.iframe || !proc.iframe.contentWindow) {
@@ -256,19 +235,18 @@ export class ToolRegistry {
       }
 
       // Shellが保持しているHostTransportを利用する
-      const transport = context.shell["transport"];
-      if (!transport)
-        throw new Error("HostTransport not connected to Shell context.");
+      const transport = context.shell['transport'];
+      if (!transport) throw new Error('HostTransport not connected to Shell context.');
 
       let result = await transport.invokeGuest(
         pid,
-        "execute_tool",
+        'execute_tool',
         { name: action.type, params: action.params },
         proc.iframe.contentWindow,
       );
 
       // 戻り値の正規化
-      if (typeof result !== "object" || result === null) {
+      if (typeof result !== 'object' || result === null) {
         result = { log: String(result), ui: `⚙️ ${action.type}` };
       } else if (result.log === undefined) {
         result.log = JSON.stringify(result);
@@ -277,10 +255,7 @@ export class ToolRegistry {
 
       return result;
     } catch (err: any) {
-      console.error(
-        `[ToolRegistry] Error executing dynamic tool <${action.type}>:`,
-        err,
-      );
+      console.error(`[ToolRegistry] Error executing dynamic tool <${action.type}>:`, err);
       return {
         log: `Error executing dynamic tool <${action.type}>: ${err.message}`,
         ui: `❌ Error: ${err.message}`,

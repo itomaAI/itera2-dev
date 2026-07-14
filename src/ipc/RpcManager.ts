@@ -22,11 +22,7 @@ export class RpcManager {
       const timeoutId = setTimeout(() => {
         if (this.pendingRequests.has(id)) {
           this.pendingRequests.delete(id);
-          reject(
-            new Error(
-              `RPC Timeout: Request ${id} exceeded ${this.timeoutMs}ms`,
-            ),
-          );
+          reject(new Error(`RPC Timeout: Request ${id} exceeded ${this.timeoutMs}ms`));
         }
       }, this.timeoutMs);
 
@@ -51,7 +47,7 @@ export class RpcManager {
   clearAll(): void {
     for (const { reject, timeoutId } of this.pendingRequests.values()) {
       clearTimeout(timeoutId);
-      reject(new Error("RPC Manager cleared all pending requests."));
+      reject(new Error('RPC Manager cleared all pending requests.'));
     }
     this.pendingRequests.clear();
   }

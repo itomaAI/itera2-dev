@@ -3,9 +3,9 @@
  * Itera OS v2: Search Tools
  */
 
-import type { ToolRegistry } from "../ToolRegistry";
-import type { VfsService } from "../../vfs/VfsService";
-import type { Principal } from "../../vfs/types";
+import type { ToolRegistry } from '../ToolRegistry';
+import type { VfsService } from '../../vfs/VfsService';
+import type { Principal } from '../../vfs/types';
 
 const yieldToMain = () => new Promise((resolve) => setTimeout(resolve, 0));
 
@@ -15,36 +15,31 @@ const isBinary = (path: string) =>
   );
 
 export function registerSearchTools(registry: ToolRegistry): void {
-  const setId = "system:search";
-  const setName = "System: Search & indexing";
+  const setId = 'system:search';
+  const setName = 'System: Search & indexing';
 
-  const AGENT_PRINCIPAL: Principal = { type: "agent", id: "Itera_AI" };
+  const AGENT_PRINCIPAL: Principal = { type: 'agent', id: 'Itera_AI' };
 
   registry.registerSystemTool(setId, setName, {
-    name: "search",
-    description: "Search text inside files.",
+    name: 'search',
+    description: 'Search text inside files.',
     impl: async (params: any, context: { vfs: VfsService }) => {
       const query = params.query;
       if (!query) throw new Error("Attribute 'query' is required.");
 
-      const rootPath = params.path || "";
+      const rootPath = params.path || '';
       const extensions = params.include
-        ? params.include
-            .split(",")
-            .map((e: string) => e.trim().toLowerCase().replace(/^\*/, ""))
+        ? params.include.split(',').map((e: string) => e.trim().toLowerCase().replace(/^\*/, ''))
         : [];
-      const contextLines = parseInt(params.context || "2", 10);
+      const contextLines = parseInt(params.context || '2', 10);
 
-      const useRegex = params.regex && params.regex.toLowerCase() === "true";
-      const isCaseSensitive =
-        params.case_sensitive && params.case_sensitive.toLowerCase() === "true";
-      const flags = isCaseSensitive ? "m" : "mi";
+      const useRegex = params.regex && params.regex.toLowerCase() === 'true';
+      const isCaseSensitive = params.case_sensitive && params.case_sensitive.toLowerCase() === 'true';
+      const flags = isCaseSensitive ? 'm' : 'mi';
 
       let regex: RegExp;
       try {
-        const pattern = useRegex
-          ? query
-          : query.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+        const pattern = useRegex ? query : query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
         regex = new RegExp(pattern, flags);
       } catch (e: any) {
         return {
@@ -65,7 +60,7 @@ export function registerSearchTools(registry: ToolRegistry): void {
         if (rootPath && !filePath.startsWith(rootPath)) continue;
 
         if (extensions.length > 0) {
-          const ext = "." + filePath.split(".").pop()?.toLowerCase();
+          const ext = '.' + filePath.split('.').pop()?.toLowerCase();
           if (!extensions.some((e: string) => ext.endsWith(e))) continue;
         }
 
@@ -79,7 +74,7 @@ export function registerSearchTools(registry: ToolRegistry): void {
         }
 
         if (results.length >= 20) {
-          results.push("... (Search truncated: Too many matches)");
+          results.push('... (Search truncated: Too many matches)');
           break;
         }
 
@@ -106,10 +101,10 @@ export function registerSearchTools(registry: ToolRegistry): void {
                 .slice(startLine, endLine)
                 .map((l, idx) => {
                   const currentLineNum = startLine + idx + 1;
-                  const marker = currentLineNum === j + 1 ? ">" : " ";
-                  return `${marker} ${currentLineNum.toString().padStart(4, " ")} | ${l}`;
+                  const marker = currentLineNum === j + 1 ? '>' : ' ';
+                  return `${marker} ${currentLineNum.toString().padStart(4, ' ')} | ${l}`;
                 })
-                .join("\n");
+                .join('\n');
 
               results.push(`File: ${filePath}\n${snippet}\n---`);
             }
@@ -119,7 +114,7 @@ export function registerSearchTools(registry: ToolRegistry): void {
         }
 
         if (results.length >= 20) {
-          results.push("... (Search truncated: Too many matches)");
+          results.push('... (Search truncated: Too many matches)');
           break;
         }
       }
@@ -129,7 +124,7 @@ export function registerSearchTools(registry: ToolRegistry): void {
       }
 
       return {
-        log: results.join("\n"),
+        log: results.join('\n'),
         ui: `🔍 Search: "${query}" (${results.length} hits)`,
       };
     },

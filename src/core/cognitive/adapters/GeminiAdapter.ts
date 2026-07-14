@@ -3,17 +3,17 @@
  * Itera OS v2: Google Gemini API Adapter
  */
 
-import { BaseLLMAdapter, type LlmConfig } from "./BaseAdapter";
-import type { SystemLogger } from "../../state/SystemLogger";
+import { BaseLLMAdapter, type LlmConfig } from './BaseAdapter';
+import type { SystemLogger } from '../../state/SystemLogger';
 
 export class GeminiAdapter extends BaseLLMAdapter {
   private apiKey: string;
   private modelName: string;
-  private baseUrl = "https://generativelanguage.googleapis.com/v1beta/models";
+  private baseUrl = 'https://generativelanguage.googleapis.com/v1beta/models';
 
   constructor(
     apiKey: string,
-    modelName: string = "gemini-3-flash-preview",
+    modelName: string = 'gemini-3-flash-preview',
     config: LlmConfig = {},
     logger: SystemLogger | null = null,
   ) {
@@ -22,12 +22,8 @@ export class GeminiAdapter extends BaseLLMAdapter {
     this.modelName = modelName;
   }
 
-  async generateStream(
-    messages: any,
-    onChunk: (text: string) => void,
-    signal?: AbortSignal,
-  ): Promise<void> {
-    if (!this.apiKey) throw new Error("API Key is missing.");
+  async generateStream(messages: any, onChunk: (text: string) => void, signal?: AbortSignal): Promise<void> {
+    if (!this.apiKey) throw new Error('API Key is missing.');
 
     const url = `${this.baseUrl}/${this.modelName}:streamGenerateContent?key=${this.apiKey}`;
     const generationConfig = {
@@ -41,8 +37,8 @@ export class GeminiAdapter extends BaseLLMAdapter {
     };
 
     const response = await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
       signal,
     });
@@ -58,12 +54,12 @@ export class GeminiAdapter extends BaseLLMAdapter {
 
     const reader = response.body!.getReader();
     const decoder = new TextDecoder();
-    let buffer = "";
+    let buffer = '';
 
     const onAbort = () => {
-      reader.cancel(new DOMException("Aborted", "AbortError")).catch(() => {});
+      reader.cancel(new DOMException('Aborted', 'AbortError')).catch(() => {});
     };
-    if (signal) signal.addEventListener("abort", onAbort);
+    if (signal) signal.addEventListener('abort', onAbort);
 
     let idleTimeout: ReturnType<typeof setTimeout>;
     let isIdleTimeout = false;
@@ -71,7 +67,7 @@ export class GeminiAdapter extends BaseLLMAdapter {
       clearTimeout(idleTimeout);
       idleTimeout = setTimeout(() => {
         isIdleTimeout = true;
-        reader.cancel(new Error("Stream Idle Timeout"));
+        reader.cancel(new Error('Stream Idle Timeout'));
       }, 15000);
     };
 
@@ -81,14 +77,11 @@ export class GeminiAdapter extends BaseLLMAdapter {
 
     try {
       while (true) {
-        if (signal && signal.aborted)
-          throw new DOMException("Aborted", "AbortError");
+        if (signal && signal.aborted) throw new DOMException('Aborted', 'AbortError');
         const { done, value } = await reader.read();
 
         if (isIdleTimeout) {
-          throw new Error(
-            "Stream Idle Timeout: No response from API for 15 seconds.",
-          );
+          throw new Error('Stream Idle Timeout: No response from API for 15 seconds.');
         }
 
         resetIdleTimeout();
@@ -118,7 +111,7 @@ export class GeminiAdapter extends BaseLLMAdapter {
               escaped = false;
               continue;
             }
-            if (char === "\\") {
+            if (char === '\\') {
               escaped = true;
               continue;
             }
@@ -139,9 +132,7 @@ export class GeminiAdapter extends BaseLLMAdapter {
           buffer = buffer.substring(endQuote + 1);
         }
 
-        const usageMatch = buffer.match(
-          /"usageMetadata"\s*:\s*(\{(?:[^{}]|(?:\{[^{}]*\}))*\})/,
-        );
+        const usageMatch = buffer.match(/"usageMetadata"\s*:\s*(\{(?:[^{}]|(?:\{[^{}]*\}))*\})/);
         if (usageMatch) {
           try {
             finalUsageMetadata = JSON.parse(usageMatch[1]);
@@ -155,8 +146,8 @@ export class GeminiAdapter extends BaseLLMAdapter {
         const input = Math.max(0, promptTotal - cached);
         const output = finalUsageMetadata.candidatesTokenCount || 0;
 
-        this.logger.log("usage", {
-          provider: "google",
+        this.logger.log('usage', {
+          provider: 'google',
           model: this.modelName,
           tokens: {
             input: input,
@@ -167,11 +158,11 @@ export class GeminiAdapter extends BaseLLMAdapter {
         });
       }
     } catch (e: any) {
-      if (e.name === "AbortError") throw e;
+      if (e.name === 'AbortError') throw e;
       throw e;
     } finally {
       clearTimeout(idleTimeout!);
-      if (signal) signal.removeEventListener("abort", onAbort);
+      if (signal) signal.removeEventListener('abort', onAbort);
     }
   }
 }

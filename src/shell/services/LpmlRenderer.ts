@@ -8,16 +8,15 @@ export class LpmlRenderer {
 
   formatStream(text: string): string {
     const escape = (str: string) => {
-      const div = document.createElement("div");
+      const div = document.createElement('div');
       div.textContent = str;
       return div.innerHTML;
     };
 
-    const TAG_NAME_PATTERN = "[a-zA-Z0-9_\\-]+";
+    const TAG_NAME_PATTERN = '[a-zA-Z0-9_\\-]+';
     const TAG_REGEX = new RegExp(
-      `&lt;(${TAG_NAME_PATTERN})([^&]*)&gt;([\\s\\S]*?)&lt;\\/\\1&gt;|` +
-        `&lt;(${TAG_NAME_PATTERN})([^&]*)\\/&gt;`,
-      "g",
+      `&lt;(${TAG_NAME_PATTERN})([^&]*)&gt;([\\s\\S]*?)&lt;\\/\\1&gt;|` + `&lt;(${TAG_NAME_PATTERN})([^&]*)\\/&gt;`,
+      'g',
     );
 
     const safeText = escape(text);
@@ -29,14 +28,12 @@ export class LpmlRenderer {
       const gap = safeText.substring(lastIndex, match.index);
       if (gap && gap.trim().length > 0) {
         // タグ間のテキストは通常のmutedテキストとして扱う
-        parts.push(
-          `<span class="text-text-muted whitespace-pre-wrap">${gap}</span>`,
-        );
+        parts.push(`<span class="text-text-muted whitespace-pre-wrap">${gap}</span>`);
       }
 
       const tagName = match[1] || match[4];
-      const attributes = match[2] || match[5] || "";
-      const content = match[3] || "";
+      const attributes = match[2] || match[5] || '';
+      const content = match[3] || '';
 
       parts.push(this._createTagHTML(tagName, attributes, content));
       lastIndex = TAG_REGEX.lastIndex;
@@ -44,21 +41,15 @@ export class LpmlRenderer {
 
     const remaining = safeText.substring(lastIndex);
     if (remaining && remaining.trim().length > 0) {
-      parts.push(
-        `<span class="text-text-muted whitespace-pre-wrap">${remaining}</span>`,
-      );
+      parts.push(`<span class="text-text-muted whitespace-pre-wrap">${remaining}</span>`);
     }
 
-    return parts.join("");
+    return parts.join('');
   }
 
-  private _createTagHTML(
-    tagName: string,
-    attributes: string,
-    content: string,
-  ): string {
+  private _createTagHTML(tagName: string, attributes: string, content: string): string {
     let title = tagName;
-    let colorClass = "border-border-main bg-card";
+    let colorClass = 'border-border-main bg-card';
     let isOpen = false;
 
     const getAttr = (key: string) => {
@@ -67,85 +58,85 @@ export class LpmlRenderer {
     };
 
     switch (tagName) {
-      case "thinking":
-        title = "💭 Thinking";
-        colorClass = "border-tag-thinking bg-tag-thinking/10";
+      case 'thinking':
+        title = '💭 Thinking';
+        colorClass = 'border-tag-thinking bg-tag-thinking/10';
         break;
-      case "plan":
-        title = "📅 Plan";
-        colorClass = "border-tag-plan bg-tag-plan/10";
+      case 'plan':
+        title = '📅 Plan';
+        colorClass = 'border-tag-plan bg-tag-plan/10';
         break;
-      case "report":
-        title = "📢 Report";
-        colorClass = "border-tag-report bg-tag-report/20";
+      case 'report':
+        title = '📢 Report';
+        colorClass = 'border-tag-report bg-tag-report/20';
         isOpen = true;
         break;
-      case "ask":
-        title = "❓ Question";
-        colorClass = "border-tag-report bg-tag-report/20";
+      case 'ask':
+        title = '❓ Question';
+        colorClass = 'border-tag-report bg-tag-report/20';
         isOpen = true;
         break;
-      case "yield":
-        title = "⏳ Waiting for System...";
-        colorClass = "border-border-main bg-card/50";
+      case 'yield':
+        title = '⏳ Waiting for System...';
+        colorClass = 'border-border-main bg-card/50';
         break;
-      case "breathe":
-        title = "💨 Taking a breath...";
-        colorClass = "border-border-main bg-card/50";
+      case 'breathe':
+        title = '💨 Taking a breath...';
+        colorClass = 'border-border-main bg-card/50';
         break;
-      case "finish":
-        title = "✅ Standby";
-        colorClass = "border-success bg-success/20";
+      case 'finish':
+        title = '✅ Standby';
+        colorClass = 'border-success bg-success/20';
         isOpen = true;
         break;
-      case "create_file":
-      case "edit_file":
-        const path = getAttr("path") || "file";
+      case 'create_file':
+      case 'edit_file':
+        const path = getAttr('path') || 'file';
         title = `📝 ${tagName}: ${path}`;
-        colorClass = "border-warning bg-warning/10";
+        colorClass = 'border-warning bg-warning/10';
         break;
-      case "error":
-        title = "⚠️ Error";
-        colorClass = "border-tag-error bg-tag-error/10";
+      case 'error':
+        title = '⚠️ Error';
+        colorClass = 'border-tag-error bg-tag-error/10';
         isOpen = true;
         break;
-      case "tool_output":
-        const actionName = getAttr("action") || "unknown";
-        const status = getAttr("status") || "success";
+      case 'tool_output':
+        const actionName = getAttr('action') || 'unknown';
+        const status = getAttr('status') || 'success';
         title = `📥 System Output: [${actionName}]`;
-        if (status === "error") {
-          colorClass = "border-error bg-error/10";
+        if (status === 'error') {
+          colorClass = 'border-error bg-error/10';
           title = `⚠️ System Error: [${actionName}]`;
           isOpen = true;
         } else {
-          colorClass = "border-border-main bg-panel/80";
+          colorClass = 'border-border-main bg-panel/80';
           isOpen = false;
         }
         break;
-      case "event":
-        const eventType = getAttr("type") || "unknown";
+      case 'event':
+        const eventType = getAttr('type') || 'unknown';
         title = `🔔 Event: ${eventType}`;
-        colorClass = "border-primary bg-primary/10";
+        colorClass = 'border-primary bg-primary/10';
         isOpen = false;
         break;
-      case "system":
-        const sysType = getAttr("type") || "info";
+      case 'system':
+        const sysType = getAttr('type') || 'info';
         title = `💻 System: ${sysType}`;
-        if (sysType === "syntax_warning") {
-          colorClass = "border-error bg-error/10";
+        if (sysType === 'syntax_warning') {
+          colorClass = 'border-error bg-error/10';
           title = `🚨 System Warning: LPML Syntax`;
           isOpen = true;
         } else {
-          colorClass = "border-system bg-system/10";
+          colorClass = 'border-system bg-system/10';
           isOpen = false;
         }
         break;
       default:
         title = `⚙️ ${tagName}`;
-        colorClass = "border-border-main bg-card/50";
+        colorClass = 'border-border-main bg-card/50';
     }
 
-    const openAttr = isOpen ? "open" : "";
+    const openAttr = isOpen ? 'open' : '';
     let displayContent = content.trim();
 
     // 属性がある場合は薄く表示

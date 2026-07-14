@@ -3,26 +3,26 @@
  * Itera OS v2: System Management (ZIP Export/Import & Reset)
  */
 
-import type { VfsService } from "../../core/vfs/VfsService";
-import type { NodeStore } from "../../core/vfs/NodeStore";
-import type { ContentStore } from "../../core/vfs/ContentStore";
-import { VfsFsck } from "../../core/vfs/VfsFsck";
-import { SYSTEM_PRINCIPAL } from "../../core/vfs/types";
+import type { VfsService } from '../../core/vfs/VfsService';
+import type { NodeStore } from '../../core/vfs/NodeStore';
+import type { ContentStore } from '../../core/vfs/ContentStore';
+import { VfsFsck } from '../../core/vfs/VfsFsck';
+import { SYSTEM_PRINCIPAL } from '../../core/vfs/types';
 
 declare const JSZip: any;
 
 const DOM_IDS = {
-  MODAL: "system-modal",
-  BTN_OPEN: "btn-settings",
-  BTN_CLOSE: "btn-close-system",
-  BTN_EXPORT: "btn-sys-export",
-  BTN_IMPORT: "btn-sys-import",
-  INPUT_IMPORT: "input-sys-import",
-  BTN_RESET: "btn-sys-reset",
-  BTN_REPAIR: "btn-sys-repair",
-  BTN_BACKUP_INDEX: "btn-sys-backup-index",
-  BTN_RESTORE_INDEX: "btn-sys-restore-index",
-  INPUT_RESTORE_INDEX: "input-sys-restore-index",
+  MODAL: 'system-modal',
+  BTN_OPEN: 'btn-settings',
+  BTN_CLOSE: 'btn-close-system',
+  BTN_EXPORT: 'btn-sys-export',
+  BTN_IMPORT: 'btn-sys-import',
+  INPUT_IMPORT: 'input-sys-import',
+  BTN_RESET: 'btn-sys-reset',
+  BTN_REPAIR: 'btn-sys-repair',
+  BTN_BACKUP_INDEX: 'btn-sys-backup-index',
+  BTN_RESTORE_INDEX: 'btn-sys-restore-index',
+  INPUT_RESTORE_INDEX: 'input-sys-restore-index',
 };
 
 export class SystemModal {
@@ -32,11 +32,7 @@ export class SystemModal {
   private nodeStore: NodeStore;
   private contentStore: ContentStore;
 
-  constructor(
-    vfs: VfsService,
-    nodeStore: NodeStore,
-    contentStore: ContentStore,
-  ) {
+  constructor(vfs: VfsService, nodeStore: NodeStore, contentStore: ContentStore) {
     this.vfs = vfs;
     this.nodeStore = nodeStore;
     this.contentStore = contentStore;
@@ -70,10 +66,10 @@ export class SystemModal {
     if (this.els.BTN_RESET) {
       this.els.BTN_RESET.onclick = async () => {
         const confirmed = await window.AppUI?.confirm(
-          "WARNING: This will permanently delete ALL files and settings.\n\nAre you absolutely sure?",
+          'WARNING: This will permanently delete ALL files and settings.\n\nAre you absolutely sure?',
         );
         if (confirmed) {
-          if (this.events["reset"]) this.events["reset"]();
+          if (this.events['reset']) this.events['reset']();
           this.close();
         }
       };
@@ -88,30 +84,27 @@ export class SystemModal {
     }
 
     if (this.els.BTN_RESTORE_INDEX && this.els.INPUT_RESTORE_INDEX) {
-      this.els.BTN_RESTORE_INDEX.onclick = () =>
-        this.els.INPUT_RESTORE_INDEX!.click();
-      this.els.INPUT_RESTORE_INDEX.onchange = (e) =>
-        this._handleRestoreIndex(e);
+      this.els.BTN_RESTORE_INDEX.onclick = () => this.els.INPUT_RESTORE_INDEX!.click();
+      this.els.INPUT_RESTORE_INDEX.onchange = (e) => this._handleRestoreIndex(e);
     }
   }
 
   open() {
-    if (this.els.MODAL) this.els.MODAL.classList.remove("hidden");
+    if (this.els.MODAL) this.els.MODAL.classList.remove('hidden');
   }
 
   close() {
-    if (this.els.MODAL) this.els.MODAL.classList.add("hidden");
+    if (this.els.MODAL) this.els.MODAL.classList.add('hidden');
   }
 
   // --- ZIP Export ---
   private async _handleExport() {
-    if (typeof JSZip === "undefined") {
-      if (window.AppUI)
-        window.AppUI.notify("JSZip library not loaded.", "error");
+    if (typeof JSZip === 'undefined') {
+      if (window.AppUI) window.AppUI.notify('JSZip library not loaded.', 'error');
       return;
     }
 
-    if (window.AppUI) window.AppUI.showLoading("Creating Backup...");
+    if (window.AppUI) window.AppUI.showLoading('Creating Backup...');
 
     try {
       const zip = new JSZip();
@@ -122,30 +115,26 @@ export class SystemModal {
       }) as any[];
 
       for (const stat of files) {
-        if (stat.kind === "file" && !stat.path.startsWith(".trash/")) {
+        if (stat.kind === 'file' && !stat.path.startsWith('.trash/')) {
           const blob = await this.vfs.readBlob(SYSTEM_PRINCIPAL, stat.path);
           zip.file(stat.path, blob);
         }
       }
 
-      const zipBlob = await zip.generateAsync({ type: "blob" });
+      const zipBlob = await zip.generateAsync({ type: 'blob' });
       const url = URL.createObjectURL(zipBlob);
-      const a = document.createElement("a");
+      const a = document.createElement('a');
       a.href = url;
-      const timestamp = new Date()
-        .toISOString()
-        .slice(0, 19)
-        .replace(/[:T]/g, "-");
+      const timestamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
       a.download = `itera_backup_${timestamp}.zip`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
       setTimeout(() => URL.revokeObjectURL(url), 100);
 
-      if (window.AppUI) window.AppUI.notify("Backup Exported", "success");
+      if (window.AppUI) window.AppUI.notify('Backup Exported', 'success');
     } catch (e: any) {
-      if (window.AppUI)
-        window.AppUI.notify(`Export failed: ${e.message}`, "error");
+      if (window.AppUI) window.AppUI.notify(`Export failed: ${e.message}`, 'error');
     } finally {
       if (window.AppUI) window.AppUI.hideLoading();
     }
@@ -157,9 +146,8 @@ export class SystemModal {
     const file = input.files?.[0];
     if (!file) return;
 
-    if (typeof JSZip === "undefined") {
-      if (window.AppUI)
-        window.AppUI.notify("JSZip library not loaded.", "error");
+    if (typeof JSZip === 'undefined') {
+      if (window.AppUI) window.AppUI.notify('JSZip library not loaded.', 'error');
       return;
     }
 
@@ -167,11 +155,11 @@ export class SystemModal {
       `CAUTION: This will ERASE all current files and restore from "${file.name}".\n\nContinue?`,
     );
     if (!confirmed) {
-      input.value = "";
+      input.value = '';
       return;
     }
 
-    if (window.AppUI) window.AppUI.showLoading("Restoring Backup...");
+    if (window.AppUI) window.AppUI.showLoading('Restoring Backup...');
 
     try {
       // 一旦全消去 (System権限)
@@ -192,17 +180,12 @@ export class SystemModal {
 
       const promises: Promise<void>[] = [];
       zip.forEach((relativePath: string, zipEntry: any) => {
-        if (
-          zipEntry.dir ||
-          relativePath.startsWith("__MACOSX") ||
-          relativePath.includes(".DS_Store")
-        )
-          return;
+        if (zipEntry.dir || relativePath.startsWith('__MACOSX') || relativePath.includes('.DS_Store')) return;
 
         promises.push(
           (async () => {
-            const blob = await zipEntry.async("blob");
-            const cleanPath = relativePath.replace(/^\/+/, "");
+            const blob = await zipEntry.async('blob');
+            const cleanPath = relativePath.replace(/^\/+/, '');
             await this.vfs.writeFile(SYSTEM_PRINCIPAL, cleanPath, blob, {
               overwrite: true,
             });
@@ -213,30 +196,25 @@ export class SystemModal {
 
       await Promise.all(promises);
 
-      if (window.AppUI)
-        window.AppUI.notify(
-          `Restore Complete: ${count} files. Reloading...`,
-          "success",
-        );
+      if (window.AppUI) window.AppUI.notify(`Restore Complete: ${count} files. Reloading...`, 'success');
       setTimeout(() => window.location.reload(), 1500);
     } catch (err: any) {
       console.error(err);
-      if (window.AppUI)
-        window.AppUI.notify(`Restore Failed: ${err.message}`, "error");
+      if (window.AppUI) window.AppUI.notify(`Restore Failed: ${err.message}`, 'error');
     } finally {
-      input.value = "";
+      input.value = '';
       if (window.AppUI) window.AppUI.hideLoading();
     }
   }
 
   // --- Diagnostics & Repair ---
   private async _handleRepair() {
-    if (window.AppUI) window.AppUI.showLoading("Checking VFS Consistency...");
+    if (window.AppUI) window.AppUI.showLoading('Checking VFS Consistency...');
     try {
       const fsck = new VfsFsck(this.nodeStore, this.contentStore);
       const report = await fsck.runRepair();
 
-      let msg = "File system is clean. No errors found.";
+      let msg = 'File system is clean. No errors found.';
       if (report.totalErrorsFixed > 0) {
         msg =
           `Repaired ${report.totalErrorsFixed} issues:\n` +
@@ -245,13 +223,12 @@ export class SystemModal {
           `- Missing Contents Fixed: ${report.missingContentsFixed}\n` +
           `- Dangling Contents Rescued: ${report.danglingContentsRescued}\n\n` +
           `Check '.lost+found' folder in root if files were rescued.`;
-        if (window.AppUI) window.AppUI.notify(msg, "warning");
+        if (window.AppUI) window.AppUI.notify(msg, 'warning');
       } else {
-        if (window.AppUI) window.AppUI.notify(msg, "success");
+        if (window.AppUI) window.AppUI.notify(msg, 'success');
       }
     } catch (e: any) {
-      if (window.AppUI)
-        window.AppUI.notify(`Repair failed: ${e.message}`, "error");
+      if (window.AppUI) window.AppUI.notify(`Repair failed: ${e.message}`, 'error');
     } finally {
       if (window.AppUI) window.AppUI.hideLoading();
       this.close();
@@ -261,23 +238,19 @@ export class SystemModal {
   private _handleBackupIndex() {
     try {
       const jsonStr = this.nodeStore.exportIndex();
-      const blob = new Blob([jsonStr], { type: "application/json" });
+      const blob = new Blob([jsonStr], { type: 'application/json' });
       const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
+      const a = document.createElement('a');
       a.href = url;
-      const timestamp = new Date()
-        .toISOString()
-        .slice(0, 19)
-        .replace(/[:T]/g, "-");
+      const timestamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
       a.download = `itera_index_backup_${timestamp}.json`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
       setTimeout(() => URL.revokeObjectURL(url), 100);
-      if (window.AppUI) window.AppUI.notify("Index Backup Exported", "success");
+      if (window.AppUI) window.AppUI.notify('Index Backup Exported', 'success');
     } catch (e: any) {
-      if (window.AppUI)
-        window.AppUI.notify(`Index backup failed: ${e.message}`, "error");
+      if (window.AppUI) window.AppUI.notify(`Index backup failed: ${e.message}`, 'error');
     }
   }
 
@@ -290,11 +263,11 @@ export class SystemModal {
       `CAUTION: This will overwrite your entire file system index with "${file.name}".\nAre you sure you want to proceed?`,
     );
     if (!confirmed) {
-      input.value = "";
+      input.value = '';
       return;
     }
 
-    if (window.AppUI) window.AppUI.showLoading("Restoring Index...");
+    if (window.AppUI) window.AppUI.showLoading('Restoring Index...');
     try {
       const text = await new Promise<string>((resolve, reject) => {
         const reader = new FileReader();
@@ -304,15 +277,13 @@ export class SystemModal {
       });
 
       await this.nodeStore.importIndex(text);
-      if (window.AppUI)
-        window.AppUI.notify("Index restored. Reloading system...", "success");
+      if (window.AppUI) window.AppUI.notify('Index restored. Reloading system...', 'success');
       setTimeout(() => window.location.reload(), 1500);
     } catch (err: any) {
       console.error(err);
-      if (window.AppUI)
-        window.AppUI.notify(`Index Restore Failed: ${err.message}`, "error");
+      if (window.AppUI) window.AppUI.notify(`Index Restore Failed: ${err.message}`, 'error');
     } finally {
-      input.value = "";
+      input.value = '';
       if (window.AppUI) window.AppUI.hideLoading();
     }
   }

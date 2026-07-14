@@ -3,8 +3,8 @@
  * Itera OS v2: Anthropic API Adapter
  */
 
-import { BaseLLMAdapter, type LlmConfig } from "./BaseAdapter";
-import type { SystemLogger } from "../../state/SystemLogger";
+import { BaseLLMAdapter, type LlmConfig } from './BaseAdapter';
+import type { SystemLogger } from '../../state/SystemLogger';
 
 export class AnthropicAdapter extends BaseLLMAdapter {
   private apiKey: string;
@@ -12,7 +12,7 @@ export class AnthropicAdapter extends BaseLLMAdapter {
 
   constructor(
     apiKey: string,
-    modelName: string = "claude-3-5-sonnet-20241022",
+    modelName: string = 'claude-3-5-sonnet-20241022',
     config: LlmConfig = {},
     logger: SystemLogger | null = null,
   ) {
@@ -21,13 +21,9 @@ export class AnthropicAdapter extends BaseLLMAdapter {
     this.modelName = modelName;
   }
 
-  async generateStream(
-    payloadData: any,
-    onChunk: (text: string) => void,
-    signal?: AbortSignal,
-  ): Promise<void> {
+  async generateStream(payloadData: any, onChunk: (text: string) => void, signal?: AbortSignal): Promise<void> {
     const { system, messages } = payloadData;
-    const baseUrl = "https://api.anthropic.com/v1/messages";
+    const baseUrl = 'https://api.anthropic.com/v1/messages';
     let targetUrl = baseUrl;
 
     const proxyUrl = this.config.network?.proxyUrl;
@@ -45,13 +41,13 @@ export class AnthropicAdapter extends BaseLLMAdapter {
     };
 
     const response = await fetch(targetUrl, {
-      method: "POST",
+      method: 'POST',
       headers: {
-        "Content-Type": "application/json",
-        "x-api-key": this.apiKey,
-        "anthropic-version": "2023-06-01",
-        "anthropic-beta": "files-api-2025-04-14",
-        "anthropic-dangerously-allow-browser": "true",
+        'Content-Type': 'application/json',
+        'x-api-key': this.apiKey,
+        'anthropic-version': '2023-06-01',
+        'anthropic-beta': 'files-api-2025-04-14',
+        'anthropic-dangerously-allow-browser': 'true',
       },
       body: JSON.stringify(payload),
       signal,
@@ -67,13 +63,13 @@ export class AnthropicAdapter extends BaseLLMAdapter {
     }
 
     const reader = response.body!.getReader();
-    const decoder = new TextDecoder("utf-8");
-    let buffer = "";
+    const decoder = new TextDecoder('utf-8');
+    let buffer = '';
 
     const onAbort = () => {
-      reader.cancel(new DOMException("Aborted", "AbortError")).catch(() => {});
+      reader.cancel(new DOMException('Aborted', 'AbortError')).catch(() => {});
     };
-    if (signal) signal.addEventListener("abort", onAbort);
+    if (signal) signal.addEventListener('abort', onAbort);
 
     let idleTimeout: ReturnType<typeof setTimeout>;
     let isIdleTimeout = false;
@@ -81,7 +77,7 @@ export class AnthropicAdapter extends BaseLLMAdapter {
       clearTimeout(idleTimeout);
       idleTimeout = setTimeout(() => {
         isIdleTimeout = true;
-        reader.cancel(new Error("Stream Idle Timeout"));
+        reader.cancel(new Error('Stream Idle Timeout'));
       }, 15000);
     };
 
@@ -94,14 +90,11 @@ export class AnthropicAdapter extends BaseLLMAdapter {
       let eventType: string | null = null;
 
       while (true) {
-        if (signal && signal.aborted)
-          throw new DOMException("Aborted", "AbortError");
+        if (signal && signal.aborted) throw new DOMException('Aborted', 'AbortError');
         const { done, value } = await reader.read();
 
         if (isIdleTimeout) {
-          throw new Error(
-            "Stream Idle Timeout: No response from API for 15 seconds.",
-          );
+          throw new Error('Stream Idle Timeout: No response from API for 15 seconds.');
         }
 
         resetIdleTimeout();
@@ -109,46 +102,46 @@ export class AnthropicAdapter extends BaseLLMAdapter {
         if (done) break;
 
         buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split("\n");
-        buffer = lines.pop() || "";
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
 
         for (const line of lines) {
           const trimmedLine = line.trim();
           if (!trimmedLine) continue;
 
-          if (trimmedLine.startsWith("event: ")) {
+          if (trimmedLine.startsWith('event: ')) {
             eventType = trimmedLine.substring(7);
             continue;
           }
 
-          if (trimmedLine.startsWith("data: ")) {
+          if (trimmedLine.startsWith('data: ')) {
             const dataStr = trimmedLine.substring(6);
 
             try {
               const data = JSON.parse(dataStr);
 
               // ★ Anthropic のトークン消費量抽出
-              if (eventType === "message_start" && data.message?.usage) {
+              if (eventType === 'message_start' && data.message?.usage) {
                 inputTokens = data.message.usage.input_tokens || 0;
-              } else if (eventType === "message_delta" && data.usage) {
+              } else if (eventType === 'message_delta' && data.usage) {
                 outputTokens = data.usage.output_tokens || 0;
-              } else if (eventType === "content_block_delta") {
-                if (data.delta && data.delta.type === "text_delta") {
+              } else if (eventType === 'content_block_delta') {
+                if (data.delta && data.delta.type === 'text_delta') {
                   onChunk(data.delta.text);
                 }
-              } else if (eventType === "message_stop") {
+              } else if (eventType === 'message_stop') {
                 break;
               }
             } catch (e) {
-              console.warn("[AnthropicAdapter] Stream Parse Warning:", e);
+              console.warn('[AnthropicAdapter] Stream Parse Warning:', e);
             }
           }
         }
       }
 
       if (this.logger) {
-        this.logger.log("usage", {
-          provider: "anthropic",
+        this.logger.log('usage', {
+          provider: 'anthropic',
           model: this.modelName,
           tokens: {
             input: inputTokens,
@@ -158,11 +151,11 @@ export class AnthropicAdapter extends BaseLLMAdapter {
         });
       }
     } catch (e: any) {
-      if (e.name === "AbortError") throw e;
+      if (e.name === 'AbortError') throw e;
       throw e;
     } finally {
       clearTimeout(idleTimeout!);
-      if (signal) signal.removeEventListener("abort", onAbort);
+      if (signal) signal.removeEventListener('abort', onAbort);
     }
   }
 }

@@ -3,22 +3,18 @@
  * Itera OS VFS v2: Boot Initialization and System Reconciliation
  */
 
-import { DEFAULT_FILES } from "../../config/default_files";
-import type { VfsService } from "./VfsService";
-import type { NodeStore } from "./NodeStore";
-import type { PathResolver } from "./PathResolver";
-import { SYSTEM_PRINCIPAL } from "./types";
+import { DEFAULT_FILES } from '../../config/default_files';
+import type { VfsService } from './VfsService';
+import type { NodeStore } from './NodeStore';
+import type { PathResolver } from './PathResolver';
+import { SYSTEM_PRINCIPAL } from './types';
 
 export class VfsInitializer {
   private vfs: VfsService;
   private nodeStore: NodeStore;
   private pathResolver: PathResolver;
 
-  constructor(
-    vfs: VfsService,
-    nodeStore: NodeStore,
-    pathResolver: PathResolver,
-  ) {
+  constructor(vfs: VfsService, nodeStore: NodeStore, pathResolver: PathResolver) {
     this.vfs = vfs;
     this.nodeStore = nodeStore;
     this.pathResolver = pathResolver;
@@ -31,11 +27,8 @@ export class VfsInitializer {
     // ユーザーの自動アップデート設定を読み取る
     let autoUpdate = true;
     try {
-      if (this.vfs.exists(SYSTEM_PRINCIPAL, "system/config/preferences.json")) {
-        const prefContent = await this.vfs.readFile(
-          SYSTEM_PRINCIPAL,
-          "system/config/preferences.json",
-        );
+      if (this.vfs.exists(SYSTEM_PRINCIPAL, 'system/config/preferences.json')) {
+        const prefContent = await this.vfs.readFile(SYSTEM_PRINCIPAL, 'system/config/preferences.json');
         const pref = JSON.parse(prefContent);
         if (pref.autoUpdateSystemFiles === false) {
           autoUpdate = false;
@@ -46,15 +39,13 @@ export class VfsInitializer {
     }
 
     for (const [key, content] of Object.entries(DEFAULT_FILES)) {
-      const isDir = key.endsWith("/");
+      const isDir = key.endsWith('/');
       const cleanPath = isDir ? key.slice(0, -1) : key;
       const id = this.pathResolver.getIdByPath(cleanPath);
 
       // 領域の判定
-      const isSystemArea = cleanPath.startsWith("system/");
-      const isConfigArea =
-        cleanPath.startsWith("system/config/") ||
-        cleanPath.startsWith("system/registry/");
+      const isSystemArea = cleanPath.startsWith('system/');
+      const isConfigArea = cleanPath.startsWith('system/config/') || cleanPath.startsWith('system/registry/');
 
       if (id === undefined) {
         // パスが存在しない場合は新規作成
@@ -73,7 +64,7 @@ export class VfsInitializer {
         const isForceUpdateArea = isSystemArea && !isConfigArea;
 
         // autoUpdate が有効、かつ強制アップデート対象のファイル（システムライブラリ等）の場合のみ上書きする
-        if (node && node.kind === "file" && isForceUpdateArea && autoUpdate) {
+        if (node && node.kind === 'file' && isForceUpdateArea && autoUpdate) {
           await this.vfs.writeFile(SYSTEM_PRINCIPAL, cleanPath, content, {
             overwrite: true,
             system: true,
@@ -85,30 +76,25 @@ export class VfsInitializer {
 
     // --- 厳密な ACL（権限）の再帰的適用 ---
     // 1. system/ 領域は原則 Read-Only (AIやGuestアプリからの破壊を防止)
-    if (this.vfs.exists(SYSTEM_PRINCIPAL, "system")) {
-      await this.vfs.setAclRecursive(SYSTEM_PRINCIPAL, "system", {
+    if (this.vfs.exists(SYSTEM_PRINCIPAL, 'system')) {
+      await this.vfs.setAclRecursive(SYSTEM_PRINCIPAL, 'system', {
         owner: SYSTEM_PRINCIPAL,
-        rules: [{ principal: { type: "any", id: "*" }, permissions: ["read"] }],
+        rules: [{ principal: { type: 'any', id: '*' }, permissions: ['read'] }],
       });
     }
 
     // 2. ただし以下の領域は Read/Write を許可して上塗りする
-    const readWriteAcl: import("./types").AccessControlList = {
+    const readWriteAcl: import('./types').AccessControlList = {
       owner: SYSTEM_PRINCIPAL,
       rules: [
         {
-          principal: { type: "any", id: "*" },
-          permissions: ["read", "write"],
+          principal: { type: 'any', id: '*' },
+          permissions: ['read', 'write'],
         },
       ],
     };
 
-    const rwPaths = [
-      "system/config",
-      "system/cache",
-      "system/themes",
-      "system/registry",
-    ];
+    const rwPaths = ['system/config', 'system/cache', 'system/themes', 'system/registry'];
 
     for (const rwPath of rwPaths) {
       if (this.vfs.exists(SYSTEM_PRINCIPAL, rwPath)) {
@@ -121,7 +107,7 @@ export class VfsInitializer {
         `[VfsInitializer] System reconciliation complete. Deployed: ${deployedCount}, Updated: ${updatedCount}`,
       );
     } else {
-      console.log("[VfsInitializer] System is up to date.");
+      console.log('[VfsInitializer] System is up to date.');
     }
   }
 }

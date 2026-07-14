@@ -7,14 +7,14 @@
 // 1. Core Data Models (Metadata)
 // ==========================================
 
-export type PrincipalType = "system" | "user" | "agent" | "group" | "any";
+export type PrincipalType = 'system' | 'user' | 'agent' | 'group' | 'any';
 
 export interface Principal {
   type: PrincipalType;
   id: string;
 }
 
-export type PermissionType = "read" | "write" | "manage";
+export type PermissionType = 'read' | 'write' | 'manage';
 
 export interface AclRule {
   principal: Principal;
@@ -27,14 +27,14 @@ export interface AccessControlList {
 }
 
 // OS全体で使い回す共通のPrincipal定数
-export const SYSTEM_PRINCIPAL: Principal = { type: "system", id: "kernel" };
-export const USER_PRINCIPAL: Principal = { type: "user", id: "local_user" };
+export const SYSTEM_PRINCIPAL: Principal = { type: 'system', id: 'kernel' };
+export const USER_PRINCIPAL: Principal = { type: 'user', id: 'local_user' };
 
 export interface VfsNode {
   id: string;
   name: string;
   parentId: string | null;
-  kind: "file" | "directory";
+  kind: 'file' | 'directory';
   contentRef?: ContentRef;
   flags: VfsNodeFlags;
   meta: VfsNodeMeta;
@@ -59,7 +59,7 @@ export interface VfsNodeMeta {
 }
 
 export interface ContentRef {
-  backend: "opfs" | "memory";
+  backend: 'opfs' | 'memory';
   key: string;
 }
 
@@ -71,8 +71,7 @@ export interface AppHints {
 // 2. Event System (Pub/Sub for UI & Sync)
 // ==========================================
 
-export type VfsEventType =
-  "create" | "update" | "rename" | "move" | "trash" | "restore" | "delete";
+export type VfsEventType = 'create' | 'update' | 'rename' | 'move' | 'trash' | 'restore' | 'delete';
 
 export interface VfsEvent {
   type: VfsEventType;
@@ -90,7 +89,7 @@ export interface VfsStat {
   id: string;
   path: string;
   name: string;
-  kind: "file" | "directory";
+  kind: 'file' | 'directory';
   size: number;
   createdAt: number;
   updatedAt: number;
@@ -101,7 +100,7 @@ export interface TreeNode {
   id: string;
   name: string;
   path: string;
-  kind: "file" | "directory";
+  kind: 'file' | 'directory';
   meta: VfsNodeMeta;
   children?: TreeNode[];
 }
