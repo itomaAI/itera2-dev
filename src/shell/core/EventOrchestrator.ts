@@ -13,7 +13,6 @@ import type { SessionManager } from '../services/SessionManager';
 import type { CognitiveManager } from '../services/CognitiveManager';
 import type { FileAssociationResolver, ResolvedApp } from '../../core/sys/FileAssociationResolver';
 import type { VfsEventBus } from '../../core/vfs/VfsEventBus';
-import { USER_PRINCIPAL } from '../../core/vfs/types';
 
 export class EventOrchestrator {
   private desktop: DesktopEnvironment;

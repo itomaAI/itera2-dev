@@ -1,6 +1,6 @@
 /**
  * AUTO-GENERATED FILE - DO NOT EDIT MANUALLY
- * Generated on: 2026-07-14T09:39:41.937Z
+ * Generated on: 2026-07-14T10:00:28.631Z
  */
 
 export const DEFAULT_FILES: Record<string, string> = {
@@ -1077,7 +1077,7 @@ Unlike traditional chatbots, Itera has a **Body (UI)** and **Memory (VFS)**. It 
 
 ## 💡 Key Features
 
-* **Recursive Self-Improvement**: The AI can rewrite its own code (\`apps/home.html\`, \`js/app.js\`) to fix bugs or add features.
+* **Recursive Self-Improvement**: The AI can rewrite its own code (\`index.html\`, \`js/app.js\`) to fix bugs or add features.
 * **Time Machine**: Don't worry about breaking things. Click the 🕒 icon in the sidebar to create snapshots or restore the system instantly.
 * **Itera Blueprints**: Drag and drop \`.md\` blueprint files into the chat to install new apps via AI.
 
@@ -4134,4 +4134,4 @@ Use this Codex as a guidepost, and build a better Itera OS together with the use
 }, null, 2)
 };
 
-export const BUILD_TIME = 1784021981937;
+export const BUILD_TIME = 1784023228631;

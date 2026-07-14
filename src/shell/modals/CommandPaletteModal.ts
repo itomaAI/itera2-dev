@@ -6,7 +6,7 @@
 import type { VfsService } from '../../core/vfs/VfsService';
 import type { AppRegistry } from '../../core/sys/AppRegistry';
 import type { UriRouter } from '../core/UriRouter';
-import { USER_PRINCIPAL } from '../../core/vfs/types';
+import type { Principal } from '../../core/vfs/types';
 
 export interface CommandItem {
   id: string;
@@ -16,8 +16,6 @@ export interface CommandItem {
   score: number;
   action: () => void;
 }
-
-import type { Principal } from '../../core/vfs/types';
 
 export class CommandPaletteModal {
   private vfs: VfsService;

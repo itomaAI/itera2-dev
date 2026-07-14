@@ -228,7 +228,7 @@ export class PropertiesModal {
     const isSudo = this.activePrincipal.type === 'system';
     
     // Owner のシリアライズ
-    const currentOwnerStr = `\${acl.owner.type}:\${acl.owner.id}`;
+    const currentOwnerStr = `${acl.owner.type}:${acl.owner.id}`;
 
     let html = `
       <div class="text-xs text-text-muted mb-2">Control who can access or modify this item.</div>
@@ -246,18 +246,18 @@ export class PropertiesModal {
           <label class="flex items-center justify-between w-full mb-3">
             <span class="text-xs font-bold text-text-main">Owner</span>
             <select id="perm-owner" class="bg-panel border border-border-main rounded text-xs p-1 text-text-main focus:outline-none focus:border-primary">
-              <option value="system:kernel" \${currentOwnerStr === 'system:kernel' ? 'selected' : ''}>System (kernel)</option>
-              <option value="user:local_user" \${currentOwnerStr === 'user:local_user' ? 'selected' : ''}>User (local_user)</option>
-              <option value="agent:Itera_AI" \${currentOwnerStr === 'agent:Itera_AI' ? 'selected' : ''}>Agent (Itera_AI)</option>
+              <option value="system:kernel" ${currentOwnerStr === 'system:kernel' ? 'selected' : ''}>System (kernel)</option>
+              <option value="user:local_user" ${currentOwnerStr === 'user:local_user' ? 'selected' : ''}>User (local_user)</option>
+              <option value="agent:Itera_AI" ${currentOwnerStr === 'agent:Itera_AI' ? 'selected' : ''}>Agent (Itera_AI)</option>
             </select>
           </label>
 
           <label class="flex items-center justify-between w-full">
             <span class="text-xs font-bold text-text-main">Local User</span>
             <select id="perm-user" class="bg-panel border border-border-main rounded text-xs p-1 text-text-main focus:outline-none focus:border-primary">
-              <option value="read_write" \${userLevel === 'read_write' ? 'selected' : ''}>Read & Write</option>
-              <option value="read" \${userLevel === 'read' ? 'selected' : ''}>Read Only</option>
-              <option value="none" \${userLevel === 'none' ? 'selected' : ''}>No Access</option>
+              <option value="read_write" ${userLevel === 'read_write' ? 'selected' : ''}>Read & Write</option>
+              <option value="read" ${userLevel === 'read' ? 'selected' : ''}>Read Only</option>
+              <option value="none" ${userLevel === 'none' ? 'selected' : ''}>No Access</option>
             </select>
           </label>
         </div>

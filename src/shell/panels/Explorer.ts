@@ -6,7 +6,7 @@
 import type { VfsService } from '../../core/vfs/VfsService';
 import type { VfsEventBus } from '../../core/vfs/VfsEventBus';
 import type { FileAssociationResolver, ResolvedApp } from '../../core/sys/FileAssociationResolver';
-import { USER_PRINCIPAL } from '../../core/vfs/types';
+import type { Principal } from '../../core/vfs/types';
 import { TreeView } from './TreeView';
 
 declare const JSZip: any;
@@ -29,8 +29,6 @@ const DOM_IDS = {
   BTN_UPLOAD_FILE: 'btn-upload-file',
   INPUT_FILE: 'input-upload-file',
 };
-
-import type { Principal } from '../../core/vfs/types';
 
 export class Explorer {
   private vfs: VfsService;

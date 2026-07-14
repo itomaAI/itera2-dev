@@ -24,6 +24,30 @@ export class VfsInitializer {
     let deployedCount = 0;
     let updatedCount = 0;
 
+    // 1. 必須ディレクトリの自己修復（存在しなければシステム権限で再作成）
+    const requiredDirs = [
+      'system',
+      'system/apps',
+      'system/config',
+      'system/core',
+      'system/registry',
+      'system/themes',
+      'system/temp',
+      'system/logs',
+      'trash'
+    ];
+
+    for (const dir of requiredDirs) {
+      if (!this.vfs.exists(SYSTEM_PRINCIPAL, dir)) {
+        try {
+          await this.vfs.mkdir(SYSTEM_PRINCIPAL, dir);
+          console.log(`[VfsInitializer] Restored missing directory: ${dir}`);
+        } catch (e) {
+          // 並行処理などですでに作成されていた場合のエラーは無視
+        }
+      }
+    }
+
     // ユーザーの自動アップデート設定を読み取る
     let autoUpdate = true;
     try {
@@ -79,7 +103,11 @@ export class VfsInitializer {
     if (this.vfs.exists(SYSTEM_PRINCIPAL, 'system')) {
       await this.vfs.setAclRecursive(SYSTEM_PRINCIPAL, 'system', {
         owner: SYSTEM_PRINCIPAL,
-        rules: [{ principal: { type: 'any', id: '*' }, permissions: ['read'] }],
+        rules: [
+          { principal: { type: 'user', id: 'local_user' }, permissions: ['read'] },
+          { principal: { type: 'agent', id: 'Itera_AI' }, permissions: ['read'] },
+          { principal: { type: 'any', id: '*' }, permissions: ['read'] }
+        ],
       });
     }
 
@@ -87,10 +115,9 @@ export class VfsInitializer {
     const readWriteAcl: import('./types').AccessControlList = {
       owner: SYSTEM_PRINCIPAL,
       rules: [
-        {
-          principal: { type: 'any', id: '*' },
-          permissions: ['read', 'write'],
-        },
+        { principal: { type: 'user', id: 'local_user' }, permissions: ['read', 'write', 'manage'] },
+        { principal: { type: 'agent', id: 'Itera_AI' }, permissions: ['read', 'write'] },
+        { principal: { type: 'any', id: '*' }, permissions: ['read', 'write'] }
       ],
     };
 
