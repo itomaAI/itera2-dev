@@ -38,7 +38,7 @@ export class VfsInitializer {
       'system/services',
       'system/themes',
       'system/temp',
-      'system/logs'
+      'system/logs',
     ];
 
     for (const dir of requiredDirs) {
@@ -69,7 +69,7 @@ export class VfsInitializer {
     for (const [key, content] of Object.entries(DEFAULT_FILES)) {
       const isDir = key.endsWith('/');
       const cleanPath = isDir ? key.slice(0, -1) : key;
-      
+
       // 領域の判定
       const isSystemArea = cleanPath.startsWith('system/');
       const isConfigArea = cleanPath.startsWith('system/config/') || cleanPath.startsWith('system/registry/');
@@ -116,7 +116,7 @@ export class VfsInitializer {
         rules: [
           { principal: { type: 'user', id: 'local_user' }, permissions: ['read'] },
           { principal: { type: 'agent', id: 'Itera_AI' }, permissions: ['read'] },
-          { principal: { type: 'any', id: '*' }, permissions: ['read'] }
+          { principal: { type: 'any', id: '*' }, permissions: ['read'] },
         ],
       });
     }
@@ -127,7 +127,7 @@ export class VfsInitializer {
       rules: [
         { principal: { type: 'user', id: 'local_user' }, permissions: ['read', 'write', 'manage'] },
         { principal: { type: 'agent', id: 'Itera_AI' }, permissions: ['read', 'write'] },
-        { principal: { type: 'any', id: '*' }, permissions: ['read', 'write'] }
+        { principal: { type: 'any', id: '*' }, permissions: ['read', 'write'] },
       ],
     };
 

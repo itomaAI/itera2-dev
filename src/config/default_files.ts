@@ -1,239 +1,347 @@
 /**
  * AUTO-GENERATED FILE - DO NOT EDIT MANUALLY
- * Generated on: 2026-07-14T14:43:19.745Z
+ * Generated on: 2026-07-14T15:02:52.886Z
  */
 
 export const DEFAULT_FILES: Record<string, string> = {
   "apps/calendar.html": `
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Calendar</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="../system/core/ui.js"></script>
     <script src="../system/core/std.js"></script>
     <style>
-        .calendar-cell { min-height: 80px; }
-        /* Utility for hiding scrollbars but keeping functionality */
-        .no-scrollbar::-webkit-scrollbar { display: none; }
-        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+      .calendar-cell {
+        min-height: 80px;
+      }
+      /* Utility for hiding scrollbars but keeping functionality */
+      .no-scrollbar::-webkit-scrollbar {
+        display: none;
+      }
+      .no-scrollbar {
+        -ms-overflow-style: none;
+        scrollbar-width: none;
+      }
     </style>
-</head>
-<body class="bg-app text-text-main h-screen flex flex-col p-6 overflow-hidden">
-
+  </head>
+  <body class="bg-app text-text-main h-screen flex flex-col p-6 overflow-hidden">
     <!-- Header -->
     <header class="flex items-center justify-between mb-6 shrink-0">
-        <div class="flex items-center gap-4">
-            <button onclick="AppUI.home()" class="p-2 -ml-2 rounded-full hover:bg-hover text-text-muted hover:text-text-main transition">
-                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path></svg>
-            </button>
-            <h1 class="text-2xl font-bold tracking-tight" id="month-label">Calendar</h1>
-        </div>
-        <div class="flex gap-2 bg-panel p-1 rounded-lg border border-border-main">
-            <button onclick="changeMonth(-1)" class="p-1 hover:bg-hover rounded text-text-muted hover:text-text-main transition">&lt;</button>
-            <button onclick="today()" class="px-3 text-xs font-bold text-text-main hover:bg-hover rounded transition">Today</button>
-            <button onclick="changeMonth(1)" class="p-1 hover:bg-hover rounded text-text-muted hover:text-text-main transition">&gt;</button>
-        </div>
+      <div class="flex items-center gap-4">
+        <button
+          onclick="AppUI.home()"
+          class="p-2 -ml-2 rounded-full hover:bg-hover text-text-muted hover:text-text-main transition"
+        >
+          <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M10 19l-7-7m0 0l7-7m-7 7h18"
+            ></path>
+          </svg>
+        </button>
+        <h1 class="text-2xl font-bold tracking-tight" id="month-label">Calendar</h1>
+      </div>
+      <div class="flex gap-2 bg-panel p-1 rounded-lg border border-border-main">
+        <button
+          onclick="changeMonth(-1)"
+          class="p-1 hover:bg-hover rounded text-text-muted hover:text-text-main transition"
+        >
+          &lt;
+        </button>
+        <button onclick="today()" class="px-3 text-xs font-bold text-text-main hover:bg-hover rounded transition">
+          Today
+        </button>
+        <button
+          onclick="changeMonth(1)"
+          class="p-1 hover:bg-hover rounded text-text-muted hover:text-text-main transition"
+        >
+          &gt;
+        </button>
+      </div>
     </header>
 
     <!-- Event Details Modal -->
-    <div id="day-modal" class="hidden fixed inset-0 bg-black/50 z-50 flex justify-end backdrop-blur-sm transition-opacity">
-        <div class="bg-panel w-full max-w-sm h-full shadow-2xl border-l border-border-main flex flex-col transform translate-x-full transition-transform duration-300" id="day-modal-content">
-            
-            <!-- Modal Header -->
-            <div class="p-4 border-b border-border-main flex justify-between items-center bg-card/50">
-                <div>
-                    <h3 class="font-bold text-xl tracking-tight" id="modal-date-display">Date</h3>
-                    <p class="text-xs text-text-muted font-mono uppercase tracking-widest mt-0.5" id="modal-weekday-display">Day</p>
-                </div>
-                <button onclick="closeDayModal()" class="p-2 rounded-full hover:bg-hover text-text-muted hover:text-text-main transition bg-panel shadow-sm border border-border-main">
-                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
-                </button>
-            </div>
-            
-            <!-- Event List (View Mode) -->
-            <div class="flex-1 p-4 overflow-y-auto space-y-3" id="modal-event-list">
-                <!-- Injected via JS -->
-            </div>
-
-            <!-- Event Form (Edit Mode) -->
-            <div id="event-edit-form" class="hidden flex-1 p-4 overflow-y-auto flex-col space-y-4">
-                <input type="hidden" id="edit-event-id">
-                <input type="hidden" id="edit-event-original-date">
-                
-                <div>
-                    <label class="block text-xs font-bold text-text-muted uppercase mb-1">Event Title <span class="text-error">*</span></label>
-                    <input type="text" id="edit-event-title" placeholder="Meeting..." class="w-full bg-card border border-border-main rounded p-2 focus:border-primary focus:outline-none text-text-main text-sm">
-                </div>
-                
-                <div class="grid grid-cols-3 gap-4">
-                    <div>
-                        <label class="block text-xs font-bold text-text-muted uppercase mb-1">Date <span class="text-error">*</span></label>
-                        <input type="date" id="edit-event-date" class="w-full bg-card border border-border-main rounded p-2 focus:border-primary focus:outline-none text-text-main text-sm">
-                    </div>
-                    <div>
-                        <label class="block text-xs font-bold text-text-muted uppercase mb-1">Start</label>
-                        <input type="time" id="edit-event-time" class="w-full bg-card border border-border-main rounded p-2 focus:border-primary focus:outline-none text-text-main text-sm">
-                    </div>
-                    <div>
-                        <label class="block text-xs font-bold text-text-muted uppercase mb-1">End</label>
-                        <input type="time" id="edit-event-end-time" class="w-full bg-card border border-border-main rounded p-2 focus:border-primary focus:outline-none text-text-main text-sm">
-                    </div>
-                </div>
-
-                <div>
-                    <label class="block text-xs font-bold text-text-muted uppercase mb-1">Notes / Description</label>
-                    <textarea id="edit-event-note" rows="4" placeholder="Details..." class="w-full bg-card border border-border-main rounded p-2 focus:border-primary focus:outline-none text-text-main text-sm resize-none"></textarea>
-                </div>
-
-                <div class="mt-auto flex gap-2 pt-4 border-t border-border-main">
-                    <button onclick="cancelEventForm()" class="flex-1 px-4 py-2 rounded-lg text-sm font-medium hover:bg-hover transition border border-border-main text-text-main">Cancel</button>
-                    <button onclick="saveEventForm()" class="flex-1 px-4 py-2 rounded-lg bg-primary text-text-inverted text-sm font-bold hover:bg-primary/90 shadow transition flex items-center justify-center gap-1">
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
-                        Save Event
-                    </button>
-                </div>
-            </div>
-
-            <!-- Add Event Button (Footer) -->
-            <div class="p-4 border-t border-border-main bg-card/50" id="add-event-section">
-                <input type="hidden" id="modal-target-date">
-                <button onclick="openEventForm(null)" class="w-full bg-panel hover:bg-hover border border-border-main text-primary font-bold px-4 py-3 rounded-xl transition shadow-sm hover:shadow flex items-center justify-center gap-2 group">
-                    <span class="text-xl leading-none group-hover:scale-125 transition-transform">+</span> 
-                    <span>Create New Event</span>
-                </button>
-            </div>
+    <div
+      id="day-modal"
+      class="hidden fixed inset-0 bg-black/50 z-50 flex justify-end backdrop-blur-sm transition-opacity"
+    >
+      <div
+        class="bg-panel w-full max-w-sm h-full shadow-2xl border-l border-border-main flex flex-col transform translate-x-full transition-transform duration-300"
+        id="day-modal-content"
+      >
+        <!-- Modal Header -->
+        <div class="p-4 border-b border-border-main flex justify-between items-center bg-card/50">
+          <div>
+            <h3 class="font-bold text-xl tracking-tight" id="modal-date-display">Date</h3>
+            <p class="text-xs text-text-muted font-mono uppercase tracking-widest mt-0.5" id="modal-weekday-display">
+              Day
+            </p>
+          </div>
+          <button
+            onclick="closeDayModal()"
+            class="p-2 rounded-full hover:bg-hover text-text-muted hover:text-text-main transition bg-panel shadow-sm border border-border-main"
+          >
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+            </svg>
+          </button>
         </div>
+
+        <!-- Event List (View Mode) -->
+        <div class="flex-1 p-4 overflow-y-auto space-y-3" id="modal-event-list">
+          <!-- Injected via JS -->
+        </div>
+
+        <!-- Event Form (Edit Mode) -->
+        <div id="event-edit-form" class="hidden flex-1 p-4 overflow-y-auto flex-col space-y-4">
+          <input type="hidden" id="edit-event-id" />
+          <input type="hidden" id="edit-event-original-date" />
+
+          <div>
+            <label class="block text-xs font-bold text-text-muted uppercase mb-1"
+              >Event Title <span class="text-error">*</span></label
+            >
+            <input
+              type="text"
+              id="edit-event-title"
+              placeholder="Meeting..."
+              class="w-full bg-card border border-border-main rounded p-2 focus:border-primary focus:outline-none text-text-main text-sm"
+            />
+          </div>
+
+          <div class="grid grid-cols-3 gap-4">
+            <div>
+              <label class="block text-xs font-bold text-text-muted uppercase mb-1"
+                >Date <span class="text-error">*</span></label
+              >
+              <input
+                type="date"
+                id="edit-event-date"
+                class="w-full bg-card border border-border-main rounded p-2 focus:border-primary focus:outline-none text-text-main text-sm"
+              />
+            </div>
+            <div>
+              <label class="block text-xs font-bold text-text-muted uppercase mb-1">Start</label>
+              <input
+                type="time"
+                id="edit-event-time"
+                class="w-full bg-card border border-border-main rounded p-2 focus:border-primary focus:outline-none text-text-main text-sm"
+              />
+            </div>
+            <div>
+              <label class="block text-xs font-bold text-text-muted uppercase mb-1">End</label>
+              <input
+                type="time"
+                id="edit-event-end-time"
+                class="w-full bg-card border border-border-main rounded p-2 focus:border-primary focus:outline-none text-text-main text-sm"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label class="block text-xs font-bold text-text-muted uppercase mb-1">Notes / Description</label>
+            <textarea
+              id="edit-event-note"
+              rows="4"
+              placeholder="Details..."
+              class="w-full bg-card border border-border-main rounded p-2 focus:border-primary focus:outline-none text-text-main text-sm resize-none"
+            ></textarea>
+          </div>
+
+          <div class="mt-auto flex gap-2 pt-4 border-t border-border-main">
+            <button
+              onclick="cancelEventForm()"
+              class="flex-1 px-4 py-2 rounded-lg text-sm font-medium hover:bg-hover transition border border-border-main text-text-main"
+            >
+              Cancel
+            </button>
+            <button
+              onclick="saveEventForm()"
+              class="flex-1 px-4 py-2 rounded-lg bg-primary text-text-inverted text-sm font-bold hover:bg-primary/90 shadow transition flex items-center justify-center gap-1"
+            >
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+              </svg>
+              Save Event
+            </button>
+          </div>
+        </div>
+
+        <!-- Add Event Button (Footer) -->
+        <div class="p-4 border-t border-border-main bg-card/50" id="add-event-section">
+          <input type="hidden" id="modal-target-date" />
+          <button
+            onclick="openEventForm(null)"
+            class="w-full bg-panel hover:bg-hover border border-border-main text-primary font-bold px-4 py-3 rounded-xl transition shadow-sm hover:shadow flex items-center justify-center gap-2 group"
+          >
+            <span class="text-xl leading-none group-hover:scale-125 transition-transform">+</span>
+            <span>Create New Event</span>
+          </button>
+        </div>
+      </div>
     </div>
 
     <!-- Calendar Grid -->
     <div class="flex-1 flex flex-col bg-panel border border-border-main rounded-xl overflow-hidden shadow-sm relative">
-        <!-- Header Row -->
-        <div class="grid grid-cols-7 gap-px bg-border-main text-center py-2 text-xs font-bold text-text-muted uppercase tracking-wider bg-panel shrink-0">
-            <div>Sun</div><div>Mon</div><div>Tue</div><div>Wed</div><div>Thu</div><div>Fri</div><div>Sat</div>
-        </div>
-        <!-- Days -->
-        <div id="grid" class="flex-1 grid grid-cols-7 gap-px bg-border-main overflow-y-auto"></div>
+      <!-- Header Row -->
+      <div
+        class="grid grid-cols-7 gap-px bg-border-main text-center py-2 text-xs font-bold text-text-muted uppercase tracking-wider bg-panel shrink-0"
+      >
+        <div>Sun</div>
+        <div>Mon</div>
+        <div>Tue</div>
+        <div>Wed</div>
+        <div>Thu</div>
+        <div>Fri</div>
+        <div>Sat</div>
+      </div>
+      <!-- Days -->
+      <div id="grid" class="flex-1 grid grid-cols-7 gap-px bg-border-main overflow-y-auto"></div>
     </div>
 
     <script>
-        // --- State Management ---
-        const State = {
-            currentDate: new Date(),
-            events: [],
-            modalDate: null
-        };
+      // --- State Management ---
+      const State = {
+        currentDate: new Date(),
+        events: [],
+        modalDate: null,
+      };
 
-        const DOM = id => document.getElementById(id);
+      const DOM = (id) => document.getElementById(id);
 
-        // --- Core Logic ---
+      // --- Core Logic ---
 
-        async function render() {
-            const [year, month] = [State.currentDate.getFullYear(), State.currentDate.getMonth()];
-            const monthKey = \`\${year}-\${String(month + 1).padStart(2, '0')}\`;
-            const todayStr = new Date().toISOString().slice(0, 10);
-            
-            DOM('month-label').textContent = State.currentDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
-            
-            // Fetch events and tasks for this month
-            State.events = await App.getCalendarItems(monthKey).catch(() => []);
-            
-            const firstDay = new Date(year, month, 1).getDay();
-            const daysInMonth = new Date(year, month + 1, 0).getDate();
+      async function render() {
+        const [year, month] = [State.currentDate.getFullYear(), State.currentDate.getMonth()];
+        const monthKey = \`\${year}-\${String(month + 1).padStart(2, '0')}\`;
+        const todayStr = new Date().toISOString().slice(0, 10);
 
-            let html = '';
-            
-            // Empty cells for days before the 1st
-            html += Array(firstDay).fill('<div class="calendar-cell bg-app/50"></div>').join('');
+        DOM('month-label').textContent = State.currentDate.toLocaleDateString('en-US', {
+          month: 'long',
+          year: 'numeric',
+        });
 
-            // Day cells
-            for (let d = 1; d <= daysInMonth; d++) {
-                const dateStr = \`\${year}-\${String(month + 1).padStart(2, '0')}-\${String(d).padStart(2, '0')}\`;
-                const dayEvents = State.events.filter(i => i.date === dateStr);
-                
-                // Render badges
-                const badges = dayEvents
-                    .sort((a, b) => (a.time || '').localeCompare(b.time || ''))
-                    .map(i => {
-                        const isTask = i.type === 'task';
-                        const color = isTask ? 'bg-success/15 text-success border-success/30' : 'bg-primary/15 text-primary border-primary/30';
-                        const timeStr = i.time ? \`<span class="opacity-60 font-mono mr-1">\${i.time}\${i.endTime ? '-' + i.endTime : ''}</span>\` : '';
-                        return \`<div class="text-[9px] px-1.5 py-0.5 rounded border \${color} truncate mb-0.5 font-medium tracking-tight">\${timeStr}\${i.title}</div>\`;
-                    }).join('');
+        // Fetch events and tasks for this month
+        State.events = await App.getCalendarItems(monthKey).catch(() => []);
 
-                const isToday = dateStr === todayStr;
-                const todayClass = isToday ? 'bg-primary text-white w-6 h-6 flex items-center justify-center rounded-full shadow-lg shadow-primary/30 ring-2 ring-primary/20' : 'text-text-muted';
+        const firstDay = new Date(year, month, 1).getDay();
+        const daysInMonth = new Date(year, month + 1, 0).getDate();
 
-                html += \`
+        let html = '';
+
+        // Empty cells for days before the 1st
+        html += Array(firstDay).fill('<div class="calendar-cell bg-app/50"></div>').join('');
+
+        // Day cells
+        for (let d = 1; d <= daysInMonth; d++) {
+          const dateStr = \`\${year}-\${String(month + 1).padStart(2, '0')}-\${String(d).padStart(2, '0')}\`;
+          const dayEvents = State.events.filter((i) => i.date === dateStr);
+
+          // Render badges
+          const badges = dayEvents
+            .sort((a, b) => (a.time || '').localeCompare(b.time || ''))
+            .map((i) => {
+              const isTask = i.type === 'task';
+              const color = isTask
+                ? 'bg-success/15 text-success border-success/30'
+                : 'bg-primary/15 text-primary border-primary/30';
+              const timeStr = i.time
+                ? \`<span class="opacity-60 font-mono mr-1">\${i.time}\${i.endTime ? '-' + i.endTime : ''}</span>\`
+                : '';
+              return \`<div class="text-[9px] px-1.5 py-0.5 rounded border \${color} truncate mb-0.5 font-medium tracking-tight">\${timeStr}\${i.title}</div>\`;
+            })
+            .join('');
+
+          const isToday = dateStr === todayStr;
+          const todayClass = isToday
+            ? 'bg-primary text-white w-6 h-6 flex items-center justify-center rounded-full shadow-lg shadow-primary/30 ring-2 ring-primary/20'
+            : 'text-text-muted';
+
+          html += \`
                     <div class="calendar-cell bg-panel hover:bg-hover transition-colors duration-200 p-2 cursor-pointer flex flex-col gap-1 group relative overflow-hidden border-t border-transparent hover:border-primary/30" onclick="openDayModal('\${dateStr}')">
                         <div class="text-xs font-bold \${todayClass} transition-transform group-hover:scale-110 group-hover:text-text-main">\${d}</div>
                         <div class="flex-1 w-full space-y-0.5 mt-1 overflow-y-auto no-scrollbar">\${badges}</div>
                         <div class="absolute inset-0 border-2 border-primary/0 group-hover:border-primary/20 rounded transition-colors pointer-events-none"></div>
                     </div>\`;
-            }
-
-            DOM('grid').innerHTML = html;
         }
 
-        function changeMonth(delta) {
-            State.currentDate.setDate(1);
-            State.currentDate.setMonth(State.currentDate.getMonth() + delta);
-            render();
-        }
+        DOM('grid').innerHTML = html;
+      }
 
-        function today() {
-            State.currentDate = new Date();
-            render();
-        }
+      function changeMonth(delta) {
+        State.currentDate.setDate(1);
+        State.currentDate.setMonth(State.currentDate.getMonth() + delta);
+        render();
+      }
 
-        // --- Day Modal Logic ---
+      function today() {
+        State.currentDate = new Date();
+        render();
+      }
 
-        function openDayModal(dateStr) {
-            State.modalDate = dateStr;
-            const targetDate = new Date(dateStr + 'T00:00:00'); // Prevent timezone shift
-            
-            DOM('modal-date-display').textContent = targetDate.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
-            DOM('modal-weekday-display').textContent = targetDate.toLocaleDateString('en-US', { weekday: 'long' });
-            DOM('modal-target-date').value = dateStr;
+      // --- Day Modal Logic ---
 
-            const dayEvents = State.events.filter(i => i.date === dateStr);
-            renderModalEvents(dayEvents);
+      function openDayModal(dateStr) {
+        State.modalDate = dateStr;
+        const targetDate = new Date(dateStr + 'T00:00:00'); // Prevent timezone shift
 
-            // Show modal
-            const modal = DOM('day-modal');
-            const content = DOM('day-modal-content');
-            modal.classList.remove('hidden');
-            void modal.offsetWidth; // Force reflow
-            content.classList.remove('translate-x-full');
-        }
+        DOM('modal-date-display').textContent = targetDate.toLocaleDateString('en-US', {
+          month: 'long',
+          day: 'numeric',
+          year: 'numeric',
+        });
+        DOM('modal-weekday-display').textContent = targetDate.toLocaleDateString('en-US', { weekday: 'long' });
+        DOM('modal-target-date').value = dateStr;
 
-        function renderModalEvents(events) {
-            const container = DOM('modal-event-list');
-            
-            if (events.length === 0) {
-                container.innerHTML = \`
+        const dayEvents = State.events.filter((i) => i.date === dateStr);
+        renderModalEvents(dayEvents);
+
+        // Show modal
+        const modal = DOM('day-modal');
+        const content = DOM('day-modal-content');
+        modal.classList.remove('hidden');
+        void modal.offsetWidth; // Force reflow
+        content.classList.remove('translate-x-full');
+      }
+
+      function renderModalEvents(events) {
+        const container = DOM('modal-event-list');
+
+        if (events.length === 0) {
+          container.innerHTML = \`
                     <div class="flex flex-col items-center justify-center h-40 text-text-muted opacity-60">
                         <svg class="w-10 h-10 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
                         <span class="text-sm font-medium">No events for this day</span>
                         <span class="text-xs">Enjoy your free time!</span>
                     </div>\`;
-                return;
-            }
+          return;
+        }
 
-            // Sort by time
-            events.sort((a, b) => (a.time || '').localeCompare(b.time || ''));
+        // Sort by time
+        events.sort((a, b) => (a.time || '').localeCompare(b.time || ''));
 
-            const html = events.map((event, index) => {
-                const isTask = event.type === 'task';
-                const icon = isTask ? '✅' : '📅';
-                const isLast = index === events.length - 1;
-                const dotColor = isTask ? 'bg-success' : 'bg-primary';
-                const cardColor = isTask ? 'bg-success/5 border-success/30' : 'bg-primary/5 border-primary/30 hover:bg-primary/10 hover:border-primary/50 cursor-pointer';
-                const timeText = event.time ? (event.endTime ? \`\${event.time}<br><span class="opacity-50">\${event.endTime}</span>\` : event.time) : 'ALL DAY';
-                
-                return \`
+        const html = events
+          .map((event, index) => {
+            const isTask = event.type === 'task';
+            const icon = isTask ? '✅' : '📅';
+            const isLast = index === events.length - 1;
+            const dotColor = isTask ? 'bg-success' : 'bg-primary';
+            const cardColor = isTask
+              ? 'bg-success/5 border-success/30'
+              : 'bg-primary/5 border-primary/30 hover:bg-primary/10 hover:border-primary/50 cursor-pointer';
+            const timeText = event.time
+              ? event.endTime
+                ? \`\${event.time}<br><span class="opacity-50">\${event.endTime}</span>\`
+                : event.time
+              : 'ALL DAY';
+
+            return \`
                     <div class="flex gap-4 group relative" \${!isTask ? \`onclick="openEventForm('\${event.id}')"\` : \`title="Tasks cannot be edited here."\`}>
                         <div class="w-14 shrink-0 text-right pt-2 leading-tight">
                             <span class="font-mono text-[10px] uppercase font-bold text-text-muted tracking-wider">\${timeText}</span>
@@ -249,120 +357,130 @@ export const DEFAULT_FILES: Record<string, string> = {
                                     \${!isTask ? \`<button onclick="event.stopPropagation(); deleteEvent('\${event.id}')" class="text-text-muted hover:text-error opacity-0 group-hover:opacity-100 transition"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg></button>\` : ''}
                                 </div>
                                 <div class="text-[10px] text-text-muted uppercase tracking-wider font-bold flex items-center gap-1">
-                                    <span>\${icon}</span> \${isTask ? 'Task Deadline' : (event.note ? 'Notes' : 'Event')}
+                                    <span>\${icon}</span> \${isTask ? 'Task Deadline' : event.note ? 'Notes' : 'Event'}
                                 </div>
                                 \${event.note ? \`<div class="text-xs text-text-muted mt-1 bg-card/50 p-2 rounded border border-border-main/50 line-clamp-2">\${event.note}</div>\` : ''}
                             </div>
                         </div>
                     </div>\`;
-            }).join('');
+          })
+          .join('');
 
-            container.innerHTML = \`<div class="relative mt-2">\${html}</div>\`;
+        container.innerHTML = \`<div class="relative mt-2">\${html}</div>\`;
+      }
+
+      function closeDayModal() {
+        const modal = DOM('day-modal');
+        const content = DOM('day-modal-content');
+        content.classList.add('translate-x-full');
+        setTimeout(() => {
+          modal.classList.add('hidden');
+          cancelEventForm();
+        }, 300);
+      }
+
+      // --- Event Form Logic ---
+
+      function toggleFormView(showForm) {
+        ['modal-event-list', 'add-event-section'].forEach((id) => DOM(id).classList.toggle('hidden', showForm));
+        DOM('event-edit-form').classList.toggle('hidden', !showForm);
+        DOM('event-edit-form').classList.toggle('flex', showForm);
+      }
+
+      function openEventForm(id = null) {
+        const event = id ? State.events.find((e) => e.id === id) : {};
+        if (id && !event) return;
+
+        DOM('edit-event-id').value = event.id || '';
+        DOM('edit-event-original-date').value = event.date || '';
+        DOM('edit-event-title').value = event.title || '';
+        DOM('edit-event-date').value = event.date || State.modalDate;
+        DOM('edit-event-time').value = event.time || '';
+        DOM('edit-event-end-time').value = event.endTime || '';
+        DOM('edit-event-note').value = event.note || '';
+
+        toggleFormView(true);
+        setTimeout(() => DOM('edit-event-title').focus(), 50);
+      }
+
+      const cancelEventForm = () => toggleFormView(false);
+
+      async function saveEventForm() {
+        const [id, title, date, time, endTime, note, originalDate] = [
+          'id',
+          'title',
+          'date',
+          'time',
+          'end-time',
+          'note',
+          'original-date',
+        ].map((k) => DOM(\`edit-event-\${k}\`).value);
+        if (!title.trim() || !date) return;
+
+        AppUI.showLoading('Saving...');
+        if (id) {
+          await App.updateEvent(id, { title, date, time, endTime, note, originalDate });
+        } else {
+          await App.addEvent(title, date, time, note, endTime);
         }
+        AppUI.hideLoading();
 
-        function closeDayModal() {
-            const modal = DOM('day-modal');
-            const content = DOM('day-modal-content');
-            content.classList.add('translate-x-full');
-            setTimeout(() => {
-                modal.classList.add('hidden');
-                cancelEventForm();
-            }, 300);
+        cancelEventForm();
+        await render(); // Refresh state
+        openDayModal(date); // Re-open modal with new data
+      }
+
+      async function deleteEvent(id) {
+        if (await AppUI.confirm('Are you sure you want to delete this event?')) {
+          AppUI.showLoading('Deleting...');
+          await App.deleteEvent(id, State.modalDate);
+          AppUI.hideLoading();
+          await render();
+          openDayModal(State.modalDate);
         }
+      }
 
-        // --- Event Form Logic ---
+      // 日付遷移の共通ロジック
+      async function handleDateNavigation(dateStr) {
+        if (!dateStr || dateStr.length < 10) return;
+        const cleanDateStr = dateStr.slice(0, 10); // YYYY-MM-DD
 
-        function toggleFormView(showForm) {
-            ['modal-event-list', 'add-event-section'].forEach(id => DOM(id).classList.toggle('hidden', showForm));
-            DOM('event-edit-form').classList.toggle('hidden', !showForm);
-            DOM('event-edit-form').classList.toggle('flex', showForm);
-        }
+        const targetDate = new Date(cleanDateStr + 'T00:00:00');
+        if (!isNaN(targetDate.getTime())) {
+          const currentY = State.currentDate.getFullYear();
+          const currentM = State.currentDate.getMonth();
 
-        function openEventForm(id = null) {
-            const event = id ? State.events.find(e => e.id === id) : {};
-            if (id && !event) return;
-            
-            DOM('edit-event-id').value = event.id || '';
-            DOM('edit-event-original-date').value = event.date || '';
-            DOM('edit-event-title').value = event.title || '';
-            DOM('edit-event-date').value = event.date || State.modalDate;
-            DOM('edit-event-time').value = event.time || '';
-            DOM('edit-event-end-time').value = event.endTime || '';
-            DOM('edit-event-note').value = event.note || '';
-
-            toggleFormView(true);
-            setTimeout(() => DOM('edit-event-title').focus(), 50);
-        }
-
-        const cancelEventForm = () => toggleFormView(false);
-
-        async function saveEventForm() {
-            const [id, title, date, time, endTime, note, originalDate] = ['id','title','date','time','end-time','note','original-date'].map(k => DOM(\`edit-event-\${k}\`).value);
-            if (!title.trim() || !date) return;
-
-            AppUI.showLoading("Saving...");
-            if (id) {
-                await App.updateEvent(id, { title, date, time, endTime, note, originalDate });
-            } else {
-                await App.addEvent(title, date, time, note, endTime);
-            }
-            AppUI.hideLoading();
-            
-            cancelEventForm();
-            await render(); // Refresh state
-            openDayModal(date); // Re-open modal with new data
-        }
-        
-        async function deleteEvent(id) {
-            if (await AppUI.confirm('Are you sure you want to delete this event?')) {
-                AppUI.showLoading("Deleting...");
-                await App.deleteEvent(id, State.modalDate);
-                AppUI.hideLoading();
-                await render();
-                openDayModal(State.modalDate);
-            }
-        }
-
-        // 日付遷移の共通ロジック
-        async function handleDateNavigation(dateStr) {
-            if (!dateStr || dateStr.length < 10) return;
-            const cleanDateStr = dateStr.slice(0, 10); // YYYY-MM-DD
-            
-            const targetDate = new Date(cleanDateStr + 'T00:00:00');
-            if (!isNaN(targetDate.getTime())) {
-                const currentY = State.currentDate.getFullYear();
-                const currentM = State.currentDate.getMonth();
-                
-                if (targetDate.getFullYear() !== currentY || targetDate.getMonth() !== currentM) {
-                    State.currentDate = targetDate;
-                    await render();
-                }
-                openDayModal(cleanDateStr);
-            }
-        }
-
-        // --- Boot ---
-        (async () => {
+          if (targetDate.getFullYear() !== currentY || targetDate.getMonth() !== currentM) {
+            State.currentDate = targetDate;
             await render();
-            
-            // V2: Soft Navigation (Resume) 対応
-            if (window.MetaOS && MetaOS.system && MetaOS.system.on) {
-                MetaOS.system.on('route_changed', async (payload) => {
-                    if (payload && payload.args && payload.args.date) {
-                        await handleDateNavigation(payload.args.date);
-                    }
-                });
-            }
+          }
+          openDayModal(cleanDateStr);
+        }
+      }
 
-            // V2: 初期起動時の args 確認
-            const args = await App.Context.getArgs();
-            if (args && args.date) {
-                await handleDateNavigation(args.date);
+      // --- Boot ---
+      (async () => {
+        await render();
+
+        // V2: Soft Navigation (Resume) 対応
+        if (window.MetaOS && MetaOS.system && MetaOS.system.on) {
+          MetaOS.system.on('route_changed', async (payload) => {
+            if (payload && payload.args && payload.args.date) {
+              await handleDateNavigation(payload.args.date);
             }
-        })();
+          });
+        }
+
+        // V2: 初期起動時の args 確認
+        const args = await App.Context.getArgs();
+        if (args && args.date) {
+          await handleDateNavigation(args.date);
+        }
+      })();
     </script>
-</body>
-</html>`.trim(),
+  </body>
+</html>
+`.trim(),
 
   "apps/home.html": `
 <!doctype html>
@@ -1424,138 +1542,229 @@ export const DEFAULT_FILES: Record<string, string> = {
 `.trim(),
 
   "apps/tasks.html": `
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Tasks</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="../system/core/ui.js"></script>
     <script src="../system/core/std.js"></script>
-</head>
-<body class="bg-app text-text-main h-screen flex flex-col p-6 overflow-hidden">
-
+  </head>
+  <body class="bg-app text-text-main h-screen flex flex-col p-6 overflow-hidden">
     <!-- Header -->
     <header class="flex items-center justify-between mb-6 shrink-0">
-        <div class="flex items-center gap-4">
-            <button onclick="AppUI.home()" class="p-2 -ml-2 rounded-full hover:bg-hover text-text-muted hover:text-text-main transition">
-                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path></svg>
-            </button>
-            <h1 class="text-2xl font-bold tracking-tight">Tasks</h1>
-        </div>
-        <div class="flex gap-2">
-            <button onclick="render()" class="p-2 rounded hover:bg-hover text-text-muted hover:text-primary transition">
-                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
-            </button>
-        </div>
+      <div class="flex items-center gap-4">
+        <button
+          onclick="AppUI.home()"
+          class="p-2 -ml-2 rounded-full hover:bg-hover text-text-muted hover:text-text-main transition"
+        >
+          <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M10 19l-7-7m0 0l7-7m-7 7h18"
+            ></path>
+          </svg>
+        </button>
+        <h1 class="text-2xl font-bold tracking-tight">Tasks</h1>
+      </div>
+      <div class="flex gap-2">
+        <button onclick="render()" class="p-2 rounded hover:bg-hover text-text-muted hover:text-primary transition">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+            ></path>
+          </svg>
+        </button>
+      </div>
     </header>
 
     <!-- Input Area -->
     <div class="mb-6 shrink-0 bg-panel border border-border-main rounded-xl p-3 shadow-sm">
-        <input type="text" id="task-input" placeholder="New task..." class="w-full bg-transparent border-b border-border-main/50 pb-2 mb-3 focus:outline-none focus:border-primary text-text-main placeholder-text-muted text-lg font-medium transition" onkeydown="if(event.key==='Enter') addTask()">
-        
-        <div class="flex items-center gap-2 justify-end">
-            <!-- Date Input -->
-            <input type="date" id="task-date" class="bg-card border border-border-main rounded px-2 py-1.5 text-xs text-text-muted focus:outline-none focus:border-primary focus:text-text-main">
-            
-            <!-- Priority -->
-            <select id="task-priority" class="bg-card border border-border-main text-xs rounded px-2 py-1.5 text-text-muted focus:outline-none cursor-pointer hover:text-text-main hover:border-primary transition">
-                <option value="low">Low</option>
-                <option value="medium" selected>Medium</option>
-                <option value="high">High</option>
-            </select>
-            
-            <!-- Add Button -->
-            <button onclick="addTask()" class="bg-primary hover:bg-primary/90 text-text-inverted px-4 py-1.5 rounded-lg font-bold text-xs transition flex items-center gap-1 shadow-md hover:shadow-lg">
-                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M12 4v16m8-8H4"></path></svg>
-                Add
-            </button>
-        </div>
+      <input
+        type="text"
+        id="task-input"
+        placeholder="New task..."
+        class="w-full bg-transparent border-b border-border-main/50 pb-2 mb-3 focus:outline-none focus:border-primary text-text-main placeholder-text-muted text-lg font-medium transition"
+        onkeydown="if (event.key === 'Enter') addTask();"
+      />
+
+      <div class="flex items-center gap-2 justify-end">
+        <!-- Date Input -->
+        <input
+          type="date"
+          id="task-date"
+          class="bg-card border border-border-main rounded px-2 py-1.5 text-xs text-text-muted focus:outline-none focus:border-primary focus:text-text-main"
+        />
+
+        <!-- Priority -->
+        <select
+          id="task-priority"
+          class="bg-card border border-border-main text-xs rounded px-2 py-1.5 text-text-muted focus:outline-none cursor-pointer hover:text-text-main hover:border-primary transition"
+        >
+          <option value="low">Low</option>
+          <option value="medium" selected>Medium</option>
+          <option value="high">High</option>
+        </select>
+
+        <!-- Add Button -->
+        <button
+          onclick="addTask()"
+          class="bg-primary hover:bg-primary/90 text-text-inverted px-4 py-1.5 rounded-lg font-bold text-xs transition flex items-center gap-1 shadow-md hover:shadow-lg"
+        >
+          <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M12 4v16m8-8H4"></path>
+          </svg>
+          Add
+        </button>
+      </div>
     </div>
 
     <!-- Filters -->
     <div class="flex gap-1 mb-4 border-b border-border-main/50 px-2 shrink-0">
-        <button onclick="setFilter('all')" id="filter-all" class="px-4 py-2 text-sm font-medium border-b-2 border-primary text-primary transition-all">All</button>
-        <button onclick="setFilter('pending')" id="filter-pending" class="px-4 py-2 text-sm font-medium border-b-2 border-transparent text-text-muted hover:text-text-main transition-all">Pending</button>
-        <button onclick="setFilter('completed')" id="filter-completed" class="px-4 py-2 text-sm font-medium border-b-2 border-transparent text-text-muted hover:text-text-main transition-all">Completed</button>
+      <button
+        onclick="setFilter('all')"
+        id="filter-all"
+        class="px-4 py-2 text-sm font-medium border-b-2 border-primary text-primary transition-all"
+      >
+        All
+      </button>
+      <button
+        onclick="setFilter('pending')"
+        id="filter-pending"
+        class="px-4 py-2 text-sm font-medium border-b-2 border-transparent text-text-muted hover:text-text-main transition-all"
+      >
+        Pending
+      </button>
+      <button
+        onclick="setFilter('completed')"
+        id="filter-completed"
+        class="px-4 py-2 text-sm font-medium border-b-2 border-transparent text-text-muted hover:text-text-main transition-all"
+      >
+        Completed
+      </button>
     </div>
 
     <!-- Task List -->
     <div class="flex-1 overflow-y-auto -mx-2 px-2 pb-10" id="task-list">
-        <div class="text-center text-text-muted text-sm py-10 opacity-50">Loading...</div>
+      <div class="text-center text-text-muted text-sm py-10 opacity-50">Loading...</div>
     </div>
 
     <!-- Edit Modal -->
-    <div id="edit-modal" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center backdrop-blur-sm">
-        <div class="bg-panel w-full max-w-md mx-4 rounded-xl shadow-2xl border border-border-main flex flex-col max-h-[90vh]">
-            <div class="p-4 border-b border-border-main flex justify-between items-center">
-                <h3 class="font-bold text-lg">Edit Task</h3>
-                <button onclick="closeTaskModal()" class="text-text-muted hover:text-text-main">
-                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
-                </button>
-            </div>
-            
-            <div class="p-4 space-y-4 overflow-y-auto">
-                <input type="hidden" id="edit-id">
-                
-                <div>
-                    <label class="block text-xs font-bold text-text-muted uppercase mb-1">Task Title</label>
-                    <input type="text" id="edit-title" class="w-full bg-card border border-border-main rounded p-2 focus:border-primary focus:outline-none text-text-main">
-                </div>
-
-                <div class="grid grid-cols-2 gap-4">
-                    <div>
-                        <label class="block text-xs font-bold text-text-muted uppercase mb-1">Priority</label>
-                        <select id="edit-priority" class="w-full bg-card border border-border-main rounded p-2 focus:border-primary focus:outline-none text-text-main">
-                            <option value="low">Low</option>
-                            <option value="medium">Medium</option>
-                            <option value="high">High</option>
-                        </select>
-                    </div>
-                    <div>
-                        <label class="block text-xs font-bold text-text-muted uppercase mb-1">Due Date</label>
-                        <input type="date" id="edit-date" class="w-full bg-card border border-border-main rounded p-2 focus:border-primary focus:outline-none text-text-main text-sm">
-                    </div>
-                </div>
-
-                <div>
-                    <label class="block text-xs font-bold text-text-muted uppercase mb-1">Description / Notes</label>
-                    <textarea id="edit-desc" rows="4" class="w-full bg-card border border-border-main rounded p-2 focus:border-primary focus:outline-none text-text-main text-sm resize-none" placeholder="Add details..."></textarea>
-                </div>
-            </div>
-
-            <div class="p-4 border-t border-border-main flex justify-between items-center bg-card/50 rounded-b-xl">
-                <button onclick="deleteFromModal()" class="text-error text-sm hover:underline font-medium">Delete Task</button>
-                <div class="flex gap-2">
-                    <button onclick="closeTaskModal()" class="px-4 py-2 rounded-lg text-sm font-medium hover:bg-hover transition">Cancel</button>
-                    <button onclick="saveTaskChanges()" class="px-4 py-2 rounded-lg bg-primary text-text-inverted text-sm font-bold hover:bg-primary/90 shadow transition">Save Changes</button>
-                </div>
-            </div>
+    <div
+      id="edit-modal"
+      class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center backdrop-blur-sm"
+    >
+      <div
+        class="bg-panel w-full max-w-md mx-4 rounded-xl shadow-2xl border border-border-main flex flex-col max-h-[90vh]"
+      >
+        <div class="p-4 border-b border-border-main flex justify-between items-center">
+          <h3 class="font-bold text-lg">Edit Task</h3>
+          <button onclick="closeTaskModal()" class="text-text-muted hover:text-text-main">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+            </svg>
+          </button>
         </div>
+
+        <div class="p-4 space-y-4 overflow-y-auto">
+          <input type="hidden" id="edit-id" />
+
+          <div>
+            <label class="block text-xs font-bold text-text-muted uppercase mb-1">Task Title</label>
+            <input
+              type="text"
+              id="edit-title"
+              class="w-full bg-card border border-border-main rounded p-2 focus:border-primary focus:outline-none text-text-main"
+            />
+          </div>
+
+          <div class="grid grid-cols-2 gap-4">
+            <div>
+              <label class="block text-xs font-bold text-text-muted uppercase mb-1">Priority</label>
+              <select
+                id="edit-priority"
+                class="w-full bg-card border border-border-main rounded p-2 focus:border-primary focus:outline-none text-text-main"
+              >
+                <option value="low">Low</option>
+                <option value="medium">Medium</option>
+                <option value="high">High</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-xs font-bold text-text-muted uppercase mb-1">Due Date</label>
+              <input
+                type="date"
+                id="edit-date"
+                class="w-full bg-card border border-border-main rounded p-2 focus:border-primary focus:outline-none text-text-main text-sm"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label class="block text-xs font-bold text-text-muted uppercase mb-1">Description / Notes</label>
+            <textarea
+              id="edit-desc"
+              rows="4"
+              class="w-full bg-card border border-border-main rounded p-2 focus:border-primary focus:outline-none text-text-main text-sm resize-none"
+              placeholder="Add details..."
+            ></textarea>
+          </div>
+        </div>
+
+        <div class="p-4 border-t border-border-main flex justify-between items-center bg-card/50 rounded-b-xl">
+          <button onclick="deleteFromModal()" class="text-error text-sm hover:underline font-medium">
+            Delete Task
+          </button>
+          <div class="flex gap-2">
+            <button
+              onclick="closeTaskModal()"
+              class="px-4 py-2 rounded-lg text-sm font-medium hover:bg-hover transition"
+            >
+              Cancel
+            </button>
+            <button
+              onclick="saveTaskChanges()"
+              class="px-4 py-2 rounded-lg bg-primary text-text-inverted text-sm font-bold hover:bg-primary/90 shadow transition"
+            >
+              Save Changes
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
 
     <script>
-        let currentFilter = 'all';
-        let allTasks = [];
-        
-        const DOM = id => document.getElementById(id);
+      let currentFilter = 'all';
+      let allTasks = [];
 
-        const GroupUI = {
-            overdue:   { label: "Overdue",   icon: '🔥', color: 'text-error' },
-            today:     { label: "Today",     icon: '🌟', color: 'text-text-muted' },
-            upcoming:  { label: "Upcoming",  icon: '📌', color: 'text-text-muted' },
-            noDate:    { label: "No Date",   icon: '📌', color: 'text-text-muted' },
-            completed: { label: "Completed", icon: '✔️', color: 'text-text-muted' }
+      const DOM = (id) => document.getElementById(id);
+
+      const GroupUI = {
+        overdue: { label: 'Overdue', icon: '🔥', color: 'text-error' },
+        today: { label: 'Today', icon: '🌟', color: 'text-text-muted' },
+        upcoming: { label: 'Upcoming', icon: '📌', color: 'text-text-muted' },
+        noDate: { label: 'No Date', icon: '📌', color: 'text-text-muted' },
+        completed: { label: 'Completed', icon: '✔️', color: 'text-text-muted' },
+      };
+
+      const renderTaskCard = (task, todayStr) => {
+        const isDone = task.status === 'completed';
+        const hasDate = !!task.dueDate;
+        const isOverdue = hasDate && !isDone && task.dueDate < todayStr;
+        const pColors = {
+          high: 'text-error border-error/30 bg-error/10',
+          medium: 'text-warning border-warning/30 bg-warning/10',
+          low: 'text-success border-success/30 bg-success/10',
         };
 
-        const renderTaskCard = (task, todayStr) => {
-            const isDone = task.status === 'completed';
-            const hasDate = !!task.dueDate;
-            const isOverdue = hasDate && !isDone && task.dueDate < todayStr;
-            const pColors = { high: 'text-error border-error/30 bg-error/10', medium: 'text-warning border-warning/30 bg-warning/10', low: 'text-success border-success/30 bg-success/10' };
-            
-            return \`
+        return \`
                 <div class="group flex items-center gap-3 p-3 mb-2 rounded-xl bg-panel border border-border-main hover:border-primary/50 transition-all duration-200 \${isDone ? 'opacity-50 grayscale' : 'hover:shadow-md hover:-translate-y-0.5'}">
                     <button onclick="toggle('\${task.id}')" class="shrink-0 w-5 h-5 rounded-full border-2 flex items-center justify-center transition hover:scale-110 \${isDone ? 'bg-success border-success' : 'border-text-muted hover:border-primary'}">
                         \${isDone ? '<svg class="w-3 h-3 text-text-inverted" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"></path></svg>' : ''}
@@ -1571,147 +1780,184 @@ export const DEFAULT_FILES: Record<string, string> = {
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
                     </button>
                 </div>\`;
-        };
+      };
 
-        async function render() {
-            const list = DOM('task-list');
-            try {
-                allTasks = await App.getTasks();
-                const tasks = allTasks.filter(t => currentFilter === 'all' || (currentFilter === 'pending' && t.status !== 'completed') || (currentFilter === 'completed' && t.status === 'completed'));
-                
-                if (!tasks.length) return list.innerHTML = \`<div class="text-center text-text-muted text-sm py-10 italic">No tasks found.<br>Get things done!</div>\`;
+      async function render() {
+        const list = DOM('task-list');
+        try {
+          allTasks = await App.getTasks();
+          const tasks = allTasks.filter(
+            (t) =>
+              currentFilter === 'all' ||
+              (currentFilter === 'pending' && t.status !== 'completed') ||
+              (currentFilter === 'completed' && t.status === 'completed'),
+          );
 
-                const todayStr = new Date().toISOString().slice(0, 10);
-                const getGroupKey = t => t.status === 'completed' ? 'completed' : !t.dueDate ? 'noDate' : t.dueDate < todayStr ? 'overdue' : t.dueDate === todayStr ? 'today' : 'upcoming';
-                
-                // Group & Sort in one functional sweep
-                const groups = tasks
-                    .sort((a, b) => {
-                        const aDone = a.status === 'completed' ? 1 : 0;
-                        const bDone = b.status === 'completed' ? 1 : 0;
-                        if (aDone !== bDone) return aDone - bDone;
+          if (!tasks.length)
+            return (list.innerHTML = \`<div class="text-center text-text-muted text-sm py-10 italic">No tasks found.<br>Get things done!</div>\`);
 
-                        const aDate = a.dueDate || '9999';
-                        const bDate = b.dueDate || '9999';
-                        if (aDate !== bDate) return aDate > bDate ? 1 : -1;
+          const todayStr = new Date().toISOString().slice(0, 10);
+          const getGroupKey = (t) =>
+            t.status === 'completed'
+              ? 'completed'
+              : !t.dueDate
+                ? 'noDate'
+                : t.dueDate < todayStr
+                  ? 'overdue'
+                  : t.dueDate === todayStr
+                    ? 'today'
+                    : 'upcoming';
 
-                        const pMap = { high: 3, medium: 2, low: 1 };
-                        const aPri = pMap[a.priority] || 2;
-                        const bPri = pMap[b.priority] || 2;
-                        if (aPri !== bPri) return bPri - aPri;
+          // Group & Sort in one functional sweep
+          const groups = tasks
+            .sort((a, b) => {
+              const aDone = a.status === 'completed' ? 1 : 0;
+              const bDone = b.status === 'completed' ? 1 : 0;
+              if (aDone !== bDone) return aDone - bDone;
 
-                        return b.id - a.id;
-                    })
-                    .reduce((acc, t) => { acc[getGroupKey(t)].push(t); return acc; }, { overdue:[], today:[], upcoming:[], noDate:[], completed:[] });
+              const aDate = a.dueDate || '9999';
+              const bDate = b.dueDate || '9999';
+              if (aDate !== bDate) return aDate > bDate ? 1 : -1;
 
-                list.innerHTML = Object.entries(groups).filter(([, arr]) => arr.length).map(([key, arr]) => \`
+              const pMap = { high: 3, medium: 2, low: 1 };
+              const aPri = pMap[a.priority] || 2;
+              const bPri = pMap[b.priority] || 2;
+              if (aPri !== bPri) return bPri - aPri;
+
+              return b.id - a.id;
+            })
+            .reduce(
+              (acc, t) => {
+                acc[getGroupKey(t)].push(t);
+                return acc;
+              },
+              { overdue: [], today: [], upcoming: [], noDate: [], completed: [] },
+            );
+
+          list.innerHTML = Object.entries(groups)
+            .filter(([, arr]) => arr.length)
+            .map(
+              ([key, arr]) => \`
                     <div class="mt-4 mb-2">
                         <h3 class="text-[11px] font-bold uppercase tracking-widest \${GroupUI[key].color} flex items-center gap-1.5 px-1 border-b border-border-main/50 pb-1">
                             <span>\${GroupUI[key].icon}</span> \${GroupUI[key].label}
                             <span class="ml-auto bg-card px-2 py-0.5 rounded-full text-[9px] border border-border-main">\${arr.length}</span>
                         </h3>
                     </div>
-                    \${arr.map(t => renderTaskCard(t, todayStr)).join('')}
-                \`).join('');
-
-            } catch(e) { list.innerHTML = \`<div class="text-error p-4">Error: \${e.message}</div>\`; }
+                    \${arr.map((t) => renderTaskCard(t, todayStr)).join('')}
+                \`,
+            )
+            .join('');
+        } catch (e) {
+          list.innerHTML = \`<div class="text-error p-4">Error: \${e.message}</div>\`;
         }
+      }
 
-        function setFilter(filter) {
-            currentFilter = filter;
-            // Reset Styles
-            ['all', 'pending', 'completed'].forEach(f => {
-                const btn = document.getElementById('filter-' + f);
-                btn.className = "px-4 py-2 text-sm font-medium border-b-2 border-transparent text-text-muted hover:text-text-main transition-all";
-            });
-            // Set Active
-            const active = document.getElementById('filter-' + filter);
-            active.className = "px-4 py-2 text-sm font-medium border-b-2 border-primary text-primary transition-all";
-            
-            render();
-        }
+      function setFilter(filter) {
+        currentFilter = filter;
+        // Reset Styles
+        ['all', 'pending', 'completed'].forEach((f) => {
+          const btn = document.getElementById('filter-' + f);
+          btn.className =
+            'px-4 py-2 text-sm font-medium border-b-2 border-transparent text-text-muted hover:text-text-main transition-all';
+        });
+        // Set Active
+        const active = document.getElementById('filter-' + filter);
+        active.className = 'px-4 py-2 text-sm font-medium border-b-2 border-primary text-primary transition-all';
 
-        async function addTask() {
-            const input = document.getElementById('task-input');
-            const dateInput = document.getElementById('task-date');
-            const priority = document.getElementById('task-priority').value;
-            
-            if(!input.value.trim()) return;
-            
-            await App.addTask(input.value, dateInput.value, priority);
-            
-            input.value = '';
-            dateInput.value = ''; // Reset date
-            render();
-        }
-
-        async function toggle(id) { await App.toggleTask(id); render(); }
-        async function del(id) { if(confirm('Delete task?')) { await App.deleteTask(id); render(); } }
-
-        // Modal Logic
-        function openTaskModal(id) {
-            const task = allTasks.find(t => t.id === id);
-            if (!task) return;
-
-            document.getElementById('edit-id').value = task.id;
-            document.getElementById('edit-title').value = task.title;
-            document.getElementById('edit-priority').value = task.priority || 'medium';
-            document.getElementById('edit-date').value = task.dueDate || '';
-            document.getElementById('edit-desc').value = task.description || ''; // Load description
-
-            document.getElementById('edit-modal').classList.remove('hidden');
-        }
-
-        function closeTaskModal() {
-            document.getElementById('edit-modal').classList.add('hidden');
-        }
-
-        async function saveTaskChanges() {
-            const id = document.getElementById('edit-id').value;
-            const title = document.getElementById('edit-title').value;
-            const priority = document.getElementById('edit-priority').value;
-            const dueDate = document.getElementById('edit-date').value;
-            const description = document.getElementById('edit-desc').value;
-
-            if (!title.trim()) return;
-
-            // We use updateTask from std.js. Note: std.js doesn't validate fields, so we can add description.
-            await App.updateTask(id, {
-                title,
-                priority,
-                dueDate,
-                description
-            });
-
-            closeTaskModal();
-            render();
-        }
-
-        async function deleteFromModal() {
-            const id = document.getElementById('edit-id').value;
-            if (confirm('Delete this task permanently?')) {
-                await App.deleteTask(id);
-                closeTaskModal();
-                render();
-            }
-        }
-
-        // Reactive Update
-        if (window.MetaOS && MetaOS.system && MetaOS.system.on) {
-            MetaOS.system.on('file_changed', (payload) => {
-                // If tasks DB changes, refresh list
-                if (payload.path.startsWith('data/tasks/')) {
-                    console.log('Task DB changed, reloading...');
-                    render();
-                }
-            });
-        }
-
-        // Init
         render();
+      }
+
+      async function addTask() {
+        const input = document.getElementById('task-input');
+        const dateInput = document.getElementById('task-date');
+        const priority = document.getElementById('task-priority').value;
+
+        if (!input.value.trim()) return;
+
+        await App.addTask(input.value, dateInput.value, priority);
+
+        input.value = '';
+        dateInput.value = ''; // Reset date
+        render();
+      }
+
+      async function toggle(id) {
+        await App.toggleTask(id);
+        render();
+      }
+      async function del(id) {
+        if (confirm('Delete task?')) {
+          await App.deleteTask(id);
+          render();
+        }
+      }
+
+      // Modal Logic
+      function openTaskModal(id) {
+        const task = allTasks.find((t) => t.id === id);
+        if (!task) return;
+
+        document.getElementById('edit-id').value = task.id;
+        document.getElementById('edit-title').value = task.title;
+        document.getElementById('edit-priority').value = task.priority || 'medium';
+        document.getElementById('edit-date').value = task.dueDate || '';
+        document.getElementById('edit-desc').value = task.description || ''; // Load description
+
+        document.getElementById('edit-modal').classList.remove('hidden');
+      }
+
+      function closeTaskModal() {
+        document.getElementById('edit-modal').classList.add('hidden');
+      }
+
+      async function saveTaskChanges() {
+        const id = document.getElementById('edit-id').value;
+        const title = document.getElementById('edit-title').value;
+        const priority = document.getElementById('edit-priority').value;
+        const dueDate = document.getElementById('edit-date').value;
+        const description = document.getElementById('edit-desc').value;
+
+        if (!title.trim()) return;
+
+        // We use updateTask from std.js. Note: std.js doesn't validate fields, so we can add description.
+        await App.updateTask(id, {
+          title,
+          priority,
+          dueDate,
+          description,
+        });
+
+        closeTaskModal();
+        render();
+      }
+
+      async function deleteFromModal() {
+        const id = document.getElementById('edit-id').value;
+        if (confirm('Delete this task permanently?')) {
+          await App.deleteTask(id);
+          closeTaskModal();
+          render();
+        }
+      }
+
+      // Reactive Update
+      if (window.MetaOS && MetaOS.system && MetaOS.system.on) {
+        MetaOS.system.on('file_changed', (payload) => {
+          // If tasks DB changes, refresh list
+          if (payload.path.startsWith('data/tasks/')) {
+            console.log('Task DB changed, reloading...');
+            render();
+          }
+        });
+      }
+
+      // Init
+      render();
     </script>
-</body>
-</html>`.trim(),
+  </body>
+</html>
+`.trim(),
 
   "data/events/2026-07.json": JSON.stringify([
   {
@@ -3232,90 +3478,116 @@ Use this Codex as a guidepost, and build a better Itera OS together with the use
 `.trim(),
 
   "services/git.html": `
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
+  <head>
+    <meta charset="UTF-8" />
     <title>Git Daemon</title>
-</head>
-<body>
+  </head>
+  <body>
     <script type="module">
-        import git from 'https://esm.sh/isomorphic-git@1.24.5';
-        import http from 'https://esm.sh/isomorphic-git@1.24.5/http/web';
+      import git from 'https://esm.sh/isomorphic-git@1.24.5';
+      import http from 'https://esm.sh/isomorphic-git@1.24.5/http/web';
 
-        // ==========================================
-        // 1. FS Adapter for isomorphic-git
-        // ==========================================
-        const IgitFs = {
-            promises: {
-                async readFile(filepath, opts) {
-                    const encoding = (opts && typeof opts === 'object' ? opts.encoding : opts) || 'binary';
-                    const isText = encoding === 'utf8' || encoding === 'utf-8';
-                    try {
-                        const data = await MetaOS.fs.read(filepath, { encoding: isText ? undefined : 'binary' });
-                        return isText ? data : new Uint8Array(data);
-                    } catch(e) {
-                        const err = new Error(e.message); err.code = 'ENOENT'; throw err;
-                    }
-                },
-                async writeFile(filepath, data, opts) {
-                    try {
-                        await MetaOS.fs.write(filepath, data, { overwrite: true, silent: true });
-                    } catch(e) {
-                        const err = new Error(e.message); err.code = 'ENOENT'; throw err;
-                    }
-                },
-                async unlink(filepath) {
-                    try { await MetaOS.fs.delete(filepath, { permanent: true }); } 
-                    catch(e) { const err = new Error(e.message); err.code = 'ENOENT'; throw err; }
-                },
-                async readdir(filepath) {
-                    try {
-                        const stats = await MetaOS.fs.list(filepath, { detail: true });
-                        return stats.map(s => s.name);
-                    } catch(e) {
-                        const err = new Error(e.message); err.code = 'ENOENT'; throw err;
-                    }
-                },
-                async mkdir(filepath) {
-                    try { await MetaOS.fs.mkdir(filepath); } catch(e) {} // 既存なら無視
-                },
-                async rmdir(filepath) {
-                    try { await MetaOS.fs.delete(filepath, { permanent: true }); } 
-                    catch(e) { const err = new Error(e.message); err.code = 'ENOENT'; throw err; }
-                },
-                async stat(filepath) {
-                    try {
-                        const st = await MetaOS.fs.stat(filepath);
-                        const isDir = st.kind === 'directory';
-                        return {
-                            type: isDir ? 'dir' : 'file',
-                            mode: isDir ? 0o040000 : 0o100644,
-                            size: st.size || 0,
-                            ino: 0,
-                            mtimeMs: st.updatedAt,
-                            ctimeMs: st.createdAt,
-                            isDirectory: () => isDir,
-                            isFile: () => !isDir,
-                            isSymbolicLink: () => false
-                        };
-                    } catch(e) {
-                        const err = new Error(e.message); err.code = 'ENOENT'; throw err;
-                    }
-                },
-                async lstat(filepath) { return this.stat(filepath); },
-                async readlink() { throw new Error("Symlinks not supported"); },
-                async symlink() { throw new Error("Symlinks not supported"); }
+      // ==========================================
+      // 1. FS Adapter for isomorphic-git
+      // ==========================================
+      const IgitFs = {
+        promises: {
+          async readFile(filepath, opts) {
+            const encoding = (opts && typeof opts === 'object' ? opts.encoding : opts) || 'binary';
+            const isText = encoding === 'utf8' || encoding === 'utf-8';
+            try {
+              const data = await MetaOS.fs.read(filepath, { encoding: isText ? undefined : 'binary' });
+              return isText ? data : new Uint8Array(data);
+            } catch (e) {
+              const err = new Error(e.message);
+              err.code = 'ENOENT';
+              throw err;
             }
-        };
+          },
+          async writeFile(filepath, data, opts) {
+            try {
+              await MetaOS.fs.write(filepath, data, { overwrite: true, silent: true });
+            } catch (e) {
+              const err = new Error(e.message);
+              err.code = 'ENOENT';
+              throw err;
+            }
+          },
+          async unlink(filepath) {
+            try {
+              await MetaOS.fs.delete(filepath, { permanent: true });
+            } catch (e) {
+              const err = new Error(e.message);
+              err.code = 'ENOENT';
+              throw err;
+            }
+          },
+          async readdir(filepath) {
+            try {
+              const stats = await MetaOS.fs.list(filepath, { detail: true });
+              return stats.map((s) => s.name);
+            } catch (e) {
+              const err = new Error(e.message);
+              err.code = 'ENOENT';
+              throw err;
+            }
+          },
+          async mkdir(filepath) {
+            try {
+              await MetaOS.fs.mkdir(filepath);
+            } catch (e) {} // 既存なら無視
+          },
+          async rmdir(filepath) {
+            try {
+              await MetaOS.fs.delete(filepath, { permanent: true });
+            } catch (e) {
+              const err = new Error(e.message);
+              err.code = 'ENOENT';
+              throw err;
+            }
+          },
+          async stat(filepath) {
+            try {
+              const st = await MetaOS.fs.stat(filepath);
+              const isDir = st.kind === 'directory';
+              return {
+                type: isDir ? 'dir' : 'file',
+                mode: isDir ? 0o040000 : 0o100644,
+                size: st.size || 0,
+                ino: 0,
+                mtimeMs: st.updatedAt,
+                ctimeMs: st.createdAt,
+                isDirectory: () => isDir,
+                isFile: () => !isDir,
+                isSymbolicLink: () => false,
+              };
+            } catch (e) {
+              const err = new Error(e.message);
+              err.code = 'ENOENT';
+              throw err;
+            }
+          },
+          async lstat(filepath) {
+            return this.stat(filepath);
+          },
+          async readlink() {
+            throw new Error('Symlinks not supported');
+          },
+          async symlink() {
+            throw new Error('Symlinks not supported');
+          },
+        },
+      };
 
-        // ==========================================
-        // 2. Git Command Handler
-        // ==========================================
-        async function initDaemon() {
-            if (!window.MetaOS) return setTimeout(initDaemon, 100);
+      // ==========================================
+      // 2. Git Command Handler
+      // ==========================================
+      async function initDaemon() {
+        if (!window.MetaOS) return setTimeout(initDaemon, 100);
 
-            const definition = \`<define_tag name="git">
+        const definition = \`<define_tag name="git">
 Executes a Git command.
 Attributes:
 - command (required): init | clone | status | add | commit | push | pull | log | checkout | branch
@@ -3331,121 +3603,521 @@ Attributes:
 - corsProxy: CORS proxy URL (default: 'https://cors.isomorphic-git.org').
 </define_tag>\`;
 
-            await MetaOS.tools.register({
-                name: 'git',
-                description: 'Git version control operations',
-                definition,
-                handler: async (p) => {
-                    const dir = p.dir || '';
-                    const corsProxy = p.corsProxy || 'https://cors.isomorphic-git.org';
-                    const onAuth = () => ({ username: p.token });
+        await MetaOS.tools.register({
+          name: 'git',
+          description: 'Git version control operations',
+          definition,
+          handler: async (p) => {
+            const dir = p.dir || '';
+            const corsProxy = p.corsProxy || 'https://cors.isomorphic-git.org';
+            const onAuth = () => ({ username: p.token });
 
-                    let log = '';
+            let log = '';
 
-                    try {
-                        switch(p.command) {
-                            case 'init':
-                                await git.init({ fs: IgitFs, dir });
-                                log = \`Initialized empty Git repository in \${dir}\`;
-                                break;
-                                
-                            case 'clone':
-                                await git.clone({
-                                    fs: IgitFs, http, dir, url: p.url, corsProxy,
-                                    depth: p.depth ? parseInt(p.depth) : 1, // Default Shallow Clone
-                                    singleBranch: true,
-                                    onAuth: p.token ? onAuth : undefined
-                                });
-                                log = \`Cloned \${p.url} into \${dir}\`;
-                                break;
-                                
-                            case 'status':
-                                const matrix = await git.statusMatrix({ fs: IgitFs, dir });
-                                const changes = matrix.filter(row => row[1] !== row[2] || row[2] !== row[3]);
-                                if (changes.length === 0) {
-                                    log = "Nothing to commit, working tree clean";
-                                } else {
-                                    log = "Changes:\\n" + changes.map(row => {
-                                        let status = 'modified';
-                                        if (row[1] === 0) status = 'added';
-                                        if (row[2] === 0) status = 'deleted';
-                                        return \`- \${status}: \${row[0]}\`;
-                                    }).join('\\n');
-                                }
-                                break;
-                                
-                            case 'add':
-                                if (p.filepath === '.') {
-                                    const m = await git.statusMatrix({ fs: IgitFs, dir });
-                                    for (const row of m) {
-                                        if (row[2] === 0) await git.remove({ fs: IgitFs, dir, filepath: row[0] });
-                                        else if (row[1] !== row[2] || row[2] !== row[3]) await git.add({ fs: IgitFs, dir, filepath: row[0] });
-                                    }
-                                    log = \`Added all changes in \${dir}\`;
-                                } else {
-                                    await git.add({ fs: IgitFs, dir, filepath: p.filepath });
-                                    log = \`Added \${p.filepath}\`;
-                                }
-                                break;
-                                
-                            case 'commit':
-                                const sha = await git.commit({
-                                    fs: IgitFs, dir,
-                                    message: p.message || 'Update',
-                                    author: { name: p.author_name || 'Itera AI', email: p.author_email || 'ai@itera.os' }
-                                });
-                                log = \`Committed \${sha.substring(0,7)}: \${p.message}\`;
-                                break;
-                                
-                            case 'push':
-                                const pushRes = await git.push({
-                                    fs: IgitFs, http, dir, corsProxy,
-                                    onAuth: p.token ? onAuth : undefined
-                                });
-                                log = pushRes.ok ? "Pushed successfully" : \`Push failed: \${pushRes.error}\`;
-                                break;
-                                
-                            case 'pull':
-                                await git.pull({
-                                    fs: IgitFs, http, dir, corsProxy,
-                                    author: { name: p.author_name || 'Itera AI', email: p.author_email || 'ai@itera.os' },
-                                    onAuth: p.token ? onAuth : undefined
-                                });
-                                log = \`Pulled successfully\`;
-                                break;
-                                
-                            case 'log':
-                                const commits = await git.log({ fs: IgitFs, dir, depth: p.depth ? parseInt(p.depth) : 5 });
-                                log = commits.map(c => \`* \${c.oid.substring(0,7)} - \${c.commit.author.name}: \${c.commit.message}\`).join('\\n');
-                                break;
-                                
-                            case 'branch':
-                                await git.branch({ fs: IgitFs, dir, ref: p.ref });
-                                log = \`Created branch \${p.ref}\`;
-                                break;
-                                
-                            case 'checkout':
-                                await git.checkout({ fs: IgitFs, dir, ref: p.ref });
-                                log = \`Checked out \${p.ref}\`;
-                                break;
-                                
-                            default:
-                                throw new Error(\`Unknown git command: \${p.command}\`);
-                        }
-                        return { log, ui: \`🐙 Git \${p.command} executed\` };
-                    } catch(err) {
-                        return { error: true, log: \`Git Error: \${err.message}\`, ui: \`❌ Git Error\` };
+            try {
+              switch (p.command) {
+                case 'init':
+                  await git.init({ fs: IgitFs, dir });
+                  log = \`Initialized empty Git repository in \${dir}\`;
+                  break;
+
+                case 'clone':
+                  await git.clone({
+                    fs: IgitFs,
+                    http,
+                    dir,
+                    url: p.url,
+                    corsProxy,
+                    depth: p.depth ? parseInt(p.depth) : 1, // Default Shallow Clone
+                    singleBranch: true,
+                    onAuth: p.token ? onAuth : undefined,
+                  });
+                  log = \`Cloned \${p.url} into \${dir}\`;
+                  break;
+
+                case 'status':
+                  const matrix = await git.statusMatrix({ fs: IgitFs, dir });
+                  const changes = matrix.filter((row) => row[1] !== row[2] || row[2] !== row[3]);
+                  if (changes.length === 0) {
+                    log = 'Nothing to commit, working tree clean';
+                  } else {
+                    log =
+                      'Changes:\\n' +
+                      changes
+                        .map((row) => {
+                          let status = 'modified';
+                          if (row[1] === 0) status = 'added';
+                          if (row[2] === 0) status = 'deleted';
+                          return \`- \${status}: \${row[0]}\`;
+                        })
+                        .join('\\n');
+                  }
+                  break;
+
+                case 'add':
+                  if (p.filepath === '.') {
+                    const m = await git.statusMatrix({ fs: IgitFs, dir });
+                    for (const row of m) {
+                      if (row[2] === 0) await git.remove({ fs: IgitFs, dir, filepath: row[0] });
+                      else if (row[1] !== row[2] || row[2] !== row[3])
+                        await git.add({ fs: IgitFs, dir, filepath: row[0] });
                     }
-                }
-            });
+                    log = \`Added all changes in \${dir}\`;
+                  } else {
+                    await git.add({ fs: IgitFs, dir, filepath: p.filepath });
+                    log = \`Added \${p.filepath}\`;
+                  }
+                  break;
 
-            MetaOS.ai.log(definition + "\\n\\n[System] Git client tool is now available in the background.", "tool_available");
+                case 'commit':
+                  const sha = await git.commit({
+                    fs: IgitFs,
+                    dir,
+                    message: p.message || 'Update',
+                    author: { name: p.author_name || 'Itera AI', email: p.author_email || 'ai@itera.os' },
+                  });
+                  log = \`Committed \${sha.substring(0, 7)}: \${p.message}\`;
+                  break;
+
+                case 'push':
+                  const pushRes = await git.push({
+                    fs: IgitFs,
+                    http,
+                    dir,
+                    corsProxy,
+                    onAuth: p.token ? onAuth : undefined,
+                  });
+                  log = pushRes.ok ? 'Pushed successfully' : \`Push failed: \${pushRes.error}\`;
+                  break;
+
+                case 'pull':
+                  await git.pull({
+                    fs: IgitFs,
+                    http,
+                    dir,
+                    corsProxy,
+                    author: { name: p.author_name || 'Itera AI', email: p.author_email || 'ai@itera.os' },
+                    onAuth: p.token ? onAuth : undefined,
+                  });
+                  log = \`Pulled successfully\`;
+                  break;
+
+                case 'log':
+                  const commits = await git.log({ fs: IgitFs, dir, depth: p.depth ? parseInt(p.depth) : 5 });
+                  log = commits
+                    .map((c) => \`* \${c.oid.substring(0, 7)} - \${c.commit.author.name}: \${c.commit.message}\`)
+                    .join('\\n');
+                  break;
+
+                case 'branch':
+                  await git.branch({ fs: IgitFs, dir, ref: p.ref });
+                  log = \`Created branch \${p.ref}\`;
+                  break;
+
+                case 'checkout':
+                  await git.checkout({ fs: IgitFs, dir, ref: p.ref });
+                  log = \`Checked out \${p.ref}\`;
+                  break;
+
+                default:
+                  throw new Error(\`Unknown git command: \${p.command}\`);
+              }
+              return { log, ui: \`🐙 Git \${p.command} executed\` };
+            } catch (err) {
+              return { error: true, log: \`Git Error: \${err.message}\`, ui: \`❌ Git Error\` };
+            }
+          },
+        });
+
+        MetaOS.ai.log(
+          definition + '\\n\\n[System] Git client tool is now available in the background.',
+          'tool_available',
+        );
+      }
+
+      initDaemon();
+    </script>
+  </body>
+</html>
+`.trim(),
+
+  "system/apps/billing.html": `
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>API Usage & Billing Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="../core/ui.js"></script>
+    <script src="../core/std.js"></script>
+    <style>
+      /* Chart.js の文字色などをテーマに合わせるために必要 */
+      canvas {
+        filter: var(--chart-filter, none);
+      }
+      .dark canvas {
+        --chart-filter: invert(0.9) hue-rotate(180deg);
+      }
+
+      .no-scrollbar::-webkit-scrollbar {
+        display: none;
+      }
+      .no-scrollbar {
+        -ms-overflow-style: none;
+        scrollbar-width: none;
+      }
+    </style>
+  </head>
+  <body class="bg-app text-text-main h-screen flex flex-col p-6 overflow-hidden">
+    <div class="max-w-6xl mx-auto w-full flex flex-col h-full">
+      <!-- Header -->
+      <header class="flex items-center justify-between mb-6 shrink-0">
+        <div class="flex items-center gap-4">
+          <button
+            onclick="AppUI.home()"
+            class="p-2 -ml-2 rounded-full hover:bg-hover text-text-muted hover:text-text-main transition"
+          >
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M10 19l-7-7m0 0l7-7m-7 7h18"
+              ></path>
+            </svg>
+          </button>
+          <h1 class="text-2xl font-bold tracking-tight">API Billing & Usage</h1>
+        </div>
+        <button
+          id="refreshBtn"
+          class="bg-primary hover:bg-primary/90 text-white px-4 py-2 rounded-lg shadow-md text-sm font-bold transition flex items-center gap-2"
+        >
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+            ></path>
+          </svg>
+          Refresh
+        </button>
+      </header>
+
+      <main class="flex-1 overflow-y-auto no-scrollbar pb-10">
+        <!-- Summary Cards -->
+        <div class="grid grid-cols-1 md:grid-cols-5 gap-4 mb-6">
+          <div
+            class="bg-panel border border-border-main rounded-xl p-5 shadow-sm border-l-4 border-l-primary relative overflow-hidden"
+          >
+            <div class="absolute -right-4 -bottom-4 text-6xl opacity-5">🧠</div>
+            <h3 class="text-[10px] font-bold text-primary uppercase tracking-widest mb-1">Current Context</h3>
+            <p class="text-3xl font-bold text-text-main font-mono tabular-nums" id="sessionTotal">0</p>
+            <span class="text-[10px] text-text-muted mt-1 block">Latest total tokens</span>
+          </div>
+          <div class="bg-panel border border-border-main rounded-xl p-5 shadow-sm">
+            <h3 class="text-[10px] font-bold text-text-muted uppercase tracking-widest mb-1">7D Total Cost</h3>
+            <p class="text-2xl font-bold text-text-main font-mono tabular-nums" id="totalCost">$0.00</p>
+          </div>
+          <div class="bg-panel border border-border-main rounded-xl p-5 shadow-sm">
+            <h3 class="text-[10px] font-bold text-text-muted uppercase tracking-widest mb-1">7D Input</h3>
+            <p class="text-xl font-bold text-system font-mono tabular-nums" id="totalInput">0</p>
+          </div>
+          <div class="bg-panel border border-border-main rounded-xl p-5 shadow-sm">
+            <h3 class="text-[10px] font-bold text-text-muted uppercase tracking-widest mb-1">7D Output</h3>
+            <p class="text-xl font-bold text-success font-mono tabular-nums" id="totalOutput">0</p>
+          </div>
+          <div class="bg-panel border border-border-main rounded-xl p-5 shadow-sm">
+            <h3 class="text-[10px] font-bold text-text-muted uppercase tracking-widest mb-1">7D Cached</h3>
+            <p class="text-xl font-bold text-warning font-mono tabular-nums" id="totalCached">0</p>
+          </div>
+        </div>
+
+        <!-- Charts -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
+          <div class="bg-panel border border-border-main rounded-xl p-5 shadow-sm lg:col-span-2">
+            <h2 class="text-sm font-bold uppercase tracking-wider text-text-main mb-4 flex items-center gap-2">
+              <span class="text-lg">📊</span> Daily Cost (USD)
+            </h2>
+            <div class="relative h-64">
+              <canvas id="dailyCostChart"></canvas>
+            </div>
+          </div>
+          <div class="bg-panel border border-border-main rounded-xl p-5 shadow-sm">
+            <h2 class="text-sm font-bold uppercase tracking-wider text-text-main mb-4 flex items-center gap-2">
+              <span class="text-lg">🍩</span> Cost Breakdown
+            </h2>
+            <div class="relative h-64">
+              <canvas id="costBreakdownChart"></canvas>
+            </div>
+          </div>
+        </div>
+
+        <!-- Table -->
+        <div class="bg-panel border border-border-main rounded-xl p-5 shadow-sm">
+          <h2 class="text-sm font-bold uppercase tracking-wider text-text-main mb-4 flex items-center gap-2">
+            <span class="text-lg">📋</span> Usage Details by Model
+          </h2>
+          <div class="overflow-x-auto">
+            <table class="w-full text-left border-collapse">
+              <thead>
+                <tr class="border-b border-border-main text-text-muted">
+                  <th class="py-3 px-4 text-xs font-bold uppercase tracking-wider">Model</th>
+                  <th class="py-3 px-4 text-xs font-bold uppercase tracking-wider text-right">Input (M)</th>
+                  <th class="py-3 px-4 text-xs font-bold uppercase tracking-wider text-right">Cached (M)</th>
+                  <th class="py-3 px-4 text-xs font-bold uppercase tracking-wider text-right">Output (M)</th>
+                  <th class="py-3 px-4 text-xs font-bold uppercase tracking-wider text-right">Cost (USD)</th>
+                </tr>
+              </thead>
+              <tbody id="modelTableBody">
+                <!-- Rows injected by JS -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </main>
+    </div>
+
+    <script>
+      let dailyChartInstance = null;
+      let breakdownChartInstance = null;
+
+      async function getPricingMap() {
+        const map = {};
+        try {
+          const profiles = await App.FS.readJson('system/registry/llm_profiles.json');
+          if (profiles && Array.isArray(profiles.providers)) {
+            profiles.providers.forEach((p) => {
+              if (Array.isArray(p.models)) {
+                p.models.forEach((m) => {
+                  if (m.pricing) map[m.id] = m.pricing;
+                });
+              }
+            });
+          }
+        } catch (e) {
+          console.warn('Failed to load llm_profiles.json', e);
+        }
+        return map;
+      }
+
+      async function loadData() {
+        if (!window.MetaOS) {
+          console.error('MetaOS not found.');
+          return;
         }
 
-        initDaemon();
+        AppUI.showLoading('Aggregating Data...');
+
+        try {
+          const pricingMap = await getPricingMap();
+
+          const files = await window.MetaOS.fs.list('system/logs/usage');
+          const now = new Date();
+          const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+
+          let dailyData = {};
+          let modelData = {};
+          let totalStats = { input: 0, output: 0, cached: 0, cost: 0 };
+          let costBreakdown = { input: 0, output: 0, cached: 0 };
+          let allLogs = [];
+
+          for (const file of files) {
+            const filePath = typeof file === 'object' ? file.path || file.name : file;
+            if (!filePath.endsWith('.jsonl')) continue;
+
+            const fullPath = filePath.startsWith('system/logs/usage') ? filePath : \`system/logs/usage/\${filePath}\`;
+
+            let content;
+            try {
+              content = await window.MetaOS.fs.read(fullPath);
+            } catch (e) {
+              continue;
+            }
+            if (!content) continue;
+
+            const lines = content.split('\\n');
+
+            for (const line of lines) {
+              if (!line.trim()) continue;
+              try {
+                const log = JSON.parse(line);
+                const dateObj = new Date(log.timestamp);
+
+                if (dateObj < sevenDaysAgo) continue;
+
+                const dateStr = dateObj.toLocaleDateString('en-CA', { month: '2-digit', day: '2-digit' }); // MM-DD
+
+                const model = log.model || 'unknown';
+                const pricing = pricingMap[model] || {};
+                const totalTokens = log.tokens.total || 0;
+
+                let rates = { input: 0, output: 0, cached: 0 };
+
+                if (pricing.tiers && pricing.tiers.length > 0) {
+                  const tier =
+                    pricing.tiers.find((t) => t.maxTokens === null || totalTokens <= t.maxTokens) ||
+                    pricing.tiers[pricing.tiers.length - 1];
+                  rates.input = tier.input || 0;
+                  rates.output = tier.output || 0;
+                  rates.cached = tier.cached !== undefined ? tier.cached : rates.input * 0.1;
+                } else if (pricing.input !== undefined) {
+                  rates.input = pricing.input;
+                  rates.output = pricing.output || 0;
+                  rates.cached = pricing.cached !== undefined ? pricing.cached : rates.input * 0.1;
+                }
+
+                const tIn = log.tokens.input || 0;
+                const tOut = log.tokens.output || 0;
+                const tCache = log.tokens.cached || 0;
+
+                const cIn = (tIn / 1000000) * rates.input;
+                const cOut = (tOut / 1000000) * rates.output;
+                const cCache = (tCache / 1000000) * rates.cached;
+                const cTotal = cIn + cOut + cCache;
+
+                // Aggregate Daily
+                if (!dailyData[dateStr]) {
+                  dailyData[dateStr] = { cost: 0, input: 0, output: 0, cached: 0 };
+                }
+                dailyData[dateStr].cost += cTotal;
+                dailyData[dateStr].input += tIn;
+                dailyData[dateStr].output += tOut;
+                dailyData[dateStr].cached += tCache;
+
+                // Aggregate Model
+                if (!modelData[model]) {
+                  modelData[model] = { input: 0, output: 0, cached: 0, cost: 0 };
+                }
+                modelData[model].input += tIn;
+                modelData[model].output += tOut;
+                modelData[model].cached += tCache;
+                modelData[model].cost += cTotal;
+
+                // Total
+                totalStats.input += tIn;
+                totalStats.output += tOut;
+                totalStats.cached += tCache;
+                totalStats.cost += cTotal;
+
+                costBreakdown.input += cIn;
+                costBreakdown.output += cOut;
+                costBreakdown.cached += cCache;
+
+                allLogs.push(log);
+              } catch (e) {
+                console.warn('Parse error on line:', line, e);
+              }
+            }
+          }
+
+          // Calculate current session tokens
+          allLogs.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+
+          let currentContext = 0;
+          if (allLogs.length > 0) {
+            currentContext = allLogs[0].tokens.total || 0;
+          }
+
+          renderDashboard(dailyData, modelData, totalStats, costBreakdown, currentContext);
+        } catch (error) {
+          console.error('Failed to load logs:', error);
+          AppUI.notify('Failed to aggregate data', 'error');
+        } finally {
+          AppUI.hideLoading();
+        }
+      }
+
+      function renderDashboard(dailyData, modelData, totalStats, costBreakdown, sessionTotal) {
+        // Update Summary
+        document.getElementById('sessionTotal').textContent = sessionTotal.toLocaleString();
+        document.getElementById('totalCost').textContent = \`$\${totalStats.cost.toFixed(4)}\`;
+        document.getElementById('totalInput').textContent = (totalStats.input / 1000000).toFixed(2) + ' M';
+        document.getElementById('totalOutput').textContent = (totalStats.output / 1000000).toFixed(2) + ' M';
+        document.getElementById('totalCached').textContent = (totalStats.cached / 1000000).toFixed(2) + ' M';
+
+        // Update Table
+        const tbody = document.getElementById('modelTableBody');
+        tbody.innerHTML = '';
+        for (const [model, stats] of Object.entries(modelData)) {
+          const tr = document.createElement('tr');
+          tr.className = 'border-b border-border-main/50 hover:bg-hover transition';
+          tr.innerHTML = \`
+          <td class="py-3 px-4 text-sm font-bold text-text-main">\${model}</td>
+          <td class="py-3 px-4 text-sm text-text-muted font-mono text-right">\${(stats.input / 1000000).toFixed(3)}</td>
+          <td class="py-3 px-4 text-sm text-text-muted font-mono text-right">\${(stats.cached / 1000000).toFixed(3)}</td>
+          <td class="py-3 px-4 text-sm text-text-muted font-mono text-right">\${(stats.output / 1000000).toFixed(3)}</td>
+          <td class="py-3 px-4 text-sm font-bold text-primary font-mono text-right">$\${stats.cost.toFixed(4)}</td>
+        \`;
+          tbody.appendChild(tr);
+        }
+
+        const labels = Object.keys(dailyData).sort();
+        const costValues = labels.map((l) => dailyData[l].cost);
+
+        const colorPrimary = AppUI.getThemeColor('accent-primary');
+        const colorWarning = AppUI.getThemeColor('accent-warning');
+        const colorSuccess = AppUI.getThemeColor('accent-success');
+
+        // Render Daily Chart
+        const ctxDaily = document.getElementById('dailyCostChart').getContext('2d');
+        if (dailyChartInstance) dailyChartInstance.destroy();
+        dailyChartInstance = new Chart(ctxDaily, {
+          type: 'bar',
+          data: {
+            labels: labels,
+            datasets: [
+              {
+                label: 'Cost (USD)',
+                data: costValues,
+                backgroundColor: colorPrimary,
+                borderRadius: 4,
+              },
+            ],
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: { y: { beginAtZero: true } },
+          },
+        });
+
+        // Render Breakdown Chart
+        const ctxBreakdown = document.getElementById('costBreakdownChart').getContext('2d');
+        if (breakdownChartInstance) breakdownChartInstance.destroy();
+        breakdownChartInstance = new Chart(ctxBreakdown, {
+          type: 'doughnut',
+          data: {
+            labels: ['Input', 'Cached', 'Output'],
+            datasets: [
+              {
+                data: [costBreakdown.input, costBreakdown.cached, costBreakdown.output],
+                backgroundColor: [colorPrimary, colorWarning, colorSuccess],
+                borderWidth: 0,
+              },
+            ],
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+              legend: { position: 'bottom' },
+            },
+          },
+        });
+      }
+
+      document.getElementById('refreshBtn').addEventListener('click', loadData);
+
+      // Auto-load on boot
+      window.addEventListener('load', () => {
+        setTimeout(loadData, 500);
+      });
     </script>
-</body>
-</html>`.trim(),
+  </body>
+</html>
+`.trim(),
 
   "system/apps/launcher.html": `
 <!doctype html>
@@ -3835,8 +4507,18 @@ Attributes:
           <div class="flex items-center gap-3 mb-6 pb-4 border-b border-border-main/50">
             <div class="w-8 h-8 rounded-full bg-primary/20 text-primary flex items-center justify-center">
               <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path>
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
+                ></path>
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
+                ></path>
               </svg>
             </div>
             <div>
@@ -3849,7 +4531,6 @@ Attributes:
             <div class="text-text-muted text-sm animate-pulse">Loading services...</div>
           </div>
         </section>
-
       </div>
     </main>
 
@@ -4138,18 +4819,20 @@ Attributes:
         try {
           servicesData = await App.FS.readJson('system/registry/services.json', []);
           container.innerHTML = '';
-          
+
           if (!Array.isArray(servicesData) || servicesData.length === 0) {
-            container.innerHTML = '<div class="text-xs text-text-muted italic px-2 py-4 bg-card/50 rounded-lg border border-border-main text-center">No background services registered.</div>';
+            container.innerHTML =
+              '<div class="text-xs text-text-muted italic px-2 py-4 bg-card/50 rounded-lg border border-border-main text-center">No background services registered.</div>';
             return;
           }
 
           servicesData.forEach((svc, index) => {
             const div = document.createElement('div');
-            div.className = 'flex items-center justify-between p-4 rounded-xl border border-border-main bg-card hover:border-primary/30 transition shadow-sm';
-            
+            div.className =
+              'flex items-center justify-between p-4 rounded-xl border border-border-main bg-card hover:border-primary/30 transition shadow-sm';
+
             const isChecked = svc.autoStart ? 'checked' : '';
-            
+
             div.innerHTML = \`
               <div class="flex items-center gap-4 overflow-hidden mr-4">
                 <div class="w-10 h-10 bg-panel rounded-xl flex items-center justify-center text-2xl shadow-inner shrink-0">\${svc.icon || '⚙️'}</div>
@@ -4161,7 +4844,7 @@ Attributes:
               <div class="flex items-center shrink-0">
                 <label class="relative inline-flex items-center cursor-pointer">
                   <input type="checkbox" class="sr-only peer" \${isChecked} onchange="toggleService(\${index}, this.checked)">
-                  <div class="w-10 h-5.5 bg-panel peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-text-muted peer-checked:after:bg-white after:border-border-main after:border after:rounded-full after:h-4.5 after:w-4.5 after:transition-all peer-checked:bg-primary border border-border-main shadow-inner"></div>
+                  <div class="w-11 h-6 bg-panel peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-text-muted peer-checked:after:bg-white after:border-border-main after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary border border-border-main shadow-inner"></div>
                 </label>
               </div>
             \`;
@@ -4172,7 +4855,7 @@ Attributes:
         }
       }
 
-      window.toggleService = async function(index, isEnabled) {
+      window.toggleService = async function (index, isEnabled) {
         if (servicesData[index]) {
           servicesData[index].autoStart = isEnabled;
           clearTimeout(window._saveTimerSvc);
@@ -4182,76 +4865,22 @@ Attributes:
             status.classList.remove('opacity-0');
             status.classList.add('text-warning');
             try {
-              await App.FS.writeJson('system/registry/services.json', servicesData, { overwrite: true, system: true, silent: true });
+              await App.FS.writeJson('system/registry/services.json', servicesData, {
+                overwrite: true,
+                system: true,
+                silent: true,
+              });
               status.textContent = 'Saved';
               status.classList.remove('text-warning');
               status.classList.add('text-success');
-              setTimeout(() => { status.classList.add('opacity-0'); status.classList.remove('text-success'); }, 2000);
-              App.AI.logEvent(\`User \\\${isEnabled ? 'enabled' : 'disabled'} auto-start for service "\\\${servicesData[index].name || servicesData[index].id}".\`, 'config_changed');
-            } catch (e) {
-              status.textContent = 'Error';
-              status.classList.add('text-error');
-            }
-          }, 500);
-        }
-      };
+              setTimeout(() => {
+                status.classList.add('opacity-0');
+                status.classList.remove('text-success');
+              }, 2000);
 
-      // --- Background Services ---
-      async function loadServices() {
-        const container = DOM('services-list');
-        try {
-          servicesData = await App.FS.readJson('system/registry/services.json', []);
-          container.innerHTML = '';
-          
-          if (!Array.isArray(servicesData) || servicesData.length === 0) {
-            container.innerHTML = '<div class="text-xs text-text-muted italic px-2 py-4 bg-card/50 rounded-lg border border-border-main text-center">No background services registered.</div>';
-            return;
-          }
-
-          servicesData.forEach((svc, index) => {
-            const div = document.createElement('div');
-            div.className = 'flex items-center justify-between p-4 rounded-xl border border-border-main bg-card hover:border-primary/30 transition shadow-sm';
-            
-            const isChecked = svc.autoStart ? 'checked' : '';
-            
-            div.innerHTML = \`
-              <div class="flex items-center gap-4 overflow-hidden mr-4">
-                <div class="w-10 h-10 bg-panel rounded-xl flex items-center justify-center text-2xl shadow-inner shrink-0">\${svc.icon || '⚙️'}</div>
-                <div class="flex flex-col min-w-0">
-                  <div class="font-bold text-sm text-text-main truncate">\${svc.name || svc.id}</div>
-                  <div class="text-[10px] text-text-muted mt-0.5 truncate">\${svc.description || svc.path}</div>
-                </div>
-              </div>
-              <div class="flex items-center shrink-0">
-                <label class="relative inline-flex items-center cursor-pointer">
-                  <input type="checkbox" class="sr-only peer" \${isChecked} onchange="toggleService(\${index}, this.checked)">
-                  <div class="w-10 h-5.5 bg-panel peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-text-muted peer-checked:after:bg-white after:border-border-main after:border after:rounded-full after:h-4.5 after:w-4.5 after:transition-all peer-checked:bg-primary border border-border-main shadow-inner"></div>
-                </label>
-              </div>
-            \`;
-            container.appendChild(div);
-          });
-        } catch (e) {
-          container.innerHTML = '<div class="text-error text-sm">Failed to load services.</div>';
-        }
-      }
-
-      window.toggleService = async function(index, isEnabled) {
-        if (servicesData[index]) {
-          servicesData[index].autoStart = isEnabled;
-          clearTimeout(window._saveTimerSvc);
-          window._saveTimerSvc = setTimeout(async () => {
-            const status = DOM('save-status');
-            status.textContent = 'Saving...';
-            status.classList.remove('opacity-0');
-            status.classList.add('text-warning');
-            try {
-              await App.FS.writeJson('system/registry/services.json', servicesData, { overwrite: true, system: true, silent: true });
-              status.textContent = 'Saved';
-              status.classList.remove('text-warning');
-              status.classList.add('text-success');
-              setTimeout(() => { status.classList.add('opacity-0'); status.classList.remove('text-success'); }, 2000);
-              App.AI.logEvent(\`User \\\${isEnabled ? 'enabled' : 'disabled'} auto-start for service "\\\${servicesData[index].name || servicesData[index].id}".\`, 'config_changed');
+              const svcName = servicesData[index].name || servicesData[index].id;
+              const stateStr = isEnabled ? 'enabled' : 'disabled';
+              App.AI.logEvent(\`User \${stateStr} auto-start for service "\${svcName}".\`, 'config_changed');
             } catch (e) {
               status.textContent = 'Error';
               status.classList.add('text-error');
@@ -4874,6 +5503,13 @@ Attributes:
     "icon": "⚙️",
     "path": "system/apps/settings.html",
     "description": "System configuration"
+  },
+  {
+    "id": "billing",
+    "name": "Billing",
+    "icon": "💳",
+    "path": "system/apps/billing.html",
+    "description": "API usage and cost dashboard"
   }
 ], null, 2),
 
@@ -5120,7 +5756,7 @@ Attributes:
     "icon": "🐙",
     "path": "services/git.html",
     "description": "Background service providing Git operations.",
-    "autoStart": true
+    "autoStart": false
   }
 ], null, 2),
 
@@ -5245,4 +5881,4 @@ Attributes:
 }, null, 2)
 };
 
-export const BUILD_TIME = 1784040199745;
+export const BUILD_TIME = 1784041372886;

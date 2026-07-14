@@ -40,7 +40,12 @@ export class Explorer {
   private els: Record<string, HTMLElement | null> = {};
   private currentUploadTarget: string = '';
 
-  constructor(vfs: VfsService, eventBus: VfsEventBus, resolver: FileAssociationResolver, getActivePrincipal: () => Principal) {
+  constructor(
+    vfs: VfsService,
+    eventBus: VfsEventBus,
+    resolver: FileAssociationResolver,
+    getActivePrincipal: () => Principal,
+  ) {
     this.vfs = vfs;
     this.eventBus = eventBus;
     this.resolver = resolver;

@@ -138,7 +138,7 @@ export class ProcessMonitorModal {
         }
       } else {
         const basePath = proc.path.split(/[?#]/)[0];
-        const appInfo = this.appRegistry.getAllApps().find(a => a.path === basePath);
+        const appInfo = this.appRegistry.getAllApps().find((a) => a.path === basePath);
         if (appInfo) {
           displayName = appInfo.name;
           icon = appInfo.icon || icon;

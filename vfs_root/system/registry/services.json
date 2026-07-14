@@ -5,6 +5,6 @@
     "icon": "🐙",
     "path": "services/git.html",
     "description": "Background service providing Git operations.",
-    "autoStart": true
+    "autoStart": false
   }
 ]

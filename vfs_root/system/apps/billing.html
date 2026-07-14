@@ -1,0 +1,375 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>API Usage & Billing Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="../core/ui.js"></script>
+    <script src="../core/std.js"></script>
+    <style>
+      /* Chart.js の文字色などをテーマに合わせるために必要 */
+      canvas {
+        filter: var(--chart-filter, none);
+      }
+      .dark canvas {
+        --chart-filter: invert(0.9) hue-rotate(180deg);
+      }
+
+      .no-scrollbar::-webkit-scrollbar {
+        display: none;
+      }
+      .no-scrollbar {
+        -ms-overflow-style: none;
+        scrollbar-width: none;
+      }
+    </style>
+  </head>
+  <body class="bg-app text-text-main h-screen flex flex-col p-6 overflow-hidden">
+    <div class="max-w-6xl mx-auto w-full flex flex-col h-full">
+      <!-- Header -->
+      <header class="flex items-center justify-between mb-6 shrink-0">
+        <div class="flex items-center gap-4">
+          <button
+            onclick="AppUI.home()"
+            class="p-2 -ml-2 rounded-full hover:bg-hover text-text-muted hover:text-text-main transition"
+          >
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M10 19l-7-7m0 0l7-7m-7 7h18"
+              ></path>
+            </svg>
+          </button>
+          <h1 class="text-2xl font-bold tracking-tight">API Billing & Usage</h1>
+        </div>
+        <button
+          id="refreshBtn"
+          class="bg-primary hover:bg-primary/90 text-white px-4 py-2 rounded-lg shadow-md text-sm font-bold transition flex items-center gap-2"
+        >
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+            ></path>
+          </svg>
+          Refresh
+        </button>
+      </header>
+
+      <main class="flex-1 overflow-y-auto no-scrollbar pb-10">
+        <!-- Summary Cards -->
+        <div class="grid grid-cols-1 md:grid-cols-5 gap-4 mb-6">
+          <div
+            class="bg-panel border border-border-main rounded-xl p-5 shadow-sm border-l-4 border-l-primary relative overflow-hidden"
+          >
+            <div class="absolute -right-4 -bottom-4 text-6xl opacity-5">🧠</div>
+            <h3 class="text-[10px] font-bold text-primary uppercase tracking-widest mb-1">Current Context</h3>
+            <p class="text-3xl font-bold text-text-main font-mono tabular-nums" id="sessionTotal">0</p>
+            <span class="text-[10px] text-text-muted mt-1 block">Latest total tokens</span>
+          </div>
+          <div class="bg-panel border border-border-main rounded-xl p-5 shadow-sm">
+            <h3 class="text-[10px] font-bold text-text-muted uppercase tracking-widest mb-1">7D Total Cost</h3>
+            <p class="text-2xl font-bold text-text-main font-mono tabular-nums" id="totalCost">$0.00</p>
+          </div>
+          <div class="bg-panel border border-border-main rounded-xl p-5 shadow-sm">
+            <h3 class="text-[10px] font-bold text-text-muted uppercase tracking-widest mb-1">7D Input</h3>
+            <p class="text-xl font-bold text-system font-mono tabular-nums" id="totalInput">0</p>
+          </div>
+          <div class="bg-panel border border-border-main rounded-xl p-5 shadow-sm">
+            <h3 class="text-[10px] font-bold text-text-muted uppercase tracking-widest mb-1">7D Output</h3>
+            <p class="text-xl font-bold text-success font-mono tabular-nums" id="totalOutput">0</p>
+          </div>
+          <div class="bg-panel border border-border-main rounded-xl p-5 shadow-sm">
+            <h3 class="text-[10px] font-bold text-text-muted uppercase tracking-widest mb-1">7D Cached</h3>
+            <p class="text-xl font-bold text-warning font-mono tabular-nums" id="totalCached">0</p>
+          </div>
+        </div>
+
+        <!-- Charts -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
+          <div class="bg-panel border border-border-main rounded-xl p-5 shadow-sm lg:col-span-2">
+            <h2 class="text-sm font-bold uppercase tracking-wider text-text-main mb-4 flex items-center gap-2">
+              <span class="text-lg">📊</span> Daily Cost (USD)
+            </h2>
+            <div class="relative h-64">
+              <canvas id="dailyCostChart"></canvas>
+            </div>
+          </div>
+          <div class="bg-panel border border-border-main rounded-xl p-5 shadow-sm">
+            <h2 class="text-sm font-bold uppercase tracking-wider text-text-main mb-4 flex items-center gap-2">
+              <span class="text-lg">🍩</span> Cost Breakdown
+            </h2>
+            <div class="relative h-64">
+              <canvas id="costBreakdownChart"></canvas>
+            </div>
+          </div>
+        </div>
+
+        <!-- Table -->
+        <div class="bg-panel border border-border-main rounded-xl p-5 shadow-sm">
+          <h2 class="text-sm font-bold uppercase tracking-wider text-text-main mb-4 flex items-center gap-2">
+            <span class="text-lg">📋</span> Usage Details by Model
+          </h2>
+          <div class="overflow-x-auto">
+            <table class="w-full text-left border-collapse">
+              <thead>
+                <tr class="border-b border-border-main text-text-muted">
+                  <th class="py-3 px-4 text-xs font-bold uppercase tracking-wider">Model</th>
+                  <th class="py-3 px-4 text-xs font-bold uppercase tracking-wider text-right">Input (M)</th>
+                  <th class="py-3 px-4 text-xs font-bold uppercase tracking-wider text-right">Cached (M)</th>
+                  <th class="py-3 px-4 text-xs font-bold uppercase tracking-wider text-right">Output (M)</th>
+                  <th class="py-3 px-4 text-xs font-bold uppercase tracking-wider text-right">Cost (USD)</th>
+                </tr>
+              </thead>
+              <tbody id="modelTableBody">
+                <!-- Rows injected by JS -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </main>
+    </div>
+
+    <script>
+      let dailyChartInstance = null;
+      let breakdownChartInstance = null;
+
+      async function getPricingMap() {
+        const map = {};
+        try {
+          const profiles = await App.FS.readJson('system/registry/llm_profiles.json');
+          if (profiles && Array.isArray(profiles.providers)) {
+            profiles.providers.forEach((p) => {
+              if (Array.isArray(p.models)) {
+                p.models.forEach((m) => {
+                  if (m.pricing) map[m.id] = m.pricing;
+                });
+              }
+            });
+          }
+        } catch (e) {
+          console.warn('Failed to load llm_profiles.json', e);
+        }
+        return map;
+      }
+
+      async function loadData() {
+        if (!window.MetaOS) {
+          console.error('MetaOS not found.');
+          return;
+        }
+
+        AppUI.showLoading('Aggregating Data...');
+
+        try {
+          const pricingMap = await getPricingMap();
+
+          const files = await window.MetaOS.fs.list('system/logs/usage');
+          const now = new Date();
+          const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+
+          let dailyData = {};
+          let modelData = {};
+          let totalStats = { input: 0, output: 0, cached: 0, cost: 0 };
+          let costBreakdown = { input: 0, output: 0, cached: 0 };
+          let allLogs = [];
+
+          for (const file of files) {
+            const filePath = typeof file === 'object' ? file.path || file.name : file;
+            if (!filePath.endsWith('.jsonl')) continue;
+
+            const fullPath = filePath.startsWith('system/logs/usage') ? filePath : `system/logs/usage/${filePath}`;
+
+            let content;
+            try {
+              content = await window.MetaOS.fs.read(fullPath);
+            } catch (e) {
+              continue;
+            }
+            if (!content) continue;
+
+            const lines = content.split('\n');
+
+            for (const line of lines) {
+              if (!line.trim()) continue;
+              try {
+                const log = JSON.parse(line);
+                const dateObj = new Date(log.timestamp);
+
+                if (dateObj < sevenDaysAgo) continue;
+
+                const dateStr = dateObj.toLocaleDateString('en-CA', { month: '2-digit', day: '2-digit' }); // MM-DD
+
+                const model = log.model || 'unknown';
+                const pricing = pricingMap[model] || {};
+                const totalTokens = log.tokens.total || 0;
+
+                let rates = { input: 0, output: 0, cached: 0 };
+
+                if (pricing.tiers && pricing.tiers.length > 0) {
+                  const tier =
+                    pricing.tiers.find((t) => t.maxTokens === null || totalTokens <= t.maxTokens) ||
+                    pricing.tiers[pricing.tiers.length - 1];
+                  rates.input = tier.input || 0;
+                  rates.output = tier.output || 0;
+                  rates.cached = tier.cached !== undefined ? tier.cached : rates.input * 0.1;
+                } else if (pricing.input !== undefined) {
+                  rates.input = pricing.input;
+                  rates.output = pricing.output || 0;
+                  rates.cached = pricing.cached !== undefined ? pricing.cached : rates.input * 0.1;
+                }
+
+                const tIn = log.tokens.input || 0;
+                const tOut = log.tokens.output || 0;
+                const tCache = log.tokens.cached || 0;
+
+                const cIn = (tIn / 1000000) * rates.input;
+                const cOut = (tOut / 1000000) * rates.output;
+                const cCache = (tCache / 1000000) * rates.cached;
+                const cTotal = cIn + cOut + cCache;
+
+                // Aggregate Daily
+                if (!dailyData[dateStr]) {
+                  dailyData[dateStr] = { cost: 0, input: 0, output: 0, cached: 0 };
+                }
+                dailyData[dateStr].cost += cTotal;
+                dailyData[dateStr].input += tIn;
+                dailyData[dateStr].output += tOut;
+                dailyData[dateStr].cached += tCache;
+
+                // Aggregate Model
+                if (!modelData[model]) {
+                  modelData[model] = { input: 0, output: 0, cached: 0, cost: 0 };
+                }
+                modelData[model].input += tIn;
+                modelData[model].output += tOut;
+                modelData[model].cached += tCache;
+                modelData[model].cost += cTotal;
+
+                // Total
+                totalStats.input += tIn;
+                totalStats.output += tOut;
+                totalStats.cached += tCache;
+                totalStats.cost += cTotal;
+
+                costBreakdown.input += cIn;
+                costBreakdown.output += cOut;
+                costBreakdown.cached += cCache;
+
+                allLogs.push(log);
+              } catch (e) {
+                console.warn('Parse error on line:', line, e);
+              }
+            }
+          }
+
+          // Calculate current session tokens
+          allLogs.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+
+          let currentContext = 0;
+          if (allLogs.length > 0) {
+            currentContext = allLogs[0].tokens.total || 0;
+          }
+
+          renderDashboard(dailyData, modelData, totalStats, costBreakdown, currentContext);
+        } catch (error) {
+          console.error('Failed to load logs:', error);
+          AppUI.notify('Failed to aggregate data', 'error');
+        } finally {
+          AppUI.hideLoading();
+        }
+      }
+
+      function renderDashboard(dailyData, modelData, totalStats, costBreakdown, sessionTotal) {
+        // Update Summary
+        document.getElementById('sessionTotal').textContent = sessionTotal.toLocaleString();
+        document.getElementById('totalCost').textContent = `$${totalStats.cost.toFixed(4)}`;
+        document.getElementById('totalInput').textContent = (totalStats.input / 1000000).toFixed(2) + ' M';
+        document.getElementById('totalOutput').textContent = (totalStats.output / 1000000).toFixed(2) + ' M';
+        document.getElementById('totalCached').textContent = (totalStats.cached / 1000000).toFixed(2) + ' M';
+
+        // Update Table
+        const tbody = document.getElementById('modelTableBody');
+        tbody.innerHTML = '';
+        for (const [model, stats] of Object.entries(modelData)) {
+          const tr = document.createElement('tr');
+          tr.className = 'border-b border-border-main/50 hover:bg-hover transition';
+          tr.innerHTML = `
+          <td class="py-3 px-4 text-sm font-bold text-text-main">${model}</td>
+          <td class="py-3 px-4 text-sm text-text-muted font-mono text-right">${(stats.input / 1000000).toFixed(3)}</td>
+          <td class="py-3 px-4 text-sm text-text-muted font-mono text-right">${(stats.cached / 1000000).toFixed(3)}</td>
+          <td class="py-3 px-4 text-sm text-text-muted font-mono text-right">${(stats.output / 1000000).toFixed(3)}</td>
+          <td class="py-3 px-4 text-sm font-bold text-primary font-mono text-right">$${stats.cost.toFixed(4)}</td>
+        `;
+          tbody.appendChild(tr);
+        }
+
+        const labels = Object.keys(dailyData).sort();
+        const costValues = labels.map((l) => dailyData[l].cost);
+
+        const colorPrimary = AppUI.getThemeColor('accent-primary');
+        const colorWarning = AppUI.getThemeColor('accent-warning');
+        const colorSuccess = AppUI.getThemeColor('accent-success');
+
+        // Render Daily Chart
+        const ctxDaily = document.getElementById('dailyCostChart').getContext('2d');
+        if (dailyChartInstance) dailyChartInstance.destroy();
+        dailyChartInstance = new Chart(ctxDaily, {
+          type: 'bar',
+          data: {
+            labels: labels,
+            datasets: [
+              {
+                label: 'Cost (USD)',
+                data: costValues,
+                backgroundColor: colorPrimary,
+                borderRadius: 4,
+              },
+            ],
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: { y: { beginAtZero: true } },
+          },
+        });
+
+        // Render Breakdown Chart
+        const ctxBreakdown = document.getElementById('costBreakdownChart').getContext('2d');
+        if (breakdownChartInstance) breakdownChartInstance.destroy();
+        breakdownChartInstance = new Chart(ctxBreakdown, {
+          type: 'doughnut',
+          data: {
+            labels: ['Input', 'Cached', 'Output'],
+            datasets: [
+              {
+                data: [costBreakdown.input, costBreakdown.cached, costBreakdown.output],
+                backgroundColor: [colorPrimary, colorWarning, colorSuccess],
+                borderWidth: 0,
+              },
+            ],
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+              legend: { position: 'bottom' },
+            },
+          },
+        });
+      }
+
+      document.getElementById('refreshBtn').addEventListener('click', loadData);
+
+      // Auto-load on boot
+      window.addEventListener('load', () => {
+        setTimeout(loadData, 500);
+      });
+    </script>
+  </body>
+</html>

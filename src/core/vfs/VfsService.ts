@@ -117,7 +117,7 @@ export class VfsService {
       rules: [
         { principal: { type: 'user', id: 'local_user' }, permissions: ['read', 'write', 'manage'] },
         { principal: { type: 'agent', id: 'Itera_AI' }, permissions: ['read', 'write'] },
-        { principal: { type: 'any', id: '*' }, permissions: ['read', 'write'] }
+        { principal: { type: 'any', id: '*' }, permissions: ['read', 'write'] },
       ],
     };
   }

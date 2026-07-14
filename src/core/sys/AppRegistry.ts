@@ -35,7 +35,7 @@ export class AppRegistry {
   private vfs: VfsService;
   private apps: Map<string, AppManifest> = new Map();
   private services: Map<string, ServiceManifest> = new Map();
-  
+
   private appsRegistryPath = 'system/registry/apps.json';
   private servicesRegistryPath = 'system/registry/services.json';
   private listeners: (() => void)[] = [];
@@ -44,9 +44,7 @@ export class AppRegistry {
     this.vfs = vfs;
 
     eventBus.subscribe((events) => {
-      const isUpdated = events.some(
-        (e) => e.path === this.appsRegistryPath || e.path === this.servicesRegistryPath
-      );
+      const isUpdated = events.some((e) => e.path === this.appsRegistryPath || e.path === this.servicesRegistryPath);
       if (isUpdated) {
         this._load().then(() => this._notify());
       }

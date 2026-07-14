@@ -226,7 +226,7 @@ export class PropertiesModal {
     const tPerm = document.getElementById('tab-permissions')!;
 
     const isSudo = this.activePrincipal.type === 'system';
-    
+
     // Owner のシリアライズ
     const currentOwnerStr = `${acl.owner.type}:${acl.owner.id}`;
 
@@ -319,7 +319,7 @@ export class PropertiesModal {
     const aiVal = (document.getElementById('perm-ai') as HTMLSelectElement).value;
     const guestVal = (document.getElementById('perm-guest') as HTMLSelectElement).value;
     const isRecursive = (document.getElementById('perm-recursive') as HTMLInputElement)?.checked || false;
-    
+
     const isSudo = this.activePrincipal.type === 'system';
 
     let userVal = 'read_write';
@@ -339,7 +339,7 @@ export class PropertiesModal {
       const perms = val === 'read_write' ? ['read', 'write'] : val === 'read' ? ['read'] : [];
       // read_writeが与えられたローカルユーザーにはmanageも付与する
       if (val === 'read_write' && type === 'user' && id === 'local_user') {
-          perms.push('manage');
+        perms.push('manage');
       }
       newRules.push({
         principal: { type, id },

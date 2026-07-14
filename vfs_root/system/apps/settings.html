@@ -307,8 +307,18 @@
           <div class="flex items-center gap-3 mb-6 pb-4 border-b border-border-main/50">
             <div class="w-8 h-8 rounded-full bg-primary/20 text-primary flex items-center justify-center">
               <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path>
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
+                ></path>
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
+                ></path>
               </svg>
             </div>
             <div>
@@ -321,7 +331,6 @@
             <div class="text-text-muted text-sm animate-pulse">Loading services...</div>
           </div>
         </section>
-
       </div>
     </main>
 
@@ -610,18 +619,20 @@
         try {
           servicesData = await App.FS.readJson('system/registry/services.json', []);
           container.innerHTML = '';
-          
+
           if (!Array.isArray(servicesData) || servicesData.length === 0) {
-            container.innerHTML = '<div class="text-xs text-text-muted italic px-2 py-4 bg-card/50 rounded-lg border border-border-main text-center">No background services registered.</div>';
+            container.innerHTML =
+              '<div class="text-xs text-text-muted italic px-2 py-4 bg-card/50 rounded-lg border border-border-main text-center">No background services registered.</div>';
             return;
           }
 
           servicesData.forEach((svc, index) => {
             const div = document.createElement('div');
-            div.className = 'flex items-center justify-between p-4 rounded-xl border border-border-main bg-card hover:border-primary/30 transition shadow-sm';
-            
+            div.className =
+              'flex items-center justify-between p-4 rounded-xl border border-border-main bg-card hover:border-primary/30 transition shadow-sm';
+
             const isChecked = svc.autoStart ? 'checked' : '';
-            
+
             div.innerHTML = `
               <div class="flex items-center gap-4 overflow-hidden mr-4">
                 <div class="w-10 h-10 bg-panel rounded-xl flex items-center justify-center text-2xl shadow-inner shrink-0">${svc.icon || '⚙️'}</div>
@@ -633,7 +644,7 @@
               <div class="flex items-center shrink-0">
                 <label class="relative inline-flex items-center cursor-pointer">
                   <input type="checkbox" class="sr-only peer" ${isChecked} onchange="toggleService(${index}, this.checked)">
-                  <div class="w-10 h-5.5 bg-panel peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-text-muted peer-checked:after:bg-white after:border-border-main after:border after:rounded-full after:h-4.5 after:w-4.5 after:transition-all peer-checked:bg-primary border border-border-main shadow-inner"></div>
+                  <div class="w-11 h-6 bg-panel peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-text-muted peer-checked:after:bg-white after:border-border-main after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary border border-border-main shadow-inner"></div>
                 </label>
               </div>
             `;
@@ -644,7 +655,7 @@
         }
       }
 
-      window.toggleService = async function(index, isEnabled) {
+      window.toggleService = async function (index, isEnabled) {
         if (servicesData[index]) {
           servicesData[index].autoStart = isEnabled;
           clearTimeout(window._saveTimerSvc);
@@ -654,76 +665,22 @@
             status.classList.remove('opacity-0');
             status.classList.add('text-warning');
             try {
-              await App.FS.writeJson('system/registry/services.json', servicesData, { overwrite: true, system: true, silent: true });
+              await App.FS.writeJson('system/registry/services.json', servicesData, {
+                overwrite: true,
+                system: true,
+                silent: true,
+              });
               status.textContent = 'Saved';
               status.classList.remove('text-warning');
               status.classList.add('text-success');
-              setTimeout(() => { status.classList.add('opacity-0'); status.classList.remove('text-success'); }, 2000);
-              App.AI.logEvent(`User \${isEnabled ? 'enabled' : 'disabled'} auto-start for service "\${servicesData[index].name || servicesData[index].id}".`, 'config_changed');
-            } catch (e) {
-              status.textContent = 'Error';
-              status.classList.add('text-error');
-            }
-          }, 500);
-        }
-      };
+              setTimeout(() => {
+                status.classList.add('opacity-0');
+                status.classList.remove('text-success');
+              }, 2000);
 
-      // --- Background Services ---
-      async function loadServices() {
-        const container = DOM('services-list');
-        try {
-          servicesData = await App.FS.readJson('system/registry/services.json', []);
-          container.innerHTML = '';
-          
-          if (!Array.isArray(servicesData) || servicesData.length === 0) {
-            container.innerHTML = '<div class="text-xs text-text-muted italic px-2 py-4 bg-card/50 rounded-lg border border-border-main text-center">No background services registered.</div>';
-            return;
-          }
-
-          servicesData.forEach((svc, index) => {
-            const div = document.createElement('div');
-            div.className = 'flex items-center justify-between p-4 rounded-xl border border-border-main bg-card hover:border-primary/30 transition shadow-sm';
-            
-            const isChecked = svc.autoStart ? 'checked' : '';
-            
-            div.innerHTML = `
-              <div class="flex items-center gap-4 overflow-hidden mr-4">
-                <div class="w-10 h-10 bg-panel rounded-xl flex items-center justify-center text-2xl shadow-inner shrink-0">${svc.icon || '⚙️'}</div>
-                <div class="flex flex-col min-w-0">
-                  <div class="font-bold text-sm text-text-main truncate">${svc.name || svc.id}</div>
-                  <div class="text-[10px] text-text-muted mt-0.5 truncate">${svc.description || svc.path}</div>
-                </div>
-              </div>
-              <div class="flex items-center shrink-0">
-                <label class="relative inline-flex items-center cursor-pointer">
-                  <input type="checkbox" class="sr-only peer" ${isChecked} onchange="toggleService(${index}, this.checked)">
-                  <div class="w-10 h-5.5 bg-panel peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-text-muted peer-checked:after:bg-white after:border-border-main after:border after:rounded-full after:h-4.5 after:w-4.5 after:transition-all peer-checked:bg-primary border border-border-main shadow-inner"></div>
-                </label>
-              </div>
-            `;
-            container.appendChild(div);
-          });
-        } catch (e) {
-          container.innerHTML = '<div class="text-error text-sm">Failed to load services.</div>';
-        }
-      }
-
-      window.toggleService = async function(index, isEnabled) {
-        if (servicesData[index]) {
-          servicesData[index].autoStart = isEnabled;
-          clearTimeout(window._saveTimerSvc);
-          window._saveTimerSvc = setTimeout(async () => {
-            const status = DOM('save-status');
-            status.textContent = 'Saving...';
-            status.classList.remove('opacity-0');
-            status.classList.add('text-warning');
-            try {
-              await App.FS.writeJson('system/registry/services.json', servicesData, { overwrite: true, system: true, silent: true });
-              status.textContent = 'Saved';
-              status.classList.remove('text-warning');
-              status.classList.add('text-success');
-              setTimeout(() => { status.classList.add('opacity-0'); status.classList.remove('text-success'); }, 2000);
-              App.AI.logEvent(`User \${isEnabled ? 'enabled' : 'disabled'} auto-start for service "\${servicesData[index].name || servicesData[index].id}".`, 'config_changed');
+              const svcName = servicesData[index].name || servicesData[index].id;
+              const stateStr = isEnabled ? 'enabled' : 'disabled';
+              App.AI.logEvent(`User ${stateStr} auto-start for service "${svcName}".`, 'config_changed');
             } catch (e) {
               status.textContent = 'Error';
               status.classList.add('text-error');

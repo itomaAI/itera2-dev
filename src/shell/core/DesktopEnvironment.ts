@@ -287,7 +287,7 @@ export class DesktopEnvironment {
     } else {
       const confirmed = await window.AppUI?.confirm(
         'WARNING: Enabling System Privileges (Sudo) allows you to modify or delete core OS files.\\n\\nIncorrect actions may break the system. Are you sure you want to proceed?',
-        'Enable Sudo Mode'
+        'Enable Sudo Mode',
       );
       if (confirmed) {
         this.isSudoMode = true;
@@ -301,7 +301,7 @@ export class DesktopEnvironment {
   private _updateSudoUI(): void {
     const btn = document.getElementById('btn-sudo');
     if (!btn) return;
-    
+
     if (this.isSudoMode) {
       btn.classList.add('text-error', 'bg-error/10');
       btn.classList.remove('text-text-muted', 'hover:text-warning');
