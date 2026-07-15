@@ -354,7 +354,9 @@ All methods (except \`on/off\`) are **Asynchronous** and return a \`Promise\`.
     - To write a Base64 or Data URI string as binary, you MUST explicitly specify \`{ encoding: 'base64' }\` or \`{ encoding: 'dataurl' }\` in \`opts\`.
 - \`resolveUrl(path)\` (Returns a String): In Guest Apps, relative paths (e.g., \`./image.png\`) in JS do NOT work because apps run on virtual Blob URLs. To dynamically load assets from VFS into \`img.src\` or CSS, you MUST resolve the real URL first: \`const url = await MetaOS.fs.resolveUrl('data/image.png'); img.src = url;\`. (Note: Static HTML/CSS like \`<img src="...">\` or \`url(...)\` are auto-compiled and safe to use relative paths).
 - \`delete(path, opts)\`, \`rename(oldPath, newPath, opts)\`, \`copy(srcPath, destPath, opts)\`, \`mkdir(path, opts)\`
-- \`stat(path)\`, \`list(path, opts)\`, \`exists(path)\`
+- \`stat(path)\`: Returns a plain object \`{ kind: 'file' | 'directory', size, ... }\` (Do NOT use Node.js \`isDirectory()\`).
+- \`list(path, opts)\`: Returns \`string[]\`. If \`opts.detail=true\`, returns an array of stat objects.
+- \`exists(path)\`: Returns boolean.
 
 **AI & History (MetaOS.ai)**:
 - \`ask(text, opts)\`: Sends a chat message as the user and triggers AI. \`opts.attachments\` accepts an array of VFS paths.
@@ -365,7 +367,8 @@ All methods (except \`on/off\`) are **Asynchronous** and return a \`Promise\`.
 **System & IPC (MetaOS.system)**:
 - \`spawn(path, opts)\`: Starts a process. \`opts: { pid, mode, forceReload, args }\`. (pid="main" changes foreground view, set forceReload=true to ignore cache)
 - \`kill(pid)\`: Terminates a process.
-- \`ps()\`, \`info()\`, \`capture(pid)\`
+- \`ps()\`: Returns array of processes \`[{ pid, path, type, state }]\`.
+- \`info()\`, \`capture(pid)\`
 - \`broadcast(eventName, payload)\`: IPC broadcast.
 - \`on(eventName, handler)\`, \`off(eventName, handler)\`: IPC listener.
 - \`getArgs()\`: Returns the args object provided when the app was spawned (e.g., to get the target file path).

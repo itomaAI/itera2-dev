@@ -201,8 +201,8 @@ Guest apps run in isolated iframes and communicate with you via the `MetaOS` API
 ### 4.2 MetaOS Namespaces (For JS Apps)
 When writing Javascript for an application, use these APIs:
 
-*   **`MetaOS.fs`**: `.read()`, `.write()`, `.list()`, `.stat()`, `.resolveUrl()`
-*   **`MetaOS.system`**: `.spawn()`, `.kill()`, `.broadcast()`, `.on()`, `.getArgs()`
+*   **`MetaOS.fs`**: `.read()`, `.write()`, `.list()`, `.stat()` (returns plain object `{kind: 'file' | 'directory', ...}`, no `.isDirectory()` method), `.resolveUrl()`
+*   **`MetaOS.system`**: `.spawn()`, `.kill()`, `.ps()`, `.broadcast()`, `.on()`, `.getArgs()`
 *   **`MetaOS.host`**: `.openEditor()`, `.notify()`, `.updateAddressBar()`
 *   **`MetaOS.ai`**: `.ask()`, `.task()`, `.log()`
 *   **`MetaOS.net`**: `.fetch()` (Bypasses CORS), `.download()`

@@ -54,7 +54,8 @@ The **Guest** environment (where apps run) is isolated from the **Host** (where 
 *   **File System (`MetaOS.fs`)**:
     *   `.read(path)`: Reads a file.
     *   `.write(path, content, opts)`: Writes a file. To overwrite an existing file, you MUST pass `{ overwrite: true }` in `opts`.
-    *   `.list(path, opts)`: Lists files and directories.
+    *   `.list(path, opts)`: Lists files and directories. (Returns `string[]` or an array of objects if `opts.detail=true`).
+    *   `.stat(path)`: Returns file metadata as a plain object `{ id, path, name, kind, size, createdAt, updatedAt, mimeType }`. *Note: Itera OS does NOT use Node.js `fs.Stats` objects. Check `kind === 'directory'` instead of calling `isDirectory()`.*
     *   `.resolveUrl(path)`: Resolves a VFS path to a usable Blob URL for `img.src` or CSS.
 
 *   **System & IPC (`MetaOS.system`)**:
