@@ -201,9 +201,17 @@ window.addEventListener('message', async (e) => {
       fileUrl = URL.createObjectURL(typedBlob);
 
       const oldCache = this.assetCache.get(absPath);
-      if (oldCache) URL.revokeObjectURL(oldCache.url);
-
-      this.assetCache.set(absPath, { url: fileUrl, version: stat.updatedAt });
+      
+      // コンパイルの競合（Race Condition）対策：
+      // 他のプロセスが同時にコンパイルして既に最新キャッシュを生成していた場合、
+      // 自分が作ったURLを破棄し、先に作られたキャッシュのURLを安全に再利用する
+      if (oldCache && oldCache.version === stat.updatedAt) {
+        URL.revokeObjectURL(fileUrl);
+        fileUrl = oldCache.url;
+      } else {
+        if (oldCache) URL.revokeObjectURL(oldCache.url);
+        this.assetCache.set(absPath, { url: fileUrl, version: stat.updatedAt });
+      }
     }
 
     const finalUrl = fileUrl + search + hash;
