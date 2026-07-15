@@ -3,9 +3,11 @@
  * Itera OS v2: File to App Association Resolver
  */
 
-import type { ConfigManager } from './ConfigManager';
 import type { AppRegistry } from './AppRegistry';
 import type { VfsStat } from '../vfs/types';
+import type { VfsService } from '../vfs/VfsService';
+import type { VfsEventBus } from '../vfs/VfsEventBus';
+import { SYSTEM_PRINCIPAL } from '../vfs/types';
 
 export interface ResolvedApp {
   /** 起動すべきアプリのID。Host内蔵機能を使用する場合は特殊なIDを返す */
@@ -17,12 +19,32 @@ export interface ResolvedApp {
 }
 
 export class FileAssociationResolver {
-  private configManager: ConfigManager;
+  private vfs: VfsService;
   private appRegistry: AppRegistry;
+  private associations: any = { extensions: {}, mimeTypes: {} };
 
-  constructor(configManager: ConfigManager, appRegistry: AppRegistry) {
-    this.configManager = configManager;
+  constructor(vfs: VfsService, appRegistry: AppRegistry, eventBus: VfsEventBus) {
+    this.vfs = vfs;
     this.appRegistry = appRegistry;
+
+    eventBus.subscribe((events) => {
+      const isUpdated = events.some((e) => e.path === 'system/registry/associations.json');
+      if (isUpdated) {
+        this.loadAssociations();
+      }
+    });
+  }
+
+  async loadAssociations(): Promise<void> {
+    try {
+      if (this.vfs.exists(SYSTEM_PRINCIPAL, 'system/registry/associations.json')) {
+        const content = await this.vfs.readFile(SYSTEM_PRINCIPAL, 'system/registry/associations.json');
+        this.associations = JSON.parse(content);
+      }
+    } catch (e) {
+      console.warn('[FileAssociationResolver] Failed to load associations.json', e);
+      this.associations = { extensions: {}, mimeTypes: {} };
+    }
   }
 
   /**
@@ -33,9 +55,7 @@ export class FileAssociationResolver {
     const mimeType = stat.mimeType || this._guessMimeType(stat.name);
 
     // 1. ユーザーの明示的な設定 (associations.json) をチェック
-    const userAssoc = this.configManager.get('associations');
-    // Optional chaining を使用して、設定が空でもエラーにならないように保護
-    const userPreferredAppId = userAssoc?.extensions?.[extension] || userAssoc?.mimeTypes?.[mimeType];
+    const userPreferredAppId = this.associations?.extensions?.[extension] || this.associations?.mimeTypes?.[mimeType];
 
     if (userPreferredAppId) {
       const app = this.appRegistry.getApp(userPreferredAppId);

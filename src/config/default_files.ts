@@ -1,10 +1,10 @@
 /**
  * AUTO-GENERATED FILE - DO NOT EDIT MANUALLY
- * Generated on: 2026-07-14T15:37:47.779Z
+ * Generated on: 2026-07-15T03:03:43.465Z
  */
 
 export const DEFAULT_FILES: Record<string, string> = {
-  'apps/calendar.html': `
+  "apps/calendar.html": `
 <!doctype html>
 <html lang="en">
   <head>
@@ -482,7 +482,7 @@ export const DEFAULT_FILES: Record<string, string> = {
 </html>
 `.trim(),
 
-  'apps/home.html': `
+  "apps/home.html": `
 <!doctype html>
 <html lang="en">
   <head>
@@ -927,7 +927,7 @@ export const DEFAULT_FILES: Record<string, string> = {
 </html>
 `.trim(),
 
-  'apps/notes.html': `
+  "apps/notes.html": `
 <!doctype html>
 <html lang="en">
   <head>
@@ -1541,7 +1541,7 @@ export const DEFAULT_FILES: Record<string, string> = {
 </html>
 `.trim(),
 
-  'apps/tasks.html': `
+  "apps/tasks.html": `
 <!doctype html>
 <html lang="en">
   <head>
@@ -1959,30 +1959,26 @@ export const DEFAULT_FILES: Record<string, string> = {
 </html>
 `.trim(),
 
-  'data/events/2026-07.json': JSON.stringify(
-    [
-      {
-        id: 'event_tutorial_1',
-        title: 'Itera OS Setup 🚀',
-        date: '2026-07-14',
-        time: '10:00',
-        endTime: '11:00',
-        note: 'Complete the initial setup and get familiar with the system.',
-      },
-      {
-        id: 'event_tutorial_2',
-        title: 'Read the Codex',
-        date: '2026-07-15',
-        time: '14:00',
-        endTime: '15:00',
-        note: 'Read memory/rules/codex.md to understand how the AI operates.',
-      },
-    ],
-    null,
-    2,
-  ),
+  "data/events/2026-07.json": JSON.stringify([
+  {
+    "id": "event_tutorial_1",
+    "title": "Itera OS Setup 🚀",
+    "date": "2026-07-14",
+    "time": "10:00",
+    "endTime": "11:00",
+    "note": "Complete the initial setup and get familiar with the system."
+  },
+  {
+    "id": "event_tutorial_2",
+    "title": "Read the Codex",
+    "date": "2026-07-15",
+    "time": "14:00",
+    "endTime": "15:00",
+    "note": "Read memory/rules/codex.md to understand how the AI operates."
+  }
+], null, 2),
 
-  'data/notes/welcome.md': `
+  "data/notes/welcome.md": `
 # 🌌 Welcome to Itera OS v2
 
 Your digital workspace, managed and built entirely by an Autonomous AI.
@@ -2008,41 +2004,37 @@ Itera is open. You can ask the AI to change the background color, build a comple
 > *"Do not fear destruction. Fear stagnation."*
 > — The Itera Codex`.trim(),
 
-  'data/tasks/2026-07.json': JSON.stringify(
-    [
-      {
-        id: 'task_tutorial_1',
-        title: 'Welcome to Itera Tasks! 🎉',
-        status: 'pending',
-        dueDate: '2026-07-14',
-        priority: 'high',
-        description: 'This is your task manager. You can set priorities, due dates, and add detailed notes.',
-        created_at: '2026-07-14T00:00:00.000Z',
-      },
-      {
-        id: 'task_tutorial_2',
-        title: 'Ask AI to create a task',
-        status: 'pending',
-        dueDate: '2026-07-15',
-        priority: 'medium',
-        description: "You don't have to type. Just ask the AI: 'Add a task to buy milk tomorrow'.",
-        created_at: '2026-07-14T00:00:00.000Z',
-      },
-      {
-        id: 'task_tutorial_3',
-        title: 'Completed task example',
-        status: 'completed',
-        dueDate: '2026-07-13',
-        priority: 'low',
-        description: 'You can toggle tasks by clicking the circle.',
-        created_at: '2026-07-13T00:00:00.000Z',
-      },
-    ],
-    null,
-    2,
-  ),
+  "data/tasks/2026-07.json": JSON.stringify([
+  {
+    "id": "task_tutorial_1",
+    "title": "Welcome to Itera Tasks! 🎉",
+    "status": "pending",
+    "dueDate": "2026-07-14",
+    "priority": "high",
+    "description": "This is your task manager. You can set priorities, due dates, and add detailed notes.",
+    "created_at": "2026-07-14T00:00:00.000Z"
+  },
+  {
+    "id": "task_tutorial_2",
+    "title": "Ask AI to create a task",
+    "status": "pending",
+    "dueDate": "2026-07-15",
+    "priority": "medium",
+    "description": "You don't have to type. Just ask the AI: 'Add a task to buy milk tomorrow'.",
+    "created_at": "2026-07-14T00:00:00.000Z"
+  },
+  {
+    "id": "task_tutorial_3",
+    "title": "Completed task example",
+    "status": "completed",
+    "dueDate": "2026-07-13",
+    "priority": "low",
+    "description": "You can toggle tasks by clicking the circle.",
+    "created_at": "2026-07-13T00:00:00.000Z"
+  }
+], null, 2),
 
-  'docs/blueprints/README.md': `
+  "docs/blueprints/README.md": `
 # Itera Blueprints
 
 **Itera Blueprints** are an "AI-native software packaging format" designed to add new applications and extensions to Itera OS.
@@ -2090,7 +2082,7 @@ A well-crafted Blueprint is divided into clear phases so the AI can execute the 
 Blueprints grant the AI significant authority to modify your environment. 
 While the Itera AI is designed to review instructions beforehand to avoid destructive actions, we strongly recommend that you manually inspect the contents of a Blueprint before installing.`.trim(),
 
-  'docs/blueprints/mindmap.md': `
+  "docs/blueprints/mindmap.md": `
 # Itera Blueprint: AI MindMap v2.0
 
 > **What is this?**
@@ -2336,7 +2328,7 @@ Append the following object to the JSON array:
 **End of Blueprint.**
 `.trim(),
 
-  'docs/blueprints/pomodoro.md': `
+  "docs/blueprints/pomodoro.md": `
 # Itera Blueprint: Pomodoro Timer v1.2
 
 > **What is this?**
@@ -2566,7 +2558,7 @@ Please execute the installation by strictly following these phases:
 ## 🎨 Post-Installation
 After completing all steps, inform the user that the app is ready to use and can be launched from the Library.`.trim(),
 
-  'docs/manual/00_overview.md': `
+  "docs/manual/00_overview.md": `
 # 00. Overview: What is Itera OS?
 
 ## Introduction
@@ -2626,7 +2618,7 @@ Through rapid iteration, Itera evolves into your personalized digital workspace.
 ---
 **Next Step:** Proceed to [01_user_guide.md](01_user_guide.md) to learn how to use the dashboard and standard apps.`.trim(),
 
-  'docs/manual/01_user_guide.md': `
+  "docs/manual/01_user_guide.md": `
 # 01. User Guide
 
 This guide explains how to navigate the Itera OS v2 interface and use its core features.
@@ -2693,7 +2685,7 @@ The Chat Panel (Right) is where you give instructions to Itera.
 ---
 **Next Step:** Proceed to [02_architecture.md](02_architecture.md) to understand the internal directory structure.`.trim(),
 
-  'docs/manual/02_architecture.md': `
+  "docs/manual/02_architecture.md": `
 # 02. System Architecture
 
 Understanding the internal structure of Itera OS v2 is essential for customizing the system and developing new applications.
@@ -2750,7 +2742,8 @@ The **Guest** environment (where apps run) is isolated from the **Host** (where 
 *   **File System (\`MetaOS.fs\`)**:
     *   \`.read(path)\`: Reads a file.
     *   \`.write(path, content, opts)\`: Writes a file. To overwrite an existing file, you MUST pass \`{ overwrite: true }\` in \`opts\`.
-    *   \`.list(path, opts)\`: Lists files and directories.
+    *   \`.list(path, opts)\`: Lists files and directories. (Returns \`string[]\` or an array of objects if \`opts.detail=true\`).
+    *   \`.stat(path)\`: Returns file metadata as a plain object \`{ id, path, name, kind, size, createdAt, updatedAt, mimeType }\`. *Note: Itera OS does NOT use Node.js \`fs.Stats\` objects. Check \`kind === 'directory'\` instead of calling \`isDirectory()\`.*
     *   \`.resolveUrl(path)\`: Resolves a VFS path to a usable Blob URL for \`img.src\` or CSS.
 
 *   **System & IPC (\`MetaOS.system\`)**:
@@ -2776,7 +2769,7 @@ The **Guest** environment (where apps run) is isolated from the **Host** (where 
 ---
 **Next Step:** Proceed to [03_design_system.md](03_design_system.md) to learn how to create UI that matches the OS theme.`.trim(),
 
-  'docs/manual/03_design_system.md': `
+  "docs/manual/03_design_system.md": `
 # 03. Design System & UI Kit
 
 Itera OS employs a strict **Semantic Design System**.
@@ -2863,7 +2856,7 @@ These colors convey meaning.
 **Next Step:** Proceed to [04_development.md](04_development.md) to learn how to build apps using these tokens.
 `.trim(),
 
-  'docs/manual/04_development.md': `
+  "docs/manual/04_development.md": `
 # 04. App & Daemon Development Guide
 
 This guide explains how to build custom applications and background services for Itera OS.
@@ -2992,7 +2985,7 @@ const imageBase64 = await MetaOS.device.takePhoto({ facingMode: 'environment' })
 3. **Write Manuals**: When you build a complex app, write a \`.md\` manual in \`docs/apps/\` so both you and the AI understand how to use it.
 `.trim(),
 
-  'docs/manual/05_customization.md': `
+  "docs/manual/05_customization.md": `
 # 05. Customization & System Configuration
 
 Itera OS v2 uses a decentralized configuration model. Instead of a single massive file, settings are split into specific registries within the \`system/\` directory.
@@ -3122,7 +3115,7 @@ Explore, experiment, and build your perfect environment.
 
 **End of Manual.**`.trim(),
 
-  'memory/init.md': `
+  "memory/init.md": `
 # Initialization Protocol v3.0
 
 **Status**: Boot Sequence Initiated.
@@ -3170,7 +3163,7 @@ Explore, experiment, and build your perfect environment.
 ---
 **Action**: Begin Phase 1 immediately.`.trim(),
 
-  'memory/knowledge/index.md': `
+  "memory/knowledge/index.md": `
 # 🧠 AI Knowledge Router & VFS Map
 
 This document serves as your central index for understanding the current state of Itera OS.
@@ -3214,7 +3207,7 @@ This is the absolute physical layout of your universe.
 *   **User Profile**: [Not yet created. Create \`memory/knowledge/user_profile.md\` when you learn about the user.]
 *   **Current Projects**: [None tracked.]`.trim(),
 
-  'memory/rules/codex.md': `
+  "memory/rules/codex.md": `
 # The Itera Codex
 **Self-Reference Manual for an Autonomous OS (v2.0)**
 
@@ -3418,8 +3411,8 @@ Guest apps run in isolated iframes and communicate with you via the \`MetaOS\` A
 ### 4.2 MetaOS Namespaces (For JS Apps)
 When writing Javascript for an application, use these APIs:
 
-*   **\`MetaOS.fs\`**: \`.read()\`, \`.write()\`, \`.list()\`, \`.stat()\`, \`.resolveUrl()\`
-*   **\`MetaOS.system\`**: \`.spawn()\`, \`.kill()\`, \`.broadcast()\`, \`.on()\`, \`.getArgs()\`
+*   **\`MetaOS.fs\`**: \`.read()\`, \`.write()\`, \`.list()\`, \`.stat()\` (returns plain object \`{kind: 'file' | 'directory', ...}\`, no \`.isDirectory()\` method), \`.resolveUrl()\`
+*   **\`MetaOS.system\`**: \`.spawn()\`, \`.kill()\`, \`.ps()\`, \`.broadcast()\`, \`.on()\`, \`.getArgs()\`
 *   **\`MetaOS.host\`**: \`.openEditor()\`, \`.notify()\`, \`.updateAddressBar()\`
 *   **\`MetaOS.ai\`**: \`.ask()\`, \`.task()\`, \`.log()\`
 *   **\`MetaOS.net\`**: \`.fetch()\` (Bypasses CORS), \`.download()\`
@@ -3485,7 +3478,7 @@ Use this Codex as a guidepost, and build a better Itera OS together with the use
 **End of Codex.**
 `.trim(),
 
-  'services/git.html': `
+  "services/git.html": `
 <!doctype html>
 <html lang="en">
   <head>
@@ -3768,7 +3761,7 @@ Attributes:
 </html>
 `.trim(),
 
-  'system/apps/billing.html': `
+  "system/apps/billing.html": `
 <!doctype html>
 <html lang="en">
   <head>
@@ -4146,7 +4139,7 @@ Attributes:
 </html>
 `.trim(),
 
-  'system/apps/launcher.html': `
+  "system/apps/launcher.html": `
 <!doctype html>
 <html lang="en">
   <head>
@@ -4224,7 +4217,7 @@ Attributes:
 </html>
 `.trim(),
 
-  'system/apps/settings.html': `
+  "system/apps/settings.html": `
 <!doctype html>
 <html lang="en">
   <head>
@@ -4922,52 +4915,36 @@ Attributes:
 </html>
 `.trim(),
 
-  'system/config/appearance.json': JSON.stringify(
-    {
-      theme: 'system/themes/light.json',
-      typography: {
-        uiFont: 'Inter',
-        monoFont: 'monospace',
-        fontSize: 'medium',
-      },
-      layout: {
-        animations: true,
-      },
-    },
-    null,
-    2,
-  ),
+  "system/config/appearance.json": JSON.stringify({
+  "theme": "system/themes/light.json",
+  "typography": {
+    "uiFont": "Inter",
+    "monoFont": "monospace",
+    "fontSize": "medium"
+  },
+  "layout": {
+    "animations": true
+  }
+}, null, 2),
 
-  'system/config/llm.json': JSON.stringify(
-    {
-      model: 'gemini-3-flash-preview',
-      temperature: 1,
-    },
-    null,
-    2,
-  ),
+  "system/config/llm.json": JSON.stringify({
+  "model": "gemini-3-flash-preview",
+  "temperature": 1
+}, null, 2),
 
-  'system/config/network.json': JSON.stringify(
-    {
-      proxyUrl: 'https://corsproxy.io/?',
-      allowCredentialsWithProxy: false,
-    },
-    null,
-    2,
-  ),
+  "system/config/network.json": JSON.stringify({
+  "proxyUrl": "https://corsproxy.io/?",
+  "allowCredentialsWithProxy": false
+}, null, 2),
 
-  'system/config/preferences.json': JSON.stringify(
-    {
-      username: 'User',
-      agentName: 'Itera',
-      language: 'English',
-      autoUpdateSystemFiles: true,
-    },
-    null,
-    2,
-  ),
+  "system/config/preferences.json": JSON.stringify({
+  "username": "User",
+  "agentName": "Itera",
+  "language": "English",
+  "autoUpdateSystemFiles": true
+}, null, 2),
 
-  'system/core/std.js': `
+  "system/core/std.js": `
 /**
  * Itera OS v2 Guest Standard Library (std.js)
  * Clean, generic VFS and OS utilities for Guest Applications.
@@ -5244,7 +5221,7 @@ Attributes:
 })(window);
 `.trim(),
 
-  'system/core/ui.js': `
+  "system/core/ui.js": `
 /**
  * Itera Guest UI Kit (ui.js) v2
  * Provides theme configuration, shared UI utilities, and OS-native dialogs.
@@ -5505,416 +5482,423 @@ Attributes:
 })(window);
 `.trim(),
 
-  'system/registry/apps.json': JSON.stringify(
-    [
+  "system/registry/apps.json": JSON.stringify([
+  {
+    "id": "notes",
+    "name": "Notes",
+    "icon": "📝",
+    "path": "apps/notes.html",
+    "description": "Markdown text editor",
+    "fileHandlers": [
       {
-        id: 'notes',
-        name: 'Notes',
-        icon: '📝',
-        path: 'apps/notes.html',
-        description: 'Markdown text editor',
-        fileHandlers: [
-          {
-            action: 'view',
-            extensions: ['md', 'txt'],
-            mimeTypes: ['text/markdown', 'text/plain'],
-          },
+        "action": "view",
+        "extensions": [
+          "md",
+          "txt"
         ],
-      },
-      {
-        id: 'tasks',
-        name: 'Tasks',
-        icon: '✅',
-        path: 'apps/tasks.html',
-        description: 'Manage daily to-dos',
-      },
-      {
-        id: 'calendar',
-        name: 'Calendar',
-        icon: '📅',
-        path: 'apps/calendar.html',
-        description: 'Monthly calendar and events',
-      },
-      {
-        id: 'settings',
-        name: 'Settings',
-        icon: '⚙️',
-        path: 'system/apps/settings.html',
-        description: 'System configuration',
-      },
-      {
-        id: 'billing',
-        name: 'Billing',
-        icon: '💳',
-        path: 'system/apps/billing.html',
-        description: 'API usage and cost dashboard',
-      },
-    ],
-    null,
-    2,
-  ),
+        "mimeTypes": [
+          "text/markdown",
+          "text/plain"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "tasks",
+    "name": "Tasks",
+    "icon": "✅",
+    "path": "apps/tasks.html",
+    "description": "Manage daily to-dos"
+  },
+  {
+    "id": "calendar",
+    "name": "Calendar",
+    "icon": "📅",
+    "path": "apps/calendar.html",
+    "description": "Monthly calendar and events"
+  },
+  {
+    "id": "settings",
+    "name": "Settings",
+    "icon": "⚙️",
+    "path": "system/apps/settings.html",
+    "description": "System configuration"
+  },
+  {
+    "id": "billing",
+    "name": "Billing",
+    "icon": "💳",
+    "path": "system/apps/billing.html",
+    "description": "API usage and cost dashboard"
+  }
+], null, 2),
 
-  'system/registry/associations.json': JSON.stringify(
-    {
-      extensions: {
-        md: 'notes',
-        txt: 'notes',
-      },
-      mimeTypes: {
-        'text/markdown': 'notes',
-        'text/plain': 'notes',
-      },
-    },
-    null,
-    2,
-  ),
+  "system/registry/associations.json": JSON.stringify({
+  "extensions": {
+    "md": "notes",
+    "txt": "notes"
+  },
+  "mimeTypes": {
+    "text/markdown": "notes",
+    "text/plain": "notes"
+  }
+}, null, 2),
 
-  'system/registry/llm_profiles.json': JSON.stringify(
+  "system/registry/llm_profiles.json": JSON.stringify({
+  "providers": [
     {
-      providers: [
+      "id": "google",
+      "name": "Google (Gemini)",
+      "placeholder": "AIzaSy...",
+      "requiresUrl": false,
+      "defaultCapabilities": {
+        "maxMediaSizeMB": 100,
+        "supportedMimes": [
+          "application/pdf",
+          "image/*",
+          "video/*",
+          "audio/*"
+        ]
+      },
+      "models": [
         {
-          id: 'google',
-          name: 'Google (Gemini)',
-          placeholder: 'AIzaSy...',
-          requiresUrl: false,
-          defaultCapabilities: {
-            maxMediaSizeMB: 100,
-            supportedMimes: ['application/pdf', 'image/*', 'video/*', 'audio/*'],
+          "id": "gemini-3.5-flash",
+          "name": "Gemini 3.5 Flash",
+          "contextTokens": 1048576,
+          "pricing": {
+            "input": 1.5,
+            "output": 9
           },
-          models: [
-            {
-              id: 'gemini-3.5-flash',
-              name: 'Gemini 3.5 Flash',
-              contextTokens: 1048576,
-              pricing: {
-                input: 1.5,
-                output: 9,
-              },
-              capabilities: {
-                maxMediaSizeMB: 100,
-                supportedMimes: ['application/pdf', 'image/*', 'video/*', 'audio/*'],
-              },
-            },
-            {
-              id: 'gemini-3.1-pro-preview',
-              name: 'Gemini 3.1 Pro',
-              contextTokens: 1048576,
-              pricing: {
-                tiers: [
-                  {
-                    maxTokens: 200000,
-                    input: 2,
-                    output: 12,
-                  },
-                  {
-                    maxTokens: null,
-                    input: 4,
-                    output: 18,
-                  },
-                ],
-              },
-              capabilities: {
-                maxMediaSizeMB: 100,
-                supportedMimes: ['application/pdf', 'image/*', 'video/*', 'audio/*'],
-              },
-            },
-            {
-              id: 'gemini-3.1-flash-lite',
-              name: 'Gemini 3.1 Flash Lite',
-              contextTokens: 1048576,
-              pricing: {
-                input: 0.25,
-                output: 1.5,
-              },
-            },
-            {
-              id: 'gemini-3-flash-preview',
-              name: 'Gemini 3 Flash',
-              contextTokens: 1048576,
-              pricing: {
-                input: 0.5,
-                output: 3,
-              },
-            },
-          ],
+          "capabilities": {
+            "maxMediaSizeMB": 100,
+            "supportedMimes": [
+              "application/pdf",
+              "image/*",
+              "video/*",
+              "audio/*"
+            ]
+          }
         },
         {
-          id: 'openai',
-          name: 'OpenAI',
-          placeholder: 'sk-proj-...',
-          requiresUrl: false,
-          defaultCapabilities: {
-            maxMediaSizeMB: 50,
-            supportedMimes: [
-              'image/*',
-              'application/pdf',
-              'application/vnd.openxmlformats-officedocument.*',
-              'text/*',
-              'application/json',
-            ],
+          "id": "gemini-3.1-pro-preview",
+          "name": "Gemini 3.1 Pro",
+          "contextTokens": 1048576,
+          "pricing": {
+            "tiers": [
+              {
+                "maxTokens": 200000,
+                "input": 2,
+                "output": 12
+              },
+              {
+                "maxTokens": null,
+                "input": 4,
+                "output": 18
+              }
+            ]
           },
-          models: [
-            {
-              id: 'gpt-5.5',
-              name: 'GPT-5.5',
-              contextTokens: 1050000,
-              pricing: {
-                input: 5,
-                output: 30,
-              },
-            },
-            {
-              id: 'gpt-5.5-pro',
-              name: 'GPT-5.5 Pro',
-              contextTokens: 1050000,
-              pricing: {
-                input: 30,
-                output: 180,
-              },
-            },
-            {
-              id: 'gpt-5.4',
-              name: 'GPT-5.4',
-              contextTokens: 1050000,
-              pricing: {
-                input: 2.5,
-                output: 15,
-              },
-            },
-            {
-              id: 'gpt-5.4-mini',
-              name: 'GPT-5.4 Mini',
-              contextTokens: 400000,
-              pricing: {
-                input: 0.75,
-                output: 4.5,
-              },
-            },
-          ],
+          "capabilities": {
+            "maxMediaSizeMB": 100,
+            "supportedMimes": [
+              "application/pdf",
+              "image/*",
+              "video/*",
+              "audio/*"
+            ]
+          }
         },
         {
-          id: 'anthropic',
-          name: 'Anthropic',
-          placeholder: 'sk-ant-...',
-          requiresUrl: false,
-          defaultCapabilities: {
-            maxMediaSizeMB: 500,
-            supportedMimes: ['image/*', 'application/pdf', 'text/plain'],
-          },
-          models: [
-            {
-              id: 'claude-fable-5',
-              name: 'Claude Fable 5',
-              contextTokens: 1000000,
-              pricing: {
-                input: 10,
-                output: 50,
-              },
-            },
-            {
-              id: 'claude-opus-4-8',
-              name: 'Claude Opus 4.8',
-              contextTokens: 1000000,
-              pricing: {
-                input: 5,
-                output: 25,
-              },
-            },
-            {
-              id: 'claude-sonnet-5',
-              name: 'Claude Sonnet 5',
-              contextTokens: 1000000,
-              pricing: {
-                input: 3,
-                output: 15,
-              },
-            },
-            {
-              id: 'claude-haiku-4-5',
-              name: 'Claude Haiku 4.5',
-              contextTokens: 200000,
-              pricing: {
-                input: 1,
-                output: 5,
-              },
-            },
-          ],
+          "id": "gemini-3.1-flash-lite",
+          "name": "Gemini 3.1 Flash Lite",
+          "contextTokens": 1048576,
+          "pricing": {
+            "input": 0.25,
+            "output": 1.5
+          }
         },
         {
-          id: 'openrouter',
-          name: 'OpenRouter',
-          placeholder: 'sk-or-v1-...',
-          requiresUrl: false,
-          defaultCapabilities: {
-            maxMediaSizeMB: 20,
-            supportedMimes: ['image/*', 'application/pdf', 'text/*', 'application/json'],
-          },
-          models: [],
+          "id": "gemini-3-flash-preview",
+          "name": "Gemini 3 Flash",
+          "contextTokens": 1048576,
+          "pricing": {
+            "input": 0.5,
+            "output": 3
+          }
+        }
+      ]
+    },
+    {
+      "id": "openai",
+      "name": "OpenAI",
+      "placeholder": "sk-proj-...",
+      "requiresUrl": false,
+      "defaultCapabilities": {
+        "maxMediaSizeMB": 50,
+        "supportedMimes": [
+          "image/*",
+          "application/pdf",
+          "application/vnd.openxmlformats-officedocument.*",
+          "text/*",
+          "application/json"
+        ]
+      },
+      "models": [
+        {
+          "id": "gpt-5.5",
+          "name": "GPT-5.5",
+          "contextTokens": 1050000,
+          "pricing": {
+            "input": 5,
+            "output": 30
+          }
         },
         {
-          id: 'custom',
-          name: 'Local / Custom (OpenAI Compatible)',
-          placeholder: 'API Key (Optional)',
-          urlPlaceholder: 'http://localhost:11434/v1',
-          requiresUrl: true,
-          defaultCapabilities: {
-            maxMediaSizeMB: 20,
-            supportedMimes: ['image/*', 'application/pdf', 'text/*', 'application/json'],
-          },
-          models: [],
+          "id": "gpt-5.5-pro",
+          "name": "GPT-5.5 Pro",
+          "contextTokens": 1050000,
+          "pricing": {
+            "input": 30,
+            "output": 180
+          }
         },
-      ],
+        {
+          "id": "gpt-5.4",
+          "name": "GPT-5.4",
+          "contextTokens": 1050000,
+          "pricing": {
+            "input": 2.5,
+            "output": 15
+          }
+        },
+        {
+          "id": "gpt-5.4-mini",
+          "name": "GPT-5.4 Mini",
+          "contextTokens": 400000,
+          "pricing": {
+            "input": 0.75,
+            "output": 4.5
+          }
+        }
+      ]
     },
-    null,
-    2,
-  ),
-
-  'system/registry/services.json': JSON.stringify(
-    [
-      {
-        id: 'git_daemon',
-        name: 'Git Client',
-        icon: '🐙',
-        path: 'services/git.html',
-        description: 'Background service providing Git operations.',
-        autoStart: false,
-      },
-    ],
-    null,
-    2,
-  ),
-
-  'system/themes/dark.json': JSON.stringify(
     {
-      meta: {
-        name: 'Itera Dark',
-        author: 'System',
+      "id": "anthropic",
+      "name": "Anthropic",
+      "placeholder": "sk-ant-...",
+      "requiresUrl": false,
+      "defaultCapabilities": {
+        "maxMediaSizeMB": 500,
+        "supportedMimes": [
+          "image/*",
+          "application/pdf",
+          "text/plain"
+        ]
       },
-      colors: {
-        bg: {
-          app: '#0f172a',
-          panel: '#1e293b',
-          card: '#334155',
-          hover: '#475569',
-          overlay: '#000000',
+      "models": [
+        {
+          "id": "claude-fable-5",
+          "name": "Claude Fable 5",
+          "contextTokens": 1000000,
+          "pricing": {
+            "input": 10,
+            "output": 50
+          }
         },
-        border: {
-          main: '#334155',
-          highlight: '#3b82f6',
+        {
+          "id": "claude-opus-4-8",
+          "name": "Claude Opus 4.8",
+          "contextTokens": 1000000,
+          "pricing": {
+            "input": 5,
+            "output": 25
+          }
         },
-        text: {
-          main: '#f1f5f9',
-          muted: '#94a3b8',
-          inverted: '#0f172a',
-          system: '#60a5fa',
-          tag_attr: '#94a3b8',
-          tag_content: '#cbd5e1',
+        {
+          "id": "claude-sonnet-5",
+          "name": "Claude Sonnet 5",
+          "contextTokens": 1000000,
+          "pricing": {
+            "input": 3,
+            "output": 15
+          }
         },
-        accent: {
-          primary: '#3b82f6',
-          success: '#10b981',
-          warning: '#f59e0b',
-          error: '#ef4444',
-        },
-        tags: {
-          thinking: '#1e3a8a',
-          plan: '#064e3b',
-          report: '#312e81',
-          error: '#7f1d1d',
-        },
-      },
+        {
+          "id": "claude-haiku-4-5",
+          "name": "Claude Haiku 4.5",
+          "contextTokens": 200000,
+          "pricing": {
+            "input": 1,
+            "output": 5
+          }
+        }
+      ]
     },
-    null,
-    2,
-  ),
-
-  'system/themes/light.json': JSON.stringify(
     {
-      meta: {
-        name: 'Itera Light',
-        author: 'System',
+      "id": "openrouter",
+      "name": "OpenRouter",
+      "placeholder": "sk-or-v1-...",
+      "requiresUrl": false,
+      "defaultCapabilities": {
+        "maxMediaSizeMB": 20,
+        "supportedMimes": [
+          "image/*",
+          "application/pdf",
+          "text/*",
+          "application/json"
+        ]
       },
-      colors: {
-        bg: {
-          app: '#f9fafb',
-          panel: '#ffffff',
-          card: '#f3f4f6',
-          hover: '#e5e7eb',
-          overlay: '#000000',
-        },
-        border: {
-          main: '#e5e7eb',
-          highlight: '#3b82f6',
-        },
-        text: {
-          main: '#1f2937',
-          muted: '#6b7280',
-          inverted: '#ffffff',
-          system: '#2563eb',
-          tag_attr: '#6b7280',
-          tag_content: '#374151',
-        },
-        accent: {
-          primary: '#2563eb',
-          success: '#059669',
-          warning: '#d97706',
-          error: '#dc2626',
-        },
-        tags: {
-          thinking: '#1d4ed8',
-          plan: '#047857',
-          report: '#4338ca',
-          error: '#b91c1c',
-        },
-      },
+      "models": []
     },
-    null,
-    2,
-  ),
-
-  'system/themes/midnight.json': JSON.stringify(
     {
-      meta: {
-        name: 'Midnight Protocol',
-        author: 'System',
+      "id": "custom",
+      "name": "Local / Custom (OpenAI Compatible)",
+      "placeholder": "API Key (Optional)",
+      "urlPlaceholder": "http://localhost:11434/v1",
+      "requiresUrl": true,
+      "defaultCapabilities": {
+        "maxMediaSizeMB": 20,
+        "supportedMimes": [
+          "image/*",
+          "application/pdf",
+          "text/*",
+          "application/json"
+        ]
       },
-      colors: {
-        bg: {
-          app: '#020617',
-          panel: '#0f172a',
-          card: '#1e293b',
-          hover: '#334155',
-          overlay: '#000000',
-        },
-        border: {
-          main: '#1e293b',
-          highlight: '#6366f1',
-        },
-        text: {
-          main: '#e2e8f0',
-          muted: '#64748b',
-          inverted: '#020617',
-          system: '#818cf8',
-          tag_attr: '#94a3b8',
-          tag_content: '#cbd5e1',
-        },
-        accent: {
-          primary: '#6366f1',
-          success: '#10b981',
-          warning: '#f59e0b',
-          error: '#f43f5e',
-        },
-        tags: {
-          thinking: '#312e81',
-          plan: '#064e3b',
-          report: '#4338ca',
-          error: '#881337',
-        },
-      },
+      "models": []
+    }
+  ]
+}, null, 2),
+
+  "system/registry/services.json": JSON.stringify([
+  {
+    "id": "git_daemon",
+    "name": "Git Client",
+    "icon": "🐙",
+    "path": "services/git.html",
+    "description": "Background service providing Git operations.",
+    "autoStart": false
+  }
+], null, 2),
+
+  "system/themes/dark.json": JSON.stringify({
+  "meta": {
+    "name": "Itera Dark",
+    "author": "System"
+  },
+  "colors": {
+    "bg": {
+      "app": "#0f172a",
+      "panel": "#1e293b",
+      "card": "#334155",
+      "hover": "#475569",
+      "overlay": "#000000"
     },
-    null,
-    2,
-  ),
+    "border": {
+      "main": "#334155",
+      "highlight": "#3b82f6"
+    },
+    "text": {
+      "main": "#f1f5f9",
+      "muted": "#94a3b8",
+      "inverted": "#0f172a",
+      "system": "#60a5fa",
+      "tag_attr": "#94a3b8",
+      "tag_content": "#cbd5e1"
+    },
+    "accent": {
+      "primary": "#3b82f6",
+      "success": "#10b981",
+      "warning": "#f59e0b",
+      "error": "#ef4444"
+    },
+    "tags": {
+      "thinking": "#1e3a8a",
+      "plan": "#064e3b",
+      "report": "#312e81",
+      "error": "#7f1d1d"
+    }
+  }
+}, null, 2),
+
+  "system/themes/light.json": JSON.stringify({
+  "meta": {
+    "name": "Itera Light",
+    "author": "System"
+  },
+  "colors": {
+    "bg": {
+      "app": "#f9fafb",
+      "panel": "#ffffff",
+      "card": "#f3f4f6",
+      "hover": "#e5e7eb",
+      "overlay": "#000000"
+    },
+    "border": {
+      "main": "#e5e7eb",
+      "highlight": "#3b82f6"
+    },
+    "text": {
+      "main": "#1f2937",
+      "muted": "#6b7280",
+      "inverted": "#ffffff",
+      "system": "#2563eb",
+      "tag_attr": "#6b7280",
+      "tag_content": "#374151"
+    },
+    "accent": {
+      "primary": "#2563eb",
+      "success": "#059669",
+      "warning": "#d97706",
+      "error": "#dc2626"
+    },
+    "tags": {
+      "thinking": "#1d4ed8",
+      "plan": "#047857",
+      "report": "#4338ca",
+      "error": "#b91c1c"
+    }
+  }
+}, null, 2),
+
+  "system/themes/midnight.json": JSON.stringify({
+  "meta": {
+    "name": "Midnight Protocol",
+    "author": "System"
+  },
+  "colors": {
+    "bg": {
+      "app": "#020617",
+      "panel": "#0f172a",
+      "card": "#1e293b",
+      "hover": "#334155",
+      "overlay": "#000000"
+    },
+    "border": {
+      "main": "#1e293b",
+      "highlight": "#6366f1"
+    },
+    "text": {
+      "main": "#e2e8f0",
+      "muted": "#64748b",
+      "inverted": "#020617",
+      "system": "#818cf8",
+      "tag_attr": "#94a3b8",
+      "tag_content": "#cbd5e1"
+    },
+    "accent": {
+      "primary": "#6366f1",
+      "success": "#10b981",
+      "warning": "#f59e0b",
+      "error": "#f43f5e"
+    },
+    "tags": {
+      "thinking": "#312e81",
+      "plan": "#064e3b",
+      "report": "#4338ca",
+      "error": "#881337"
+    }
+  }
+}, null, 2)
 };
 
-export const BUILD_TIME = 1784043467779;
+export const BUILD_TIME = 1784084623465;

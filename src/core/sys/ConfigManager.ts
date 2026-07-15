@@ -21,10 +21,6 @@ export interface OsConfig {
   };
   llm: { model: string; temperature: number };
   network: { proxyUrl: string; allowCredentialsWithProxy: boolean };
-  associations: {
-    extensions: Record<string, string>;
-    mimeTypes: Record<string, string>;
-  };
   [category: string]: any;
 }
 
@@ -45,7 +41,6 @@ const DEFAULT_CONFIG: OsConfig = {
     proxyUrl: 'https://corsproxy.io/?',
     allowCredentialsWithProxy: false,
   },
-  associations: { extensions: {}, mimeTypes: {} },
 };
 
 export class ConfigManager {

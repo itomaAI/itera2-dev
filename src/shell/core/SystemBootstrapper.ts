@@ -76,7 +76,8 @@ export class SystemBootstrapper {
     const appRegistry = new AppRegistry(vfs, eventBus);
     await appRegistry.loadAll();
 
-    const resolver = new FileAssociationResolver(configManager, appRegistry);
+    const resolver = new FileAssociationResolver(vfs, appRegistry, eventBus);
+    await resolver.loadAssociations();
 
     const history = new HistoryManager();
     await history.loadFromDB();
