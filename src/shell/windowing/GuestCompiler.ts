@@ -201,7 +201,7 @@ window.addEventListener('message', async (e) => {
       fileUrl = URL.createObjectURL(typedBlob);
 
       const oldCache = this.assetCache.get(absPath);
-      
+
       // コンパイルの競合（Race Condition）対策：
       // 他のプロセスが同時にコンパイルして既に最新キャッシュを生成していた場合、
       // 自分が作ったURLを破棄し、先に作られたキャッシュのURLを安全に再利用する
