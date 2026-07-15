@@ -97,7 +97,7 @@
     home: () => {
       if (global.MetaOS) global.MetaOS.system.spawn('apps/home.html', { pid: 'main' });
     },
-    notify: (message, type = 'info', duration = 3000) => {
+    notify: (message, type = 'info', duration) => {
       let container = document.getElementById('__itera-toast-container');
       if (!container) {
         container = document.createElement('div');
@@ -108,8 +108,9 @@
           right: '1.25rem',
           display: 'flex',
           flexDirection: 'column',
+          alignItems: 'flex-end',
           gap: '0.5rem',
-          zIndex: '9999',
+          zIndex: '99999',
           pointerEvents: 'none',
         });
         document.body.appendChild(container);
@@ -128,27 +129,52 @@
       Object.assign(toast.style, {
         display: 'flex',
         alignItems: 'center',
+        justifyContent: 'space-between',
         gap: '0.75rem',
-        padding: '0.75rem 1rem',
-        borderRadius: '0.5rem',
+        padding: '0.5rem 0.75rem',
+        borderRadius: '0.25rem',
         background: 'rgb(var(--c-bg-panel))',
         color: 'rgb(var(--c-text-main))',
         border: `1px solid ${color}`,
-        boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
-        fontSize: '0.875rem',
+        boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+        fontSize: '0.75rem',
         pointerEvents: 'auto',
+        minWidth: '240px',
         maxWidth: '320px',
         wordBreak: 'break-word',
-        transition: 'opacity 0.3s ease',
+        transition: 'opacity 0.2s ease, transform 0.2s ease',
       });
 
-      toast.innerHTML = `<div style="width:4px; height:100%; min-height:1.5rem; background:${color}; border-radius:2px; flex-shrink:0;"></div><span>${icon}</span><span>${message}</span>`;
+      toast.innerHTML = `
+        <div style="display: flex; align-items: center; gap: 0.5rem; flex: 1;">
+          <div style="width:3px; height:100%; min-height:1.25rem; background:\${color}; border-radius:1px; flex-shrink:0;"></div>
+          <span>\${icon}</span>
+          <span>\${message}</span>
+        </div>
+        <button class="text-text-muted hover:text-text-main transition flex-shrink-0" style="padding: 2px; line-height: 1;">✕</button>
+      `;
+
+      const closeBtn = toast.querySelector('button');
+      const closeToast = () => {
+        if (document.body.contains(toast)) {
+          toast.style.opacity = '0';
+          toast.style.transform = 'translateY(10px)';
+          setTimeout(() => toast.remove(), 200);
+        }
+      };
+
+      if (closeBtn) {
+        closeBtn.onclick = closeToast;
+      }
+
       container.appendChild(toast);
 
-      setTimeout(() => {
-        toast.style.opacity = '0';
-        toast.addEventListener('transitionend', () => toast.remove());
-      }, duration);
+      const shouldAutoDismiss = duration !== undefined ? duration > 0 : type === 'info' || type === 'success';
+      const timeoutMs = duration && duration > 0 ? duration : 3000;
+
+      if (shouldAutoDismiss) {
+        setTimeout(closeToast, timeoutMs);
+      }
     },
     alert: (message, title = 'System Alert') => {
       return AppUI._createDialog({ type: 'alert', message, title });
