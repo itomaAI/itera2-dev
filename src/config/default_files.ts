@@ -1,6 +1,6 @@
 /**
  * AUTO-GENERATED FILE - DO NOT EDIT MANUALLY
- * Generated on: 2026-07-16T04:14:59.173Z
+ * Generated on: 2026-07-16T14:42:24.094Z
  */
 
 export const DEFAULT_FILES: Record<string, string> = {
@@ -2751,7 +2751,8 @@ The **Guest** environment (where apps run) is isolated from the **Host** (where 
     *   \`.read(path)\`: Reads a file.
     *   \`.write(path, content, opts)\`: Writes a file. To overwrite an existing file, you MUST pass \`{ overwrite: true }\` in \`opts\`.
     *   \`.list(path, opts)\`: Lists files and directories. (Returns \`string[]\` or an array of objects if \`opts.detail=true\`).
-    *   \`.stat(path)\`: Returns file metadata as a plain object \`{ id, path, name, kind, size, createdAt, updatedAt, mimeType }\`. *Note: Itera OS does NOT use Node.js \`fs.Stats\` objects. Check \`kind === 'directory'\` instead of calling \`isDirectory()\`.*
+    *   \`.stat(path)\`: Returns file metadata as a plain object \`{ id, path, name, kind, size, createdAt, updatedAt, mimeType, version, hash, flags, acl }\`. *Note: Itera OS does NOT use Node.js \`fs.Stats\` objects. Check \`kind === 'directory'\` instead of calling \`isDirectory()\`.*
+    *   \`.getSyncState(path)\`: Returns a lightweight, flat dictionary of file versions and hashes (\`{ "path/to/file": { hash, version, updatedAt } }\`) optimized for fast directory tree synchronization.
     *   \`.resolveUrl(path)\`: Resolves a VFS path to a usable Blob URL for \`img.src\` or CSS.
 
 *   **System & IPC (\`MetaOS.system\`)**:
@@ -5944,4 +5945,4 @@ Attributes:
   ),
 };
 
-export const BUILD_TIME = 1784175299173;
+export const BUILD_TIME = 1784212944094;

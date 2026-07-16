@@ -56,6 +56,7 @@ export interface VfsNodeMeta {
   deletedAt?: number;
   mimeType?: string;
   version: number;
+  hash?: string;
 }
 
 export interface ContentRef {
@@ -94,6 +95,10 @@ export interface VfsStat {
   createdAt: number;
   updatedAt: number;
   mimeType?: string;
+  version: number;
+  hash?: string;
+  flags: VfsNodeFlags;
+  acl: AccessControlList;
 }
 
 export interface TreeNode {
@@ -104,6 +109,15 @@ export interface TreeNode {
   meta: VfsNodeMeta;
   children?: TreeNode[];
 }
+
+export interface SyncStateItem {
+  kind: 'file' | 'directory';
+  updatedAt: number;
+  version: number;
+  hash?: string;
+}
+
+export type SyncStateTree = Record<string, SyncStateItem>;
 
 export interface ListOptions {
   recursive?: boolean;

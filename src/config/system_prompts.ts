@@ -185,7 +185,14 @@ Lists files in the Virtual File System.
 Attributes:
     - path (optional): Target directory.
     - recursive (optional): "true" or "false".
-    - detail (optional): "true" or "false". If true, lists file size and modified date.
+    - detail (optional): "true" or "false". If true, lists file size and modified date. Note: This does NOT return hash or ACL permissions. Use <file_info> for detailed metadata.
+</define_tag>
+
+<define_tag name="file_info">
+Retrieves detailed metadata for a specific file or directory.
+Attributes:
+    - path: File or directory path.
+Use this to check file sizes, modification dates, exact hashes, and ACL permissions (to see if you have write access before attempting to edit).
 </define_tag>
 
 <define_tag name="search">

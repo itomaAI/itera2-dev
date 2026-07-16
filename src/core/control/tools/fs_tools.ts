@@ -261,6 +261,47 @@ export function registerFSTools(registry: ToolRegistry): void {
   });
 
   registry.registerSystemTool(setId, setName, {
+    name: 'file_info',
+    description: 'Get detailed metadata of a file or directory.',
+    impl: async (params: any, context: { vfs: VfsService }) => {
+      if (!params.path) throw new Error("Attribute 'path' is required.");
+      const stat = context.vfs.stat(AGENT_PRINCIPAL, params.path);
+
+      let acl;
+      try {
+        acl = context.vfs.getAcl(AGENT_PRINCIPAL, params.path);
+      } catch (e) {
+        // 読み取り権限がない場合は無視
+      }
+
+      let log = `[File Info]\n`;
+      log += `Path: /${stat.path || stat.name}\n`;
+      log += `Type: ${stat.kind}\n`;
+      if (stat.mimeType) log += `MIME: ${stat.mimeType}\n`;
+      log += `Size: ${stat.size} bytes\n`;
+      log += `Created: ${new Date(stat.createdAt).toISOString()}\n`;
+      log += `Updated: ${new Date(stat.updatedAt).toISOString()}\n`;
+
+      if (stat.version !== undefined) log += `Version: ${stat.version}\n`;
+      if (stat.hash) log += `Hash: ${stat.hash}\n`;
+
+      if (stat.flags) {
+        log += `Flags: isSystem=${stat.flags.isSystem}, isTrashed=${stat.flags.isTrashed}\n`;
+      }
+
+      if (acl) {
+        log += `\n[Access Control List]\n`;
+        log += `Owner: ${acl.owner.type}:${acl.owner.id}\n`;
+        acl.rules.forEach((rule: any) => {
+          log += `- ${rule.principal.type}:${rule.principal.id} => [${rule.permissions.join(', ')}]\n`;
+        });
+      }
+
+      return { log, ui: `ℹ️ Info: ${stat.name}` };
+    },
+  });
+
+  registry.registerSystemTool(setId, setName, {
     name: 'list_files',
     description: 'Lists files in the VFS.',
     impl: async (params: any, context: { vfs: VfsService }) => {

@@ -3,16 +3,17 @@
  * Itera OS VFS v2: Main File System API (Facade)
  */
 
-import type {
-  VfsNode,
-  VfsStat,
-  ListOptions,
-  WriteOptions,
-  DeleteOptions,
-  TreeNode,
-  Principal,
-  PermissionType,
-  AccessControlList,
+import {
+  SYSTEM_PRINCIPAL,
+  type VfsNode,
+  type VfsStat,
+  type ListOptions,
+  type WriteOptions,
+  type DeleteOptions,
+  type TreeNode,
+  type Principal,
+  type PermissionType,
+  type AccessControlList,
 } from './types';
 import type { NodeStore } from './NodeStore';
 import type { ContentStore } from './ContentStore';
@@ -40,6 +41,22 @@ export class VfsService {
     this.pathResolver = pathResolver;
     this.eventBus = eventBus;
     this.lockManager = new VfsLockManager();
+  }
+
+  private async _calculateHash(content: string | Uint8Array | Blob): Promise<string> {
+    let data: ArrayBuffer;
+    if (typeof content === 'string') {
+      data = new TextEncoder().encode(content).buffer as ArrayBuffer;
+    } else if (content instanceof Uint8Array) {
+      data = content.buffer as ArrayBuffer;
+    } else if (content instanceof Blob) {
+      data = await content.arrayBuffer();
+    } else {
+      return '';
+    }
+    const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    return hashArray.map((b) => b.toString(16).padStart(2, '0')).join('');
   }
 
   private _hasPermission(principal: Principal, node: VfsNode, action: PermissionType): boolean {
@@ -151,6 +168,9 @@ export class VfsService {
         size: 0,
         createdAt: 0,
         updatedAt: 0,
+        version: 1,
+        flags: { isSystem: true, isTrashed: false },
+        acl: this._getDefaultAcl(SYSTEM_PRINCIPAL, null),
       };
     }
 
@@ -164,6 +184,10 @@ export class VfsService {
       createdAt: node.meta.createdAt,
       updatedAt: node.meta.updatedAt,
       mimeType: node.meta.mimeType,
+      version: node.meta.version,
+      hash: node.meta.hash,
+      flags: JSON.parse(JSON.stringify(node.flags)),
+      acl: JSON.parse(JSON.stringify(node.acl)),
     };
   }
 
@@ -212,6 +236,10 @@ export class VfsService {
             createdAt: node.meta.createdAt,
             updatedAt: node.meta.updatedAt,
             mimeType: node.meta.mimeType,
+            version: node.meta.version,
+            hash: node.meta.hash,
+            flags: JSON.parse(JSON.stringify(node.flags)),
+            acl: JSON.parse(JSON.stringify(node.acl)),
           } as VfsStat;
         }
         return p;
@@ -238,6 +266,54 @@ export class VfsService {
   getTree(principal: Principal): TreeNode[] {
     const fullTree = this.pathResolver.buildTree();
     return this._filterTreeByPermission(principal, fullTree);
+  }
+
+  getSyncState(principal: Principal, path: string = ''): import('./types').SyncStateTree {
+    const rootPath = this.pathResolver.normalizePath(path);
+    const rootId = this.pathResolver.getIdByPath(rootPath);
+
+    if (rootId === undefined) throw new Error(`Path not found: ${rootPath}`);
+    this._checkNodePermission(principal, rootId, 'read');
+
+    const result: import('./types').SyncStateTree = {};
+
+    const traverse = (parentId: string | null) => {
+      const children = this.nodeStore.getChildren(parentId);
+      for (const node of children) {
+        if (node.flags.isHidden) continue;
+        if (!this._hasPermission(principal, node, 'read')) continue;
+
+        const nodePath = this.pathResolver.getPathById(node.id);
+        result[nodePath] = {
+          kind: node.kind,
+          updatedAt: node.meta.updatedAt,
+          version: node.meta.version,
+          hash: node.meta.hash,
+        };
+
+        if (node.kind === 'directory') {
+          traverse(node.id);
+        }
+      }
+    };
+
+    if (rootId !== null) {
+      const rootNode = this.nodeStore.getNode(rootId)!;
+      result[rootPath] = {
+        kind: rootNode.kind,
+        updatedAt: rootNode.meta.updatedAt,
+        version: rootNode.meta.version,
+        hash: rootNode.meta.hash,
+      };
+      if (rootNode.kind === 'directory') {
+        traverse(rootId);
+      }
+    } else {
+      result[''] = { kind: 'directory', updatedAt: 0, version: 1 };
+      traverse(null);
+    }
+
+    return result;
   }
 
   getAcl(principal: Principal, path: string): AccessControlList {
@@ -367,6 +443,7 @@ export class VfsService {
         const contentRef = await this.contentStore.write(node.id, newContent);
         node.contentRef = contentRef;
         node.meta.size = new Blob([newContent]).size;
+        node.meta.hash = await this._calculateHash(newContent);
 
         await this.nodeStore.putNode(node);
         this.eventBus.publish({
@@ -455,6 +532,7 @@ export class VfsService {
 
         node.contentRef = contentRef;
         node.meta.size = size;
+        node.meta.hash = await this._calculateHash(content);
 
         await this.nodeStore.putNode(node);
         this.eventBus.publish({
@@ -723,6 +801,7 @@ export class VfsService {
               createdAt: Date.now(),
               updatedAt: Date.now(),
               version: 1,
+              hash: srcNode.meta.hash,
             },
             acl: this._getDefaultAcl(principal, destParentId),
           };
