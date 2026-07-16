@@ -88,6 +88,10 @@ export class TreeView {
           break;
         case 'rename':
         case 'move':
+          this._handlePathChanged(event.oldPath, event.path);
+          this._handleNodeDeleted(event);
+          this._handleNodeCreated(event);
+          break;
         case 'trash':
         case 'restore':
           // これらはすべて「別の場所への移動」なので、一度消して新しい場所に作る
@@ -152,7 +156,61 @@ export class TreeView {
       const sizeKB = (event.node.meta.size / 1024).toFixed(1) + ' KB';
       const updated = new Date(event.node.meta.updatedAt).toLocaleString();
       targetDiv.title = `Size: ${sizeKB}\nUpdated: ${updated}`;
+
+      // UI上の状態（syncStateや名前）が変化した可能性があるので内部HTMLを再構築
+      const name = event.node.name;
+      const path = event.path;
+      const isStub = event.node.meta && event.node.meta.syncState === 'stub';
+      const stubIndicator = isStub ? '<span class="ml-1 text-primary text-[10px]" title="Cloud Only">☁️</span>' : '';
+      let icon =
+        event.node.kind === 'directory' ? (this.expandedPaths.has(path) ? '📂' : '📁') : this._getFileIcon(name);
+      if (path === 'trash') icon = '🗑️';
+      if (path === 'system') icon = '⚙️';
+
+      targetDiv.innerHTML = `
+        <span class="mr-2 opacity-80 text-xs pointer-events-none flex-shrink-0">${icon}</span>
+        <span class="truncate pointer-events-none flex-1${isStub ? ' text-text-muted' : ''}">${name}${stubIndicator}</span>
+        <button class="menu-btn w-6 h-6 flex items-center justify-center text-text-muted hover:text-text-main hover:bg-hover rounded ml-1 transition flex-shrink-0 opacity-100 md:opacity-0 group-hover:opacity-100">
+          ⋮
+        </button>
+      `;
+
+      targetDiv.dataset.name = name;
+      targetDiv.dataset.path = path;
+
+      const menuBtn = targetDiv.querySelector('.menu-btn') as HTMLButtonElement;
+      if (menuBtn) {
+        menuBtn.onclick = (e) => {
+          e.stopPropagation();
+          e.preventDefault();
+          const rect = menuBtn.getBoundingClientRect();
+          this.selectedPath = path;
+          this._showContextMenu(rect.left, rect.bottom, path, event.node!.kind, name);
+        };
+      }
     }
+  }
+
+  private _handlePathChanged(oldPath?: string, newPath?: string) {
+    if (!oldPath || !newPath) return;
+
+    if (this.selectedPath === oldPath) {
+      this.selectedPath = newPath;
+    } else if (this.selectedPath && this.selectedPath.startsWith(oldPath + '/')) {
+      this.selectedPath = this.selectedPath.replace(oldPath, newPath);
+    }
+
+    const newExpanded = new Set<string>();
+    for (const p of this.expandedPaths) {
+      if (p === oldPath) {
+        newExpanded.add(newPath);
+      } else if (p.startsWith(oldPath + '/')) {
+        newExpanded.add(p.replace(oldPath, newPath));
+      } else {
+        newExpanded.add(p);
+      }
+    }
+    this.expandedPaths = newExpanded;
   }
 
   private _sortChildren(ul: HTMLElement) {
