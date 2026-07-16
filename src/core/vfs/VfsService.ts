@@ -316,14 +316,23 @@ export class VfsService {
     const normPath = this.pathResolver.normalizePath(path);
     if (!normPath) throw new Error('Cannot write to root path.');
 
-    // デッドロックを避けるため、親ディレクトリをロック外で確保する
     const parts = normPath.split('/');
     const name = parts.pop()!;
     const parentPath = parts.join('/');
-    const parentId = await this._ensureDir(principal, parentPath);
 
-    return this.lockManager.acquire(normPath, async () => {
-      const existingId = this.pathResolver.getIdByPath(normPath);
+    // TOCTOU(レースコンディション)対策のためのリトライループ
+    while (true) {
+      let shouldRetry = false;
+      const parentId = await this._ensureDir(principal, parentPath);
+
+      const res = await this.lockManager.acquire(normPath, async () => {
+        // ロック取得待ちの間に親ディレクトリが削除されていた場合はリトライする
+        if (parentId !== null && !this.nodeStore.getNode(parentId)) {
+          shouldRetry = true;
+          return null;
+        }
+
+        const existingId = this.pathResolver.getIdByPath(normPath);
       let node: VfsNode;
       const now = Date.now();
       let existingContent = '';
@@ -368,7 +377,11 @@ export class VfsService {
       });
 
       return `Appended to ${normPath}`;
-    });
+      });
+
+      if (shouldRetry) continue;
+      return res!;
+    }
   }
 
   async writeFile(
@@ -380,14 +393,21 @@ export class VfsService {
     const normPath = this.pathResolver.normalizePath(path);
     if (!normPath) throw new Error('Cannot write to root path.');
 
-    // 親ディレクトリの解決をロック取得の「前」に行う (デッドロック回避)
     const parts = normPath.split('/');
     const name = parts.pop()!;
     const parentPath = parts.join('/');
-    const parentId = await this._ensureDir(principal, parentPath);
 
-    return this.lockManager.acquire(normPath, async () => {
-      const existingId = this.pathResolver.getIdByPath(normPath);
+    while (true) {
+      let shouldRetry = false;
+      const parentId = await this._ensureDir(principal, parentPath);
+
+      const res = await this.lockManager.acquire(normPath, async () => {
+        if (parentId !== null && !this.nodeStore.getNode(parentId)) {
+          shouldRetry = true;
+          return null;
+        }
+
+        const existingId = this.pathResolver.getIdByPath(normPath);
       let node: VfsNode;
       const now = Date.now();
       let eventType: 'create' | 'update' = 'create';
@@ -445,7 +465,11 @@ export class VfsService {
       });
 
       return eventType === 'create' ? `Created ${normPath}` : `Overwrote ${normPath}`;
-    });
+      });
+
+      if (shouldRetry) continue;
+      return res!;
+    }
   }
 
   async mkdir(principal: Principal, path: string): Promise<string> {
@@ -456,11 +480,17 @@ export class VfsService {
     const name = parts.pop()!;
     const parentPath = parts.join('/');
 
-    // 親ディレクトリの解決をロック取得の「前」に行う (デッドロック回避)
-    const parentId = await this._ensureDir(principal, parentPath);
+    while (true) {
+      let shouldRetry = false;
+      const parentId = await this._ensureDir(principal, parentPath);
 
-    return this.lockManager.acquire(normPath, async () => {
-      const existingId = this.pathResolver.getIdByPath(normPath);
+      const res = await this.lockManager.acquire(normPath, async () => {
+        if (parentId !== null && !this.nodeStore.getNode(parentId)) {
+          shouldRetry = true;
+          return null;
+        }
+
+        const existingId = this.pathResolver.getIdByPath(normPath);
       if (existingId !== undefined) {
         throw new Error(`Path already exists: ${normPath}`);
       }
@@ -491,14 +521,15 @@ export class VfsService {
       });
 
       return `Created directory: ${normPath}`;
-    });
+      });
+
+      if (shouldRetry) continue;
+      return res!;
+    }
   }
 
   async deleteFile(principal: Principal, path: string, opts: DeleteOptions = {}): Promise<string> {
     const normPath = this.pathResolver.normalizePath(path);
-
-    // ゴミ箱の解決を先に行う
-    let trashDirId: string | null = null;
     const isPermanent =
       opts.permanent ||
       normPath === 'trash' ||
@@ -506,12 +537,21 @@ export class VfsService {
       normPath.startsWith('system/temp/') ||
       normPath.startsWith('system/logs/');
 
-    if (!isPermanent) {
-      trashDirId = await this._ensureDir(principal, 'trash');
-    }
+    while (true) {
+      let shouldRetry = false;
+      let trashDirId: string | null = null;
+      
+      if (!isPermanent) {
+        trashDirId = await this._ensureDir(principal, 'trash');
+      }
 
-    return this.lockManager.acquire(normPath, async () => {
-      const id = this.pathResolver.getIdByPath(normPath);
+      const res = await this.lockManager.acquire(normPath, async () => {
+        if (!isPermanent && trashDirId !== null && !this.nodeStore.getNode(trashDirId)) {
+          shouldRetry = true;
+          return null;
+        }
+
+        const id = this.pathResolver.getIdByPath(normPath);
 
       if (id === undefined) throw new Error(`Not found: ${normPath}`);
       if (id === null) throw new Error(`Cannot delete root directory.`);
@@ -555,7 +595,11 @@ export class VfsService {
         });
         return `Moved to trash: ${normPath}`;
       }
-    });
+      });
+
+      if (shouldRetry) continue;
+      return res!;
+    }
   }
 
   async rename(principal: Principal, oldPath: string, newPath: string): Promise<string> {
@@ -565,14 +609,21 @@ export class VfsService {
     if (!normOld) throw new Error('Cannot rename root.');
     if (!normNew) throw new Error('Invalid destination path.');
 
-    // 移動先の親ディレクトリ解決をロック前に行う
     const parts = normNew.split('/');
     const newName = parts.pop()!;
     const newParentPath = parts.join('/');
-    const newParentId = await this._ensureDir(principal, newParentPath);
 
-    return this.lockManager.acquireMultiple([normOld, normNew], async () => {
-      const oldId = this.pathResolver.getIdByPath(normOld);
+    while (true) {
+      let shouldRetry = false;
+      const newParentId = await this._ensureDir(principal, newParentPath);
+
+      const res = await this.lockManager.acquireMultiple([normOld, normNew], async () => {
+        if (newParentId !== null && !this.nodeStore.getNode(newParentId)) {
+          shouldRetry = true;
+          return null;
+        }
+
+        const oldId = this.pathResolver.getIdByPath(normOld);
       if (oldId === undefined || oldId === null) throw new Error(`Source not found or cannot be root: ${normOld}`);
 
       // 移動権限の厳密なチェック：ファイル自身、元の親ディレクトリ、新しい親ディレクトリ全ての write 権限を要求する
@@ -621,21 +672,32 @@ export class VfsService {
       });
 
       return `Moved/Renamed: ${normOld} -> ${normNew}`;
-    });
+      });
+
+      if (shouldRetry) continue;
+      return res!;
+    }
   }
 
   async copyFile(principal: Principal, srcPath: string, destPath: string): Promise<string> {
     const normSrc = this.pathResolver.normalizePath(srcPath);
     const normDest = this.pathResolver.normalizePath(destPath);
 
-    // コピー先の親ディレクトリ解決をロック前に行う
     const parts = normDest.split('/');
     const newName = parts.pop()!;
     const destParentPath = parts.join('/');
-    const destParentId = await this._ensureDir(principal, destParentPath);
 
-    return this.lockManager.acquireMultiple([normSrc, normDest], async () => {
-      const srcId = this.pathResolver.getIdByPath(normSrc);
+    while (true) {
+      let shouldRetry = false;
+      const destParentId = await this._ensureDir(principal, destParentPath);
+
+      const res = await this.lockManager.acquireMultiple([normSrc, normDest], async () => {
+        if (destParentId !== null && !this.nodeStore.getNode(destParentId)) {
+          shouldRetry = true;
+          return null;
+        }
+
+        const srcId = this.pathResolver.getIdByPath(normSrc);
       if (srcId === undefined || srcId === null) throw new Error(`Source not found or cannot be root: ${normSrc}`);
       this._checkNodePermission(principal, srcId, 'read');
 
@@ -754,7 +816,11 @@ export class VfsService {
         await copyRecursive(srcId, rootNewId);
         return `Copied directory: ${normSrc} -> ${normDest} (${count} files)`;
       }
-    });
+      });
+
+      if (shouldRetry) continue;
+      return res!;
+    }
   }
 
   private async _ensureDir(principal: Principal, path: string): Promise<string | null> {
