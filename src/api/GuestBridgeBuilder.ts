@@ -171,12 +171,12 @@ export class GuestBridgeBuilder {
             getAcl: async (path) => transport.requestHost('fs:get_acl', { path }),
             setAcl: async (path, acl, opts = {}) => transport.requestHost('fs:set_acl', { path, acl, opts }),
             mount: async (path, onFetchMissing) => {
-                let normPath = path.replace(/\\/g, '/').replace(/^\\/+/, '').replace(/\\/+$/, '');
+                let normPath = path.replace(/\\\\/g, '/').replace(/^\\/+/, '').replace(/\\/+$/, '');
                 mountHandlers.set(normPath, onFetchMissing);
                 return transport.requestHost('fs:mount', { path: normPath });
             },
             unmount: async (path) => {
-                let normPath = path.replace(/\\/g, '/').replace(/^\\/+/, '').replace(/\\/+$/, '');
+                let normPath = path.replace(/\\\\/g, '/').replace(/^\\/+/, '').replace(/\\/+$/, '');
                 mountHandlers.delete(normPath);
                 return transport.requestHost('fs:unmount', { path: normPath });
             },
