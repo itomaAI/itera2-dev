@@ -333,50 +333,50 @@ export class VfsService {
         }
 
         const existingId = this.pathResolver.getIdByPath(normPath);
-      let node: VfsNode;
-      const now = Date.now();
-      let existingContent = '';
+        let node: VfsNode;
+        const now = Date.now();
+        let existingContent = '';
 
-      if (existingId !== undefined && existingId !== null) {
-        this._checkNodePermission(principal, existingId, 'write');
-        const existingNode = this.nodeStore.getNode(existingId)!;
-        if (existingNode.kind === 'directory') {
-          throw new Error(`Cannot append: A directory exists at ${normPath}`);
+        if (existingId !== undefined && existingId !== null) {
+          this._checkNodePermission(principal, existingId, 'write');
+          const existingNode = this.nodeStore.getNode(existingId)!;
+          if (existingNode.kind === 'directory') {
+            throw new Error(`Cannot append: A directory exists at ${normPath}`);
+          }
+          if (existingNode.contentRef) {
+            existingContent = await this.contentStore.readText(existingNode.contentRef);
+          }
+          node = { ...existingNode };
+          node.meta.updatedAt = now;
+          node.meta.version += 1;
+        } else {
+          this._checkNodePermission(principal, parentId, 'write');
+          node = {
+            id: generateId(),
+            name,
+            parentId,
+            kind: 'file',
+            flags: { isSystem: !!opts.system, isTrashed: false },
+            meta: { size: 0, createdAt: now, updatedAt: now, version: 1 },
+            acl: this._getDefaultAcl(principal, parentId),
+          };
         }
-        if (existingNode.contentRef) {
-          existingContent = await this.contentStore.readText(existingNode.contentRef);
-        }
-        node = { ...existingNode };
-        node.meta.updatedAt = now;
-        node.meta.version += 1;
-      } else {
-        this._checkNodePermission(principal, parentId, 'write');
-        node = {
-          id: generateId(),
-          name,
-          parentId,
-          kind: 'file',
-          flags: { isSystem: !!opts.system, isTrashed: false },
-          meta: { size: 0, createdAt: now, updatedAt: now, version: 1 },
-          acl: this._getDefaultAcl(principal, parentId),
-        };
-      }
 
-      const newContent = existingContent + (existingContent && !existingContent.endsWith('\n') ? '\n' : '') + content;
+        const newContent = existingContent + (existingContent && !existingContent.endsWith('\n') ? '\n' : '') + content;
 
-      const contentRef = await this.contentStore.write(node.id, newContent);
-      node.contentRef = contentRef;
-      node.meta.size = new Blob([newContent]).size;
+        const contentRef = await this.contentStore.write(node.id, newContent);
+        node.contentRef = contentRef;
+        node.meta.size = new Blob([newContent]).size;
 
-      await this.nodeStore.putNode(node);
-      this.eventBus.publish({
-        type: existingId ? 'update' : 'create',
-        nodeId: node.id,
-        node,
-        path: normPath,
-      });
+        await this.nodeStore.putNode(node);
+        this.eventBus.publish({
+          type: existingId ? 'update' : 'create',
+          nodeId: node.id,
+          node,
+          path: normPath,
+        });
 
-      return `Appended to ${normPath}`;
+        return `Appended to ${normPath}`;
       });
 
       if (shouldRetry) continue;
@@ -408,63 +408,63 @@ export class VfsService {
         }
 
         const existingId = this.pathResolver.getIdByPath(normPath);
-      let node: VfsNode;
-      const now = Date.now();
-      let eventType: 'create' | 'update' = 'create';
+        let node: VfsNode;
+        const now = Date.now();
+        let eventType: 'create' | 'update' = 'create';
 
-      if (existingId !== undefined && existingId !== null) {
-        if (!opts.overwrite) {
-          throw new Error(`File already exists at ${normPath}. Set overwrite=true to overwrite.`);
+        if (existingId !== undefined && existingId !== null) {
+          if (!opts.overwrite) {
+            throw new Error(`File already exists at ${normPath}. Set overwrite=true to overwrite.`);
+          }
+
+          this._checkNodePermission(principal, existingId, 'write');
+
+          const existingNode = this.nodeStore.getNode(existingId)!;
+          if (existingNode.kind === 'directory') {
+            throw new Error(`Cannot write file: A directory already exists at ${normPath}`);
+          }
+
+          node = { ...existingNode };
+          node.meta.updatedAt = now;
+          node.meta.version += 1;
+          eventType = 'update';
+        } else {
+          this._checkNodePermission(principal, parentId, 'write');
+
+          node = {
+            id: generateId(),
+            name,
+            parentId,
+            kind: 'file',
+            flags: { isSystem: !!opts.system, isTrashed: false },
+            meta: { size: 0, createdAt: now, updatedAt: now, version: 1 },
+            acl: this._getDefaultAcl(principal, parentId),
+          };
         }
 
-        this._checkNodePermission(principal, existingId, 'write');
+        const contentRef = await this.contentStore.write(node.id, content);
 
-        const existingNode = this.nodeStore.getNode(existingId)!;
-        if (existingNode.kind === 'directory') {
-          throw new Error(`Cannot write file: A directory already exists at ${normPath}`);
+        let size = 0;
+        if (typeof content === 'string') {
+          size = new Blob([content]).size;
+        } else if (content instanceof Uint8Array) {
+          size = content.byteLength;
+        } else if (content instanceof Blob) {
+          size = content.size;
         }
 
-        node = { ...existingNode };
-        node.meta.updatedAt = now;
-        node.meta.version += 1;
-        eventType = 'update';
-      } else {
-        this._checkNodePermission(principal, parentId, 'write');
+        node.contentRef = contentRef;
+        node.meta.size = size;
 
-        node = {
-          id: generateId(),
-          name,
-          parentId,
-          kind: 'file',
-          flags: { isSystem: !!opts.system, isTrashed: false },
-          meta: { size: 0, createdAt: now, updatedAt: now, version: 1 },
-          acl: this._getDefaultAcl(principal, parentId),
-        };
-      }
+        await this.nodeStore.putNode(node);
+        this.eventBus.publish({
+          type: eventType,
+          nodeId: node.id,
+          node,
+          path: normPath,
+        });
 
-      const contentRef = await this.contentStore.write(node.id, content);
-
-      let size = 0;
-      if (typeof content === 'string') {
-        size = new Blob([content]).size;
-      } else if (content instanceof Uint8Array) {
-        size = content.byteLength;
-      } else if (content instanceof Blob) {
-        size = content.size;
-      }
-
-      node.contentRef = contentRef;
-      node.meta.size = size;
-
-      await this.nodeStore.putNode(node);
-      this.eventBus.publish({
-        type: eventType,
-        nodeId: node.id,
-        node,
-        path: normPath,
-      });
-
-      return eventType === 'create' ? `Created ${normPath}` : `Overwrote ${normPath}`;
+        return eventType === 'create' ? `Created ${normPath}` : `Overwrote ${normPath}`;
       });
 
       if (shouldRetry) continue;
@@ -491,36 +491,36 @@ export class VfsService {
         }
 
         const existingId = this.pathResolver.getIdByPath(normPath);
-      if (existingId !== undefined) {
-        throw new Error(`Path already exists: ${normPath}`);
-      }
+        if (existingId !== undefined) {
+          throw new Error(`Path already exists: ${normPath}`);
+        }
 
-      this._checkNodePermission(principal, parentId, 'write');
+        this._checkNodePermission(principal, parentId, 'write');
 
-      const newNode: VfsNode = {
-        id: generateId(),
-        name,
-        parentId,
-        kind: 'directory',
-        flags: { isSystem: false, isTrashed: false },
-        meta: {
-          size: 0,
-          createdAt: Date.now(),
-          updatedAt: Date.now(),
-          version: 1,
-        },
-        acl: this._getDefaultAcl(principal, parentId),
-      };
+        const newNode: VfsNode = {
+          id: generateId(),
+          name,
+          parentId,
+          kind: 'directory',
+          flags: { isSystem: false, isTrashed: false },
+          meta: {
+            size: 0,
+            createdAt: Date.now(),
+            updatedAt: Date.now(),
+            version: 1,
+          },
+          acl: this._getDefaultAcl(principal, parentId),
+        };
 
-      await this.nodeStore.putNode(newNode);
-      this.eventBus.publish({
-        type: 'create',
-        nodeId: newNode.id,
-        node: newNode,
-        path: normPath,
-      });
+        await this.nodeStore.putNode(newNode);
+        this.eventBus.publish({
+          type: 'create',
+          nodeId: newNode.id,
+          node: newNode,
+          path: normPath,
+        });
 
-      return `Created directory: ${normPath}`;
+        return `Created directory: ${normPath}`;
       });
 
       if (shouldRetry) continue;
@@ -540,7 +540,7 @@ export class VfsService {
     while (true) {
       let shouldRetry = false;
       let trashDirId: string | null = null;
-      
+
       if (!isPermanent) {
         trashDirId = await this._ensureDir(principal, 'trash');
       }
@@ -553,48 +553,48 @@ export class VfsService {
 
         const id = this.pathResolver.getIdByPath(normPath);
 
-      if (id === undefined) throw new Error(`Not found: ${normPath}`);
-      if (id === null) throw new Error(`Cannot delete root directory.`);
+        if (id === undefined) throw new Error(`Not found: ${normPath}`);
+        if (id === null) throw new Error(`Cannot delete root directory.`);
 
-      // 削除権限の厳密なチェック：ファイル自身の write 権限に加え、親ディレクトリの write 権限も要求する
-      this._checkNodePermission(principal, id, 'write');
-      const node = this.nodeStore.getNode(id)!;
-      if (node.parentId !== null) {
-        this._checkNodePermission(principal, node.parentId, 'write');
-      }
-
-      if (isPermanent) {
-        await this._deleteRecursive(principal, id);
-        return `Permanently deleted: ${normPath}`;
-      } else {
+        // 削除権限の厳密なチェック：ファイル自身の write 権限に加え、親ディレクトリの write 権限も要求する
+        this._checkNodePermission(principal, id, 'write');
         const node = this.nodeStore.getNode(id)!;
-        const timestamp = Date.now();
-        const newName = `${timestamp}_${node.name}`;
+        if (node.parentId !== null) {
+          this._checkNodePermission(principal, node.parentId, 'write');
+        }
 
-        const updatedNode: VfsNode = {
-          ...node,
-          name: newName,
-          parentId: trashDirId!,
-          flags: { ...node.flags, isTrashed: true },
-          meta: {
-            ...node.meta,
-            deletedAt: timestamp,
-            version: node.meta.version + 1,
-          },
-        };
+        if (isPermanent) {
+          await this._deleteRecursive(principal, id);
+          return `Permanently deleted: ${normPath}`;
+        } else {
+          const node = this.nodeStore.getNode(id)!;
+          const timestamp = Date.now();
+          const newName = `${timestamp}_${node.name}`;
 
-        await this.nodeStore.putNode(updatedNode);
-        const newPath = this.pathResolver.getPathById(id);
+          const updatedNode: VfsNode = {
+            ...node,
+            name: newName,
+            parentId: trashDirId!,
+            flags: { ...node.flags, isTrashed: true },
+            meta: {
+              ...node.meta,
+              deletedAt: timestamp,
+              version: node.meta.version + 1,
+            },
+          };
 
-        this.eventBus.publish({
-          type: 'trash',
-          nodeId: id,
-          node: updatedNode,
-          path: newPath,
-          oldPath: normPath,
-        });
-        return `Moved to trash: ${normPath}`;
-      }
+          await this.nodeStore.putNode(updatedNode);
+          const newPath = this.pathResolver.getPathById(id);
+
+          this.eventBus.publish({
+            type: 'trash',
+            nodeId: id,
+            node: updatedNode,
+            path: newPath,
+            oldPath: normPath,
+          });
+          return `Moved to trash: ${normPath}`;
+        }
       });
 
       if (shouldRetry) continue;
@@ -624,54 +624,54 @@ export class VfsService {
         }
 
         const oldId = this.pathResolver.getIdByPath(normOld);
-      if (oldId === undefined || oldId === null) throw new Error(`Source not found or cannot be root: ${normOld}`);
+        if (oldId === undefined || oldId === null) throw new Error(`Source not found or cannot be root: ${normOld}`);
 
-      // 移動権限の厳密なチェック：ファイル自身、元の親ディレクトリ、新しい親ディレクトリ全ての write 権限を要求する
-      this._checkNodePermission(principal, oldId, 'write');
-      const node = this.nodeStore.getNode(oldId)!;
-      if (node.parentId !== null) {
-        this._checkNodePermission(principal, node.parentId, 'write');
-      }
-
-      const newId = this.pathResolver.getIdByPath(normNew);
-      if (newId !== undefined) throw new Error(`Destination already exists: ${normNew}`);
-
-      this._checkNodePermission(principal, newParentId, 'write');
-
-      if (node.kind === 'directory') {
-        let cur: string | null = newParentId;
-        while (cur !== null) {
-          if (cur === node.id) {
-            throw new Error('Cannot move a directory into its own subfolder.');
-          }
-          const parentNode = this.nodeStore.getNode(cur);
-          cur = parentNode ? parentNode.parentId : null;
+        // 移動権限の厳密なチェック：ファイル自身、元の親ディレクトリ、新しい親ディレクトリ全ての write 権限を要求する
+        this._checkNodePermission(principal, oldId, 'write');
+        const node = this.nodeStore.getNode(oldId)!;
+        if (node.parentId !== null) {
+          this._checkNodePermission(principal, node.parentId, 'write');
         }
-      }
 
-      const updatedNode: VfsNode = {
-        ...node,
-        name: newName,
-        parentId: newParentId,
-        meta: {
-          ...node.meta,
-          updatedAt: Date.now(),
-          version: node.meta.version + 1,
-        },
-      };
+        const newId = this.pathResolver.getIdByPath(normNew);
+        if (newId !== undefined) throw new Error(`Destination already exists: ${normNew}`);
 
-      await this.nodeStore.putNode(updatedNode);
+        this._checkNodePermission(principal, newParentId, 'write');
 
-      const isMove = node.parentId !== newParentId;
-      this.eventBus.publish({
-        type: isMove ? 'move' : 'rename',
-        nodeId: oldId,
-        node: updatedNode,
-        path: normNew,
-        oldPath: normOld,
-      });
+        if (node.kind === 'directory') {
+          let cur: string | null = newParentId;
+          while (cur !== null) {
+            if (cur === node.id) {
+              throw new Error('Cannot move a directory into its own subfolder.');
+            }
+            const parentNode = this.nodeStore.getNode(cur);
+            cur = parentNode ? parentNode.parentId : null;
+          }
+        }
 
-      return `Moved/Renamed: ${normOld} -> ${normNew}`;
+        const updatedNode: VfsNode = {
+          ...node,
+          name: newName,
+          parentId: newParentId,
+          meta: {
+            ...node.meta,
+            updatedAt: Date.now(),
+            version: node.meta.version + 1,
+          },
+        };
+
+        await this.nodeStore.putNode(updatedNode);
+
+        const isMove = node.parentId !== newParentId;
+        this.eventBus.publish({
+          type: isMove ? 'move' : 'rename',
+          nodeId: oldId,
+          node: updatedNode,
+          path: normNew,
+          oldPath: normOld,
+        });
+
+        return `Moved/Renamed: ${normOld} -> ${normNew}`;
       });
 
       if (shouldRetry) continue;
@@ -698,124 +698,124 @@ export class VfsService {
         }
 
         const srcId = this.pathResolver.getIdByPath(normSrc);
-      if (srcId === undefined || srcId === null) throw new Error(`Source not found or cannot be root: ${normSrc}`);
-      this._checkNodePermission(principal, srcId, 'read');
+        if (srcId === undefined || srcId === null) throw new Error(`Source not found or cannot be root: ${normSrc}`);
+        this._checkNodePermission(principal, srcId, 'read');
 
-      const destId = this.pathResolver.getIdByPath(normDest);
-      if (destId !== undefined) throw new Error(`Destination already exists: ${normDest}`);
+        const destId = this.pathResolver.getIdByPath(normDest);
+        if (destId !== undefined) throw new Error(`Destination already exists: ${normDest}`);
 
-      const srcNode = this.nodeStore.getNode(srcId)!;
+        const srcNode = this.nodeStore.getNode(srcId)!;
 
-      if (srcNode.kind === 'file') {
-        if (!srcNode.contentRef) throw new Error('Source file has no content.');
-        const blob = await this.contentStore.readBlob(srcNode.contentRef);
+        if (srcNode.kind === 'file') {
+          if (!srcNode.contentRef) throw new Error('Source file has no content.');
+          const blob = await this.contentStore.readBlob(srcNode.contentRef);
 
-        // this.writeFile を呼ぶとデッドロックになるため直接保存する
-        this._checkNodePermission(principal, destParentId, 'write');
-        const newNode: VfsNode = {
-          id: generateId(),
-          name: newName,
-          parentId: destParentId,
-          kind: 'file',
-          flags: { isSystem: srcNode.flags.isSystem, isTrashed: false },
-          meta: {
-            size: blob.size,
-            createdAt: Date.now(),
-            updatedAt: Date.now(),
-            version: 1,
-          },
-          acl: this._getDefaultAcl(principal, destParentId),
-        };
-        newNode.contentRef = await this.contentStore.write(newNode.id, blob);
-        await this.nodeStore.putNode(newNode);
-        this.eventBus.publish({
-          type: 'create',
-          nodeId: newNode.id,
-          node: newNode,
-          path: normDest,
-        });
+          // this.writeFile を呼ぶとデッドロックになるため直接保存する
+          this._checkNodePermission(principal, destParentId, 'write');
+          const newNode: VfsNode = {
+            id: generateId(),
+            name: newName,
+            parentId: destParentId,
+            kind: 'file',
+            flags: { isSystem: srcNode.flags.isSystem, isTrashed: false },
+            meta: {
+              size: blob.size,
+              createdAt: Date.now(),
+              updatedAt: Date.now(),
+              version: 1,
+            },
+            acl: this._getDefaultAcl(principal, destParentId),
+          };
+          newNode.contentRef = await this.contentStore.write(newNode.id, blob);
+          await this.nodeStore.putNode(newNode);
+          this.eventBus.publish({
+            type: 'create',
+            nodeId: newNode.id,
+            node: newNode,
+            path: normDest,
+          });
 
-        return `Copied file: ${normSrc} -> ${normDest}`;
-      } else {
-        this._checkNodePermission(principal, destParentId, 'write');
-        let count = 0;
+          return `Copied file: ${normSrc} -> ${normDest}`;
+        } else {
+          this._checkNodePermission(principal, destParentId, 'write');
+          let count = 0;
 
-        const copyRecursive = async (sourceDirId: string, currentDestParentId: string | null) => {
-          const children = this.nodeStore.getChildren(sourceDirId);
-          for (const child of children) {
-            if (!child.flags.isTrashed) {
-              if (!this._hasPermission(principal, child, 'read')) continue;
+          const copyRecursive = async (sourceDirId: string, currentDestParentId: string | null) => {
+            const children = this.nodeStore.getChildren(sourceDirId);
+            for (const child of children) {
+              if (!child.flags.isTrashed) {
+                if (!this._hasPermission(principal, child, 'read')) continue;
 
-              const newId = generateId();
-              const newNode: VfsNode = {
-                id: newId,
-                name: child.name,
-                parentId: currentDestParentId,
-                kind: child.kind,
-                flags: { ...child.flags },
-                meta: {
-                  ...child.meta,
-                  createdAt: Date.now(),
-                  updatedAt: Date.now(),
-                  version: 1,
-                },
-                acl: this._getDefaultAcl(principal, currentDestParentId),
-              };
+                const newId = generateId();
+                const newNode: VfsNode = {
+                  id: newId,
+                  name: child.name,
+                  parentId: currentDestParentId,
+                  kind: child.kind,
+                  flags: { ...child.flags },
+                  meta: {
+                    ...child.meta,
+                    createdAt: Date.now(),
+                    updatedAt: Date.now(),
+                    version: 1,
+                  },
+                  acl: this._getDefaultAcl(principal, currentDestParentId),
+                };
 
-              if (child.kind === 'file') {
-                if (child.contentRef) {
-                  const blob = await this.contentStore.readBlob(child.contentRef);
-                  newNode.contentRef = await this.contentStore.write(newId, blob);
+                if (child.kind === 'file') {
+                  if (child.contentRef) {
+                    const blob = await this.contentStore.readBlob(child.contentRef);
+                    newNode.contentRef = await this.contentStore.write(newId, blob);
+                  }
+                  await this.nodeStore.putNode(newNode);
+                  this.eventBus.publish({
+                    type: 'create',
+                    nodeId: newId,
+                    node: newNode,
+                    path: this.pathResolver.getPathById(newId),
+                  });
+                  count++;
+                } else {
+                  await this.nodeStore.putNode(newNode);
+                  this.eventBus.publish({
+                    type: 'create',
+                    nodeId: newId,
+                    node: newNode,
+                    path: this.pathResolver.getPathById(newId),
+                  });
+                  await copyRecursive(child.id, newId);
                 }
-                await this.nodeStore.putNode(newNode);
-                this.eventBus.publish({
-                  type: 'create',
-                  nodeId: newId,
-                  node: newNode,
-                  path: this.pathResolver.getPathById(newId),
-                });
-                count++;
-              } else {
-                await this.nodeStore.putNode(newNode);
-                this.eventBus.publish({
-                  type: 'create',
-                  nodeId: newId,
-                  node: newNode,
-                  path: this.pathResolver.getPathById(newId),
-                });
-                await copyRecursive(child.id, newId);
               }
             }
-          }
-        };
+          };
 
-        // コピー元のルートフォルダそのものをコピー先に作成
-        const rootNewId = generateId();
-        const rootNewNode: VfsNode = {
-          id: rootNewId,
-          name: newName,
-          parentId: destParentId,
-          kind: 'directory',
-          flags: { isSystem: srcNode.flags.isSystem, isTrashed: false },
-          meta: {
-            size: 0,
-            createdAt: Date.now(),
-            updatedAt: Date.now(),
-            version: 1,
-          },
-          acl: this._getDefaultAcl(principal, destParentId),
-        };
-        await this.nodeStore.putNode(rootNewNode);
-        this.eventBus.publish({
-          type: 'create',
-          nodeId: rootNewId,
-          node: rootNewNode,
-          path: normDest,
-        });
+          // コピー元のルートフォルダそのものをコピー先に作成
+          const rootNewId = generateId();
+          const rootNewNode: VfsNode = {
+            id: rootNewId,
+            name: newName,
+            parentId: destParentId,
+            kind: 'directory',
+            flags: { isSystem: srcNode.flags.isSystem, isTrashed: false },
+            meta: {
+              size: 0,
+              createdAt: Date.now(),
+              updatedAt: Date.now(),
+              version: 1,
+            },
+            acl: this._getDefaultAcl(principal, destParentId),
+          };
+          await this.nodeStore.putNode(rootNewNode);
+          this.eventBus.publish({
+            type: 'create',
+            nodeId: rootNewId,
+            node: rootNewNode,
+            path: normDest,
+          });
 
-        await copyRecursive(srcId, rootNewId);
-        return `Copied directory: ${normSrc} -> ${normDest} (${count} files)`;
-      }
+          await copyRecursive(srcId, rootNewId);
+          return `Copied directory: ${normSrc} -> ${normDest} (${count} files)`;
+        }
       });
 
       if (shouldRetry) continue;

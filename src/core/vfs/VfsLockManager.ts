@@ -17,9 +17,9 @@ export class VfsLockManager {
     const relatedLocks: Promise<void>[] = [];
     for (const [lockedPath, lockPromise] of this.locks.entries()) {
       if (
-        lockedPath === normPath || 
+        lockedPath === normPath ||
         normPath.startsWith(lockedPath + '/') || // 祖先がロックされている場合（例: 親フォルダの削除中）
-        lockedPath.startsWith(normPath + '/')    // 子孫がロックされている場合（例: 中のファイルの書き込み中）
+        lockedPath.startsWith(normPath + '/') // 子孫がロックされている場合（例: 中のファイルの書き込み中）
       ) {
         relatedLocks.push(lockPromise.catch(() => {}));
       }
@@ -34,7 +34,10 @@ export class VfsLockManager {
     });
 
     // 自分のロックを登録
-    this.locks.set(normPath, waitPromise.then(() => nextLock));
+    this.locks.set(
+      normPath,
+      waitPromise.then(() => nextLock),
+    );
 
     try {
       await waitPromise;
