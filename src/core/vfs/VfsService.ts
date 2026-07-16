@@ -82,6 +82,39 @@ export class VfsService {
     console.log(`[VfsService] Unmounted provider at '/${normPath}'`);
   }
 
+  private async _hydrateIfNeeded(principal: Principal, srcPath: string, destPath: string): Promise<void> {
+    const srcProvider = this._findProviderForPath(srcPath);
+    const destProvider = this._findProviderForPath(destPath);
+
+    if (srcProvider === destProvider) return;
+    if (!srcProvider) return;
+
+    const id = this.pathResolver.getIdByPath(srcPath);
+    if (!id) return;
+
+    const traverseAndHydrate = async (nodeId: string, currentPath: string) => {
+      const node = this.nodeStore.getNode(nodeId);
+      if (!node) return;
+
+      if (node.kind === 'file') {
+        if (node.meta.syncState === 'stub') {
+          try {
+            await this.readBlob(principal, currentPath);
+          } catch (e) {
+            console.warn(`[VfsService] Failed to hydrate ${currentPath} before moving/copying:`, e);
+          }
+        }
+      } else if (node.kind === 'directory') {
+        const children = this.nodeStore.getChildren(nodeId);
+        for (const child of children) {
+          await traverseAndHydrate(child.id, `${currentPath}/${child.name}`);
+        }
+      }
+    };
+
+    await traverseAndHydrate(id, srcPath);
+  }
+
   private _findProviderForPath(path: string): string | null {
     const normPath = this.pathResolver.normalizePath(path);
     let longestMatch = '';
@@ -788,6 +821,10 @@ export class VfsService {
       normPath.startsWith('system/temp/') ||
       normPath.startsWith('system/logs/');
 
+    if (!isPermanent) {
+      await this._hydrateIfNeeded(principal, normPath, 'trash');
+    }
+
     while (true) {
       let shouldRetry = false;
       let trashDirId: string | null = null;
@@ -860,6 +897,8 @@ export class VfsService {
 
     if (!normOld) throw new Error('Cannot rename root.');
     if (!normNew) throw new Error('Invalid destination path.');
+
+    await this._hydrateIfNeeded(principal, normOld, normNew);
 
     const parts = normNew.split('/');
     const newName = parts.pop()!;
@@ -935,6 +974,8 @@ export class VfsService {
   async copyFile(principal: Principal, srcPath: string, destPath: string, opts: CopyOptions = {}): Promise<string> {
     const normSrc = this.pathResolver.normalizePath(srcPath);
     const normDest = this.pathResolver.normalizePath(destPath);
+
+    await this._hydrateIfNeeded(principal, normSrc, normDest);
 
     const parts = normDest.split('/');
     const newName = parts.pop()!;
