@@ -130,7 +130,6 @@ export class Explorer {
       try {
         await this.vfs.writeFile(this.getActivePrincipal(), path, '');
         this._emitHistory('file_created', `User created empty file: ${path}`);
-        if (this.events['open_file']) this.events['open_file'](path);
       } catch (e: any) {
         if (window.AppUI) window.AppUI.notify(e.message, 'error');
       }
@@ -335,7 +334,6 @@ export class Explorer {
       try {
         await this.vfs.writeFile(this.getActivePrincipal(), fullPath, '');
         this._emitHistory('file_created', `User created empty file: ${fullPath}`);
-        if (this.events['open_file']) this.events['open_file'](fullPath);
       } catch (e: any) {
         if (window.AppUI) window.AppUI.notify(e.message, 'error');
       }
