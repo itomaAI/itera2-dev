@@ -277,7 +277,7 @@ def shutdown_event():
 if __name__ == "__main__":
     import uvicorn
     # Requires: pip install fastapi uvicorn watchdog
-    uvicorn.run("itera_sync_server:app", host="127.0.0.1", port=args.port, reload=True)
+    uvicorn.run(app, host="127.0.0.1", port=args.port)
 `.trim();
 
       async function init() {
