@@ -85,7 +85,10 @@
             <h2 class="text-sm font-bold text-text-main uppercase tracking-wider flex items-center gap-2">
               <span class="text-lg">🐍</span> Python Sync Server
             </h2>
-            <p class="text-xs text-text-muted mt-1">Save this script to your local machine and run it.</p>
+            <p class="text-xs text-text-muted mt-1">
+              Save this script to your local machine as
+              <code class="text-primary font-mono bg-primary/10 px-1 rounded">itera_sync_server.py</code> and run it.
+            </p>
           </div>
           <button
             onclick="copyScript()"
@@ -277,7 +280,7 @@ def shutdown_event():
 if __name__ == "__main__":
     import uvicorn
     # Requires: pip install fastapi uvicorn watchdog
-    uvicorn.run(app, host="127.0.0.1", port=args.port)
+    uvicorn.run("itera_sync_server:app", host="127.0.0.1", port=args.port, reload=True)
 `.trim();
 
       async function init() {

@@ -1,6 +1,6 @@
 /**
  * AUTO-GENERATED FILE - DO NOT EDIT MANUALLY
- * Generated on: 2026-07-16T16:56:01.483Z
+ * Generated on: 2026-07-16T17:02:42.482Z
  */
 
 export const DEFAULT_FILES: Record<string, string> = {
@@ -1629,7 +1629,10 @@ export const DEFAULT_FILES: Record<string, string> = {
             <h2 class="text-sm font-bold text-text-main uppercase tracking-wider flex items-center gap-2">
               <span class="text-lg">🐍</span> Python Sync Server
             </h2>
-            <p class="text-xs text-text-muted mt-1">Save this script to your local machine and run it.</p>
+            <p class="text-xs text-text-muted mt-1">
+              Save this script to your local machine as
+              <code class="text-primary font-mono bg-primary/10 px-1 rounded">itera_sync_server.py</code> and run it.
+            </p>
           </div>
           <button
             onclick="copyScript()"
@@ -6458,4 +6461,4 @@ Attributes:
 }, null, 2)
 };
 
-export const BUILD_TIME = 1784220961483;
+export const BUILD_TIME = 1784221362483;
