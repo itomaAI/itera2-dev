@@ -1,6 +1,6 @@
 /**
  * AUTO-GENERATED FILE - DO NOT EDIT MANUALLY
- * Generated on: 2026-07-16T16:51:24.460Z
+ * Generated on: 2026-07-16T16:53:26.642Z
  */
 
 export const DEFAULT_FILES: Record<string, string> = {
@@ -1592,7 +1592,7 @@ export const DEFAULT_FILES: Record<string, string> = {
               type="text"
               id="cfg-mount"
               class="w-full bg-card border border-border-main rounded-lg p-2 text-sm text-text-main focus:border-primary focus:outline-none transition font-mono"
-              placeholder="data/workspace"
+              placeholder="data/local_sync"
             />
             <p class="text-[10px] text-text-muted mt-1">Itera OS directory to be synced.</p>
           </div>
@@ -1829,7 +1829,7 @@ if __name__ == "__main__":
 
         if (!window.MetaOS) return setTimeout(init, 50);
 
-        let config = { mountPath: 'data/workspace', serverUrl: 'http://127.0.0.1:8000' };
+        let config = { mountPath: 'data/local_sync', serverUrl: 'http://127.0.0.1:8000' };
         try {
           const savedConfig = await App.Config.get('local_sync');
           if (savedConfig && Object.keys(savedConfig).length > 0) {
@@ -1865,7 +1865,7 @@ if __name__ == "__main__":
       }
 
       window.toggleDaemon = async function (start) {
-        const mountPath = DOM('cfg-mount').value.trim() || 'data/workspace';
+        const mountPath = DOM('cfg-mount').value.trim() || 'data/local_sync';
         const serverUrl = DOM('cfg-url').value.trim() || 'http://127.0.0.1:8000';
 
         await App.Config.update('local_sync', { mountPath, serverUrl });
@@ -4135,7 +4135,7 @@ Attributes:
       async function initSyncDaemon() {
         if (!window.MetaOS) return setTimeout(initSyncDaemon, 100);
 
-        let config = { mountPath: 'data/workspace', serverUrl: 'http://127.0.0.1:8000' };
+        let config = { mountPath: 'data/local_sync', serverUrl: 'http://127.0.0.1:8000' };
         try {
           const confData = await MetaOS.fs.read('system/config/local_sync.json');
           config = { ...config, ...JSON.parse(confData) };
@@ -6458,4 +6458,4 @@ Attributes:
 }, null, 2)
 };
 
-export const BUILD_TIME = 1784220684461;
+export const BUILD_TIME = 1784220806642;

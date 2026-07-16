@@ -9,7 +9,7 @@
       async function initSyncDaemon() {
         if (!window.MetaOS) return setTimeout(initSyncDaemon, 100);
 
-        let config = { mountPath: 'data/workspace', serverUrl: 'http://127.0.0.1:8000' };
+        let config = { mountPath: 'data/local_sync', serverUrl: 'http://127.0.0.1:8000' };
         try {
           const confData = await MetaOS.fs.read('system/config/local_sync.json');
           config = { ...config, ...JSON.parse(confData) };
