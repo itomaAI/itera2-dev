@@ -1,6 +1,6 @@
 /**
  * AUTO-GENERATED FILE - DO NOT EDIT MANUALLY
- * Generated on: 2026-07-16T16:33:42.445Z
+ * Generated on: 2026-07-16T16:42:22.312Z
  */
 
 export const DEFAULT_FILES: Record<string, string> = {
@@ -1829,11 +1829,20 @@ if __name__ == "__main__":
 
         if (!window.MetaOS) return setTimeout(init, 50);
 
+        let config = { mountPath: 'data/workspace', serverUrl: 'http://127.0.0.1:8000' };
         try {
-          const config = await App.Config.get('local_sync');
-          if (config.mountPath) DOM('cfg-mount').value = config.mountPath;
-          if (config.serverUrl) DOM('cfg-url').value = config.serverUrl;
-        } catch (e) {}
+          const savedConfig = await App.Config.get('local_sync');
+          if (savedConfig && Object.keys(savedConfig).length > 0) {
+            config = { ...config, ...savedConfig };
+          } else {
+            // ファイルが存在しない（または空）場合は、デフォルト値で新規作成する
+            await App.Config.update('local_sync', config);
+          }
+          DOM('cfg-mount').value = config.mountPath;
+          DOM('cfg-url').value = config.serverUrl;
+        } catch (e) {
+          console.warn('Failed to initialize local_sync config', e);
+        }
 
         checkStatus();
         setInterval(checkStatus, 2000);
@@ -5439,11 +5448,6 @@ Attributes:
   "temperature": 1
 }, null, 2),
 
-  "system/config/local_sync.json": JSON.stringify({
-  "mountPath": "data/workspace",
-  "serverUrl": "http://127.0.0.1:8000"
-}, null, 2),
-
   "system/config/network.json": JSON.stringify({
   "proxyUrl": "https://corsproxy.io/?",
   "allowCredentialsWithProxy": false
@@ -6454,4 +6458,4 @@ Attributes:
 }, null, 2)
 };
 
-export const BUILD_TIME = 1784219622445;
+export const BUILD_TIME = 1784220142312;
