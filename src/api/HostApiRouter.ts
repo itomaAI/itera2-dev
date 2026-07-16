@@ -130,12 +130,12 @@ export class HostApiRouter {
     t.registerHandler('fs:read', async ({ path, opts }) => {
       if (opts && opts.encoding) {
         if (opts.encoding === 'binary') {
-          const blob = await d.vfs.readBlob(USER_PRINCIPAL, path);
+          const blob = await d.vfs.readBlob(USER_PRINCIPAL, path, opts);
           const buffer = await blob.arrayBuffer();
           // postMessageでそのまま送受信可能な Uint8Array として返す
           return new Uint8Array(buffer);
         } else if (opts.encoding === 'base64' || opts.encoding === 'dataurl') {
-          const blob = await d.vfs.readBlob(USER_PRINCIPAL, path);
+          const blob = await d.vfs.readBlob(USER_PRINCIPAL, path, opts);
           const dataUrl = await new Promise<string>((resolve, reject) => {
             const reader = new FileReader();
             reader.onloadend = () => resolve(reader.result as string);
@@ -148,7 +148,7 @@ export class HostApiRouter {
           return dataUrl.split(',')[1] || '';
         }
       }
-      return await d.vfs.readFile(USER_PRINCIPAL, path);
+      return await d.vfs.readFile(USER_PRINCIPAL, path, opts);
     });
 
     t.registerHandler('fs:write', async ({ path, content, opts }) => {
@@ -173,19 +173,19 @@ export class HostApiRouter {
     });
 
     t.registerHandler('fs:rename', async ({ oldPath, newPath, opts }) => {
-      const res = await d.vfs.rename(USER_PRINCIPAL, oldPath, newPath);
+      const res = await d.vfs.rename(USER_PRINCIPAL, oldPath, newPath, opts);
       this._checkAndEmitEvent(opts, 'file_moved', `User App renamed file: ${oldPath} -> ${newPath}`);
       return res;
     });
 
     t.registerHandler('fs:copy', async ({ srcPath, destPath, opts }) => {
-      const res = await d.vfs.copyFile(USER_PRINCIPAL, srcPath, destPath);
+      const res = await d.vfs.copyFile(USER_PRINCIPAL, srcPath, destPath, opts);
       this._checkAndEmitEvent(opts, 'file_copied', `User App copied file: ${srcPath} -> ${destPath}`);
       return res;
     });
 
     t.registerHandler('fs:mkdir', async ({ path, opts }) => {
-      const res = await d.vfs.mkdir(USER_PRINCIPAL, path);
+      const res = await d.vfs.mkdir(USER_PRINCIPAL, path, opts);
       this._checkAndEmitEvent(opts, 'folder_created', `User App created folder: ${path}`);
       return res;
     });
@@ -193,7 +193,6 @@ export class HostApiRouter {
     t.registerHandler('fs:stat', async ({ path }) => d.vfs.stat(USER_PRINCIPAL, path));
     t.registerHandler('fs:list', async ({ path, opts }) => d.vfs.listFiles(USER_PRINCIPAL, { path, ...opts }));
     t.registerHandler('fs:exists', async ({ path }) => d.vfs.exists(USER_PRINCIPAL, path));
-    t.registerHandler('fs:get_sync_state', async ({ path }) => d.vfs.getSyncState(USER_PRINCIPAL, path || ''));
     t.registerHandler('fs:get_sync_state', async ({ path }) => d.vfs.getSyncState(USER_PRINCIPAL, path || ''));
     t.registerHandler('fs:resolve_url', async ({ path }, sourcePid) => {
       if (!d.processManager) throw new Error('ProcessManager not connected.');
@@ -213,6 +212,37 @@ export class HostApiRouter {
       }
       this._checkAndEmitEvent(opts, 'permission_changed', `User App changed permissions for: ${path}`);
       return true;
+    });
+
+    t.registerHandler('fs:mount', async ({ path }, sourcePid) => {
+      d.vfs.mountProvider(path, sourcePid);
+
+      if (!d.vfs.missingContentHandler) {
+        d.vfs.missingContentHandler = async (reqPath: string, providerPid: string) => {
+          if (!d.processManager) return false;
+          const proc = d.processManager.processes.get(providerPid);
+          if (!proc || !proc.iframe || !proc.iframe.contentWindow) {
+            console.warn(`[HostApiRouter] Provider process ${providerPid} is not running.`);
+            return false;
+          }
+          try {
+            return await t.invokeGuest(providerPid, 'fs:resolve_missing', { path: reqPath }, proc.iframe.contentWindow);
+          } catch (e) {
+            console.error(`[HostApiRouter] Failed to resolve missing content via provider ${providerPid}`, e);
+            return false;
+          }
+        };
+      }
+      return true;
+    });
+
+    t.registerHandler('fs:unmount', async ({ path }) => {
+      d.vfs.unmountProvider(path);
+      return true;
+    });
+
+    t.registerHandler('fs:create_stub', async ({ path, meta, opts }) => {
+      return await d.vfs.createStub(USER_PRINCIPAL, path, meta, opts);
     });
 
     // ==========================================

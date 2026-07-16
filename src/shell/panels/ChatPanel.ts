@@ -7,6 +7,7 @@ import type { VfsService } from '../../core/vfs/VfsService';
 import type { Turn } from '../../core/state/HistoryManager';
 import type { Principal } from '../../core/vfs/types';
 import { USER_PRINCIPAL } from '../../core/vfs/types';
+import type { LpmlRenderer } from '../services/LpmlRenderer';
 
 const DOM_IDS = {
   HISTORY: 'chat-history',
@@ -24,7 +25,7 @@ const DOM_IDS = {
 };
 
 export class ChatPanel {
-  private renderer: any; // 後のフェーズで LpmlRenderer の型を指定します
+  private renderer: LpmlRenderer | null;
   private vfs: VfsService | null = null;
   private getActivePrincipal: () => Principal = () => USER_PRINCIPAL;
   private els: Record<string, HTMLElement | HTMLInputElement | HTMLTextAreaElement | null> = {};
@@ -36,7 +37,7 @@ export class ChatPanel {
   public currentStreamEl: HTMLElement | null = null;
   private currentStreamContent: string = '';
 
-  constructor(renderer: any = null) {
+  constructor(renderer: LpmlRenderer | null = null) {
     this.renderer = renderer;
     this._initElements();
     this._bindEvents();
@@ -180,7 +181,7 @@ export class ChatPanel {
         if (file) files.push(file);
       }
     }
-    if (files.length > 0) this._addUploads(files as any);
+    if (files.length > 0) this._addUploads(files);
   }
 
   addVfsReference(path: string) {

@@ -110,7 +110,7 @@ export class DesktopEnvironment {
   public get modals() {
     return {
       editor: this._editorModal,
-      media: this._mediaViewer, // ★ バグ修正: media が公開されるように追加
+      media: this._mediaViewer,
       camera: this._cameraModal,
       audio: this._audioModal,
       system: this._systemModal,

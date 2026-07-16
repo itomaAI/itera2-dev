@@ -347,7 +347,7 @@ export class Engine {
     };
 
     actions.forEach(async (action, index) => {
-      // ツール実行の順序をある程度維持するため、インデックスに応じて開始をわずかに遅らせる (0.1秒間隔)
+      // ツール実行の順序をある程度維持するため、インデックスに応じて開始をわずかに遅らせる (50ms間隔)
       if (index > 0) {
         await new Promise((resolve) => setTimeout(resolve, index * 50));
       }

@@ -208,6 +208,7 @@ export class EventOrchestrator {
           this.processManager.broadcast('file_changed', {
             type: event.type,
             path: event.path,
+            source: event.source,
           });
         }
       }

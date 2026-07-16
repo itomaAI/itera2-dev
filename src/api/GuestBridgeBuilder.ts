@@ -123,6 +123,24 @@ export class GuestBridgeBuilder {
     const MY_PID = window.__ITERA_PID__ || window.name || 'unknown';
     const transport = new GuestTransport(MY_PID);
     const localToolHandlers = new Map();
+    const mountHandlers = new Map();
+
+    transport.registerHandler('fs:resolve_missing', async (payload) => {
+        let longestMatch = '';
+        let matchedHandler = null;
+        for (const [mountedPath, handler] of mountHandlers.entries()) {
+            if (payload.path === mountedPath || payload.path.startsWith(mountedPath + '/')) {
+                if (mountedPath.length >= longestMatch.length) {
+                    longestMatch = mountedPath;
+                    matchedHandler = handler;
+                }
+            }
+        }
+        if (matchedHandler) {
+            return await matchedHandler(payload.path);
+        }
+        return false;
+    });
 
     transport.registerHandler('execute_tool', async (payload) => {
         const handler = localToolHandlers.get(payload.name);
@@ -151,7 +169,18 @@ export class GuestBridgeBuilder {
             getSyncState: async (path) => transport.requestHost('fs:get_sync_state', { path }),
             resolveUrl: async (path) => transport.requestHost('fs:resolve_url', { path }),
             getAcl: async (path) => transport.requestHost('fs:get_acl', { path }),
-            setAcl: async (path, acl, opts = {}) => transport.requestHost('fs:set_acl', { path, acl, opts })
+            setAcl: async (path, acl, opts = {}) => transport.requestHost('fs:set_acl', { path, acl, opts }),
+            mount: async (path, onFetchMissing) => {
+                let normPath = path.replace(/\\/g, '/').replace(/^\\/+/, '').replace(/\\/+$/, '');
+                mountHandlers.set(normPath, onFetchMissing);
+                return transport.requestHost('fs:mount', { path: normPath });
+            },
+            unmount: async (path) => {
+                let normPath = path.replace(/\\/g, '/').replace(/^\\/+/, '').replace(/\\/+$/, '');
+                mountHandlers.delete(normPath);
+                return transport.requestHost('fs:unmount', { path: normPath });
+            },
+            createStub: async (path, meta, opts = {}) => transport.requestHost('fs:create_stub', { path, meta, opts })
         },
         ai: {
             ask: async (text, opts = {}) => transport.requestHost('ai:ask', { text, opts }),

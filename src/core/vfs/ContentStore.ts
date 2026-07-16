@@ -139,7 +139,7 @@ export class ContentStore {
       const keys: string[] = [];
 
       // @ts-ignore - TSの環境によっては AsyncIterable の定義が不足しているため保護
-      for await (const key of root.keys()) {
+      for await (const key of (root as any).keys()) {
         keys.push(key);
       }
       return keys;
@@ -162,7 +162,7 @@ export class ContentStore {
     try {
       const root = await this.rootHandlePromise!;
       // @ts-ignore - TSの環境によっては AsyncIterable の定義が不足しているため保護
-      for await (const key of root.keys()) {
+      for await (const key of (root as any).keys()) {
         await root.removeEntry(key, { recursive: true });
       }
       console.log(`[ContentStore] All OPFS contents have been successfully cleared.`);

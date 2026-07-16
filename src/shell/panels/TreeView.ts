@@ -216,12 +216,15 @@ export class TreeView {
 
     const isExpanded = this.expandedPaths.has(path);
     let icon = kind === 'directory' ? (isExpanded ? '📂' : '📁') : this._getFileIcon(name);
-    if (name === 'trash') icon = '🗑️';
-    if (kind === 'directory' && name === 'system') icon = '⚙️';
+    if (path === 'trash') icon = '🗑️';
+    if (path === 'system') icon = '⚙️';
+
+    const isStub = meta && meta.syncState === 'stub';
+    const stubIndicator = isStub ? '<span class="ml-1 text-primary text-[10px]" title="Cloud Only">☁️</span>' : '';
 
     div.innerHTML = `
       <span class="mr-2 opacity-80 text-xs pointer-events-none flex-shrink-0">${icon}</span>
-      <span class="truncate pointer-events-none flex-1">${name}</span>
+      <span class="truncate pointer-events-none flex-1${isStub ? ' text-text-muted' : ''}">${name}${stubIndicator}</span>
       <button class="menu-btn w-6 h-6 flex items-center justify-center text-text-muted hover:text-text-main hover:bg-hover rounded ml-1 transition flex-shrink-0 opacity-100 md:opacity-0 group-hover:opacity-100">
         ⋮
       </button>
@@ -298,10 +301,9 @@ export class TreeView {
         ul.classList.toggle('hidden');
         const iconSpan = (e.currentTarget as HTMLElement).querySelector('span:first-child');
         if (iconSpan) {
-          const name = (e.currentTarget as HTMLElement).dataset.name;
-          if (name === 'trash') {
+          if (path === 'trash') {
             iconSpan.textContent = '🗑️';
-          } else if (name === 'system') {
+          } else if (path === 'system') {
             iconSpan.textContent = '⚙️';
           } else {
             iconSpan.textContent = this.expandedPaths.has(path) ? '📂' : '📁';

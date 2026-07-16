@@ -7,7 +7,7 @@ import { DEFAULT_FILES } from '../../config/default_files';
 import type { VfsService } from './VfsService';
 import type { NodeStore } from './NodeStore';
 import type { PathResolver } from './PathResolver';
-import { SYSTEM_PRINCIPAL } from './types';
+import { SYSTEM_PRINCIPAL, type AccessControlList } from './types';
 
 export class VfsInitializer {
   private vfs: VfsService;
@@ -122,7 +122,7 @@ export class VfsInitializer {
     }
 
     // 2. ただし以下の領域は Read/Write を許可して上塗りする
-    const readWriteAcl: import('./types').AccessControlList = {
+    const readWriteAcl: AccessControlList = {
       owner: SYSTEM_PRINCIPAL,
       rules: [
         { principal: { type: 'user', id: 'local_user' }, permissions: ['read', 'write', 'manage'] },
@@ -141,7 +141,7 @@ export class VfsInitializer {
 
     // 3. memory 領域の権限設定 (AIのみ読み書き可能、User/GuestはRead-Only)
     if (this.vfs.exists(SYSTEM_PRINCIPAL, 'memory')) {
-      const memoryAcl: import('./types').AccessControlList = {
+      const memoryAcl: AccessControlList = {
         owner: { type: 'agent', id: 'Itera_AI' },
         rules: [
           {

@@ -6,10 +6,17 @@
 import {
   SYSTEM_PRINCIPAL,
   type VfsNode,
+  type VfsNodeMeta,
   type VfsStat,
   type ListOptions,
+  type ReadOptions,
   type WriteOptions,
   type DeleteOptions,
+  type MkdirOptions,
+  type RenameOptions,
+  type CopyOptions,
+  type StubOptions,
+  type SyncStateTree,
   type TreeNode,
   type Principal,
   type PermissionType,
@@ -35,6 +42,10 @@ export class VfsService {
   private eventBus: VfsEventBus;
   private lockManager: VfsLockManager;
 
+  private mounts: Map<string, string> = new Map();
+  private fetchPromises: Map<string, Promise<boolean>> = new Map();
+  public missingContentHandler: ((path: string, pid: string) => Promise<boolean>) | null = null;
+
   constructor(nodeStore: NodeStore, contentStore: ContentStore, pathResolver: PathResolver, eventBus: VfsEventBus) {
     this.nodeStore = nodeStore;
     this.contentStore = contentStore;
@@ -57,6 +68,34 @@ export class VfsService {
     const hashBuffer = await crypto.subtle.digest('SHA-256', data);
     const hashArray = Array.from(new Uint8Array(hashBuffer));
     return hashArray.map((b) => b.toString(16).padStart(2, '0')).join('');
+  }
+
+  mountProvider(path: string, pid: string): void {
+    const normPath = this.pathResolver.normalizePath(path);
+    this.mounts.set(normPath, pid);
+    console.log(`[VfsService] Mounted provider '${pid}' at '/${normPath}'`);
+  }
+
+  unmountProvider(path: string): void {
+    const normPath = this.pathResolver.normalizePath(path);
+    this.mounts.delete(normPath);
+    console.log(`[VfsService] Unmounted provider at '/${normPath}'`);
+  }
+
+  private _findProviderForPath(path: string): string | null {
+    const normPath = this.pathResolver.normalizePath(path);
+    let longestMatch = '';
+    let matchedPid: string | null = null;
+
+    for (const [mountedPath, pid] of this.mounts.entries()) {
+      if (normPath === mountedPath || normPath.startsWith(mountedPath + '/')) {
+        if (mountedPath.length >= longestMatch.length) {
+          longestMatch = mountedPath;
+          matchedPid = pid;
+        }
+      }
+    }
+    return matchedPid;
   }
 
   private _hasPermission(principal: Principal, node: VfsNode, action: PermissionType): boolean {
@@ -186,6 +225,7 @@ export class VfsService {
       mimeType: node.meta.mimeType,
       version: node.meta.version,
       hash: node.meta.hash,
+      syncState: node.meta.syncState,
       flags: JSON.parse(JSON.stringify(node.flags)),
       acl: JSON.parse(JSON.stringify(node.acl)),
     };
@@ -238,6 +278,7 @@ export class VfsService {
             mimeType: node.meta.mimeType,
             version: node.meta.version,
             hash: node.meta.hash,
+            syncState: node.meta.syncState,
             flags: JSON.parse(JSON.stringify(node.flags)),
             acl: JSON.parse(JSON.stringify(node.acl)),
           } as VfsStat;
@@ -268,14 +309,14 @@ export class VfsService {
     return this._filterTreeByPermission(principal, fullTree);
   }
 
-  getSyncState(principal: Principal, path: string = ''): import('./types').SyncStateTree {
+  getSyncState(principal: Principal, path: string = ''): SyncStateTree {
     const rootPath = this.pathResolver.normalizePath(path);
     const rootId = this.pathResolver.getIdByPath(rootPath);
 
     if (rootId === undefined) throw new Error(`Path not found: ${rootPath}`);
     this._checkNodePermission(principal, rootId, 'read');
 
-    const result: import('./types').SyncStateTree = {};
+    const result: SyncStateTree = {};
 
     const traverse = (parentId: string | null) => {
       const children = this.nodeStore.getChildren(parentId);
@@ -289,6 +330,7 @@ export class VfsService {
           updatedAt: node.meta.updatedAt,
           version: node.meta.version,
           hash: node.meta.hash,
+          syncState: node.meta.syncState,
         };
 
         if (node.kind === 'directory') {
@@ -304,12 +346,13 @@ export class VfsService {
         updatedAt: rootNode.meta.updatedAt,
         version: rootNode.meta.version,
         hash: rootNode.meta.hash,
+        syncState: rootNode.meta.syncState,
       };
       if (rootNode.kind === 'directory') {
         traverse(rootId);
       }
     } else {
-      result[''] = { kind: 'directory', updatedAt: 0, version: 1 };
+      result[''] = { kind: 'directory', updatedAt: 0, version: 1, syncState: 'synced' };
       traverse(null);
     }
 
@@ -351,7 +394,7 @@ export class VfsService {
     };
   }
 
-  async readFile(principal: Principal, path: string): Promise<string> {
+  async readFile(principal: Principal, path: string, opts: ReadOptions = {}): Promise<string> {
     const normPath = this.pathResolver.normalizePath(path);
     const id = this.pathResolver.getIdByPath(normPath);
 
@@ -361,15 +404,39 @@ export class VfsService {
 
     this._checkNodePermission(principal, id, 'read');
 
-    const node = this.nodeStore.getNode(id)!;
+    let node = this.nodeStore.getNode(id)!;
     if (node.kind !== 'file') throw new Error(`Cannot read directory as file: ${normPath}`);
+
+    if (node.meta.syncState === 'stub' && !opts.bypassFetch) {
+      const providerPid = this._findProviderForPath(normPath);
+      if (providerPid && this.missingContentHandler) {
+        if (!this.fetchPromises.has(normPath)) {
+          this.fetchPromises.set(
+            normPath,
+            this.missingContentHandler(normPath, providerPid).finally(() => {
+              this.fetchPromises.delete(normPath);
+            }),
+          );
+        }
+        const success = await this.fetchPromises.get(normPath);
+        if (!success) {
+          throw new Error(`Failed to fetch missing content for ${normPath} from provider ${providerPid}`);
+        }
+        node = this.nodeStore.getNode(id)!;
+        if (!node || node.meta.syncState === 'stub') {
+          throw new Error(`Provider ${providerPid} claimed success but file is still a stub.`);
+        }
+      } else {
+        throw new Error(`File is a stub but no provider is mounted for ${normPath}`);
+      }
+    }
 
     if (!node.contentRef) return '';
 
     return await this.contentStore.readText(node.contentRef);
   }
 
-  async readBlob(principal: Principal, path: string): Promise<Blob> {
+  async readBlob(principal: Principal, path: string, opts: ReadOptions = {}): Promise<Blob> {
     const normPath = this.pathResolver.normalizePath(path);
     const id = this.pathResolver.getIdByPath(normPath);
 
@@ -377,12 +444,113 @@ export class VfsService {
 
     this._checkNodePermission(principal, id, 'read');
 
-    const node = this.nodeStore.getNode(id)!;
+    let node = this.nodeStore.getNode(id)!;
     if (node.kind !== 'file') throw new Error(`Cannot read directory as file: ${normPath}`);
+
+    if (node.meta.syncState === 'stub' && !opts.bypassFetch) {
+      const providerPid = this._findProviderForPath(normPath);
+      if (providerPid && this.missingContentHandler) {
+        if (!this.fetchPromises.has(normPath)) {
+          this.fetchPromises.set(
+            normPath,
+            this.missingContentHandler(normPath, providerPid).finally(() => {
+              this.fetchPromises.delete(normPath);
+            }),
+          );
+        }
+        const success = await this.fetchPromises.get(normPath);
+        if (!success) {
+          throw new Error(`Failed to fetch missing content for ${normPath} from provider ${providerPid}`);
+        }
+        node = this.nodeStore.getNode(id)!;
+        if (!node || node.meta.syncState === 'stub') {
+          throw new Error(`Provider ${providerPid} claimed success but file is still a stub.`);
+        }
+      } else {
+        throw new Error(`File is a stub but no provider is mounted for ${normPath}`);
+      }
+    }
 
     if (!node.contentRef) return new Blob([]);
 
     return await this.contentStore.readBlob(node.contentRef);
+  }
+
+  async createStub(
+    principal: Principal,
+    path: string,
+    meta: Partial<VfsNodeMeta>,
+    opts: StubOptions = {},
+  ): Promise<string> {
+    const normPath = this.pathResolver.normalizePath(path);
+    if (!normPath) throw new Error('Cannot create stub at root.');
+
+    const parts = normPath.split('/');
+    const name = parts.pop()!;
+    const parentPath = parts.join('/');
+
+    while (true) {
+      let shouldRetry = false;
+      const parentId = await this._ensureDir(principal, parentPath);
+
+      const res = await this.lockManager.acquire(normPath, async () => {
+        if (parentId !== null && !this.nodeStore.getNode(parentId)) {
+          shouldRetry = true;
+          return null;
+        }
+
+        const existingId = this.pathResolver.getIdByPath(normPath);
+        let node: VfsNode;
+        const now = Date.now();
+
+        if (existingId !== undefined && existingId !== null) {
+          this._checkNodePermission(principal, existingId, 'write');
+          const existingNode = this.nodeStore.getNode(existingId)!;
+          if (existingNode.kind === 'directory') {
+            throw new Error(`Cannot create stub: A directory already exists at ${normPath}`);
+          }
+
+          if (existingNode.contentRef) {
+            await this.contentStore.delete(existingNode.contentRef);
+          }
+
+          node = { ...existingNode };
+          node.meta = { ...node.meta, ...meta, syncState: 'stub', version: node.meta.version + 1, updatedAt: now };
+          delete node.contentRef;
+        } else {
+          this._checkNodePermission(principal, parentId, 'write');
+          node = {
+            id: generateId(),
+            name,
+            parentId,
+            kind: 'file',
+            flags: { isSystem: false, isTrashed: false },
+            meta: {
+              size: meta.size || 0,
+              createdAt: meta.createdAt || now,
+              updatedAt: meta.updatedAt || now,
+              version: meta.version || 1,
+              hash: meta.hash,
+              syncState: 'stub',
+            },
+            acl: this._getDefaultAcl(principal, parentId),
+          };
+        }
+
+        await this.nodeStore.putNode(node);
+        this.eventBus.publish({
+          type: existingId ? 'update' : 'create',
+          nodeId: node.id,
+          node,
+          path: normPath,
+          source: opts.source,
+        });
+        return `Stub created at ${normPath}`;
+      });
+
+      if (shouldRetry) continue;
+      return res!;
+    }
   }
 
   /**
@@ -425,6 +593,7 @@ export class VfsService {
           node = { ...existingNode };
           node.meta.updatedAt = now;
           node.meta.version += 1;
+          delete node.meta.syncState;
         } else {
           this._checkNodePermission(principal, parentId, 'write');
           node = {
@@ -451,6 +620,7 @@ export class VfsService {
           nodeId: node.id,
           node,
           path: normPath,
+          source: opts.source,
         });
 
         return `Appended to ${normPath}`;
@@ -504,6 +674,7 @@ export class VfsService {
           node = { ...existingNode };
           node.meta.updatedAt = now;
           node.meta.version += 1;
+          delete node.meta.syncState;
           eventType = 'update';
         } else {
           this._checkNodePermission(principal, parentId, 'write');
@@ -540,6 +711,7 @@ export class VfsService {
           nodeId: node.id,
           node,
           path: normPath,
+          source: opts.source,
         });
 
         return eventType === 'create' ? `Created ${normPath}` : `Overwrote ${normPath}`;
@@ -550,7 +722,7 @@ export class VfsService {
     }
   }
 
-  async mkdir(principal: Principal, path: string): Promise<string> {
+  async mkdir(principal: Principal, path: string, opts: MkdirOptions = {}): Promise<string> {
     const normPath = this.pathResolver.normalizePath(path);
     if (!normPath) return 'root';
 
@@ -596,6 +768,7 @@ export class VfsService {
           nodeId: newNode.id,
           node: newNode,
           path: normPath,
+          source: opts.source,
         });
 
         return `Created directory: ${normPath}`;
@@ -642,7 +815,7 @@ export class VfsService {
         }
 
         if (isPermanent) {
-          await this._deleteRecursive(principal, id);
+          await this._deleteRecursive(principal, id, opts.source);
           return `Permanently deleted: ${normPath}`;
         } else {
           const node = this.nodeStore.getNode(id)!;
@@ -670,6 +843,7 @@ export class VfsService {
             node: updatedNode,
             path: newPath,
             oldPath: normPath,
+            source: opts.source,
           });
           return `Moved to trash: ${normPath}`;
         }
@@ -680,7 +854,7 @@ export class VfsService {
     }
   }
 
-  async rename(principal: Principal, oldPath: string, newPath: string): Promise<string> {
+  async rename(principal: Principal, oldPath: string, newPath: string, opts: RenameOptions = {}): Promise<string> {
     const normOld = this.pathResolver.normalizePath(oldPath);
     const normNew = this.pathResolver.normalizePath(newPath);
 
@@ -747,6 +921,7 @@ export class VfsService {
           node: updatedNode,
           path: normNew,
           oldPath: normOld,
+          source: opts.source,
         });
 
         return `Moved/Renamed: ${normOld} -> ${normNew}`;
@@ -757,7 +932,7 @@ export class VfsService {
     }
   }
 
-  async copyFile(principal: Principal, srcPath: string, destPath: string): Promise<string> {
+  async copyFile(principal: Principal, srcPath: string, destPath: string, opts: CopyOptions = {}): Promise<string> {
     const normSrc = this.pathResolver.normalizePath(srcPath);
     const normDest = this.pathResolver.normalizePath(destPath);
 
@@ -812,6 +987,7 @@ export class VfsService {
             nodeId: newNode.id,
             node: newNode,
             path: normDest,
+            source: opts.source,
           });
 
           return `Copied file: ${normSrc} -> ${normDest}`;
@@ -819,7 +995,7 @@ export class VfsService {
           this._checkNodePermission(principal, destParentId, 'write');
           let count = 0;
 
-          const copyRecursive = async (sourceDirId: string, currentDestParentId: string | null) => {
+          const copyRecursive = async (sourceDirId: string, currentDestParentId: string | null, source?: string) => {
             const children = this.nodeStore.getChildren(sourceDirId);
             for (const child of children) {
               if (!child.flags.isTrashed) {
@@ -852,6 +1028,7 @@ export class VfsService {
                     nodeId: newId,
                     node: newNode,
                     path: this.pathResolver.getPathById(newId),
+                    source: source,
                   });
                   count++;
                 } else {
@@ -861,8 +1038,9 @@ export class VfsService {
                     nodeId: newId,
                     node: newNode,
                     path: this.pathResolver.getPathById(newId),
+                    source: source,
                   });
-                  await copyRecursive(child.id, newId);
+                  await copyRecursive(child.id, newId, source);
                 }
               }
             }
@@ -890,9 +1068,10 @@ export class VfsService {
             nodeId: rootNewId,
             node: rootNewNode,
             path: normDest,
+            source: opts.source,
           });
 
-          await copyRecursive(srcId, rootNewId);
+          await copyRecursive(srcId, rootNewId, opts.source);
           return `Copied directory: ${normSrc} -> ${normDest} (${count} files)`;
         }
       });
@@ -961,7 +1140,7 @@ export class VfsService {
     });
   }
 
-  private async _deleteRecursive(principal: Principal, nodeId: string): Promise<void> {
+  private async _deleteRecursive(principal: Principal, nodeId: string, source?: string): Promise<void> {
     const node = this.nodeStore.getNode(nodeId);
     if (!node) return;
 
@@ -970,7 +1149,7 @@ export class VfsService {
     if (node.kind === 'directory') {
       const children = this.nodeStore.getChildren(nodeId);
       for (const child of children) {
-        await this._deleteRecursive(principal, child.id);
+        await this._deleteRecursive(principal, child.id, source);
       }
     } else {
       if (node.contentRef) {
@@ -981,7 +1160,7 @@ export class VfsService {
     const path = this.pathResolver.getPathById(nodeId);
     await this.nodeStore.deleteNode(nodeId);
 
-    this.eventBus.publish({ type: 'delete', nodeId, node: null, path });
+    this.eventBus.publish({ type: 'delete', nodeId, node: null, path, source });
   }
 
   /**

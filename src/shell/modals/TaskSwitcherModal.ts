@@ -76,6 +76,8 @@ export class TaskSwitcherModal {
       return;
     }
 
+    const allRegisteredApps = this.appRegistry.getAllApps();
+
     apps.forEach((app) => {
       const card = document.createElement('div');
       card.className =
@@ -91,7 +93,6 @@ export class TaskSwitcherModal {
         appName = 'Dashboard';
         appIcon = '🏠';
       } else {
-        const allRegisteredApps = this.appRegistry.getAllApps();
         const regInfo = allRegisteredApps.find((r) => r.path === basePath);
         if (regInfo) {
           appName = regInfo.name;

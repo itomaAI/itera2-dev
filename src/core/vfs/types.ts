@@ -57,6 +57,7 @@ export interface VfsNodeMeta {
   mimeType?: string;
   version: number;
   hash?: string;
+  syncState?: 'synced' | 'stub';
 }
 
 export interface ContentRef {
@@ -80,6 +81,7 @@ export interface VfsEvent {
   node: VfsNode | null;
   path: string;
   oldPath?: string;
+  source?: string;
 }
 
 // ==========================================
@@ -97,6 +99,7 @@ export interface VfsStat {
   mimeType?: string;
   version: number;
   hash?: string;
+  syncState?: 'synced' | 'stub';
   flags: VfsNodeFlags;
   acl: AccessControlList;
 }
@@ -115,6 +118,7 @@ export interface SyncStateItem {
   updatedAt: number;
   version: number;
   hash?: string;
+  syncState?: 'synced' | 'stub';
 }
 
 export type SyncStateTree = Record<string, SyncStateItem>;
@@ -124,11 +128,34 @@ export interface ListOptions {
   detail?: boolean;
 }
 
+export interface ReadOptions {
+  bypassFetch?: boolean;
+  encoding?: 'binary' | 'base64' | 'dataurl' | 'utf8';
+}
+
 export interface WriteOptions {
   overwrite?: boolean;
   system?: boolean;
+  source?: string;
 }
 
 export interface DeleteOptions {
   permanent?: boolean;
+  source?: string;
+}
+
+export interface MkdirOptions {
+  source?: string;
+}
+
+export interface RenameOptions {
+  source?: string;
+}
+
+export interface CopyOptions {
+  source?: string;
+}
+
+export interface StubOptions {
+  source?: string;
 }

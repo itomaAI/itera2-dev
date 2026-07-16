@@ -6,7 +6,7 @@
 import type { VfsService } from '../../core/vfs/VfsService';
 import type { VfsEventBus } from '../../core/vfs/VfsEventBus';
 import type { FileAssociationResolver, ResolvedApp } from '../../core/sys/FileAssociationResolver';
-import type { Principal } from '../../core/vfs/types';
+import type { Principal, VfsStat } from '../../core/vfs/types';
 import { TreeView } from './TreeView';
 
 declare const JSZip: any;
@@ -263,7 +263,7 @@ export class Explorer {
       path: dirPath,
       recursive: true,
       detail: true,
-    }) as import('../../core/vfs/types').VfsStat[];
+    }) as VfsStat[];
 
     if (files.length === 0) {
       if (window.AppUI) window.AppUI.notify('Directory is empty.', 'warning');

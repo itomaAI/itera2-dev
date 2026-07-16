@@ -6,7 +6,7 @@
 import type { VfsService } from '../../core/vfs/VfsService';
 import type { AppRegistry } from '../../core/sys/AppRegistry';
 import type { UriRouter } from '../core/UriRouter';
-import type { Principal } from '../../core/vfs/types';
+import type { Principal, VfsStat } from '../../core/vfs/types';
 
 export interface CommandItem {
   id: string;
@@ -297,7 +297,7 @@ export class CommandPaletteModal {
     const files = this.vfs.listFiles(this.getActivePrincipal(), {
       recursive: true,
       detail: true,
-    }) as import('../../core/vfs/types').VfsStat[];
+    }) as VfsStat[];
     files.forEach((stat) => {
       if (stat.kind === 'directory') return; // ファイルのみ検索
       const score = scoreMatch(stat.name + ' ' + stat.path, queryTerms);

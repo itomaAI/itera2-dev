@@ -52,6 +52,7 @@ export function registerSearchTools(registry: ToolRegistry): void {
         recursive: true,
       }) as string[];
       const results: string[] = [];
+      let skippedStubsCount = 0;
 
       let lastYieldTime = performance.now();
       const YIELD_INTERVAL_MS = 15;
@@ -80,8 +81,19 @@ export function registerSearchTools(registry: ToolRegistry): void {
 
         if (isBinary(filePath)) continue;
 
+        let isStub = false;
         try {
-          const content = await context.vfs.readFile(AGENT_PRINCIPAL, filePath);
+          const stat = context.vfs.stat(AGENT_PRINCIPAL, filePath);
+          isStub = stat.syncState === 'stub';
+        } catch (e) {}
+
+        if (isStub) {
+          skippedStubsCount++;
+          continue;
+        }
+
+        try {
+          const content = await context.vfs.readFile(AGENT_PRINCIPAL, filePath, { bypassFetch: true });
           const lines = content.split(/\r?\n/);
           let fileHits = 0;
 
@@ -119,8 +131,17 @@ export function registerSearchTools(registry: ToolRegistry): void {
         }
       }
 
+      if (skippedStubsCount > 0) {
+        results.push(
+          `\n... (${skippedStubsCount} stub files were skipped from content search. Use <file_info> or a custom daemon search tool to inspect them.)`,
+        );
+      }
+
       if (results.length === 0) {
-        return { log: `No matches found.`, ui: `🔍 No matches found` };
+        return {
+          log: `No matches found.\n(Note: ${skippedStubsCount} stub files were skipped)`,
+          ui: `🔍 No matches found`,
+        };
       }
 
       return {
