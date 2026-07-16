@@ -1,0 +1,4 @@
+{
+  "mountPath": "data/local_sync",
+  "serverUrl": "http://127.0.0.1:8000"
+}

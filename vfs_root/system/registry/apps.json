@@ -40,5 +40,12 @@
     "icon": "💳",
     "path": "system/apps/billing.html",
     "description": "API usage and cost dashboard"
+  },
+  {
+    "id": "local_sync",
+    "name": "Local Sync",
+    "icon": "🔄",
+    "path": "apps/sync_app.html",
+    "description": "Sync VFS with local machine"
   }
 ]

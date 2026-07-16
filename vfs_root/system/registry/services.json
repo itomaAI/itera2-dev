@@ -6,5 +6,13 @@
     "path": "services/git.html",
     "description": "Background service providing Git operations.",
     "autoStart": false
+  },
+  {
+    "id": "local_sync_daemon",
+    "name": "Local Sync Daemon",
+    "icon": "🔄",
+    "path": "services/local_sync.html",
+    "description": "Bi-directional sync with local python server.",
+    "autoStart": false
   }
 ]

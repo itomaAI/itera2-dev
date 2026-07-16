@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Local Sync Daemon</title>
+  </head>
+  <body>
+    <script>
+      async function initSyncDaemon() {
+        if (!window.MetaOS) return setTimeout(initSyncDaemon, 100);
+
+        let config = { mountPath: 'data/workspace', serverUrl: 'http://127.0.0.1:8000' };
+        try {
+          const confData = await MetaOS.fs.read('system/config/local_sync.json');
+          config = { ...config, ...JSON.parse(confData) };
+        } catch (e) {}
+
+        const { mountPath, serverUrl } = config;
+        let ws = null;
+
+        // 1. マウント宣言とオンデマンドフェッチの待ち受け
+        try {
+          await MetaOS.fs.mount(mountPath, async (reqPath) => {
+            const relPath = reqPath.substring(mountPath.length + 1);
+            try {
+              const res = await fetch(`${serverUrl}/api/file/${relPath}`);
+              if (!res.ok) return false;
+              const arrayBuffer = await res.arrayBuffer();
+
+              // 実体を VFS に書き込む (source フラグをつけてエコーを防止)
+              await MetaOS.fs.write(reqPath, new Uint8Array(arrayBuffer), {
+                overwrite: true,
+                silent: true,
+                source: 'sync_daemon',
+              });
+              return true;
+            } catch (e) {
+              console.error('[SyncDaemon] Fetch failed:', e);
+              return false;
+            }
+          });
+          MetaOS.ai.log(`Local Sync Daemon successfully mounted at /${mountPath}`, 'system');
+        } catch (e) {
+          console.error('[SyncDaemon] Mount failed:', e);
+          return;
+        }
+
+        // 2. 初期同期 (サーバーのメタデータを取得して VFS にスタブを作成)
+        try {
+          const res = await fetch(`${serverUrl}/api/meta`);
+          const remoteMeta = await res.json();
+          const localState = await MetaOS.fs.getSyncState(mountPath);
+
+          for (const [relPath, meta] of Object.entries(remoteMeta)) {
+            const fullPath = `${mountPath}/${relPath}`;
+            const local = localState[fullPath];
+
+            // ローカルに存在しないか、ハッシュが異なればスタブを作成
+            if (!local || local.hash !== meta.hash) {
+              await MetaOS.fs.createStub(
+                fullPath,
+                {
+                  size: meta.size,
+                  updatedAt: meta.updatedAt,
+                  hash: meta.hash,
+                },
+                { source: 'sync_daemon' },
+              );
+            }
+          }
+        } catch (e) {
+          console.error('[SyncDaemon] Initial sync failed:', e);
+        }
+
+        // 3. リアルタイム監視 (WebSocket: サーバー -> Itera OS)
+        const connectWs = () => {
+          const wsUrl = serverUrl.replace(/^http/, 'ws') + '/ws';
+          ws = new WebSocket(wsUrl);
+          ws.onmessage = async (e) => {
+            const data = JSON.parse(e.data);
+            const fullPath = `${mountPath}/${data.path}`;
+
+            if (data.type === 'create' || data.type === 'update') {
+              await MetaOS.fs.createStub(
+                fullPath,
+                {
+                  size: data.meta.size,
+                  updatedAt: data.meta.updatedAt,
+                  hash: data.meta.hash,
+                },
+                { source: 'sync_daemon' },
+              );
+            } else if (data.type === 'delete') {
+              try {
+                await MetaOS.fs.delete(fullPath, { permanent: true, source: 'sync_daemon' });
+              } catch (err) {}
+            }
+          };
+          ws.onclose = () => setTimeout(connectWs, 5000); // 再接続
+        };
+        connectWs();
+
+        // 4. ローカル変更の監視 (Itera OS -> サーバー)
+        MetaOS.system.on('file_changed', async (payload) => {
+          // 自分が書き込んだ変更(エコー)は無視する
+          if (payload.source === 'sync_daemon') return;
+
+          // 管轄外のファイルは無視する
+          if (!payload.path.startsWith(mountPath + '/')) return;
+
+          // スタブが作成されただけのイベントも無視する
+          if (payload.type === 'create' || payload.type === 'update') {
+            if (!payload.node || payload.node.syncState === 'stub') return;
+          }
+
+          const getRelPath = (p) => p.substring(mountPath.length + 1);
+
+          if (payload.type === 'create' || payload.type === 'update') {
+            try {
+              const relPath = getRelPath(payload.path);
+              // バイナリとして読み出し
+              const u8 = await MetaOS.fs.read(payload.path, { encoding: 'binary' });
+              await fetch(`${serverUrl}/api/file/${relPath}`, { method: 'PUT', body: u8 });
+            } catch (e) {
+              console.error('[SyncDaemon] Upload failed:', e);
+            }
+          } else if (payload.type === 'delete' || payload.type === 'trash') {
+            try {
+              const targetPath = payload.type === 'trash' ? payload.oldPath : payload.path;
+              const relPath = getRelPath(targetPath);
+              await fetch(`${serverUrl}/api/file/${relPath}`, { method: 'DELETE' });
+            } catch (e) {
+              console.error('[SyncDaemon] Delete failed:', e);
+            }
+          } else if (payload.type === 'rename' || payload.type === 'move') {
+            try {
+              const oldRelPath = getRelPath(payload.oldPath);
+              const newRelPath = getRelPath(payload.path);
+              await fetch(`${serverUrl}/api/file/${oldRelPath}`, { method: 'DELETE' });
+
+              const u8 = await MetaOS.fs.read(payload.path, { encoding: 'binary' });
+              await fetch(`${serverUrl}/api/file/${newRelPath}`, { method: 'PUT', body: u8 });
+            } catch (e) {}
+          }
+        });
+      }
+
+      initSyncDaemon();
+    </script>
+  </body>
+</html>

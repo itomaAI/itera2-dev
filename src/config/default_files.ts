@@ -1,6 +1,6 @@
 /**
  * AUTO-GENERATED FILE - DO NOT EDIT MANUALLY
- * Generated on: 2026-07-16T16:31:24.110Z
+ * Generated on: 2026-07-16T16:33:42.445Z
  */
 
 export const DEFAULT_FILES: Record<string, string> = {
@@ -1534,6 +1534,358 @@ export const DEFAULT_FILES: Record<string, string> = {
           }
         });
       }
+
+      init();
+    </script>
+  </body>
+</html>
+`.trim(),
+
+  "apps/sync_app.html": `
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Local Sync App</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="../system/core/ui.js"></script>
+    <script src="../system/core/std.js"></script>
+  </head>
+  <body class="bg-app text-text-main h-screen flex flex-col p-6 overflow-hidden">
+    <!-- Header -->
+    <header class="flex items-center justify-between mb-6 shrink-0">
+      <div class="flex items-center gap-4">
+        <button
+          onclick="AppUI.home()"
+          class="p-2 -ml-2 rounded-full hover:bg-hover text-text-muted hover:text-text-main transition"
+        >
+          <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M10 19l-7-7m0 0l7-7m-7 7h18"
+            ></path>
+          </svg>
+        </button>
+        <h1 class="text-2xl font-bold tracking-tight">Local Sync Manager</h1>
+      </div>
+      <div
+        id="status-badge"
+        class="px-3 py-1 bg-card border border-border-main rounded-lg text-xs font-bold text-text-muted flex items-center gap-2"
+      >
+        <span class="w-2 h-2 rounded-full bg-text-muted"></span> Stopped
+      </div>
+    </header>
+
+    <main class="flex-1 overflow-y-auto space-y-6 pb-10">
+      <!-- Configuration -->
+      <section class="bg-panel p-6 rounded-2xl border border-border-main shadow-sm">
+        <h2 class="text-sm font-bold text-text-main uppercase tracking-wider mb-4 flex items-center gap-2">
+          <span class="text-lg">⚙️</span> Settings
+        </h2>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+          <div>
+            <label class="block text-xs font-bold text-text-muted uppercase mb-1">VFS Mount Path</label>
+            <input
+              type="text"
+              id="cfg-mount"
+              class="w-full bg-card border border-border-main rounded-lg p-2 text-sm text-text-main focus:border-primary focus:outline-none transition font-mono"
+              placeholder="data/workspace"
+            />
+            <p class="text-[10px] text-text-muted mt-1">Itera OS directory to be synced.</p>
+          </div>
+          <div>
+            <label class="block text-xs font-bold text-text-muted uppercase mb-1">Server URL</label>
+            <input
+              type="text"
+              id="cfg-url"
+              class="w-full bg-card border border-border-main rounded-lg p-2 text-sm text-text-main focus:border-primary focus:outline-none transition font-mono"
+              placeholder="http://127.0.0.1:8000"
+            />
+            <p class="text-[10px] text-text-muted mt-1">Address of your Python local server.</p>
+          </div>
+        </div>
+
+        <div class="flex items-center justify-between border-t border-border-main/50 pt-6">
+          <div>
+            <h3 class="font-bold text-text-main text-sm">Sync Daemon</h3>
+            <p class="text-xs text-text-muted">Enable background synchronization.</p>
+          </div>
+          <label class="relative inline-flex items-center cursor-pointer">
+            <input type="checkbox" id="toggle-daemon" class="sr-only peer" onchange="toggleDaemon(this.checked)" />
+            <div
+              class="w-11 h-6 bg-card peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-text-muted peer-checked:after:bg-white after:border-border-main after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-success border border-border-main shadow-inner transition-colors"
+            ></div>
+          </label>
+        </div>
+      </section>
+
+      <!-- Python Script -->
+      <section class="bg-panel p-6 rounded-2xl border border-border-main shadow-sm flex flex-col h-96">
+        <div class="flex items-center justify-between mb-4 shrink-0">
+          <div>
+            <h2 class="text-sm font-bold text-text-main uppercase tracking-wider flex items-center gap-2">
+              <span class="text-lg">🐍</span> Python Sync Server
+            </h2>
+            <p class="text-xs text-text-muted mt-1">Save this script to your local machine and run it.</p>
+          </div>
+          <button
+            onclick="copyScript()"
+            id="btn-copy"
+            class="px-4 py-2 bg-primary hover:bg-primary/90 text-white text-xs font-bold rounded-lg shadow transition"
+          >
+            Copy Script
+          </button>
+        </div>
+        <div class="flex-1 bg-app border border-border-main rounded-lg overflow-hidden">
+          <textarea
+            id="script-content"
+            readonly
+            spellcheck="false"
+            class="w-full h-full bg-transparent text-xs font-mono text-text-main p-4 focus:outline-none resize-none whitespace-pre"
+          ></textarea>
+        </div>
+      </section>
+    </main>
+
+    <script>
+      const DOM = (id) => document.getElementById(id);
+      const PID = 'local_sync_daemon';
+      let isRunning = false;
+
+      const pythonScript = \`
+import os
+import time
+import hashlib
+import asyncio
+import argparse
+from pathlib import Path
+from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect, Request
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse, Response
+from watchdog.observers import Observer
+from watchdog.events import FileSystemEventHandler
+
+parser = argparse.ArgumentParser(description="Itera OS Local Sync Server")
+parser.add_argument("--dir", type=str, default="./workspace", help="Directory to sync with Itera OS")
+parser.add_argument("--port", type=int, default=8000, help="Port to run the server on")
+args = parser.parse_args()
+
+BASE_DIR = Path(args.dir).resolve()
+os.makedirs(BASE_DIR, exist_ok=True)
+
+app = FastAPI(title="Itera Sync Server")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+def get_safe_path(requested_path: str) -> Path:
+    clean_path = requested_path.lstrip("/")
+    target_path = (BASE_DIR / clean_path).resolve()
+    if not target_path.is_relative_to(BASE_DIR):
+        raise HTTPException(status_code=403, detail="Access Denied: Path Traversal")
+    return target_path
+
+def calc_hash(file_path: Path) -> str:
+    if not file_path.is_file(): return ""
+    sha256 = hashlib.sha256()
+    try:
+        with open(file_path, "rb") as f:
+            for chunk in iter(lambda: f.read(4096), b""):
+                sha256.update(chunk)
+        return sha256.hexdigest()
+    except Exception: return ""
+
+class ConnectionManager:
+    def __init__(self):
+        self.active_connections: list[WebSocket] = []
+
+    async def connect(self, websocket: WebSocket):
+        await websocket.accept()
+        self.active_connections.append(websocket)
+
+    def disconnect(self, websocket: WebSocket):
+        if websocket in self.active_connections:
+            self.active_connections.remove(websocket)
+
+    async def broadcast(self, message: dict):
+        for connection in self.active_connections:
+            try:
+                await connection.send_json(message)
+            except Exception: pass
+
+manager = ConnectionManager()
+
+@app.get("/api/meta")
+def get_all_metadata():
+    meta_tree = {}
+    for root, dirs, files in os.walk(BASE_DIR):
+        dirs[:] = [d for d in dirs if not d.startswith(".") and d != "__pycache__"]
+        for file in files:
+            if file.startswith(".DS_Store"): continue
+            full_path = Path(root) / file
+            rel_path = full_path.relative_to(BASE_DIR).as_posix()
+            stat = full_path.stat()
+            meta_tree[rel_path] = {
+                "kind": "file",
+                "size": stat.st_size,
+                "updatedAt": int(stat.st_mtime * 1000),
+                "hash": calc_hash(full_path)
+            }
+    return meta_tree
+
+@app.get("/api/file/{path:path}")
+def download_file(path: str):
+    target = get_safe_path(path)
+    if not target.is_file():
+        raise HTTPException(status_code=404, detail="Not found")
+    return FileResponse(target)
+
+@app.put("/api/file/{path:path}")
+async def upload_file(path: str, request: Request):
+    target = get_safe_path(path)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    body = await request.body()
+    with open(target, "wb") as f:
+        f.write(body)
+    return {"status": "ok"}
+
+@app.delete("/api/file/{path:path}")
+def delete_file(path: str):
+    target = get_safe_path(path)
+    if target.is_file(): target.unlink()
+    elif target.is_dir():
+        try: target.rmdir()
+        except OSError: raise HTTPException(status_code=400, detail="Not empty")
+    return {"status": "ok"}
+
+@app.websocket("/ws")
+async def websocket_endpoint(websocket: WebSocket):
+    await manager.connect(websocket)
+    try:
+        while True: await websocket.receive_text()
+    except WebSocketDisconnect:
+        manager.disconnect(websocket)
+
+class LocalFileEventHandler(FileSystemEventHandler):
+    def _notify(self, event_type: str, path: str):
+        full_path = Path(path)
+        if ".git" in full_path.parts or full_path.name.startswith("."): return
+        try: rel_path = full_path.relative_to(BASE_DIR).as_posix()
+        except ValueError: return
+
+        payload = { "type": event_type, "path": rel_path }
+        if event_type in ["create", "update"] and full_path.is_file():
+            stat = full_path.stat()
+            payload["meta"] = {
+                "size": stat.st_size,
+                "updatedAt": int(stat.st_mtime * 1000),
+                "hash": calc_hash(full_path)
+            }
+        asyncio.run_coroutine_threadsafe(manager.broadcast(payload), loop)
+
+    def on_created(self, event): self._notify("create", event.src_path)
+    def on_modified(self, event):
+        if not event.is_directory: self._notify("update", event.src_path)
+    def on_deleted(self, event): self._notify("delete", event.src_path)
+    def on_moved(self, event):
+        self._notify("delete", event.src_path)
+        self._notify("create", event.dest_path)
+
+observer = None
+loop = None
+
+@app.on_event("startup")
+def startup_event():
+    global observer, loop
+    loop = asyncio.get_running_loop()
+    print(f"[*] Itera Sync Server mounted at: {BASE_DIR}")
+    event_handler = LocalFileEventHandler()
+    observer = Observer()
+    observer.schedule(event_handler, str(BASE_DIR), recursive=True)
+    observer.start()
+
+@app.on_event("shutdown")
+def shutdown_event():
+    if observer:
+        observer.stop()
+        observer.join()
+
+if __name__ == "__main__":
+    import uvicorn
+    # Requires: pip install fastapi uvicorn watchdog
+    uvicorn.run("itera_sync_server:app", host="127.0.0.1", port=args.port, reload=True)
+\`.trim();
+
+      async function init() {
+        DOM('script-content').value = pythonScript;
+
+        if (!window.MetaOS) return setTimeout(init, 50);
+
+        try {
+          const config = await App.Config.get('local_sync');
+          if (config.mountPath) DOM('cfg-mount').value = config.mountPath;
+          if (config.serverUrl) DOM('cfg-url').value = config.serverUrl;
+        } catch (e) {}
+
+        checkStatus();
+        setInterval(checkStatus, 2000);
+      }
+
+      async function checkStatus() {
+        if (!window.MetaOS) return;
+        const ps = await MetaOS.system.ps();
+        isRunning = ps.some((p) => p.pid === PID);
+
+        DOM('toggle-daemon').checked = isRunning;
+
+        const badge = DOM('status-badge');
+        if (isRunning) {
+          badge.innerHTML =
+            '<span class="w-2 h-2 rounded-full bg-success animate-pulse shadow-[0_0_8px_rgba(var(--c-accent-success),0.8)]"></span> Running';
+        } else {
+          badge.innerHTML = '<span class="w-2 h-2 rounded-full bg-text-muted"></span> Stopped';
+        }
+      }
+
+      window.toggleDaemon = async function (start) {
+        const mountPath = DOM('cfg-mount').value.trim() || 'data/workspace';
+        const serverUrl = DOM('cfg-url').value.trim() || 'http://127.0.0.1:8000';
+
+        await App.Config.update('local_sync', { mountPath, serverUrl });
+
+        if (start) {
+          await MetaOS.system.spawn('services/local_sync.html', { pid: PID, mode: 'background' });
+          AppUI.notify('Sync daemon started.', 'success');
+        } else {
+          await MetaOS.system.kill(PID);
+          AppUI.notify('Sync daemon stopped.', 'info');
+        }
+        setTimeout(checkStatus, 500);
+      };
+
+      window.copyScript = function () {
+        const el = DOM('script-content');
+        el.select();
+        document.execCommand('copy');
+
+        const btn = DOM('btn-copy');
+        btn.textContent = 'Copied!';
+        btn.classList.add('bg-success');
+        btn.classList.remove('bg-primary');
+        setTimeout(() => {
+          btn.textContent = 'Copy Script';
+          btn.classList.remove('bg-success');
+          btn.classList.add('bg-primary');
+        }, 2000);
+      };
 
       init();
     </script>
@@ -3762,6 +4114,160 @@ Attributes:
 </html>
 `.trim(),
 
+  "services/local_sync.html": `
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Local Sync Daemon</title>
+  </head>
+  <body>
+    <script>
+      async function initSyncDaemon() {
+        if (!window.MetaOS) return setTimeout(initSyncDaemon, 100);
+
+        let config = { mountPath: 'data/workspace', serverUrl: 'http://127.0.0.1:8000' };
+        try {
+          const confData = await MetaOS.fs.read('system/config/local_sync.json');
+          config = { ...config, ...JSON.parse(confData) };
+        } catch (e) {}
+
+        const { mountPath, serverUrl } = config;
+        let ws = null;
+
+        // 1. マウント宣言とオンデマンドフェッチの待ち受け
+        try {
+          await MetaOS.fs.mount(mountPath, async (reqPath) => {
+            const relPath = reqPath.substring(mountPath.length + 1);
+            try {
+              const res = await fetch(\`\${serverUrl}/api/file/\${relPath}\`);
+              if (!res.ok) return false;
+              const arrayBuffer = await res.arrayBuffer();
+
+              // 実体を VFS に書き込む (source フラグをつけてエコーを防止)
+              await MetaOS.fs.write(reqPath, new Uint8Array(arrayBuffer), {
+                overwrite: true,
+                silent: true,
+                source: 'sync_daemon',
+              });
+              return true;
+            } catch (e) {
+              console.error('[SyncDaemon] Fetch failed:', e);
+              return false;
+            }
+          });
+          MetaOS.ai.log(\`Local Sync Daemon successfully mounted at /\${mountPath}\`, 'system');
+        } catch (e) {
+          console.error('[SyncDaemon] Mount failed:', e);
+          return;
+        }
+
+        // 2. 初期同期 (サーバーのメタデータを取得して VFS にスタブを作成)
+        try {
+          const res = await fetch(\`\${serverUrl}/api/meta\`);
+          const remoteMeta = await res.json();
+          const localState = await MetaOS.fs.getSyncState(mountPath);
+
+          for (const [relPath, meta] of Object.entries(remoteMeta)) {
+            const fullPath = \`\${mountPath}/\${relPath}\`;
+            const local = localState[fullPath];
+
+            // ローカルに存在しないか、ハッシュが異なればスタブを作成
+            if (!local || local.hash !== meta.hash) {
+              await MetaOS.fs.createStub(
+                fullPath,
+                {
+                  size: meta.size,
+                  updatedAt: meta.updatedAt,
+                  hash: meta.hash,
+                },
+                { source: 'sync_daemon' },
+              );
+            }
+          }
+        } catch (e) {
+          console.error('[SyncDaemon] Initial sync failed:', e);
+        }
+
+        // 3. リアルタイム監視 (WebSocket: サーバー -> Itera OS)
+        const connectWs = () => {
+          const wsUrl = serverUrl.replace(/^http/, 'ws') + '/ws';
+          ws = new WebSocket(wsUrl);
+          ws.onmessage = async (e) => {
+            const data = JSON.parse(e.data);
+            const fullPath = \`\${mountPath}/\${data.path}\`;
+
+            if (data.type === 'create' || data.type === 'update') {
+              await MetaOS.fs.createStub(
+                fullPath,
+                {
+                  size: data.meta.size,
+                  updatedAt: data.meta.updatedAt,
+                  hash: data.meta.hash,
+                },
+                { source: 'sync_daemon' },
+              );
+            } else if (data.type === 'delete') {
+              try {
+                await MetaOS.fs.delete(fullPath, { permanent: true, source: 'sync_daemon' });
+              } catch (err) {}
+            }
+          };
+          ws.onclose = () => setTimeout(connectWs, 5000); // 再接続
+        };
+        connectWs();
+
+        // 4. ローカル変更の監視 (Itera OS -> サーバー)
+        MetaOS.system.on('file_changed', async (payload) => {
+          // 自分が書き込んだ変更(エコー)は無視する
+          if (payload.source === 'sync_daemon') return;
+
+          // 管轄外のファイルは無視する
+          if (!payload.path.startsWith(mountPath + '/')) return;
+
+          // スタブが作成されただけのイベントも無視する
+          if (payload.type === 'create' || payload.type === 'update') {
+            if (!payload.node || payload.node.syncState === 'stub') return;
+          }
+
+          const getRelPath = (p) => p.substring(mountPath.length + 1);
+
+          if (payload.type === 'create' || payload.type === 'update') {
+            try {
+              const relPath = getRelPath(payload.path);
+              // バイナリとして読み出し
+              const u8 = await MetaOS.fs.read(payload.path, { encoding: 'binary' });
+              await fetch(\`\${serverUrl}/api/file/\${relPath}\`, { method: 'PUT', body: u8 });
+            } catch (e) {
+              console.error('[SyncDaemon] Upload failed:', e);
+            }
+          } else if (payload.type === 'delete' || payload.type === 'trash') {
+            try {
+              const targetPath = payload.type === 'trash' ? payload.oldPath : payload.path;
+              const relPath = getRelPath(targetPath);
+              await fetch(\`\${serverUrl}/api/file/\${relPath}\`, { method: 'DELETE' });
+            } catch (e) {
+              console.error('[SyncDaemon] Delete failed:', e);
+            }
+          } else if (payload.type === 'rename' || payload.type === 'move') {
+            try {
+              const oldRelPath = getRelPath(payload.oldPath);
+              const newRelPath = getRelPath(payload.path);
+              await fetch(\`\${serverUrl}/api/file/\${oldRelPath}\`, { method: 'DELETE' });
+
+              const u8 = await MetaOS.fs.read(payload.path, { encoding: 'binary' });
+              await fetch(\`\${serverUrl}/api/file/\${newRelPath}\`, { method: 'PUT', body: u8 });
+            } catch (e) {}
+          }
+        });
+      }
+
+      initSyncDaemon();
+    </script>
+  </body>
+</html>
+`.trim(),
+
   "system/apps/billing.html": `
 <!doctype html>
 <html lang="en">
@@ -4933,6 +5439,11 @@ Attributes:
   "temperature": 1
 }, null, 2),
 
+  "system/config/local_sync.json": JSON.stringify({
+  "mountPath": "data/workspace",
+  "serverUrl": "http://127.0.0.1:8000"
+}, null, 2),
+
   "system/config/network.json": JSON.stringify({
   "proxyUrl": "https://corsproxy.io/?",
   "allowCredentialsWithProxy": false
@@ -5557,6 +6068,13 @@ Attributes:
     "icon": "💳",
     "path": "system/apps/billing.html",
     "description": "API usage and cost dashboard"
+  },
+  {
+    "id": "local_sync",
+    "name": "Local Sync",
+    "icon": "🔄",
+    "path": "apps/sync_app.html",
+    "description": "Sync VFS with local machine"
   }
 ], null, 2),
 
@@ -5804,6 +6322,14 @@ Attributes:
     "path": "services/git.html",
     "description": "Background service providing Git operations.",
     "autoStart": false
+  },
+  {
+    "id": "local_sync_daemon",
+    "name": "Local Sync Daemon",
+    "icon": "🔄",
+    "path": "services/local_sync.html",
+    "description": "Bi-directional sync with local python server.",
+    "autoStart": false
   }
 ], null, 2),
 
@@ -5928,4 +6454,4 @@ Attributes:
 }, null, 2)
 };
 
-export const BUILD_TIME = 1784219484110;
+export const BUILD_TIME = 1784219622445;
