@@ -1,6 +1,6 @@
 /**
  * AUTO-GENERATED FILE - DO NOT EDIT MANUALLY
- * Generated on: 2026-07-16T17:02:42.482Z
+ * Generated on: 2026-07-16T17:16:21.140Z
  */
 
 export const DEFAULT_FILES: Record<string, string> = {
@@ -4237,11 +4237,6 @@ Attributes:
           // 管轄外のファイルは無視する
           if (!payload.path.startsWith(mountPath + '/')) return;
 
-          // スタブが作成されただけのイベントも無視する
-          if (payload.type === 'create' || payload.type === 'update') {
-            if (!payload.node || payload.node.syncState === 'stub') return;
-          }
-
           const getRelPath = (p) => p.substring(mountPath.length + 1);
 
           if (payload.type === 'create' || payload.type === 'update') {
@@ -6461,4 +6456,4 @@ Attributes:
 }, null, 2)
 };
 
-export const BUILD_TIME = 1784221362483;
+export const BUILD_TIME = 1784222181140;

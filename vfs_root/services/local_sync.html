@@ -108,11 +108,6 @@
           // 管轄外のファイルは無視する
           if (!payload.path.startsWith(mountPath + '/')) return;
 
-          // スタブが作成されただけのイベントも無視する
-          if (payload.type === 'create' || payload.type === 'update') {
-            if (!payload.node || payload.node.syncState === 'stub') return;
-          }
-
           const getRelPath = (p) => p.substring(mountPath.length + 1);
 
           if (payload.type === 'create' || payload.type === 'update') {
