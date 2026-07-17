@@ -368,6 +368,69 @@ export class Explorer {
     input.value = '';
   }
 
+  private async _handleDrop(e: DragEvent, targetFolderPath: string, element: HTMLElement) {
+    element.classList.remove('bg-primary', 'text-text-inverted');
+
+    if (e.dataTransfer && e.dataTransfer.types.includes('application/itera-file')) {
+      e.preventDefault();
+      e.stopPropagation();
+
+      const rawData = e.dataTransfer.getData('application/itera-file');
+      if (!rawData) return;
+
+      const data = JSON.parse(rawData);
+      await this._emitMove(data.path, targetFolderPath);
+    }
+  }
+
+  private _initRootDropZone() {
+    if (!this.els.CONTAINER) return;
+
+    this.els.CONTAINER.addEventListener('dragover', (e) => {
+      if (e.dataTransfer && e.dataTransfer.types.includes('application/itera-file')) {
+        e.preventDefault();
+        e.stopPropagation();
+        e.dataTransfer.dropEffect = 'move';
+        this.els.CONTAINER!.classList.add('bg-card', 'ring-2', 'ring-primary', 'ring-inset');
+      }
+    });
+
+    this.els.CONTAINER.addEventListener('dragleave', (e) => {
+      if (e.dataTransfer && e.dataTransfer.types.includes('application/itera-file')) {
+        e.preventDefault();
+        e.stopPropagation();
+        if (!this.els.CONTAINER!.contains(e.relatedTarget as Node)) {
+          this.els.CONTAINER!.classList.remove('bg-card', 'ring-2', 'ring-primary', 'ring-inset');
+        }
+      }
+    });
+
+    this.els.CONTAINER.addEventListener('drop', async (e) => {
+      if (e.dataTransfer && e.dataTransfer.types.includes('application/itera-file')) {
+        e.preventDefault();
+        e.stopPropagation();
+        this.els.CONTAINER!.classList.remove('bg-card', 'ring-2', 'ring-primary', 'ring-inset');
+
+        const rawData = e.dataTransfer.getData('application/itera-file');
+        if (rawData) {
+          const data = JSON.parse(rawData);
+          await this._emitMove(data.path, '');
+        }
+      }
+    });
+
+    document.addEventListener('dragend', (e) => {
+      if (
+        e.target &&
+        (e.target as HTMLElement).classList &&
+        (e.target as HTMLElement).classList.contains('tree-content')
+      ) {
+        (e.target as HTMLElement).style.opacity = '1';
+      }
+      this.els.CONTAINER!.classList.remove('bg-card', 'ring-2', 'ring-primary', 'ring-inset');
+    });
+  }
+
   private _bindSidebarDnD(): void {
     const sidebar = this.els.SIDEBAR;
     if (!sidebar) return;
@@ -514,7 +577,7 @@ export class Explorer {
     window.addEventListener('blur', stop);
   }
 
-  private async _promptRename(path: string) {
+  public async _promptRename(path: string) {
     const res = await window.AppUI?.showMessageBox({
       title: 'Rename or Move',
       message: `Edit path to rename or move the item:`,
@@ -531,7 +594,7 @@ export class Explorer {
     if (this.events['rename']) this.events['rename'](path, newPath);
   }
 
-  private async _confirmDelete(path: string, name: string) {
+  public async _confirmDelete(path: string, name: string) {
     const res = await window.AppUI?.showMessageBox({
       title: 'Delete Item',
       message: `Are you sure you want to delete "${name}"?`,

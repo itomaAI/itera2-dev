@@ -595,7 +595,9 @@ export class TreeView {
     });
     actions.push({
       label: 'Rename (Move)',
-      action: () => this._promptRename(path),
+      action: () => {
+        if (this.events['rename_request']) this.events['rename_request'](path);
+      },
     });
     actions.push({
       label: 'Download',
@@ -611,7 +613,9 @@ export class TreeView {
     });
     actions.push({
       label: 'Delete',
-      action: () => this._confirmDelete(path, name),
+      action: () => {
+        if (this.events['delete']) this.events['delete'](path);
+      },
       danger: true,
     });
 

@@ -3,6 +3,34 @@
  * Itera OS v2: Host Native Dialog Service
  */
 
+export interface DialogResult<T> {
+  value: T;
+  checkboxChecked: boolean;
+}
+
+export interface MessageBoxOptions<T> {
+  title: string;
+  message: string;
+  detail?: string;
+  type?: 'info' | 'warning' | 'error' | 'question';
+  buttons: {
+    label: string;
+    value: T;
+    style?: 'primary' | 'danger' | 'normal';
+    isDefault?: boolean;
+  }[];
+  checkbox?: {
+    label: string;
+    defaultChecked?: boolean;
+  };
+  prompt?: {
+    defaultValue?: string;
+    placeholder?: string;
+  };
+}
+
+export type ConflictAction = 'replace' | 'merge' | 'skip' | 'keep_both' | 'cancel';
+
 export class DialogService {
   // 過去のコードとの互換性のため duration 引数は残しますが、自動では消えなくなります。
   public notify(message: string, type: string = 'info', duration?: number): void {
@@ -269,7 +297,7 @@ export class DialogService {
       let defaultBtnEl: HTMLButtonElement | null = null;
       let cancelBtnEl: HTMLButtonElement | null = null;
 
-      options.buttons.forEach(btn => {
+      options.buttons.forEach((btn: { label: string; value: T; style?: string; isDefault?: boolean }) => {
         const btnEl = document.createElement('button');
         let bgClass = 'bg-card hover:bg-hover text-text-main';
         if (btn.style === 'primary') bgClass = 'bg-primary hover:bg-primary/90 text-white';

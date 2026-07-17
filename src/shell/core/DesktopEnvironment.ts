@@ -46,7 +46,6 @@ export class DesktopEnvironment {
   private _audioModal: AudioModal;
   private _systemModal: SystemModal;
   private _apiSettingsModal: ApiSettingsModal;
-  private _syncModal: SyncModal;
   private _taskSwitcherModal: TaskSwitcherModal;
   private _processMonitorModal: ProcessMonitorModal;
   private _propertiesModal: PropertiesModal;
