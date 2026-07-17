@@ -199,6 +199,62 @@
     </div>
 
     <script>
+      // --- Domain API ---
+      const CalendarAPI = {
+        async getEvents(monthKey) {
+          const path = `data/events/${monthKey}.json`;
+          const events = await App.FS.readJson(path, []);
+          return events.sort((a, b) => a.date.localeCompare(b.date));
+        },
+        async addEvent(title, date, time = '', note = '', endTime = '') {
+          const monthKey = date.slice(0, 7);
+          const path = `data/events/${monthKey}.json`;
+          const events = await App.FS.readJson(path, []);
+          const newEvent = { id: Date.now().toString(), title: title.trim(), date, time, endTime, note };
+          events.push(newEvent);
+          await App.FS.writeJson(path, events);
+          App.AI.logEvent(`User added a calendar event: "${title}" on ${date}`, 'event_added');
+          return newEvent;
+        },
+        async deleteEvent(id, dateStr) {
+          const monthKey = dateStr.slice(0, 7);
+          const path = `data/events/${monthKey}.json`;
+          let events = await App.FS.readJson(path, []);
+          const initialLen = events.length;
+          const eventToDelete = events.find((e) => e.id === id);
+          events = events.filter((e) => e.id !== id);
+          if (events.length !== initialLen) {
+            await App.FS.writeJson(path, events);
+            if (eventToDelete) App.AI.logEvent(`User deleted event: "${eventToDelete.title}"`, 'event_deleted');
+            return true;
+          }
+          return false;
+        },
+        async updateEvent(id, updates) {
+          const { originalDate, date, title, time, endTime, note } = updates;
+          await this.deleteEvent(id, originalDate || date);
+          return await this.addEvent(title, date, time, note, endTime);
+        },
+        async getCalendarItems(monthKey) {
+          const events = await this.getEvents(monthKey);
+          const formattedEvents = events.map((e) => ({ ...e, type: 'event' }));
+          
+          // Fetch tasks locally
+          let allTasks = [];
+          try {
+            const files = await MetaOS.fs.list('data/tasks');
+            for (const f of files.filter(x => x.endsWith('.json'))) {
+              allTasks.push(...await App.FS.readJson(f, []));
+            }
+          } catch (e) {}
+
+          const formattedTasks = allTasks
+            .filter((t) => t.dueDate && t.dueDate.startsWith(monthKey) && t.status !== 'completed')
+            .map((t) => ({ id: t.id, title: t.title, date: t.dueDate, time: '', type: 'task', priority: t.priority }));
+          return [...formattedEvents, ...formattedTasks];
+        }
+      };
+
       // --- State Management ---
       const State = {
         currentDate: new Date(),
@@ -221,7 +277,7 @@
         });
 
         // Fetch events and tasks for this month
-        State.events = await App.getCalendarItems(monthKey).catch(() => []);
+        State.events = await CalendarAPI.getCalendarItems(monthKey).catch(() => []);
 
         const firstDay = new Date(year, month, 1).getDay();
         const daysInMonth = new Date(year, month + 1, 0).getDate();
@@ -412,9 +468,9 @@
 
         AppUI.showLoading('Saving...');
         if (id) {
-          await App.updateEvent(id, { title, date, time, endTime, note, originalDate });
+          await CalendarAPI.updateEvent(id, { title, date, time, endTime, note, originalDate });
         } else {
-          await App.addEvent(title, date, time, note, endTime);
+          await CalendarAPI.addEvent(title, date, time, note, endTime);
         }
         AppUI.hideLoading();
 
@@ -429,13 +485,13 @@
           message: 'Are you sure you want to delete this event?',
           type: 'warning',
           buttons: [
-            { label: 'Cancel', value: false, style: 'normal' },
+            { label: 'Cancel', value: false, style: 'normal', isCancel: true },
             { label: 'Delete', value: true, style: 'danger', isDefault: true },
           ],
         });
-        if (res && res.value) {
+        if (res && res.action) {
           AppUI.showLoading('Deleting...');
-          await App.deleteEvent(id, State.modalDate);
+          await CalendarAPI.deleteEvent(id, State.modalDate);
           AppUI.hideLoading();
           await render();
           openDayModal(State.modalDate);

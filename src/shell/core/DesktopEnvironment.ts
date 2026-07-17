@@ -287,11 +287,11 @@ export class DesktopEnvironment {
           'WARNING: Enabling System Privileges (Sudo) allows you to modify or delete core OS files.\n\nIncorrect actions may break the system. Are you sure you want to proceed?',
         type: 'warning',
         buttons: [
-          { label: 'Cancel', value: false, style: 'normal' },
+          { label: 'Cancel', value: false, style: 'normal', isCancel: true },
           { label: 'Enable Sudo', value: true, style: 'danger', isDefault: true },
         ],
       });
-      if (res && res.value) {
+      if (res && res.action) {
         this.isSudoMode = true;
         this.activePrincipal = SYSTEM_PRINCIPAL;
         this._updateSudoUI();

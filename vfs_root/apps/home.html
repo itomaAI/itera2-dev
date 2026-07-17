@@ -202,7 +202,7 @@
       >
         <div class="p-4 border-b border-border-main flex justify-between items-center">
           <h3 class="font-bold text-lg text-text-main">Task Details</h3>
-          <button onclick="closeDashboardTaskModal()" class="text-text-muted hover:text-text-main">
+          <button onclick="DashTask.close()" class="text-text-muted hover:text-text-main">
             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
             </svg>
@@ -255,18 +255,18 @@
         </div>
 
         <div class="p-4 border-t border-border-main flex justify-between items-center bg-card/50 rounded-b-xl">
-          <button onclick="deleteDashboardTask()" class="text-error text-sm hover:underline font-medium">
+          <button onclick="DashTask.del()" class="text-error text-sm hover:underline font-medium">
             Delete Task
           </button>
           <div class="flex gap-2">
             <button
-              onclick="closeDashboardTaskModal()"
+              onclick="DashTask.close()"
               class="px-4 py-2 rounded-lg text-sm font-medium hover:bg-hover transition text-text-main"
             >
               Cancel
             </button>
             <button
-              onclick="saveDashboardTaskChanges()"
+              onclick="DashTask.save()"
               class="px-4 py-2 rounded-lg bg-primary text-text-inverted text-sm font-bold hover:bg-primary/90 shadow transition"
             >
               Save
@@ -330,8 +330,16 @@
         const refreshWidgets = async () => {
           if (!window.App) return;
 
-          // Tasks Widget
-          State.tasks = await App.getTasks().catch(() => []);
+          // Fetch Tasks Locally
+          let allTasks = [];
+          try {
+            const files = await MetaOS.fs.list('data/tasks');
+            for (const f of files.filter(x => x.endsWith('.json'))) {
+              allTasks.push(...await App.FS.readJson(f, []));
+            }
+          } catch (e) {}
+          State.tasks = allTasks;
+
           const pOrder = { high: 0, medium: 1, low: 2 };
           const pending = State.tasks
             .filter((t) => t.status !== 'completed')
@@ -354,7 +362,16 @@
             : '<div class="text-text-muted text-xs italic py-2">No active tasks.</div>';
 
           // Notes Widget
-          const notes = await App.getRecentNotes(5).catch(() => []);
+          let notes = [];
+          try {
+            const files = await MetaOS.fs.list('data', { recursive: true, detail: true });
+            notes = files
+              .filter(f => f.path.endsWith('.md'))
+              .sort((a, b) => b.updatedAt - a.updatedAt)
+              .slice(0, 5)
+              .map(f => f.path);
+          } catch (e) {}
+
           DOM('widget-notes').innerHTML = notes.length
             ? notes
                 .map(
@@ -380,12 +397,30 @@
             DOM('edit-modal').classList.remove('hidden');
           },
           close: () => DOM('edit-modal').classList.add('hidden'),
+          _updateTaskFile: async (id, fn) => {
+            try {
+              const files = await MetaOS.fs.list('data/tasks');
+              for (const f of files.filter(x => x.endsWith('.json'))) {
+                let tasks = await App.FS.readJson(f, []);
+                const idx = tasks.findIndex(t => t.id === id);
+                if (idx !== -1) {
+                  tasks = fn(tasks, idx);
+                  await App.FS.writeJson(f, tasks);
+                  return true;
+                }
+              }
+            } catch (e) {}
+            return false;
+          },
           save: async () => {
             const [id, title, priority, dueDate, description] = ['id', 'title', 'priority', 'date', 'desc'].map(
               (k) => DOM(`edit-${k}`).value,
             );
             if (title.trim()) {
-              await App.updateTask(id, { title, priority, dueDate, description });
+              await DashTask._updateTaskFile(id, (tasks, i) => {
+                tasks[i] = { ...tasks[i], title, priority, dueDate, description };
+                return tasks;
+              });
               DashTask.close();
               refreshWidgets();
             }
@@ -396,30 +431,27 @@
               message: 'Are you sure you want to delete this task permanently?',
               type: 'warning',
               buttons: [
-                { label: 'Cancel', value: false, style: 'normal' },
+                { label: 'Cancel', value: false, style: 'normal', isCancel: true },
                 { label: 'Delete', value: true, style: 'danger', isDefault: true },
               ],
             });
-            if (res && res.value) {
-              await App.deleteTask(DOM('edit-id').value);
+            if (res && res.action) {
+              await DashTask._updateTaskFile(DOM('edit-id').value, (tasks, i) => {
+                tasks.splice(i, 1);
+                return tasks;
+              });
               DashTask.close();
               refreshWidgets();
             }
           },
           toggle: async (id) => {
-            await App.toggleTask(id);
+            await DashTask._updateTaskFile(id, (tasks, i) => {
+              tasks[i].status = tasks[i].status === 'completed' ? 'pending' : 'completed';
+              return tasks;
+            });
             refreshWidgets();
           },
         };
-
-        // Backwards compatibility for inline handlers
-        Object.assign(window, {
-          openDashboardTaskModal: DashTask.edit,
-          closeDashboardTaskModal: DashTask.close,
-          saveDashboardTaskChanges: DashTask.save,
-          deleteDashboardTask: DashTask.del,
-          toggleDashboardTask: DashTask.toggle,
-        });
 
         // --- Boot Sequence ---
         const boot = async () => {

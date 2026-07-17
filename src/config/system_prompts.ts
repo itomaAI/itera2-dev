@@ -217,6 +217,7 @@ Renames or moves a file.
 Attributes:
     - path: Current path.
     - new_path: Destination path.
+    - overwrite (optional): "true" or "false" (default). Set to "true" to silently replace the destination file if it already exists.
 </define_tag>
 
 <define_tag name="copy_file">
@@ -224,6 +225,7 @@ Copies a file.
 Attributes:
     - path: Source path.
     - new_path: Destination path.
+    - overwrite (optional): "true" or "false" (default). Set to "true" to silently replace the destination file if it already exists.
 </define_tag>
 
 <define_tag name="spawn">

@@ -33,7 +33,7 @@
         try {
           if (!window.App) return setTimeout(loadApps, 50);
 
-          const apps = await App.getApps();
+          const apps = await App.FS.readJson('system/registry/apps.json', []);
 
           grid.innerHTML = '';
           apps.forEach((app, index) => {

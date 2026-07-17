@@ -378,11 +378,11 @@ export class ChatPanel {
         message: 'Are you sure you want to delete this message from the history?',
         type: 'warning',
         buttons: [
-          { label: 'Cancel', value: false, style: 'normal' },
+          { label: 'Cancel', value: false, style: 'normal', isCancel: true },
           { label: 'Delete', value: true, style: 'danger', isDefault: true },
         ],
       });
-      if (res && res.value && this.events['delete_turn']) {
+      if (res && res.action && this.events['delete_turn']) {
         this.events['delete_turn'](turn.id);
       }
     };

@@ -202,6 +202,61 @@
 
       const DOM = (id) => document.getElementById(id);
 
+      const TaskAPI = {
+        async getTasks() {
+          if (!window.MetaOS) return [];
+          try {
+            const files = await MetaOS.fs.list('data/tasks');
+            const all = [];
+            for (const f of files.filter(x => x.endsWith('.json'))) {
+              all.push(...await App.FS.readJson(f, []));
+            }
+            return all;
+          } catch (e) { return []; }
+        },
+        async addTask(title, dueDate = '', priority = 'medium') {
+          const monthKey = new Date().toISOString().slice(0, 7);
+          const path = `data/tasks/${monthKey}.json`;
+          const tasks = await App.FS.readJson(path, []);
+          const newTask = { id: Date.now().toString(), title: title.trim(), status: 'pending', dueDate, priority, created_at: new Date().toISOString() };
+          tasks.push(newTask);
+          await App.FS.writeJson(path, tasks);
+          App.AI.logEvent(`User added a new task: "${newTask.title}"`, 'task_added');
+          return newTask;
+        },
+        async _update(id, fn) {
+          if (!window.MetaOS) return false;
+          try {
+            const files = await MetaOS.fs.list('data/tasks');
+            for (const f of files.filter(x => x.endsWith('.json'))) {
+              let tasks = await App.FS.readJson(f, []);
+              const idx = tasks.findIndex(t => t.id === id);
+              if (idx !== -1) {
+                tasks = fn(tasks, idx);
+                await App.FS.writeJson(f, tasks);
+                return true;
+              }
+            }
+          } catch (e) {}
+          return false;
+        },
+        async updateTask(id, updates) {
+          let title = '';
+          const ok = await this._update(id, (tasks, i) => { tasks[i] = { ...tasks[i], ...updates }; title = tasks[i].title; return tasks; });
+          if (ok && updates.title) App.AI.logEvent(`User updated task: "${title}"`, 'task_updated');
+          return ok;
+        },
+        async toggleTask(id) {
+          return await this._update(id, (tasks, i) => { tasks[i].status = tasks[i].status === 'completed' ? 'pending' : 'completed'; return tasks; });
+        },
+        async deleteTask(id) {
+          let title = '';
+          const ok = await this._update(id, (tasks, i) => { title = tasks[i].title; tasks.splice(i, 1); return tasks; });
+          if (ok) App.AI.logEvent(`User deleted task: "${title}"`, 'task_deleted');
+          return ok;
+        }
+      };
+
       const GroupUI = {
         overdue: { label: 'Overdue', icon: '🔥', color: 'text-error' },
         today: { label: 'Today', icon: '🌟', color: 'text-text-muted' },
@@ -241,7 +296,7 @@
       async function render() {
         const list = DOM('task-list');
         try {
-          allTasks = await App.getTasks();
+          allTasks = await TaskAPI.getTasks();
           const tasks = allTasks.filter(
             (t) =>
               currentFilter === 'all' ||
@@ -331,7 +386,7 @@
 
         if (!input.value.trim()) return;
 
-        await App.addTask(input.value, dateInput.value, priority);
+        await TaskAPI.addTask(input.value, dateInput.value, priority);
 
         input.value = '';
         dateInput.value = ''; // Reset date
@@ -339,12 +394,21 @@
       }
 
       async function toggle(id) {
-        await App.toggleTask(id);
+        await TaskAPI.toggleTask(id);
         render();
       }
       async function del(id) {
-        if (confirm('Delete task?')) {
-          await App.deleteTask(id);
+        const res = await AppUI.showMessageBox({
+          title: 'Delete Task',
+          message: 'Are you sure you want to delete this task permanently?',
+          type: 'warning',
+          buttons: [
+            { label: 'Cancel', value: false, style: 'normal', isCancel: true },
+            { label: 'Delete', value: true, style: 'danger', isDefault: true },
+          ],
+        });
+        if (res && res.action) {
+          await TaskAPI.deleteTask(id);
           render();
         }
       }
@@ -376,8 +440,7 @@
 
         if (!title.trim()) return;
 
-        // We use updateTask from std.js. Note: std.js doesn't validate fields, so we can add description.
-        await App.updateTask(id, {
+        await TaskAPI.updateTask(id, {
           title,
           priority,
           dueDate,
@@ -395,12 +458,12 @@
           message: 'Delete this task permanently?',
           type: 'warning',
           buttons: [
-            { label: 'Cancel', value: false, style: 'normal' },
+            { label: 'Cancel', value: false, style: 'normal', isCancel: true },
             { label: 'Delete', value: true, style: 'danger', isDefault: true },
           ],
         });
-        if (res && res.value) {
-          await App.deleteTask(id);
+        if (res && res.action) {
+          await TaskAPI.deleteTask(id);
           closeTaskModal();
           render();
         }

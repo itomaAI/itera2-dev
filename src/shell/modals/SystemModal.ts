@@ -65,10 +65,16 @@ export class SystemModal {
 
     if (this.els.BTN_RESET) {
       this.els.BTN_RESET.onclick = async () => {
-        const confirmed = await window.AppUI?.confirm(
-          'WARNING: This will permanently delete ALL files and settings.\n\nAre you absolutely sure?',
-        );
-        if (confirmed) {
+        const res = await window.AppUI?.showMessageBox({
+          title: 'Factory Reset',
+          message: 'WARNING: This will permanently delete ALL files and settings.\n\nAre you absolutely sure you want to proceed?',
+          type: 'error',
+          buttons: [
+            { label: 'Cancel', value: false, style: 'normal', isDefault: true },
+            { label: 'Reset System', value: true, style: 'danger' }
+          ]
+        });
+        if (res && res.action) {
           if (this.events['reset']) this.events['reset']();
           this.close();
         }
@@ -151,10 +157,16 @@ export class SystemModal {
       return;
     }
 
-    const confirmed = await window.AppUI?.confirm(
-      `CAUTION: This will ERASE all current files and restore from "${file.name}".\n\nContinue?`,
-    );
-    if (!confirmed) {
+    const res = await window.AppUI?.showMessageBox({
+      title: 'Restore Backup',
+      message: `CAUTION: This will ERASE all current files and restore from "${file.name}".\n\nAre you sure you want to continue?`,
+      type: 'warning',
+      buttons: [
+        { label: 'Cancel', value: false, style: 'normal', isDefault: true },
+        { label: 'Restore', value: true, style: 'danger' }
+      ]
+    });
+    if (!res || !res.action) {
       input.value = '';
       return;
     }
@@ -264,11 +276,11 @@ export class SystemModal {
       message: `CAUTION: This will overwrite your entire file system index with "${file.name}".\nAre you sure you want to proceed?`,
       type: 'warning',
       buttons: [
-        { label: 'Cancel', value: false, style: 'normal', isDefault: true },
+        { label: 'Cancel', value: false, style: 'normal', isDefault: true, isCancel: true },
         { label: 'Restore Index', value: true, style: 'danger' },
       ],
     });
-    if (!res || !res.value) {
+    if (!res || !res.action) {
       input.value = '';
       return;
     }

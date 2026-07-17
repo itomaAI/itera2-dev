@@ -211,10 +211,13 @@ export class GuestBridgeBuilder {
         },
         host: {
             openEditor: async (path) => transport.requestHost('host:open_editor', { path }),
-            notify: async (message, title) => transport.requestHost('host:notify', { message, title }),
+            notify: async (message, type, duration) => transport.requestHost('host:notify', { message, type, duration }),
             copyText: async (text) => transport.requestHost('host:copy', { text }),
             openExternal: async (url) => transport.requestHost('host:open_url', { url }),
-            updateAddressBar: async (path) => transport.requestHost('host:address_bar', { path })
+            updateAddressBar: async (path) => transport.requestHost('host:address_bar', { path }),
+            showMessageBox: async (options) => transport.requestHost('host:show_message_box', { options }),
+            showLoading: async (message) => transport.requestHost('host:show_loading', { message }),
+            hideLoading: async () => transport.requestHost('host:hide_loading', {})
         },
         net: {
             fetch: async (url, options = {}) => transport.requestHost('net:fetch', { url, options }),

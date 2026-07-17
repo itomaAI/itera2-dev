@@ -353,6 +353,9 @@ export function registerFSTools(registry: ToolRegistry): void {
     name: 'move_file',
     description: 'Renames or moves a file.',
     impl: async (params: any, context: { vfs: VfsService }) => {
+      if (params.overwrite === 'true' && context.vfs.exists(AGENT_PRINCIPAL, params.new_path)) {
+        await context.vfs.deleteFile(AGENT_PRINCIPAL, params.new_path, { permanent: true });
+      }
       const msg = await context.vfs.rename(AGENT_PRINCIPAL, params.path, params.new_path);
       return { log: msg, ui: `🚚 Moved ${params.path}` };
     },
@@ -362,6 +365,9 @@ export function registerFSTools(registry: ToolRegistry): void {
     name: 'copy_file',
     description: 'Copies a file.',
     impl: async (params: any, context: { vfs: VfsService }) => {
+      if (params.overwrite === 'true' && context.vfs.exists(AGENT_PRINCIPAL, params.new_path)) {
+        await context.vfs.deleteFile(AGENT_PRINCIPAL, params.new_path, { permanent: true });
+      }
       const msg = await context.vfs.copyFile(AGENT_PRINCIPAL, params.path, params.new_path);
       return { log: msg, ui: `📄 Copied ${params.path}` };
     },

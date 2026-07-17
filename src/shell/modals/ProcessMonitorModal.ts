@@ -82,12 +82,12 @@ export class ProcessMonitorModal {
         message: 'Are you sure you want to terminate all background daemons?',
         type: 'warning',
         buttons: [
-          { label: 'Cancel', value: false, style: 'normal' },
+          { label: 'Cancel', value: false, style: 'normal', isCancel: true },
           { label: 'Kill All', value: true, style: 'danger', isDefault: true },
         ],
       });
 
-      if (res && res.value) {
+      if (res && res.action) {
         const procs = this.processManager.list();
         procs.forEach((p) => {
           if (p.type === 'daemon') this.processManager.kill(p.pid);

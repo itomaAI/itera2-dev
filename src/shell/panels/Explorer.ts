@@ -165,8 +165,7 @@ export class Explorer {
 
     this.treeView.on('move', async (srcPath: string, destPath: string) => {
       try {
-        await this.vfs.rename(this.getActivePrincipal(), srcPath, destPath);
-        this._emitHistory('file_moved', `User moved file: ${srcPath} -> ${destPath}`);
+        await this._handleTransfer(srcPath, destPath, 'move');
       } catch (e: any) {
         if (window.AppUI) window.AppUI.notify(e.message, 'error');
       }
@@ -310,10 +309,36 @@ export class Explorer {
   }
 
   private async _promptCreateRoot(type: 'file' | 'folder') {
-    const name = await window.AppUI?.prompt(`Enter new ${type} name:`);
+    const res = await window.AppUI?.showMessageBox({
+      title: `New ${type === 'folder' ? 'Folder' : 'File'}`,
+      message: `Enter name for the new ${type}:`,
+      type: 'question',
+      prompt: { defaultValue: type === 'folder' ? 'New Folder' : 'Untitled' },
+      buttons: [
+        { label: 'Cancel', value: null, style: 'normal', isCancel: true },
+        { label: 'Create', value: 'create', style: 'primary', isDefault: true },
+      ],
+    });
+
+    if (!res || res.action === 'cancel' || res.action === null) return;
+    const name = res.value;
     if (!name) return;
 
-    const fullPath = name.replace(/^\/+/, '');
+    let fullPath = name.replace(/^\/+/, '');
+
+    // 同名ファイル/フォルダが存在する場合は連番を振って衝突を回避
+    if (this.vfs.exists(this.getActivePrincipal(), fullPath)) {
+      const dotIndex = fullPath.lastIndexOf('.');
+      const hasExtension = type === 'file' && dotIndex !== -1 && dotIndex > fullPath.lastIndexOf('/');
+      const base = hasExtension ? fullPath.substring(0, dotIndex) : fullPath;
+      const ext = hasExtension ? fullPath.substring(dotIndex) : '';
+      
+      let counter = 1;
+      while (this.vfs.exists(this.getActivePrincipal(), fullPath)) {
+        fullPath = `${base}_${counter}${ext}`;
+        counter++;
+      }
+    }
 
     if (type === 'folder') {
       try {
@@ -399,7 +424,7 @@ export class Explorer {
         const rawData = e.dataTransfer.getData('application/itera-file');
         if (rawData) {
           const data = JSON.parse(rawData);
-          await this._emitMove(data.path, '');
+          await this._handleTransfer(data.path, '', 'move');
         }
       }
     });
@@ -569,13 +594,14 @@ export class Explorer {
       type: 'question',
       prompt: { defaultValue: path },
       buttons: [
-        { label: 'Cancel', value: null, style: 'normal' },
+        { label: 'Cancel', value: null, style: 'normal', isCancel: true },
         { label: 'Rename', value: 'rename', style: 'primary', isDefault: true },
       ],
     });
 
-    const newPath = res?.value;
-    if (!newPath || newPath === 'cancel' || newPath === path) return;
+    if (!res || res.action === 'cancel' || res.action === null) return;
+    const newPath = res.value;
+    if (!newPath || newPath === path) return;
     if (this.events['rename']) this.events['rename'](path, newPath);
   }
 
@@ -585,12 +611,12 @@ export class Explorer {
       message: `Are you sure you want to delete "${name}"?`,
       type: 'warning',
       buttons: [
-        { label: 'Cancel', value: false, style: 'normal' },
+        { label: 'Cancel', value: false, style: 'normal', isCancel: true },
         { label: 'Delete', value: true, style: 'danger', isDefault: true },
       ],
     });
 
-    if (res && res.value) {
+    if (res && res.action) {
       try {
         await this.vfs.deleteFile(this.getActivePrincipal(), path);
         this._emitHistory('file_deleted', `User deleted: ${path}`);
@@ -600,26 +626,27 @@ export class Explorer {
     }
   }
 
-  private async _emitMove(srcPath: string, destFolder: string) {
+  private async _handleTransfer(srcPath: string, destFolder: string, mode: 'move' | 'copy' = 'move') {
     if (srcPath === destFolder) return;
 
     const fileName = srcPath.split('/').pop()!;
     let newPath = destFolder ? (destFolder === srcPath ? srcPath : `${destFolder}/${fileName}`) : fileName;
 
-    // destFolder === srcPath の場合に newPathがディレクトリ名と被る対策として
     if (!destFolder) newPath = fileName;
     else if (destFolder !== srcPath) newPath = `${destFolder}/${fileName}`;
     else newPath = srcPath;
 
     if (srcPath === newPath) return;
+
     if (destFolder.startsWith(srcPath + '/')) {
-      if (window.AppUI)
+      if (window.AppUI) {
         window.AppUI.showMessageBox({
-          title: 'Invalid Move',
-          message: 'Cannot move a folder into its own subfolder.',
+          title: `Invalid ${mode === 'move' ? 'Move' : 'Copy'}`,
+          message: `Cannot ${mode} a folder into its own subfolder.`,
           type: 'error',
           buttons: [{ label: 'OK', value: null, style: 'primary', isDefault: true }],
         });
+      }
       return;
     }
 
@@ -628,11 +655,9 @@ export class Explorer {
       const isDir = stat.kind === 'directory';
 
       const res = await window.AppUI?.showConflictDialog(fileName, isDir);
-      if (!res || res.value === 'cancel') return;
+      if (!res || res.action === 'cancel' || res.action === 'skip') return;
 
-      if (res.value === 'skip') return;
-
-      if (res.value === 'keep_both') {
+      if (res.action === 'keep_both') {
         const dotIndex = newPath.lastIndexOf('.');
         const base = dotIndex !== -1 ? newPath.substring(0, dotIndex) : newPath;
         const ext = dotIndex !== -1 ? newPath.substring(dotIndex) : '';
@@ -642,24 +667,26 @@ export class Explorer {
           counter++;
         }
         try {
-          await this.vfs.rename(this.getActivePrincipal(), srcPath, newPath);
-          this._emitHistory('file_moved', `User moved file: ${srcPath} -> ${newPath}`);
+          if (mode === 'move') await this.vfs.rename(this.getActivePrincipal(), srcPath, newPath);
+          else await this.vfs.copyFile(this.getActivePrincipal(), srcPath, newPath);
+          this._emitHistory('file_' + (mode === 'move' ? 'moved' : 'copied'), `User ${mode} file: ${srcPath} -> ${newPath}`);
         } catch (e: any) {
           if (window.AppUI) window.AppUI.notify(e.message, 'error');
         }
         return;
       }
 
-      if (res.value === 'merge') {
-        await this._mergeDirectory(srcPath, newPath, false);
+      if (res.action === 'merge') {
+        await this._mergeDirectory(srcPath, newPath, mode === 'copy');
         return;
       }
 
-      if (res.value === 'replace') {
+      if (res.action === 'replace') {
         try {
           await this.vfs.deleteFile(this.getActivePrincipal(), newPath, { permanent: true });
-          await this.vfs.rename(this.getActivePrincipal(), srcPath, newPath);
-          this._emitHistory('file_moved', `User moved and replaced file: ${srcPath} -> ${newPath}`);
+          if (mode === 'move') await this.vfs.rename(this.getActivePrincipal(), srcPath, newPath);
+          else await this.vfs.copyFile(this.getActivePrincipal(), srcPath, newPath);
+          this._emitHistory('file_' + (mode === 'move' ? 'moved' : 'copied'), `User ${mode} and replaced file: ${srcPath} -> ${newPath}`);
         } catch (e: any) {
           if (window.AppUI) window.AppUI.notify(`Replace failed: ${e.message}`, 'error');
         }
@@ -668,8 +695,9 @@ export class Explorer {
     }
 
     try {
-      await this.vfs.rename(this.getActivePrincipal(), srcPath, newPath);
-      this._emitHistory('file_moved', `User moved file: ${srcPath} -> ${newPath}`);
+      if (mode === 'move') await this.vfs.rename(this.getActivePrincipal(), srcPath, newPath);
+      else await this.vfs.copyFile(this.getActivePrincipal(), srcPath, newPath);
+      this._emitHistory('file_' + (mode === 'move' ? 'moved' : 'copied'), `User ${mode} file: ${srcPath} -> ${newPath}`);
     } catch (e: any) {
       if (window.AppUI) window.AppUI.notify(e.message, 'error');
     }
@@ -697,8 +725,8 @@ export class Explorer {
               action = applyToAllAction;
             } else {
               const res = await window.AppUI?.showConflictDialog(child.name, false);
-              if (!res || res.value === 'cancel') return false;
-              action = res.value;
+              if (!res || res.action === 'cancel') return false;
+              action = res.action as string;
 
               if (res.checkboxChecked) applyToAllAction = action;
             }

@@ -563,13 +563,14 @@
           type: 'question',
           prompt: { defaultValue: 'Untitled.md' },
           buttons: [
-            { label: 'Cancel', value: null, style: 'normal' },
+            { label: 'Cancel', value: null, style: 'normal', isCancel: true },
             { label: 'Create', value: 'create', style: 'primary', isDefault: true },
           ],
         });
 
-        const name = res?.value;
-        if (!name || name === 'cancel') return;
+        if (!res || res.action === 'cancel' || res.action === null) return;
+        const name = res.value;
+        if (!name) return;
 
         let path = name;
         if (!path.includes('/')) {

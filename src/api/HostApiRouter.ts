@@ -362,8 +362,8 @@ export class HostApiRouter {
       d.shell._closeMobileDrawers();
       return true;
     });
-    t.registerHandler('host:notify', async ({ message, title }) => {
-      if (window.AppUI) window.AppUI.notify(`${title}: ${message}`);
+    t.registerHandler('host:notify', async ({ message, type, duration }) => {
+      if (window.AppUI) window.AppUI.notify(message, type, duration);
       return true;
     });
     t.registerHandler('host:copy', async ({ text }) => {
@@ -394,6 +394,21 @@ export class HostApiRouter {
         fgApp.currentUri = `metaos://${intent}/${newPath}`;
         d.processManager._updateAddressBar(fgApp.currentUri);
       }
+      return true;
+    });
+
+    t.registerHandler('host:show_message_box', async ({ options }) => {
+      if (window.AppUI) {
+        return await window.AppUI.showMessageBox(options);
+      }
+      return null;
+    });
+    t.registerHandler('host:show_loading', async ({ message }) => {
+      if (window.AppUI) window.AppUI.showLoading(message);
+      return true;
+    });
+    t.registerHandler('host:hide_loading', async () => {
+      if (window.AppUI) window.AppUI.hideLoading();
       return true;
     });
 

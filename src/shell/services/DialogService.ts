@@ -4,7 +4,8 @@
  */
 
 export interface DialogResult<T> {
-  value: T;
+  action: T;
+  value?: string;
   checkboxChecked: boolean;
 }
 
@@ -18,6 +19,7 @@ export interface MessageBoxOptions<T> {
     value: T;
     style?: 'primary' | 'danger' | 'normal';
     isDefault?: boolean;
+    isCancel?: boolean;
   }[];
   checkbox?: {
     label: string;
@@ -32,6 +34,15 @@ export interface MessageBoxOptions<T> {
 export type ConflictAction = 'replace' | 'merge' | 'skip' | 'keep_both' | 'cancel';
 
 export class DialogService {
+  private activeDialogs: { handleKeydown: (e: KeyboardEvent) => void }[] = [];
+
+  constructor() {
+    document.addEventListener('keydown', (e) => {
+      if (this.activeDialogs.length > 0) {
+        this.activeDialogs[this.activeDialogs.length - 1].handleKeydown(e);
+      }
+    });
+  }
   // 過去のコードとの互換性のため duration 引数は残しますが、自動では消えなくなります。
   public notify(message: string, type: string = 'info', duration?: number): void {
     let container = document.getElementById('__itera-toast-container');
@@ -116,21 +127,29 @@ export class DialogService {
   }
 
   public showLoading(message: string = 'Processing...'): void {
-    this.hideLoading();
-    const overlay = document.createElement('div');
-    overlay.id = '__itera-loading-overlay';
-    overlay.className =
-      'fixed inset-0 bg-app/80 backdrop-blur-sm z-[99999] flex flex-col items-center justify-center itera-animate-fade';
+    let overlay = document.getElementById('__itera-loading-overlay');
+    if (!overlay) {
+      overlay = document.createElement('div');
+      overlay.id = '__itera-loading-overlay';
+      overlay.className =
+        'fixed inset-0 bg-app/80 backdrop-blur-sm z-[99999] flex flex-col items-center justify-center itera-animate-fade';
+      overlay.style.transition = 'opacity 0.2s ease';
+      document.body.appendChild(overlay);
+    } else {
+      overlay.style.opacity = '1';
+    }
     overlay.innerHTML = `
       <div class="loader mb-4"></div>
       <div class="text-sm font-bold text-text-muted tracking-wider uppercase animate-pulse">${message}</div>
     `;
-    document.body.appendChild(overlay);
   }
 
   public hideLoading(): void {
     const overlay = document.getElementById('__itera-loading-overlay');
-    if (overlay) overlay.remove();
+    if (overlay && document.body.contains(overlay)) {
+      overlay.style.opacity = '0';
+      setTimeout(() => overlay.remove(), 200);
+    }
   }
 
   public alert(message: string, title: string = 'System Alert'): Promise<void> {
@@ -148,10 +167,10 @@ export class DialogService {
       message,
       type: 'question',
       buttons: [
-        { label: 'Cancel', value: false, style: 'normal' },
+        { label: 'Cancel', value: false, style: 'normal', isCancel: true },
         { label: 'OK', value: true, style: 'primary', isDefault: true },
       ],
-    }).then((res) => res.value);
+    }).then((res) => res.action);
   }
 
   public prompt(message: string, defaultValue: string = '', title: string = 'Input Required'): Promise<string | null> {
@@ -161,10 +180,15 @@ export class DialogService {
       type: 'question',
       prompt: { defaultValue },
       buttons: [
-        { label: 'Cancel', value: null, style: 'normal' },
+        { label: 'Cancel', value: null, style: 'normal', isCancel: true },
         { label: 'OK', value: 'ok' as any, style: 'primary', isDefault: true },
       ],
-    }).then((res) => res.value);
+    }).then((res) => {
+      if (res.action === 'ok' && res.value !== undefined) {
+        return res.value;
+      }
+      return null;
+    });
   }
 
   public async showConflictDialog(itemName: string, isDirectory: boolean): Promise<DialogResult<ConflictAction>> {
@@ -174,7 +198,7 @@ export class DialogService {
       : 'Do you want to replace it with the one you are moving?';
 
     const buttons: MessageBoxOptions<ConflictAction>['buttons'] = [
-      { label: 'Cancel', value: 'cancel', style: 'normal' },
+      { label: 'Cancel', value: 'cancel', style: 'normal', isCancel: true },
       { label: 'Skip', value: 'skip', style: 'normal' },
     ];
 
@@ -202,6 +226,7 @@ export class DialogService {
       const overlay = document.createElement('div');
       overlay.className =
         'fixed inset-0 bg-black/60 backdrop-blur-sm z-[99999] flex items-center justify-center p-4 itera-animate-fade select-none';
+      overlay.style.transition = 'opacity 0.2s ease';
 
       const box = document.createElement('div');
       box.className =
@@ -282,21 +307,34 @@ export class DialogService {
       const footer = document.createElement('div');
       footer.className = 'px-4 py-3 border-t border-border-main bg-panel flex justify-end gap-2 flex-wrap';
 
+      const dialogContext = {
+        handleKeydown: (e: KeyboardEvent) => {
+          if (e.key === 'Enter') {
+            if (inputEl && document.activeElement !== inputEl) return;
+            if (defaultBtnEl) { e.preventDefault(); defaultBtnEl.click(); }
+          } else if (e.key === 'Escape') {
+            if (cancelBtnEl) { e.preventDefault(); cancelBtnEl.click(); }
+            else if (defaultBtnEl && options.type === 'warning') { e.preventDefault(); defaultBtnEl.click(); }
+          }
+        }
+      };
+      this.activeDialogs.push(dialogContext);
+
       let isClosed = false;
-      const closeDialog = (btnValue: T) => {
+
+      const closeDialog = (btnAction: T) => {
         if (isClosed) return;
         isClosed = true;
+
+        const idx = this.activeDialogs.indexOf(dialogContext);
+        if (idx > -1) this.activeDialogs.splice(idx, 1);
 
         overlay.style.opacity = '0';
         setTimeout(() => overlay.remove(), 200);
 
-        let finalValue = btnValue;
-        if (inputEl && btnValue !== null && btnValue !== false && (btnValue as any) !== 'cancel') {
-          finalValue = inputEl.value as any;
-        }
-
         resolve({
-          value: finalValue,
+          action: btnAction,
+          value: inputEl ? inputEl.value : undefined,
           checkboxChecked: checkboxEl ? checkboxEl.checked : false,
         });
       };
@@ -304,7 +342,7 @@ export class DialogService {
       let defaultBtnEl: HTMLButtonElement | null = null;
       let cancelBtnEl: HTMLButtonElement | null = null;
 
-      options.buttons.forEach((btn: { label: string; value: T; style?: string; isDefault?: boolean }) => {
+      options.buttons.forEach((btn: any) => {
         const btnEl = document.createElement('button');
         let bgClass = 'bg-card hover:bg-hover text-text-main';
         if (btn.style === 'primary') bgClass = 'bg-primary hover:bg-primary/90 text-white';
@@ -317,15 +355,14 @@ export class DialogService {
         footer.appendChild(btnEl);
 
         if (btn.isDefault) defaultBtnEl = btnEl;
-        if (
-          btn.label.toLowerCase() === 'cancel' ||
-          btn.value === null ||
-          btn.value === false ||
-          btn.value === 'cancel'
-        ) {
-          cancelBtnEl = btnEl;
-        }
+        if (btn.isCancel) cancelBtnEl = btnEl;
       });
+
+      if (!cancelBtnEl && options.buttons.length > 0) {
+        cancelBtnEl = Array.from(footer.querySelectorAll('button')).find(
+          b => b.textContent?.toLowerCase() === 'cancel'
+        ) as HTMLButtonElement | null;
+      }
 
       box.appendChild(header);
       box.appendChild(body);
@@ -333,7 +370,7 @@ export class DialogService {
       overlay.appendChild(box);
       document.body.appendChild(overlay);
 
-      // Focus & Keyboard Navigation
+      // Focus
       if (inputEl) {
         setTimeout(() => {
           inputEl!.focus();
@@ -342,16 +379,6 @@ export class DialogService {
       } else if (defaultBtnEl) {
         setTimeout(() => defaultBtnEl!.focus(), 50);
       }
-
-      overlay.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') {
-          if (inputEl && document.activeElement !== inputEl) return;
-          if (defaultBtnEl) defaultBtnEl.click();
-        } else if (e.key === 'Escape') {
-          if (cancelBtnEl) cancelBtnEl.click();
-          else if (defaultBtnEl && options.type === 'warning') defaultBtnEl.click();
-        }
-      });
     });
   }
 }

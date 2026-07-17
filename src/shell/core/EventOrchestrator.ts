@@ -282,11 +282,11 @@ export class EventOrchestrator {
         message: 'Are you sure you want to clear the chat history and media cache?',
         type: 'warning',
         buttons: [
-          { label: 'Cancel', value: false, style: 'normal' },
+          { label: 'Cancel', value: false, style: 'normal', isCancel: true },
           { label: 'Clear History', value: true, style: 'danger', isDefault: true },
         ],
       });
-      if (res && res.value) {
+      if (res && res.action) {
         this.sessionManager.clearSession({
           purgeMedia: true,
           triggerLlm: false,

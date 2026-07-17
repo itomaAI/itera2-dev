@@ -98,108 +98,113 @@
       if (global.MetaOS) global.MetaOS.system.spawn('apps/home.html', { pid: 'main' });
     },
     notify: (message, type = 'info', duration) => {
-      let container = document.getElementById('__itera-toast-container');
-      if (!container) {
-        container = document.createElement('div');
-        container.id = '__itera-toast-container';
-        Object.assign(container.style, {
-          position: 'fixed',
-          bottom: '1.25rem',
-          right: '1.25rem',
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'flex-end',
-          gap: '0.5rem',
-          zIndex: '99999',
-          pointerEvents: 'none',
+      if (global.MetaOS) {
+        global.MetaOS.host.notify(message, type, duration);
+      } else {
+        console.log(`[Notification: ${type}] ${message}`);
+      }
+    },
+    alert: async (message, title = 'System Alert') => {
+      if (global.MetaOS) {
+        return await global.MetaOS.host.showMessageBox({
+          title,
+          message,
+          type: 'warning',
+          buttons: [{ label: 'OK', value: undefined, style: 'primary', isDefault: true }],
+        }).then(() => undefined);
+      } else {
+        window.alert(`${title}\n\n${message}`);
+        return undefined;
+      }
+    },
+    confirm: async (message, title = 'Confirmation') => {
+      if (global.MetaOS) {
+        return await global.MetaOS.host.showMessageBox({
+          title,
+          message,
+          type: 'question',
+          buttons: [
+            { label: 'Cancel', value: false, style: 'normal', isCancel: true },
+            { label: 'OK', value: true, style: 'primary', isDefault: true },
+          ],
+        }).then(res => res ? res.action : false);
+      } else {
+        return window.confirm(`${title}\n\n${message}`);
+      }
+    },
+    prompt: async (message, defaultValue = '', title = 'Input Required') => {
+      if (global.MetaOS) {
+        return await global.MetaOS.host.showMessageBox({
+          title,
+          message,
+          type: 'question',
+          prompt: { defaultValue },
+          buttons: [
+            { label: 'Cancel', value: null, style: 'normal', isCancel: true },
+            { label: 'OK', value: 'ok', style: 'primary', isDefault: true },
+          ],
+        }).then(res => {
+          if (res && res.action === 'ok') {
+            return res.value !== undefined ? res.value : null;
+          }
+          return null;
         });
-        document.body.appendChild(container);
+      } else {
+        return window.prompt(`${title}\n\n${message}`, defaultValue);
       }
+    },
+    showConflictDialog: async (itemName, isDirectory) => {
+      if (global.MetaOS) {
+        const actionName = isDirectory ? 'Merge' : 'Replace';
+        const detailMsg = isDirectory
+          ? 'Do you want to merge the folders? Files with the same names will be replaced.'
+          : 'Do you want to replace it with the one you are moving?';
 
-      const TYPES = {
-        info: { icon: 'ℹ️', color: 'rgb(var(--c-accent-primary))' },
-        success: { icon: '✅', color: 'rgb(var(--c-accent-success))' },
-        warning: { icon: '⚠️', color: 'rgb(var(--c-accent-warning))' },
-        error: { icon: '❌', color: 'rgb(var(--c-accent-error))' },
-      };
-      const { icon, color } = TYPES[type] || TYPES.info;
+        const buttons = [
+          { label: 'Cancel', value: 'cancel', style: 'normal', isCancel: true },
+          { label: 'Skip', value: 'skip', style: 'normal' },
+        ];
 
-      const toast = document.createElement('div');
-      toast.className = 'itera-animate-fade';
-      Object.assign(toast.style, {
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        gap: '0.75rem',
-        padding: '0.5rem 0.75rem',
-        borderRadius: '0.25rem',
-        background: 'rgb(var(--c-bg-panel))',
-        color: 'rgb(var(--c-text-main))',
-        border: `1px solid ${color}`,
-        boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
-        fontSize: '0.75rem',
-        pointerEvents: 'auto',
-        minWidth: '240px',
-        maxWidth: '320px',
-        wordBreak: 'break-word',
-        transition: 'opacity 0.2s ease, transform 0.2s ease',
-      });
-
-      toast.innerHTML = `
-        <div style="display: flex; align-items: center; gap: 0.5rem; flex: 1;">
-          <div style="width:3px; height:100%; min-height:1.25rem; background:\${color}; border-radius:1px; flex-shrink:0;"></div>
-          <span>\${icon}</span>
-          <span>\${message}</span>
-        </div>
-        <button class="text-text-muted hover:text-text-main transition flex-shrink-0" style="padding: 2px; line-height: 1;">✕</button>
-      `;
-
-      const closeBtn = toast.querySelector('button');
-      const closeToast = () => {
-        if (document.body.contains(toast)) {
-          toast.style.opacity = '0';
-          toast.style.transform = 'translateY(10px)';
-          setTimeout(() => toast.remove(), 200);
+        if (!isDirectory) {
+          buttons.push({ label: 'Keep Both', value: 'keep_both', style: 'normal' });
         }
-      };
 
-      if (closeBtn) {
-        closeBtn.onclick = closeToast;
+        buttons.push({ label: actionName, value: isDirectory ? 'merge' : 'replace', style: 'primary', isDefault: true });
+
+        const res = await global.MetaOS.host.showMessageBox({
+          title: 'Item Already Exists',
+          message: `An item named "${itemName}" already exists in this location.`,
+          detail: detailMsg,
+          type: 'warning',
+          checkbox: {
+            label: 'Do this for all current conflicts',
+            defaultChecked: false,
+          },
+          buttons,
+        });
+        return { action: res.action, checkboxChecked: res.checkboxChecked };
       }
-
-      container.appendChild(toast);
-
-      const shouldAutoDismiss = duration !== undefined ? duration > 0 : type === 'info' || type === 'success';
-      const timeoutMs = duration && duration > 0 ? duration : 3000;
-
-      if (shouldAutoDismiss) {
-        setTimeout(closeToast, timeoutMs);
+      return { action: 'cancel', checkboxChecked: false };
+    },
+    showMessageBox: async (options) => {
+      if (global.MetaOS) {
+        return await global.MetaOS.host.showMessageBox(options);
+      } else {
+        window.alert(`${options.title}\n\n${options.message}`);
+        return { action: options.buttons[0]?.value, value: undefined, checkboxChecked: false };
       }
-    },
-    alert: (message, title = 'System Alert') => {
-      return AppUI._createDialog({ type: 'alert', message, title });
-    },
-    confirm: (message, title = 'Confirmation') => {
-      return AppUI._createDialog({ type: 'confirm', message, title });
-    },
-    prompt: (message, defaultValue = '', title = 'Input Required') => {
-      return AppUI._createDialog({ type: 'prompt', message, title, defaultValue });
     },
     showLoading: (message = 'Processing...') => {
-      AppUI.hideLoading();
-      const overlay = document.createElement('div');
-      overlay.id = '__itera-loading-overlay';
-      overlay.className =
-        'fixed inset-0 bg-app/80 backdrop-blur-sm z-[9999] flex flex-col items-center justify-center itera-animate-fade';
-      overlay.innerHTML = `
-                <div class="itera-loader mb-4"></div>
-                <div class="text-sm font-bold text-text-muted tracking-wider uppercase animate-pulse">${message}</div>
-            `;
-      document.body.appendChild(overlay);
+      if (global.MetaOS) {
+        global.MetaOS.host.showLoading(message);
+      } else {
+        console.log(`[Loading] ${message}`);
+      }
     },
     hideLoading: () => {
-      const overlay = document.getElementById('__itera-loading-overlay');
-      if (overlay) overlay.remove();
+      if (global.MetaOS) {
+        global.MetaOS.host.hideLoading();
+      }
     },
     getThemeColor: (tokenName) => {
       const root = document.documentElement;
