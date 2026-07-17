@@ -22,7 +22,8 @@ export class MkdirOp extends BaseOperation<{ path: string; opts: MkdirOptions },
 
       const res = await this.ctx.lockManager.acquire(normPath, async () => {
         if (parentId !== null && !this.ctx.nodeStore.getNode(parentId)) {
-          shouldRetry = true; return null;
+          shouldRetry = true;
+          return null;
         }
 
         const existingId = this.ctx.pathResolver.getIdByPath(normPath);
@@ -31,7 +32,10 @@ export class MkdirOp extends BaseOperation<{ path: string; opts: MkdirOptions },
         this.ctx.auth.checkNodePermission(principal, parentId, 'write');
 
         const newNode: VfsNode = {
-          id: this.generateId(), name, parentId, kind: 'directory',
+          id: this.generateId(),
+          name,
+          parentId,
+          kind: 'directory',
           flags: { isSystem: false, isTrashed: false },
           meta: { size: 0, createdAt: Date.now(), updatedAt: Date.now(), version: 1 },
           acl: this.ctx.auth.getDefaultAcl(principal, parentId),
@@ -50,8 +54,14 @@ export class MkdirOp extends BaseOperation<{ path: string; opts: MkdirOptions },
   }
 }
 
-export class WriteFileOp extends BaseOperation<{ path: string; content: string | Uint8Array | Blob; opts: WriteOptions }, string> {
-  async execute(principal: Principal, args: { path: string; content: string | Uint8Array | Blob; opts: WriteOptions }): Promise<string> {
+export class WriteFileOp extends BaseOperation<
+  { path: string; content: string | Uint8Array | Blob; opts: WriteOptions },
+  string
+> {
+  async execute(
+    principal: Principal,
+    args: { path: string; content: string | Uint8Array | Blob; opts: WriteOptions },
+  ): Promise<string> {
     const { path, content, opts } = args;
     const normPath = this.ctx.pathResolver.normalizePath(path);
     if (!normPath) throw new Error('Cannot write to root path.');
@@ -66,7 +76,8 @@ export class WriteFileOp extends BaseOperation<{ path: string; content: string |
 
       const res = await this.ctx.lockManager.acquire(normPath, async () => {
         if (parentId !== null && !this.ctx.nodeStore.getNode(parentId)) {
-          shouldRetry = true; return null;
+          shouldRetry = true;
+          return null;
         }
 
         const existingId = this.ctx.pathResolver.getIdByPath(normPath);
@@ -77,9 +88,10 @@ export class WriteFileOp extends BaseOperation<{ path: string; content: string |
         if (existingId !== undefined && existingId !== null) {
           if (!opts.overwrite) throw new Error(`File already exists at ${normPath}. Set overwrite=true to overwrite.`);
           this.ctx.auth.checkNodePermission(principal, existingId, 'write');
-          
+
           const existingNode = this.ctx.nodeStore.getNode(existingId)!;
-          if (existingNode.kind === 'directory') throw new Error(`Cannot write file: A directory exists at ${normPath}`);
+          if (existingNode.kind === 'directory')
+            throw new Error(`Cannot write file: A directory exists at ${normPath}`);
 
           node = { ...existingNode };
           node.meta = { ...node.meta, updatedAt: now, version: node.meta.version + 1 };
@@ -88,7 +100,10 @@ export class WriteFileOp extends BaseOperation<{ path: string; content: string |
         } else {
           this.ctx.auth.checkNodePermission(principal, parentId, 'write');
           node = {
-            id: this.generateId(), name, parentId, kind: 'file',
+            id: this.generateId(),
+            name,
+            parentId,
+            kind: 'file',
             flags: { isSystem: !!opts.system, isTrashed: false },
             meta: { size: 0, createdAt: now, updatedAt: now, version: 1 },
             acl: this.ctx.auth.getDefaultAcl(principal, parentId),
@@ -134,7 +149,8 @@ export class AppendFileOp extends BaseOperation<{ path: string; content: string;
 
       const res = await this.ctx.lockManager.acquire(normPath, async () => {
         if (parentId !== null && !this.ctx.nodeStore.getNode(parentId)) {
-          shouldRetry = true; return null;
+          shouldRetry = true;
+          return null;
         }
 
         const existingId = this.ctx.pathResolver.getIdByPath(normPath);
@@ -146,7 +162,7 @@ export class AppendFileOp extends BaseOperation<{ path: string; content: string;
           this.ctx.auth.checkNodePermission(principal, existingId, 'write');
           const existingNode = this.ctx.nodeStore.getNode(existingId)!;
           if (existingNode.kind === 'directory') throw new Error(`Cannot append: A directory exists at ${normPath}`);
-          
+
           if (existingNode.contentRef) {
             existingContent = await this.ctx.contentStore.readText(existingNode.contentRef);
           }
@@ -156,7 +172,10 @@ export class AppendFileOp extends BaseOperation<{ path: string; content: string;
         } else {
           this.ctx.auth.checkNodePermission(principal, parentId, 'write');
           node = {
-            id: this.generateId(), name, parentId, kind: 'file',
+            id: this.generateId(),
+            name,
+            parentId,
+            kind: 'file',
             flags: { isSystem: !!opts.system, isTrashed: false },
             meta: { size: 0, createdAt: now, updatedAt: now, version: 1 },
             acl: this.ctx.auth.getDefaultAcl(principal, parentId),
@@ -181,8 +200,14 @@ export class AppendFileOp extends BaseOperation<{ path: string; content: string;
   }
 }
 
-export class CreateStubOp extends BaseOperation<{ path: string; meta: Partial<VfsNodeMeta>; opts: StubOptions }, string> {
-  async execute(principal: Principal, args: { path: string; meta: Partial<VfsNodeMeta>; opts: StubOptions }): Promise<string> {
+export class CreateStubOp extends BaseOperation<
+  { path: string; meta: Partial<VfsNodeMeta>; opts: StubOptions },
+  string
+> {
+  async execute(
+    principal: Principal,
+    args: { path: string; meta: Partial<VfsNodeMeta>; opts: StubOptions },
+  ): Promise<string> {
     const { path, meta } = args;
     const normPath = this.ctx.pathResolver.normalizePath(path);
 
@@ -198,7 +223,8 @@ export class CreateStubOp extends BaseOperation<{ path: string; meta: Partial<Vf
 
       const res = await this.ctx.lockManager.acquire(normPath, async () => {
         if (parentId !== null && !this.ctx.nodeStore.getNode(parentId)) {
-          shouldRetry = true; return null;
+          shouldRetry = true;
+          return null;
         }
 
         const existingId = this.ctx.pathResolver.getIdByPath(normPath);
@@ -219,11 +245,18 @@ export class CreateStubOp extends BaseOperation<{ path: string; meta: Partial<Vf
         } else {
           this.ctx.auth.checkNodePermission(principal, parentId, 'write');
           node = {
-            id: this.generateId(), name, parentId, kind: 'file',
+            id: this.generateId(),
+            name,
+            parentId,
+            kind: 'file',
             flags: { isSystem: false, isTrashed: false },
             meta: {
-              size: meta.size || 0, createdAt: meta.createdAt || now, updatedAt: meta.updatedAt || now,
-              version: meta.version || 1, hash: meta.hash, syncState: 'stub',
+              size: meta.size || 0,
+              createdAt: meta.createdAt || now,
+              updatedAt: meta.updatedAt || now,
+              version: meta.version || 1,
+              hash: meta.hash,
+              syncState: 'stub',
             },
             acl: this.ctx.auth.getDefaultAcl(principal, parentId),
           };

@@ -74,7 +74,7 @@ export class Explorer {
 
   private _bindVFS(): void {
     this.treeView.render(this.vfs.getTree(this.getActivePrincipal()));
-    
+
     this.eventBus.subscribe((mutations) => {
       // Mutation 配列と、再描画が必要になった際に最新のツリーを取得する関数を渡す
       this.treeView.applyMutations(mutations, () => this.vfs.getTree(this.getActivePrincipal()));

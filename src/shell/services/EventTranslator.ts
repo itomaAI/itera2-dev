@@ -23,7 +23,7 @@ export class EventTranslator {
   private _processMutations(mutations: VfsMutation[]): void {
     // ログや一時ファイルの変更はAIへの通知ノイズになるため除外
     const relevantMutations = mutations.filter(
-      (m) => !m.path.startsWith('system/logs/') && !m.path.startsWith('system/temp/')
+      (m) => !m.path.startsWith('system/logs/') && !m.path.startsWith('system/temp/'),
     );
 
     if (relevantMutations.length === 0) return;
@@ -51,14 +51,14 @@ export class EventTranslator {
         sourceName = 'User';
       } else if (principal.type === 'agent') {
         // AI自身が起こした変更は自分自身で認知しているため、ログを省略してループを防ぐ
-        continue; 
+        continue;
       }
 
       // Rename or Move (DETACH と ATTACH が同時に発生)
       if (attach && detach) {
         logs.push({
           type: 'file_moved',
-          message: `${sourceName} moved/renamed: ${detach.path} -> ${attach.path}`
+          message: `${sourceName} moved/renamed: ${detach.path} -> ${attach.path}`,
         });
       }
       // Create (ATTACH のみ)
@@ -84,13 +84,16 @@ export class EventTranslator {
 
     // 大量ファイルの同時変更時はサマリー化する（履歴のパンク防止）
     if (logs.length > 5) {
-      this._logToHistory('bulk_operation', `Detected ${logs.length} concurrent file system operations by Background Process.`);
+      this._logToHistory(
+        'bulk_operation',
+        `Detected ${logs.length} concurrent file system operations by Background Process.`,
+      );
     } else {
       for (const log of logs) {
         // ユーザーの手動操作については Explorer が別途リッチなログを出している場合があるため、
         // 重複を避けるために User 以外の操作（Appなどのバックグラウンド操作）を優先して出力する。
-        if (log.message.startsWith('User')) continue; 
-        
+        if (log.message.startsWith('User')) continue;
+
         this._logToHistory(log.type, log.message);
       }
     }

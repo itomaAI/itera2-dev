@@ -27,7 +27,7 @@ export class ProviderManager {
     eventBus: VfsEventBus,
     transport: HostTransport,
     processManager: ProcessManager,
-    pathResolver: PathResolver
+    pathResolver: PathResolver,
   ) {
     this.eventBus = eventBus;
     this.transport = transport;
@@ -73,7 +73,8 @@ export class ProviderManager {
 
     // 同一パスへの同時フェッチを防止（重複リクエストの排除）
     if (!this.fetchPromises.has(path)) {
-      const fetchTask = this.transport.invokeGuest(info.pid, 'fs:resolve_missing', { path }, proc.iframe.contentWindow)
+      const fetchTask = this.transport
+        .invokeGuest(info.pid, 'fs:resolve_missing', { path }, proc.iframe.contentWindow)
         .catch((e) => {
           console.error(`[ProviderManager] Fetch failed for ${path}:`, e);
           return false;
@@ -83,7 +84,7 @@ export class ProviderManager {
         });
       this.fetchPromises.set(path, fetchTask);
     }
-    
+
     return await this.fetchPromises.get(path)!;
   }
 

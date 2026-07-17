@@ -92,7 +92,7 @@ export class TreeView {
           const targetLi = targetDiv.parentElement;
           if (targetLi) targetLi.remove();
         }
-        
+
         // 内部状態のCascade Purge (巻き込み削除)
         if (this.selectedPath === mutation.path || this.selectedPath?.startsWith(mutation.path + '/')) {
           this.selectedPath = null;
@@ -102,8 +102,7 @@ export class TreeView {
             this.expandedPaths.delete(p);
           }
         }
-      } 
-      else if (mutation.type === 'ATTACH') {
+      } else if (mutation.type === 'ATTACH') {
         if (!mutation.node || mutation.node.flags?.isHidden || mutation.node.name === '.keep') continue;
 
         // ディレクトリがアタッチされた場合（移動・コピー・新規作成）、
@@ -113,14 +112,13 @@ export class TreeView {
         } else {
           this._handleNodeAttached(mutation);
         }
-      } 
-      else if (mutation.type === 'MUTATE') {
+      } else if (mutation.type === 'MUTATE') {
         this._handleNodeMutated(mutation);
       }
     }
 
     if (needsFullRender) {
-       this.render(getTreeFn());
+      this.render(getTreeFn());
     }
   }
 

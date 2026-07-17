@@ -31,7 +31,7 @@
                 // 実体を VFS に書き込む (OSレベルでエコーキャンセルされるため source フラグは不要)
                 await MetaOS.fs.write(reqPath, new Uint8Array(arrayBuffer), {
                   overwrite: true,
-                  silent: true
+                  silent: true,
                 });
                 return true;
               } catch (e) {
@@ -43,7 +43,7 @@
               // OSから渡されるローカルの変更（自身が起こした変更は除外済み）
               for (const m of mutations) {
                 const getRelPath = (p) => p.substring(mountPath.length + 1);
-                
+
                 if (m.type === 'ATTACH' || m.type === 'MUTATE') {
                   // ディレクトリの場合はスキップ
                   if (m.node && m.node.kind === 'directory') continue;
@@ -64,7 +64,7 @@
                   }
                 }
               }
-            }
+            },
           });
           MetaOS.ai.log(`Local Sync Daemon successfully mounted at /${mountPath}`, 'system');
         } catch (e) {
@@ -84,9 +84,9 @@
 
             if (!local || local.hash !== meta.hash) {
               await MetaOS.fs.createStub(fullPath, {
-                  size: meta.size,
-                  updatedAt: meta.updatedAt,
-                  hash: meta.hash,
+                size: meta.size,
+                updatedAt: meta.updatedAt,
+                hash: meta.hash,
               });
             }
           }
@@ -105,9 +105,9 @@
 
             if (data.type === 'create' || data.type === 'update') {
               await MetaOS.fs.createStub(fullPath, {
-                  size: data.meta.size,
-                  updatedAt: data.meta.updatedAt,
-                  hash: data.meta.hash,
+                size: data.meta.size,
+                updatedAt: data.meta.updatedAt,
+                hash: data.meta.hash,
               });
             } else if (data.type === 'delete') {
               try {

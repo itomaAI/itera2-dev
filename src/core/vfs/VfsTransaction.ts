@@ -98,7 +98,7 @@ export class VfsTransaction {
         });
       } else {
         const oldPath = oldPaths.get(node.id)!;
-        
+
         if (oldPath !== newPath) {
           // 移動・リネームは「旧パスからのDETACH」と「新パスへのATTACH」として表現
           mutations.push({

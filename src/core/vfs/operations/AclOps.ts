@@ -16,9 +16,9 @@ export class SetAclOp extends BaseOperation<{ path: string; acl: AccessControlLi
 
       this.ctx.auth.checkNodePermission(principal, id, 'manage');
       const node = this.ctx.nodeStore.getNode(id)!;
-      
+
       const updatedNode = { ...node, acl: JSON.parse(JSON.stringify(args.acl)) };
-      
+
       const tx = this.createTransaction(principal);
       tx.put(updatedNode);
       await tx.commit();

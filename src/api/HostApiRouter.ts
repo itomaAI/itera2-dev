@@ -198,10 +198,14 @@ export class HostApiRouter {
     });
 
     t.registerHandler('fs:stat', async ({ path }, sourcePid) => d.vfs.stat(getPrincipal(sourcePid), path));
-    t.registerHandler('fs:list', async ({ path, opts }, sourcePid) => d.vfs.listFiles(getPrincipal(sourcePid), { path, ...opts }));
+    t.registerHandler('fs:list', async ({ path, opts }, sourcePid) =>
+      d.vfs.listFiles(getPrincipal(sourcePid), { path, ...opts }),
+    );
     t.registerHandler('fs:exists', async ({ path }, sourcePid) => d.vfs.exists(getPrincipal(sourcePid), path));
-    t.registerHandler('fs:get_sync_state', async ({ path }, sourcePid) => d.vfs.getSyncState(getPrincipal(sourcePid), path || ''));
-    
+    t.registerHandler('fs:get_sync_state', async ({ path }, sourcePid) =>
+      d.vfs.getSyncState(getPrincipal(sourcePid), path || ''),
+    );
+
     t.registerHandler('fs:resolve_url', async ({ path }, sourcePid) => {
       if (!d.processManager) throw new Error('ProcessManager not connected.');
       return d.processManager.resolveUrl(path, sourcePid);

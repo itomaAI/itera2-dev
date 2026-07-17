@@ -10,8 +10,12 @@ export class DeleteFileOp extends BaseOperation<{ path: string; opts: DeleteOpti
   async execute(principal: Principal, args: { path: string; opts: DeleteOptions }): Promise<string> {
     const { path, opts } = args;
     const normPath = this.ctx.pathResolver.normalizePath(path);
-    const isPermanent = opts.permanent || normPath === 'trash' || normPath.startsWith('trash/') || 
-                        normPath.startsWith('system/temp/') || normPath.startsWith('system/logs/');
+    const isPermanent =
+      opts.permanent ||
+      normPath === 'trash' ||
+      normPath.startsWith('trash/') ||
+      normPath.startsWith('system/temp/') ||
+      normPath.startsWith('system/logs/');
 
     if (!isPermanent) {
       await this.ctx.vfs._hydrateIfNeeded(principal, normPath, 'trash');
@@ -24,7 +28,8 @@ export class DeleteFileOp extends BaseOperation<{ path: string; opts: DeleteOpti
 
       const res = await this.ctx.lockManager.acquire(normPath, async () => {
         if (!isPermanent && trashDirId !== null && !this.ctx.nodeStore.getNode(trashDirId)) {
-          shouldRetry = true; return null;
+          shouldRetry = true;
+          return null;
         }
 
         const id = this.ctx.pathResolver.getIdByPath(normPath);
@@ -45,7 +50,9 @@ export class DeleteFileOp extends BaseOperation<{ path: string; opts: DeleteOpti
           const timestamp = Date.now();
           const newName = `${timestamp}_${node.name}`;
           const updatedNode: VfsNode = {
-            ...node, name: newName, parentId: trashDirId!,
+            ...node,
+            name: newName,
+            parentId: trashDirId!,
             flags: { ...node.flags, isTrashed: true },
             meta: { ...node.meta, deletedAt: timestamp, version: node.meta.version + 1 },
           };
@@ -79,7 +86,10 @@ export class DeleteFileOp extends BaseOperation<{ path: string; opts: DeleteOpti
 }
 
 export class RenameOp extends BaseOperation<{ oldPath: string; newPath: string; opts: RenameOptions }, string> {
-  async execute(principal: Principal, args: { oldPath: string; newPath: string; opts: RenameOptions }): Promise<string> {
+  async execute(
+    principal: Principal,
+    args: { oldPath: string; newPath: string; opts: RenameOptions },
+  ): Promise<string> {
     const { oldPath, newPath } = args;
     const normOld = this.ctx.pathResolver.normalizePath(oldPath);
     const normNew = this.ctx.pathResolver.normalizePath(newPath);
@@ -99,7 +109,8 @@ export class RenameOp extends BaseOperation<{ oldPath: string; newPath: string; 
 
       const res = await this.ctx.lockManager.acquireMultiple([normOld, normNew], async () => {
         if (newParentId !== null && !this.ctx.nodeStore.getNode(newParentId)) {
-          shouldRetry = true; return null;
+          shouldRetry = true;
+          return null;
         }
 
         const oldId = this.ctx.pathResolver.getIdByPath(normOld);
@@ -123,7 +134,9 @@ export class RenameOp extends BaseOperation<{ oldPath: string; newPath: string; 
         }
 
         const updatedNode: VfsNode = {
-          ...node, name: newName, parentId: newParentId,
+          ...node,
+          name: newName,
+          parentId: newParentId,
           meta: { ...node.meta, updatedAt: Date.now(), version: node.meta.version + 1 },
         };
 
@@ -158,7 +171,8 @@ export class CopyOp extends BaseOperation<{ srcPath: string; destPath: string; o
 
       const res = await this.ctx.lockManager.acquireMultiple([normSrc, normDest], async () => {
         if (destParentId !== null && !this.ctx.nodeStore.getNode(destParentId)) {
-          shouldRetry = true; return null;
+          shouldRetry = true;
+          return null;
         }
 
         const srcId = this.ctx.pathResolver.getIdByPath(normSrc);
@@ -168,7 +182,7 @@ export class CopyOp extends BaseOperation<{ srcPath: string; destPath: string; o
 
         const destId = this.ctx.pathResolver.getIdByPath(normDest);
         if (destId !== undefined) throw new Error(`Destination already exists: ${normDest}`);
-        
+
         this.ctx.auth.checkNodePermission(principal, destParentId, 'write');
         const srcNode = this.ctx.nodeStore.getNode(srcId)!;
 
@@ -179,9 +193,18 @@ export class CopyOp extends BaseOperation<{ srcPath: string; destPath: string; o
           const blob = await this.ctx.contentStore.readBlob(srcNode.contentRef);
 
           const newNode: VfsNode = {
-            id: this.generateId(), name: newName, parentId: destParentId, kind: 'file',
+            id: this.generateId(),
+            name: newName,
+            parentId: destParentId,
+            kind: 'file',
             flags: { isSystem: srcNode.flags.isSystem, isTrashed: false },
-            meta: { size: blob.size, createdAt: Date.now(), updatedAt: Date.now(), version: 1, hash: srcNode.meta.hash },
+            meta: {
+              size: blob.size,
+              createdAt: Date.now(),
+              updatedAt: Date.now(),
+              version: 1,
+              hash: srcNode.meta.hash,
+            },
             acl: this.ctx.auth.getDefaultAcl(principal, destParentId),
           };
           newNode.contentRef = await this.ctx.contentStore.write(newNode.id, blob);
@@ -198,7 +221,10 @@ export class CopyOp extends BaseOperation<{ srcPath: string; destPath: string; o
 
               const newId = this.generateId();
               const newNode: VfsNode = {
-                id: newId, name: child.name, parentId: currentDestParentId, kind: child.kind,
+                id: newId,
+                name: child.name,
+                parentId: currentDestParentId,
+                kind: child.kind,
                 flags: { ...child.flags },
                 meta: { ...child.meta, createdAt: Date.now(), updatedAt: Date.now(), version: 1 },
                 acl: this.ctx.auth.getDefaultAcl(principal, currentDestParentId),
@@ -220,7 +246,10 @@ export class CopyOp extends BaseOperation<{ srcPath: string; destPath: string; o
 
           const rootNewId = this.generateId();
           const rootNewNode: VfsNode = {
-            id: rootNewId, name: newName, parentId: destParentId, kind: 'directory',
+            id: rootNewId,
+            name: newName,
+            parentId: destParentId,
+            kind: 'directory',
             flags: { isSystem: srcNode.flags.isSystem, isTrashed: false },
             meta: { size: 0, createdAt: Date.now(), updatedAt: Date.now(), version: 1 },
             acl: this.ctx.auth.getDefaultAcl(principal, destParentId),

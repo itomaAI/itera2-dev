@@ -78,25 +78,25 @@ export type VfsMutationType = 'ATTACH' | 'DETACH' | 'MUTATE';
 export interface VfsMutation {
   type: VfsMutationType;
   nodeId: string;
-  
-  /** 
+
+  /**
    * ATTACH/MUTATE の場合は、変更後の最新ノードが含まれる
    * DETACH の場合は null となる
    */
   node: VfsNode | null;
-  
+
   /**
    * ATTACH/MUTATE の場合は現在のパス
    * DETACH の場合は削除される直前のパス
    */
   path: string;
-  
+
   /**
    * MUTATE の場合、変更されたプロパティのキーの一覧が格納される
    * 例: ['size', 'hash', 'updatedAt']
    */
   changedProperties?: string[];
-  
+
   /**
    * Mutation の発生元となる Principal
    * これにより OS レベルでのエコーキャンセル（自身が起こした変更は自身に通知しない）を実現する

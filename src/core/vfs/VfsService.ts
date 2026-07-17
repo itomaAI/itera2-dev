@@ -48,7 +48,13 @@ export class VfsService {
     this.lockManager = new VfsLockManager();
     this.auth = new VfsAuth(nodeStore);
     this.context = {
-      nodeStore, contentStore, pathResolver, eventBus, lockManager: this.lockManager, auth: this.auth, vfs: this
+      nodeStore,
+      contentStore,
+      pathResolver,
+      eventBus,
+      lockManager: this.lockManager,
+      auth: this.auth,
+      vfs: this,
     };
   }
 
@@ -118,17 +124,34 @@ export class VfsService {
 
     if (id === null) {
       return {
-        id: '', path: '', name: 'root', kind: 'directory', size: 0, createdAt: 0, updatedAt: 0,
-        version: 1, flags: { isSystem: true, isTrashed: false }, acl: this.auth.getDefaultAcl(SYSTEM_PRINCIPAL, null),
+        id: '',
+        path: '',
+        name: 'root',
+        kind: 'directory',
+        size: 0,
+        createdAt: 0,
+        updatedAt: 0,
+        version: 1,
+        flags: { isSystem: true, isTrashed: false },
+        acl: this.auth.getDefaultAcl(SYSTEM_PRINCIPAL, null),
       };
     }
 
     const node = this.nodeStore.getNode(id)!;
     return {
-      id: node.id, path: this.pathResolver.getPathById(node.id), name: node.name, kind: node.kind,
-      size: node.meta.size, createdAt: node.meta.createdAt, updatedAt: node.meta.updatedAt,
-      mimeType: node.meta.mimeType, version: node.meta.version, hash: node.meta.hash,
-      syncState: node.meta.syncState, flags: JSON.parse(JSON.stringify(node.flags)), acl: JSON.parse(JSON.stringify(node.acl)),
+      id: node.id,
+      path: this.pathResolver.getPathById(node.id),
+      name: node.name,
+      kind: node.kind,
+      size: node.meta.size,
+      createdAt: node.meta.createdAt,
+      updatedAt: node.meta.updatedAt,
+      mimeType: node.meta.mimeType,
+      version: node.meta.version,
+      hash: node.meta.hash,
+      syncState: node.meta.syncState,
+      flags: JSON.parse(JSON.stringify(node.flags)),
+      acl: JSON.parse(JSON.stringify(node.acl)),
     };
   }
 
@@ -158,19 +181,30 @@ export class VfsService {
     };
     traverse(rootId);
 
-    return resultIds.map((id) => {
+    return resultIds
+      .map((id) => {
         const p = this.pathResolver.getPathById(id);
         if (options.detail) {
           const node = this.nodeStore.getNode(id)!;
           return {
-            id: node.id, path: p, name: node.name, kind: node.kind, size: node.meta.size,
-            createdAt: node.meta.createdAt, updatedAt: node.meta.updatedAt, mimeType: node.meta.mimeType,
-            version: node.meta.version, hash: node.meta.hash, syncState: node.meta.syncState,
-            flags: JSON.parse(JSON.stringify(node.flags)), acl: JSON.parse(JSON.stringify(node.acl)),
+            id: node.id,
+            path: p,
+            name: node.name,
+            kind: node.kind,
+            size: node.meta.size,
+            createdAt: node.meta.createdAt,
+            updatedAt: node.meta.updatedAt,
+            mimeType: node.meta.mimeType,
+            version: node.meta.version,
+            hash: node.meta.hash,
+            syncState: node.meta.syncState,
+            flags: JSON.parse(JSON.stringify(node.flags)),
+            acl: JSON.parse(JSON.stringify(node.acl)),
           } as VfsStat;
         }
         return p;
-      }).sort((a, b) => {
+      })
+      .sort((a, b) => {
         const strA = typeof a === 'string' ? a : (a as VfsStat).path;
         const strB = typeof b === 'string' ? b : (b as VfsStat).path;
         return strA.localeCompare(strB);
@@ -206,14 +240,26 @@ export class VfsService {
         if (node.flags.isHidden) continue;
         if (!this.auth.hasPermission(principal, node, 'read')) continue;
         const nodePath = this.pathResolver.getPathById(node.id);
-        result[nodePath] = { kind: node.kind, updatedAt: node.meta.updatedAt, version: node.meta.version, hash: node.meta.hash, syncState: node.meta.syncState };
+        result[nodePath] = {
+          kind: node.kind,
+          updatedAt: node.meta.updatedAt,
+          version: node.meta.version,
+          hash: node.meta.hash,
+          syncState: node.meta.syncState,
+        };
         if (node.kind === 'directory') traverse(node.id);
       }
     };
 
     if (rootId !== null) {
       const rootNode = this.nodeStore.getNode(rootId)!;
-      result[rootPath] = { kind: rootNode.kind, updatedAt: rootNode.meta.updatedAt, version: rootNode.meta.version, hash: rootNode.meta.hash, syncState: rootNode.meta.syncState };
+      result[rootPath] = {
+        kind: rootNode.kind,
+        updatedAt: rootNode.meta.updatedAt,
+        version: rootNode.meta.version,
+        hash: rootNode.meta.hash,
+        syncState: rootNode.meta.syncState,
+      };
       if (rootNode.kind === 'directory') traverse(rootId);
     } else {
       result[''] = { kind: 'directory', updatedAt: 0, version: 1, syncState: 'synced' };
@@ -232,7 +278,7 @@ export class VfsService {
     return JSON.parse(JSON.stringify(node.acl));
   }
 
-  getUsage(principal: Principal): { used: number; max: number; percent: number; isFull: boolean; } {
+  getUsage(principal: Principal): { used: number; max: number; percent: number; isFull: boolean } {
     let used = 0;
     for (const node of this.nodeStore.getAllNodes()) {
       if (node.kind === 'file' && node.meta.size && this.auth.hasPermission(principal, node, 'read')) {
@@ -260,19 +306,25 @@ export class VfsService {
 
     if (node.meta.syncState === 'stub' && !opts.bypassFetch) {
       if (!this.providerManager) throw new Error(`File is a stub but ProviderManager is not initialized.`);
-      
+
       const success = await this.providerManager.fetchContent(normPath);
       if (!success) throw new Error(`Failed to fetch missing content for ${normPath}`);
-      
+
       node = this.nodeStore.getNode(id)!;
-      if (!node || node.meta.syncState === 'stub') throw new Error(`Provider claimed success but file is still a stub.`);
+      if (!node || node.meta.syncState === 'stub')
+        throw new Error(`Provider claimed success but file is still a stub.`);
     }
-    
+
     if (!node.contentRef) return new Blob([]);
     return await this.contentStore.readBlob(node.contentRef);
   }
 
-  async createStub(principal: Principal, path: string, meta: Partial<VfsNodeMeta>, opts: StubOptions = {}): Promise<string> {
+  async createStub(
+    principal: Principal,
+    path: string,
+    meta: Partial<VfsNodeMeta>,
+    opts: StubOptions = {},
+  ): Promise<string> {
     return new CreateStubOp(this.context).execute(principal, { path, meta, opts });
   }
 
@@ -280,7 +332,12 @@ export class VfsService {
     return new AppendFileOp(this.context).execute(principal, { path, content, opts });
   }
 
-  async writeFile(principal: Principal, path: string, content: string | Uint8Array | Blob, opts: WriteOptions = {}): Promise<string> {
+  async writeFile(
+    principal: Principal,
+    path: string,
+    content: string | Uint8Array | Blob,
+    opts: WriteOptions = {},
+  ): Promise<string> {
     return new WriteFileOp(this.context).execute(principal, { path, content, opts });
   }
 

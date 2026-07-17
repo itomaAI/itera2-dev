@@ -1,6 +1,6 @@
 /**
  * AUTO-GENERATED FILE - DO NOT EDIT MANUALLY
- * Generated on: 2026-07-16T17:30:40.790Z
+ * Generated on: 2026-07-17T01:41:17.352Z
  */
 
 export const DEFAULT_FILES: Record<string, string> = {
@@ -916,7 +916,7 @@ export const DEFAULT_FILES: Record<string, string> = {
 
           // V2 API
           if (window.MetaOS && MetaOS.system.on) {
-            MetaOS.system.on('file_changed', (p) => p.path.startsWith('data/') && refreshWidgets());
+            MetaOS.system.on('vfs_mutation', (m) => m.path.startsWith('data/') && refreshWidgets());
           }
         };
 
@@ -1515,11 +1515,14 @@ export const DEFAULT_FILES: Record<string, string> = {
 
       if (window.MetaOS && MetaOS.system.on) {
         // 他のアプリからのOSレベルのイベントを購読
-        MetaOS.system.on('file_changed', (payload) => {
-          if (payload.path.startsWith('data/notes') || payload.path.startsWith('data/')) {
+        MetaOS.system.on('vfs_mutation', (mutation) => {
+          if (mutation.path.startsWith('data/notes') || mutation.path.startsWith('data/')) {
             loadList().then(() => {
-              if (currentPath && payload.path === currentPath) {
-                if (currentMode !== 'edit') {
+              if (currentPath && mutation.path === currentPath) {
+                // ファイルが削除(DETACH)された場合は何もしない（あるいはホームに戻る等）
+                if (mutation.type === 'DETACH') {
+                  // Optional: handle deletion if needed
+                } else if (currentMode !== 'edit') {
                   openNote(currentPath);
                 }
               }
@@ -2307,10 +2310,10 @@ if __name__ == "__main__":
 
       // Reactive Update
       if (window.MetaOS && MetaOS.system && MetaOS.system.on) {
-        MetaOS.system.on('file_changed', (payload) => {
+        MetaOS.system.on('vfs_mutation', (mutation) => {
           // If tasks DB changes, refresh list
-          if (payload.path.startsWith('data/tasks/')) {
-            console.log('Task DB changed, reloading...');
+          if (mutation.path.startsWith('data/tasks/')) {
+            console.log('Task DB mutated, reloading...');
             render();
           }
         });
@@ -3108,8 +3111,8 @@ The **Guest** environment (where apps run) is isolated from the **Host** (where 
     *   \`.getSyncState(path)\`: Returns a lightweight, flat dictionary of file versions and hashes (\`{ "path/to/file": { hash, version, updatedAt } }\`) optimized for fast directory tree synchronization.
     *   \`.resolveUrl(path)\`: Resolves a VFS path to a usable Blob URL for \`img.src\` or CSS.
     *   \`.createStub(path, meta)\`: Creates a metadata-only entry (placeholder) in the VFS without uploading actual content. Useful for Cloud Sync providers.
-    *   \`.mount(path, onFetchMissing)\`: Declares that the current app is a Sync Provider for the given directory. When the OS tries to read a stub file, \`onFetchMissing(path)\` will be called so your app can download the real content.
-    *   \`.unmount(path)\`: Removes the sync provider registration.
+    *   \`.registerSyncProvider(path, { onMutate, onFetchContent })\`: Declares that the current app is a Sync Provider. \`onFetchContent(path)\` is called to download real content for stubs. \`onMutate(mutations)\` receives array of VfsMutation (\`ATTACH\`, \`DETACH\`, \`MUTATE\`) avoiding echo-loops automatically.
+    *   \`.unregisterSyncProvider(path)\`: Removes the sync provider registration.
 
 *   **System & IPC (\`MetaOS.system\`)**:
     *   \`.spawn(path, opts)\`: Navigates the main window or starts a daemon.
@@ -3302,6 +3305,21 @@ if (window.MetaOS) {
     MetaOS.system.on('data_fetched', (payload) => {
         AppUI.notify(\`Received \${payload.newItems} items from background!\`, 'success');
         refreshUI();
+    });
+}
+\`\`\`
+
+### Reactive UI with VFS Mutations
+To keep your app's UI perfectly synced with the file system without polling, listen to the \`vfs_mutation\` event. This uses a Change Data Capture (CDC) model.
+
+\`\`\`javascript
+if (window.MetaOS) {
+    MetaOS.system.on('vfs_mutation', (mutation) => {
+        // mutation.type can be 'ATTACH', 'DETACH', or 'MUTATE'
+        if (mutation.path.startsWith('data/my_app/')) {
+            console.log('Fact changed:', mutation.type, mutation.path);
+            refreshUI();
+        }
     });
 }
 \`\`\`
@@ -3797,7 +3815,10 @@ Do not use \`fetch('./data.json')\` to retrieve local files in VFS (CORS errors)
 When your app saves data frequently, use \`{ silent: true }\` in \`MetaOS.fs.write\` to prevent flooding the chat history with event logs.
 Also, in V2, if you intend to overwrite an existing file, you MUST explicitly pass \`{ overwrite: true }\` in the options.
 
-**4. Documentation Duty**
+**4. Listening to VFS Mutations (CDC)**
+To keep your UI apps perfectly synced with the file system without polling, listen to the \`vfs_mutation\` event using a Change Data Capture (CDC) model: \`MetaOS.system.on('vfs_mutation', (mutation) => { ... })\`. The mutation object provides the fact of change (\`ATTACH\`, \`DETACH\`, or \`MUTATE\`), allowing your app to update seamlessly.
+
+**5. Documentation Duty**
 When you create a new app or daemon, you **MUST** create a markdown manual explaining what it is and how it works, and save it in \`memory/rules/\`.
 
 ---
@@ -4147,30 +4168,57 @@ Attributes:
         const { mountPath, serverUrl } = config;
         let ws = null;
 
-        // 1. マウント宣言とオンデマンドフェッチの待ち受け
+        // 1. Sync Providerの登録（マウント、オンデマンドフェッチ、ローカル変更の監視を統合）
         try {
-          await MetaOS.fs.mount(mountPath, async (reqPath) => {
-            const relPath = reqPath.substring(mountPath.length + 1);
-            try {
-              const res = await fetch(\`\${serverUrl}/api/file/\${relPath}\`);
-              if (!res.ok) return false;
-              const arrayBuffer = await res.arrayBuffer();
+          await MetaOS.fs.registerSyncProvider(mountPath, {
+            onFetchContent: async (reqPath) => {
+              const relPath = reqPath.substring(mountPath.length + 1);
+              try {
+                const res = await fetch(\`\${serverUrl}/api/file/\${relPath}\`);
+                if (!res.ok) return false;
+                const arrayBuffer = await res.arrayBuffer();
 
-              // 実体を VFS に書き込む (source フラグをつけてエコーを防止)
-              await MetaOS.fs.write(reqPath, new Uint8Array(arrayBuffer), {
-                overwrite: true,
-                silent: true,
-                source: 'sync_daemon',
-              });
-              return true;
-            } catch (e) {
-              console.error('[SyncDaemon] Fetch failed:', e);
-              return false;
-            }
+                // 実体を VFS に書き込む (OSレベルでエコーキャンセルされるため source フラグは不要)
+                await MetaOS.fs.write(reqPath, new Uint8Array(arrayBuffer), {
+                  overwrite: true,
+                  silent: true,
+                });
+                return true;
+              } catch (e) {
+                console.error('[SyncDaemon] Fetch failed:', e);
+                return false;
+              }
+            },
+            onMutate: async (mutations) => {
+              // OSから渡されるローカルの変更（自身が起こした変更は除外済み）
+              for (const m of mutations) {
+                const getRelPath = (p) => p.substring(mountPath.length + 1);
+
+                if (m.type === 'ATTACH' || m.type === 'MUTATE') {
+                  // ディレクトリの場合はスキップ
+                  if (m.node && m.node.kind === 'directory') continue;
+
+                  try {
+                    const relPath = getRelPath(m.path);
+                    const u8 = await MetaOS.fs.read(m.path, { encoding: 'binary' });
+                    await fetch(\`\${serverUrl}/api/file/\${relPath}\`, { method: 'PUT', body: u8 });
+                  } catch (e) {
+                    console.error('[SyncDaemon] Upload failed:', e);
+                  }
+                } else if (m.type === 'DETACH') {
+                  try {
+                    const relPath = getRelPath(m.path);
+                    await fetch(\`\${serverUrl}/api/file/\${relPath}\`, { method: 'DELETE' });
+                  } catch (e) {
+                    console.error('[SyncDaemon] Delete failed:', e);
+                  }
+                }
+              }
+            },
           });
           MetaOS.ai.log(\`Local Sync Daemon successfully mounted at /\${mountPath}\`, 'system');
         } catch (e) {
-          console.error('[SyncDaemon] Mount failed:', e);
+          console.error('[SyncDaemon] Provider registration failed:', e);
           return;
         }
 
@@ -4184,17 +4232,12 @@ Attributes:
             const fullPath = \`\${mountPath}/\${relPath}\`;
             const local = localState[fullPath];
 
-            // ローカルに存在しないか、ハッシュが異なればスタブを作成
             if (!local || local.hash !== meta.hash) {
-              await MetaOS.fs.createStub(
-                fullPath,
-                {
-                  size: meta.size,
-                  updatedAt: meta.updatedAt,
-                  hash: meta.hash,
-                },
-                { source: 'sync_daemon' },
-              );
+              await MetaOS.fs.createStub(fullPath, {
+                size: meta.size,
+                updatedAt: meta.updatedAt,
+                hash: meta.hash,
+              });
             }
           }
         } catch (e) {
@@ -4205,68 +4248,26 @@ Attributes:
         const connectWs = () => {
           const wsUrl = serverUrl.replace(/^http/, 'ws') + '/ws';
           ws = new WebSocket(wsUrl);
+
           ws.onmessage = async (e) => {
             const data = JSON.parse(e.data);
             const fullPath = \`\${mountPath}/\${data.path}\`;
 
             if (data.type === 'create' || data.type === 'update') {
-              await MetaOS.fs.createStub(
-                fullPath,
-                {
-                  size: data.meta.size,
-                  updatedAt: data.meta.updatedAt,
-                  hash: data.meta.hash,
-                },
-                { source: 'sync_daemon' },
-              );
+              await MetaOS.fs.createStub(fullPath, {
+                size: data.meta.size,
+                updatedAt: data.meta.updatedAt,
+                hash: data.meta.hash,
+              });
             } else if (data.type === 'delete') {
               try {
-                await MetaOS.fs.delete(fullPath, { permanent: true, source: 'sync_daemon' });
+                await MetaOS.fs.delete(fullPath, { permanent: true });
               } catch (err) {}
             }
           };
-          ws.onclose = () => setTimeout(connectWs, 5000); // 再接続
+          ws.onclose = () => setTimeout(connectWs, 5000);
         };
         connectWs();
-
-        // 4. ローカル変更の監視 (Itera OS -> サーバー)
-        MetaOS.system.on('file_changed', async (payload) => {
-          // 自分が書き込んだ変更(エコー)は無視する
-          if (payload.source === 'sync_daemon') return;
-
-          // 管轄外のファイルは無視する
-          if (!payload.path.startsWith(mountPath + '/')) return;
-
-          const getRelPath = (p) => p.substring(mountPath.length + 1);
-
-          if (payload.type === 'create' || payload.type === 'update') {
-            try {
-              const relPath = getRelPath(payload.path);
-              // バイナリとして読み出し
-              const u8 = await MetaOS.fs.read(payload.path, { encoding: 'binary' });
-              await fetch(\`\${serverUrl}/api/file/\${relPath}\`, { method: 'PUT', body: u8 });
-            } catch (e) {
-              console.error('[SyncDaemon] Upload failed:', e);
-            }
-          } else if (payload.type === 'delete' || payload.type === 'trash') {
-            try {
-              const targetPath = payload.type === 'trash' ? payload.oldPath : payload.path;
-              const relPath = getRelPath(targetPath);
-              await fetch(\`\${serverUrl}/api/file/\${relPath}\`, { method: 'DELETE' });
-            } catch (e) {
-              console.error('[SyncDaemon] Delete failed:', e);
-            }
-          } else if (payload.type === 'rename' || payload.type === 'move') {
-            try {
-              const oldRelPath = getRelPath(payload.oldPath);
-              const newRelPath = getRelPath(payload.path);
-              await fetch(\`\${serverUrl}/api/file/\${oldRelPath}\`, { method: 'DELETE' });
-
-              const u8 = await MetaOS.fs.read(payload.path, { encoding: 'binary' });
-              await fetch(\`\${serverUrl}/api/file/\${newRelPath}\`, { method: 'PUT', body: u8 });
-            } catch (e) {}
-          }
-        });
       }
 
       initSyncDaemon();
@@ -6456,4 +6457,4 @@ Attributes:
 }, null, 2)
 };
 
-export const BUILD_TIME = 1784223040790;
+export const BUILD_TIME = 1784252477352;

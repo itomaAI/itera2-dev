@@ -127,7 +127,7 @@ export class SystemBootstrapper {
     // 5. IPC Routing & Event Orchestration
     // ==========================================
     const transport = new HostTransport();
-    
+
     // プロバイダマネージャーの初期化と VFS への注入
     const providerManager = new ProviderManager(eventBus, transport, processManager, pathResolver);
     vfs.setProviderManager(providerManager);
