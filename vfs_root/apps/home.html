@@ -431,7 +431,7 @@
 
           // V2 API
           if (window.MetaOS && MetaOS.system.on) {
-            MetaOS.system.on('file_changed', (p) => p.path.startsWith('data/') && refreshWidgets());
+            MetaOS.system.on('vfs_mutation', (m) => m.path.startsWith('data/') && refreshWidgets());
           }
         };
 

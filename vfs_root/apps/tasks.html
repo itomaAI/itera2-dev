@@ -399,10 +399,10 @@
 
       // Reactive Update
       if (window.MetaOS && MetaOS.system && MetaOS.system.on) {
-        MetaOS.system.on('file_changed', (payload) => {
+        MetaOS.system.on('vfs_mutation', (mutation) => {
           // If tasks DB changes, refresh list
-          if (payload.path.startsWith('data/tasks/')) {
-            console.log('Task DB changed, reloading...');
+          if (mutation.path.startsWith('data/tasks/')) {
+            console.log('Task DB mutated, reloading...');
             render();
           }
         });

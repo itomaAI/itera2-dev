@@ -18,30 +18,57 @@
         const { mountPath, serverUrl } = config;
         let ws = null;
 
-        // 1. マウント宣言とオンデマンドフェッチの待ち受け
+        // 1. Sync Providerの登録（マウント、オンデマンドフェッチ、ローカル変更の監視を統合）
         try {
-          await MetaOS.fs.mount(mountPath, async (reqPath) => {
-            const relPath = reqPath.substring(mountPath.length + 1);
-            try {
-              const res = await fetch(`${serverUrl}/api/file/${relPath}`);
-              if (!res.ok) return false;
-              const arrayBuffer = await res.arrayBuffer();
+          await MetaOS.fs.registerSyncProvider(mountPath, {
+            onFetchContent: async (reqPath) => {
+              const relPath = reqPath.substring(mountPath.length + 1);
+              try {
+                const res = await fetch(`${serverUrl}/api/file/${relPath}`);
+                if (!res.ok) return false;
+                const arrayBuffer = await res.arrayBuffer();
 
-              // 実体を VFS に書き込む (source フラグをつけてエコーを防止)
-              await MetaOS.fs.write(reqPath, new Uint8Array(arrayBuffer), {
-                overwrite: true,
-                silent: true,
-                source: 'sync_daemon',
-              });
-              return true;
-            } catch (e) {
-              console.error('[SyncDaemon] Fetch failed:', e);
-              return false;
+                // 実体を VFS に書き込む (OSレベルでエコーキャンセルされるため source フラグは不要)
+                await MetaOS.fs.write(reqPath, new Uint8Array(arrayBuffer), {
+                  overwrite: true,
+                  silent: true
+                });
+                return true;
+              } catch (e) {
+                console.error('[SyncDaemon] Fetch failed:', e);
+                return false;
+              }
+            },
+            onMutate: async (mutations) => {
+              // OSから渡されるローカルの変更（自身が起こした変更は除外済み）
+              for (const m of mutations) {
+                const getRelPath = (p) => p.substring(mountPath.length + 1);
+                
+                if (m.type === 'ATTACH' || m.type === 'MUTATE') {
+                  // ディレクトリの場合はスキップ
+                  if (m.node && m.node.kind === 'directory') continue;
+
+                  try {
+                    const relPath = getRelPath(m.path);
+                    const u8 = await MetaOS.fs.read(m.path, { encoding: 'binary' });
+                    await fetch(`${serverUrl}/api/file/${relPath}`, { method: 'PUT', body: u8 });
+                  } catch (e) {
+                    console.error('[SyncDaemon] Upload failed:', e);
+                  }
+                } else if (m.type === 'DETACH') {
+                  try {
+                    const relPath = getRelPath(m.path);
+                    await fetch(`${serverUrl}/api/file/${relPath}`, { method: 'DELETE' });
+                  } catch (e) {
+                    console.error('[SyncDaemon] Delete failed:', e);
+                  }
+                }
+              }
             }
           });
           MetaOS.ai.log(`Local Sync Daemon successfully mounted at /${mountPath}`, 'system');
         } catch (e) {
-          console.error('[SyncDaemon] Mount failed:', e);
+          console.error('[SyncDaemon] Provider registration failed:', e);
           return;
         }
 
@@ -55,17 +82,12 @@
             const fullPath = `${mountPath}/${relPath}`;
             const local = localState[fullPath];
 
-            // ローカルに存在しないか、ハッシュが異なればスタブを作成
             if (!local || local.hash !== meta.hash) {
-              await MetaOS.fs.createStub(
-                fullPath,
-                {
+              await MetaOS.fs.createStub(fullPath, {
                   size: meta.size,
                   updatedAt: meta.updatedAt,
                   hash: meta.hash,
-                },
-                { source: 'sync_daemon' },
-              );
+              });
             }
           }
         } catch (e) {
@@ -76,68 +98,26 @@
         const connectWs = () => {
           const wsUrl = serverUrl.replace(/^http/, 'ws') + '/ws';
           ws = new WebSocket(wsUrl);
+
           ws.onmessage = async (e) => {
             const data = JSON.parse(e.data);
             const fullPath = `${mountPath}/${data.path}`;
 
             if (data.type === 'create' || data.type === 'update') {
-              await MetaOS.fs.createStub(
-                fullPath,
-                {
+              await MetaOS.fs.createStub(fullPath, {
                   size: data.meta.size,
                   updatedAt: data.meta.updatedAt,
                   hash: data.meta.hash,
-                },
-                { source: 'sync_daemon' },
-              );
+              });
             } else if (data.type === 'delete') {
               try {
-                await MetaOS.fs.delete(fullPath, { permanent: true, source: 'sync_daemon' });
+                await MetaOS.fs.delete(fullPath, { permanent: true });
               } catch (err) {}
             }
           };
-          ws.onclose = () => setTimeout(connectWs, 5000); // 再接続
+          ws.onclose = () => setTimeout(connectWs, 5000);
         };
         connectWs();
-
-        // 4. ローカル変更の監視 (Itera OS -> サーバー)
-        MetaOS.system.on('file_changed', async (payload) => {
-          // 自分が書き込んだ変更(エコー)は無視する
-          if (payload.source === 'sync_daemon') return;
-
-          // 管轄外のファイルは無視する
-          if (!payload.path.startsWith(mountPath + '/')) return;
-
-          const getRelPath = (p) => p.substring(mountPath.length + 1);
-
-          if (payload.type === 'create' || payload.type === 'update') {
-            try {
-              const relPath = getRelPath(payload.path);
-              // バイナリとして読み出し
-              const u8 = await MetaOS.fs.read(payload.path, { encoding: 'binary' });
-              await fetch(`${serverUrl}/api/file/${relPath}`, { method: 'PUT', body: u8 });
-            } catch (e) {
-              console.error('[SyncDaemon] Upload failed:', e);
-            }
-          } else if (payload.type === 'delete' || payload.type === 'trash') {
-            try {
-              const targetPath = payload.type === 'trash' ? payload.oldPath : payload.path;
-              const relPath = getRelPath(targetPath);
-              await fetch(`${serverUrl}/api/file/${relPath}`, { method: 'DELETE' });
-            } catch (e) {
-              console.error('[SyncDaemon] Delete failed:', e);
-            }
-          } else if (payload.type === 'rename' || payload.type === 'move') {
-            try {
-              const oldRelPath = getRelPath(payload.oldPath);
-              const newRelPath = getRelPath(payload.path);
-              await fetch(`${serverUrl}/api/file/${oldRelPath}`, { method: 'DELETE' });
-
-              const u8 = await MetaOS.fs.read(payload.path, { encoding: 'binary' });
-              await fetch(`${serverUrl}/api/file/${newRelPath}`, { method: 'PUT', body: u8 });
-            } catch (e) {}
-          }
-        });
       }
 
       initSyncDaemon();

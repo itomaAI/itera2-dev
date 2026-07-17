@@ -585,11 +585,14 @@
 
       if (window.MetaOS && MetaOS.system.on) {
         // 他のアプリからのOSレベルのイベントを購読
-        MetaOS.system.on('file_changed', (payload) => {
-          if (payload.path.startsWith('data/notes') || payload.path.startsWith('data/')) {
+        MetaOS.system.on('vfs_mutation', (mutation) => {
+          if (mutation.path.startsWith('data/notes') || mutation.path.startsWith('data/')) {
             loadList().then(() => {
-              if (currentPath && payload.path === currentPath) {
-                if (currentMode !== 'edit') {
+              if (currentPath && mutation.path === currentPath) {
+                // ファイルが削除(DETACH)された場合は何もしない（あるいはホームに戻る等）
+                if (mutation.type === 'DETACH') {
+                   // Optional: handle deletion if needed
+                } else if (currentMode !== 'edit') {
                   openNote(currentPath);
                 }
               }
