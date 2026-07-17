@@ -25,14 +25,12 @@ The Virtual File System is organized into specific domains. Some areas are stric
 │   ├── init.md             # The AI's boot protocol
 │   └── rules/              # AI knowledge and behavior guidelines
 │
-├── services/               # [Background Daemons Layer] (Read/Write)
-│   └── ...                 # Headless background tasks
-│
 ├── system/                 # [System Core Layer] (Strictly Protected)
 │   ├── apps/               # OS built-in apps (Settings, etc.)
 │   ├── config/             # Dynamic OS configuration
 │   ├── core/               # Shared core libraries (std.js, ui.js)
 │   ├── registry/           # App and Service registries
+│   ├── services/           # OS built-in background daemons
 │   ├── temp/               # [Volatile Layer] User uploads and screenshots. Purged on session reset.
 │   └── themes/             # UI Themes (.json)
 │

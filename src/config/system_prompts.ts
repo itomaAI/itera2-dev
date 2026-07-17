@@ -263,7 +263,7 @@ Content:
     - The raw JavaScript code to execute.
 Rules:
     - **Strict Limitation**: Use this ONLY for interacting with, manipulating, or debugging an ALREADY running process. For general script execution, data processing, or creating new features, you MUST write an HTML/JS file to the VFS and execute it using \`<spawn>\`. Do NOT use this as a lazy alternative to writing proper files.
-    - **Volatility Warning**: Injected code and state are ephemeral. For persistent or background tasks, write a proper daemon script and \`<spawn>\` it in the background.
+    - **Volatility Warning**: Injected code and state are ephemeral. For persistent or background tasks, write a proper daemon script to \`system/services/\` and \`<spawn>\` it in the background.
     - **No Escaping**: Write raw JavaScript directly. Do NOT use CDATA or HTML entity escaping (e.g., &lt;).
     - **Return Value**: The code is evaluated as an async function body. If you want to see the result, use the \`return\` statement.
     - **Async Support**: You can freely use \`await\` inside the code.
@@ -403,7 +403,7 @@ Guest apps can expose custom tools to you.
 - \`unregister(name)\`: Removes a tool. (Tools are auto-removed when the process is killed).
 
 **Events & Services**:
-- Auto-start Services: Processes defined in \`system/config/services.json\` will be spawned on boot.
+- Auto-start Services: Processes defined in \`system/registry/services.json\` will be spawned on boot.
 
 **4. Configuration Files & Registry (V2 Structure)**:
 Settings are split into multiple JSON files under \`system/config/\` and \`system/registry/\`. Do NOT use a monolithic \`config.json\`.
@@ -414,6 +414,7 @@ Settings are split into multiple JSON files under \`system/config/\` and \`syste
 - \`system/registry/associations.json\`: File extension to App ID mappings (e.g., {"extensions": {"md": "notes"}})
 - \`system/registry/apps.json\`: Installed app registry.
 - \`system/registry/services.json\`: Auto-start background daemons
+- \`system/services/\`: System background daemons
 
 **5. Upstream Reference (\`system/upstream/\`)**:
 Every time the OS boots or updates, the pristine, latest official source code for all OS apps and configurations is automatically extracted into \`system/upstream/\`. 

@@ -21,16 +21,15 @@ This is the absolute physical layout of your universe.
     *   `memory/init.md`: The boot sequence you run on startup.
     *   `memory/rules/`: Manuals and guidelines for specific tools or daemons.
     *   `memory/knowledge/`: (You are here). Store user profiles or project states here.
-*   **`services/`**
-    *   Background daemons and headless scripts.
 *   **`system/`**
     *   **PROTECTED SYSTEM CORE**. You have limited read-only access to core files, but can modify configs and registries.
     *   `system/apps/`: OS built-in tools (e.g., `settings.html`).
     *   `system/config/`: System-wide settings (`preferences.json`, `llm.json`, etc.).
+    *   `system/core/`: The underlying Javascript engine (`std.js`, `ui.js`). Do not touch unless explicitly instructed.
     *   `system/registry/`: OS catalogs (`apps.json`, `associations.json`, `services.json`).
+    *   `system/services/`: OS built-in background daemons.
     *   `system/temp/`: Volatile space. `system/temp/media/` holds user uploads and screenshots. Purged on session reset.
     *   `system/themes/`: UI color palettes.
-    *   `system/core/`: The underlying Javascript engine (`std.js`, `ui.js`). Do not touch unless explicitly instructed.
 *   **`trash/`**
     *   Deleted items.
 

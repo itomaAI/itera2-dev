@@ -33,7 +33,7 @@ To show your app in the Launcher, you must add it to the system registry at `sys
 
 Daemons are invisible HTML/JS files that run continuously in the background. They are perfect for timers, WebSocket connections (like Nostr), or cron jobs.
 
-### Creating a Daemon (`services/logger.html`)
+### Creating a Daemon (`system/services/logger.html`)
 ```html
 <script>
     // Runs every 10 minutes
@@ -55,7 +55,7 @@ To make your daemon start automatically when Itera OS boots, register it in `sys
         "id": "sys_logger",
         "name": "System Logger",
         "icon": "📝",
-        "path": "services/logger.html",
+        "path": "system/services/logger.html",
         "description": "Periodically logs system health.",
         "autoStart": true
     }

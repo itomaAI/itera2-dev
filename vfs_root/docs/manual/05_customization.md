@@ -70,7 +70,7 @@ Defines background services and whether they should start silently when the OS b
         "id": "my_crawler_daemon",
         "name": "Crawler Daemon",
         "icon": "🕷️",
-        "path": "services/crawler.html",
+        "path": "system/services/crawler.html",
         "description": "Fetches data in the background.",
         "autoStart": true
     }

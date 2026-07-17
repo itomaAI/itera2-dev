@@ -3,7 +3,7 @@
     "id": "git_daemon",
     "name": "Git Client",
     "icon": "🐙",
-    "path": "services/git.html",
+    "path": "system/services/git.html",
     "description": "Background service providing Git operations.",
     "autoStart": false
   },
@@ -11,7 +11,7 @@
     "id": "local_sync_daemon",
     "name": "Local Sync Daemon",
     "icon": "🔄",
-    "path": "services/local_sync.html",
+    "path": "system/services/local_sync.html",
     "description": "Bi-directional sync with local python server.",
     "autoStart": false
   }
