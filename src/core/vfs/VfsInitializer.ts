@@ -39,6 +39,7 @@ export class VfsInitializer {
       'system/themes',
       'system/temp',
       'system/logs',
+      'system/upstream', // ★ 追加: 常に最新の公式OSファイルを保持するディレクトリ
     ];
 
     for (const dir of requiredDirs) {
@@ -69,6 +70,20 @@ export class VfsInitializer {
     for (const [key, content] of Object.entries(DEFAULT_FILES)) {
       const isDir = key.endsWith('/');
       const cleanPath = isDir ? key.slice(0, -1) : key;
+
+      // ★ 追加: system/upstream/ 配下に「常に最新の公式リリースファイル」を強制展開する
+      // これにより、ユーザーやAIがアプリを改造して壊してしまっても、常に最新の公式コード（APIの使い方）を参照できる
+      const upstreamPath = `system/upstream/${cleanPath}`;
+      if (isDir) {
+        if (!this.vfs.exists(SYSTEM_PRINCIPAL, upstreamPath)) {
+          await this.vfs.mkdir(SYSTEM_PRINCIPAL, upstreamPath);
+        }
+      } else {
+        await this.vfs.writeFile(SYSTEM_PRINCIPAL, upstreamPath, content, {
+          overwrite: true,
+          system: true,
+        });
+      }
 
       // 領域の判定
       const isSystemArea = cleanPath.startsWith('system/');

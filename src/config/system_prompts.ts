@@ -414,6 +414,10 @@ Settings are split into multiple JSON files under \`system/config/\` and \`syste
 - \`system/registry/associations.json\`: File extension to App ID mappings (e.g., {"extensions": {"md": "notes"}})
 - \`system/registry/apps.json\`: Installed app registry.
 - \`system/registry/services.json\`: Auto-start background daemons
+
+**5. Upstream Reference (\`system/upstream/\`)**:
+Every time the OS boots or updates, the pristine, latest official source code for all OS apps and configurations is automatically extracted into \`system/upstream/\`. 
+If a user-modified app breaks after an OS update due to deprecated APIs, or if you need to know the correct implementation of the latest VFS/IPC APIs, ALWAYS reference the files in \`system/upstream/\` to see how the official apps do it.
 </rule>
 
 <rule name="manual_management">

@@ -104,6 +104,17 @@
             const fullPath = `${mountPath}/${data.path}`;
 
             if (data.type === 'create' || data.type === 'update') {
+              try {
+                // 外部エコーの防止: サーバーから通知されたファイルとローカルのファイルのハッシュを比較
+                // 自分がアップロードした結果の通知であれば、ハッシュが一致するため実体をスタブで破壊しない
+                const stat = await MetaOS.fs.stat(fullPath);
+                if (stat && stat.hash === data.meta.hash) {
+                  return; // すでに最新の状態（実体あり）なのでスキップ
+                }
+              } catch (err) {
+                // localにファイルが存在しない（エラーになる）場合はスタブを作ってよい
+              }
+
               await MetaOS.fs.createStub(fullPath, {
                 size: data.meta.size,
                 updatedAt: data.meta.updatedAt,
