@@ -4,7 +4,7 @@
  */
 
 import type { VfsEventBus } from './VfsEventBus';
-import type { VfsMutation, Principal } from './types';
+import type { VfsMutation } from './types';
 import type { HostTransport } from '../../ipc/HostTransport';
 import type { ProcessManager } from '../../shell/windowing/ProcessManager';
 import type { PathResolver } from './PathResolver';
@@ -18,12 +18,21 @@ export class ProviderManager {
   private mounts: Map<string, ProviderInfo> = new Map(); // normalizedPath -> ProviderInfo
   private fetchPromises: Map<string, Promise<boolean>> = new Map();
 
+  private eventBus: VfsEventBus;
+  private transport: HostTransport;
+  private processManager: ProcessManager;
+  private pathResolver: PathResolver;
+
   constructor(
-    private eventBus: VfsEventBus,
-    private transport: HostTransport,
-    private processManager: ProcessManager,
-    private pathResolver: PathResolver
+    eventBus: VfsEventBus,
+    transport: HostTransport,
+    processManager: ProcessManager,
+    pathResolver: PathResolver
   ) {
+    this.eventBus = eventBus;
+    this.transport = transport;
+    this.processManager = processManager;
+    this.pathResolver = pathResolver;
     this._bindEventBus();
   }
 

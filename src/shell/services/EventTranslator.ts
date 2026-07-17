@@ -37,7 +37,7 @@ export class EventTranslator {
 
     const logs: { type: string; message: string }[] = [];
 
-    for (const [nodeId, nodeMutations] of mutationsByNode.entries()) {
+    for (const [, nodeMutations] of mutationsByNode.entries()) {
       const attach = nodeMutations.find((m) => m.type === 'ATTACH');
       const detach = nodeMutations.find((m) => m.type === 'DETACH');
       const mutate = nodeMutations.find((m) => m.type === 'MUTATE');

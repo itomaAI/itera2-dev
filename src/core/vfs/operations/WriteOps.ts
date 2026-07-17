@@ -183,7 +183,7 @@ export class AppendFileOp extends BaseOperation<{ path: string; content: string;
 
 export class CreateStubOp extends BaseOperation<{ path: string; meta: Partial<VfsNodeMeta>; opts: StubOptions }, string> {
   async execute(principal: Principal, args: { path: string; meta: Partial<VfsNodeMeta>; opts: StubOptions }): Promise<string> {
-    const { path, meta, opts } = args;
+    const { path, meta } = args;
     const normPath = this.ctx.pathResolver.normalizePath(path);
 
     if (!normPath) throw new Error('Cannot create stub at root.');

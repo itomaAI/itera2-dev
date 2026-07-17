@@ -26,7 +26,11 @@ export interface VfsContext {
 }
 
 export abstract class BaseOperation<TArgs, TReturn> {
-  constructor(protected ctx: VfsContext) {}
+  protected ctx: VfsContext;
+
+  constructor(ctx: VfsContext) {
+    this.ctx = ctx;
+  }
 
   abstract execute(principal: Principal, args: TArgs): Promise<TReturn>;
 

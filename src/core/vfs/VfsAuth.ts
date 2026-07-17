@@ -4,10 +4,14 @@
  */
 
 import type { NodeStore } from './NodeStore';
-import { SYSTEM_PRINCIPAL, type Principal, type PermissionType, type VfsNode, type AccessControlList } from './types';
+import { type Principal, type PermissionType, type VfsNode, type AccessControlList } from './types';
 
 export class VfsAuth {
-  constructor(private nodeStore: NodeStore) {}
+  private nodeStore: NodeStore;
+
+  constructor(nodeStore: NodeStore) {
+    this.nodeStore = nodeStore;
+  }
 
   hasPermission(principal: Principal, node: VfsNode, action: PermissionType): boolean {
     if (principal.type === 'system') return true;

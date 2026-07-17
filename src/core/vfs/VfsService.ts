@@ -5,7 +5,6 @@
 
 import {
   SYSTEM_PRINCIPAL,
-  type VfsNode,
   type VfsNodeMeta,
   type VfsStat,
   type ListOptions,
@@ -19,7 +18,6 @@ import {
   type SyncStateTree,
   type TreeNode,
   type Principal,
-  type PermissionType,
   type AccessControlList,
 } from './types';
 import type { NodeStore } from './NodeStore';
@@ -38,7 +36,6 @@ export class VfsService {
   private nodeStore: NodeStore;
   private contentStore: ContentStore;
   private pathResolver: PathResolver;
-  private eventBus: VfsEventBus;
   private lockManager: VfsLockManager;
   private auth: VfsAuth;
   private context: VfsContext;
@@ -48,7 +45,6 @@ export class VfsService {
     this.nodeStore = nodeStore;
     this.contentStore = contentStore;
     this.pathResolver = pathResolver;
-    this.eventBus = eventBus;
     this.lockManager = new VfsLockManager();
     this.auth = new VfsAuth(nodeStore);
     this.context = {

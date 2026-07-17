@@ -3,7 +3,7 @@
  * Itera OS v2: Surgical DOM Update Tree View
  */
 
-import type { VfsEvent, TreeNode } from '../../core/vfs/types';
+import type { TreeNode } from '../../core/vfs/types';
 
 export class TreeView {
   private container: HTMLElement;
