@@ -161,7 +161,13 @@ export class VfsInitializer {
       ],
     };
 
-    const rwPaths = ['system/config', 'system/themes', 'system/registry', 'system/temp'];
+    const rwPaths = [
+      'system/config',
+      'system/themes',
+      'system/registry',
+      'system/temp',
+      'system/upstream', // ★ 追加: 再起動で元に戻るため、一時的な書き換えや実験を許可する
+    ];
 
     for (const rwPath of rwPaths) {
       if (this.vfs.exists(SYSTEM_PRINCIPAL, rwPath)) {
