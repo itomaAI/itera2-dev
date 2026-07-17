@@ -1,6 +1,6 @@
 /**
  * AUTO-GENERATED FILE - DO NOT EDIT MANUALLY
- * Generated on: 2026-07-17T03:58:00.464Z
+ * Generated on: 2026-07-17T06:03:28.213Z
  */
 
 export const DEFAULT_FILES: Record<string, string> = {
@@ -431,7 +431,16 @@ export const DEFAULT_FILES: Record<string, string> = {
       }
 
       async function deleteEvent(id) {
-        if (await AppUI.confirm('Are you sure you want to delete this event?')) {
+        const res = await AppUI.showMessageBox({
+          title: 'Delete Event',
+          message: 'Are you sure you want to delete this event?',
+          type: 'warning',
+          buttons: [
+            { label: 'Cancel', value: false, style: 'normal' },
+            { label: 'Delete', value: true, style: 'danger', isDefault: true },
+          ],
+        });
+        if (res && res.value) {
           AppUI.showLoading('Deleting...');
           await App.deleteEvent(id, State.modalDate);
           AppUI.hideLoading();
@@ -876,7 +885,16 @@ export const DEFAULT_FILES: Record<string, string> = {
             }
           },
           del: async () => {
-            if (await AppUI.confirm('Delete permanently?')) {
+            const res = await AppUI.showMessageBox({
+              title: 'Delete Task',
+              message: 'Are you sure you want to delete this task permanently?',
+              type: 'warning',
+              buttons: [
+                { label: 'Cancel', value: false, style: 'normal' },
+                { label: 'Delete', value: true, style: 'danger', isDefault: true },
+              ],
+            });
+            if (res && res.value) {
               await App.deleteTask(DOM('edit-id').value);
               DashTask.close();
               refreshWidgets();
@@ -1487,11 +1505,19 @@ export const DEFAULT_FILES: Record<string, string> = {
       }
 
       async function newNote() {
-        const name = prompt(
-          "Enter file name (e.g. 'notes/Meeting.md' or 'projects/Design.md'):\\nDefault goes to 'data/notes/'",
-          'Untitled.md',
-        );
-        if (!name) return;
+        const res = await AppUI.showMessageBox({
+          title: 'New Note',
+          message: "Enter file name (e.g. 'notes/Meeting.md' or 'projects/Design.md'):\\nDefault goes to 'data/notes/'",
+          type: 'question',
+          prompt: { defaultValue: 'Untitled.md' },
+          buttons: [
+            { label: 'Cancel', value: null, style: 'normal' },
+            { label: 'Create', value: 'create', style: 'primary', isDefault: true },
+          ],
+        });
+
+        const name = res?.value;
+        if (!name || name === 'cancel') return;
 
         let path = name;
         if (!path.includes('/')) {
@@ -2301,7 +2327,16 @@ if __name__ == "__main__":
 
       async function deleteFromModal() {
         const id = document.getElementById('edit-id').value;
-        if (confirm('Delete this task permanently?')) {
+        const res = await AppUI.showMessageBox({
+          title: 'Delete Task',
+          message: 'Delete this task permanently?',
+          type: 'warning',
+          buttons: [
+            { label: 'Cancel', value: false, style: 'normal' },
+            { label: 'Delete', value: true, style: 'danger', isDefault: true },
+          ],
+        });
+        if (res && res.value) {
           await App.deleteTask(id);
           closeTaskModal();
           render();
@@ -2898,7 +2933,12 @@ Please execute the installation by strictly following these phases:
 
         function notifyCompletion(finishedMode, whileAway) {
             if (!whileAway && window.AppUI) {
-                AppUI.alert(finishedMode === 'focus' ? "Focus session complete! Take a break." : "Break is over! Back to work.");
+                AppUI.showMessageBox({
+                    title: finishedMode === 'focus' ? 'Focus Complete' : 'Break Over',
+                    message: finishedMode === 'focus' ? "Focus session complete! Take a break." : "Break is over! Back to work.",
+                    type: 'info',
+                    buttons: [{ label: 'OK', value: true, style: 'primary', isDefault: true }]
+                });
             }
             if (window.MetaOS && MetaOS.ai && MetaOS.ai.log) {
                 const logMsg = finishedMode === 'focus' ? "User completed a focus session." : "User completed a break.";
@@ -3155,7 +3195,7 @@ All guest applications MUST include the UI Kit library in their \`<head>\` secti
 This library automatically injects:
 1.  **Tailwind Configuration**: Maps semantic tokens to CSS variables.
 2.  **Global Styles**: Sets the default typography and scrollbar styling.
-3.  **AppUI Helpers**: Utilities for navigation and native dialogs (\`AppUI.alert\`, \`AppUI.prompt\`).
+3.  **AppUI Helpers**: Utilities for navigation and OS-native dialogs (\`AppUI.alert\`, \`AppUI.confirm\`, \`AppUI.prompt\`, and \`AppUI.showMessageBox\`).
 
 ## Semantic Tokens Reference
 
@@ -3362,7 +3402,36 @@ console.log(res.data);
 const imageBase64 = await MetaOS.device.takePhoto({ facingMode: 'environment' });
 \`\`\`
 
-## 6. Best Practices
+## 6. Using OS-Native Dialogs (AppUI)
+
+To maintain a consistent look and feel, **do not use browser native \`alert()\`, \`confirm()\`, or \`prompt()\`**. Instead, use the injected \`window.AppUI\` methods.
+
+\`\`\`javascript
+// Simple Prompts
+await AppUI.alert('Operation completed successfully.', 'Success');
+const isSure = await AppUI.confirm('Are you sure you want to delete this?', 'Warning');
+const name = await AppUI.prompt('Enter your name:', 'John Doe', 'Identity');
+
+// Advanced Message Box
+const result = await AppUI.showMessageBox({
+    title: 'Unsaved Changes',
+    message: 'You have unsaved changes. What would you like to do?',
+    type: 'warning',
+    buttons: [
+        { label: 'Cancel', value: 'cancel', style: 'normal' },
+        { label: 'Discard', value: 'discard', style: 'danger' },
+        { label: 'Save', value: 'save', style: 'primary', isDefault: true }
+    ],
+    checkbox: {
+        label: 'Do not ask me again',
+        defaultChecked: false
+    }
+});
+// result.value will be 'cancel', 'discard', or 'save'
+// result.checkboxChecked will be true or false
+\`\`\`
+
+## 7. Best Practices
 1. **Semantic Colors**: Always use \`bg-app\`, \`text-text-main\`, \`bg-panel\` etc. (See 03_design_system.md).
 2. **Context Awareness**: Use \`App.AI.logEvent()\` when the user performs an important action so the AI knows what's happening.
 3. **Write Manuals**: When you build a complex app, write a \`.md\` manual in \`docs/apps/\` so both you and the AI understand how to use it.
@@ -5966,79 +6035,6 @@ Attributes:
       if (!val) return '#888888';
       return val.includes(' ') ? \`rgb(\${val.split(' ').join(', ')})\` : val;
     },
-    _createDialog: ({ type, message, title, defaultValue }) => {
-      return new Promise((resolve) => {
-        const overlay = document.createElement('div');
-        overlay.className =
-          'fixed inset-0 bg-black/60 backdrop-blur-sm z-[9998] flex items-center justify-center p-4 itera-animate-fade select-none';
-
-        const box = document.createElement('div');
-        box.className =
-          'bg-panel border border-border-main rounded-2xl shadow-2xl w-full max-w-sm flex flex-col overflow-hidden itera-animate-modal';
-
-        const header = document.createElement('div');
-        header.className = 'px-5 py-3 border-b border-border-main bg-card/50 flex items-center gap-2';
-        header.innerHTML = \`<span class="text-primary">✦</span><span class="font-bold text-sm text-text-main">\${title}</span>\`;
-
-        const body = document.createElement('div');
-        body.className = 'p-5 text-sm text-text-main whitespace-pre-wrap leading-relaxed';
-        body.textContent = message;
-
-        let input = null;
-        if (type === 'prompt') {
-          input = document.createElement('input');
-          input.type = 'text';
-          input.value = defaultValue || '';
-          input.className =
-            'w-full mt-4 bg-app border border-border-main rounded-lg p-2.5 text-text-main focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition shadow-inner';
-          body.appendChild(input);
-        }
-
-        const footer = document.createElement('div');
-        footer.className = 'px-5 py-3 border-t border-border-main bg-card flex justify-end gap-2';
-
-        const closeDialog = (val) => {
-          overlay.style.opacity = '0';
-          setTimeout(() => overlay.remove(), 200);
-          resolve(val);
-        };
-
-        const btnCancel = document.createElement('button');
-        btnCancel.className =
-          'px-4 py-2 rounded-lg text-xs font-bold text-text-muted hover:text-text-main hover:bg-hover transition';
-        btnCancel.textContent = 'Cancel';
-        btnCancel.onclick = () => closeDialog(type === 'prompt' ? null : false);
-
-        const btnOk = document.createElement('button');
-        btnOk.className =
-          'px-4 py-2 rounded-lg text-xs font-bold bg-primary text-white hover:bg-primary/90 shadow transition';
-        btnOk.textContent = 'OK';
-        btnOk.onclick = () => closeDialog(type === 'prompt' ? input.value : true);
-
-        if (type !== 'alert') footer.appendChild(btnCancel);
-        footer.appendChild(btnOk);
-
-        box.append(header, body, footer);
-        overlay.appendChild(box);
-        document.body.appendChild(overlay);
-
-        if (input) {
-          setTimeout(() => {
-            input.focus();
-            input.select();
-          }, 50);
-          input.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter') btnOk.click();
-            if (e.key === 'Escape') btnCancel.click();
-          });
-        } else {
-          setTimeout(() => btnOk.focus(), 50);
-          overlay.addEventListener('keydown', (e) => {
-            if (e.key === 'Escape') type === 'alert' ? btnOk.click() : btnCancel.click();
-          });
-        }
-      });
-    },
   };
 })(window);
 `.trim(),
@@ -6477,4 +6473,4 @@ Attributes:
 }, null, 2)
 };
 
-export const BUILD_TIME = 1784260680464;
+export const BUILD_TIME = 1784268208213;

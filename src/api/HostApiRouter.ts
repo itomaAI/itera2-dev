@@ -499,10 +499,10 @@ export class HostApiRouter {
           prompt: { defaultValue: '' },
           buttons: [
             { label: 'Cancel', value: null, style: 'normal' },
-            { label: 'Save Token', value: 'save', style: 'primary', isDefault: true }
-          ]
+            { label: 'Save Token', value: 'save', style: 'primary', isDefault: true },
+          ],
         });
-        
+
         const token = res?.value;
         if (token && token !== 'cancel' && token.trim()) {
           const creds = d.configManager.get('credentials') || {};

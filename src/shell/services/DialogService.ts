@@ -138,7 +138,7 @@ export class DialogService {
       title,
       message,
       type: 'warning',
-      buttons: [{ label: 'OK', value: undefined as any, style: 'primary', isDefault: true }]
+      buttons: [{ label: 'OK', value: undefined as any, style: 'primary', isDefault: true }],
     }).then(() => undefined);
   }
 
@@ -149,9 +149,9 @@ export class DialogService {
       type: 'question',
       buttons: [
         { label: 'Cancel', value: false, style: 'normal' },
-        { label: 'OK', value: true, style: 'primary', isDefault: true }
-      ]
-    }).then(res => res.value);
+        { label: 'OK', value: true, style: 'primary', isDefault: true },
+      ],
+    }).then((res) => res.value);
   }
 
   public prompt(message: string, defaultValue: string = '', title: string = 'Input Required'): Promise<string | null> {
@@ -162,29 +162,26 @@ export class DialogService {
       prompt: { defaultValue },
       buttons: [
         { label: 'Cancel', value: null, style: 'normal' },
-        { label: 'OK', value: 'ok' as any, style: 'primary', isDefault: true }
-      ]
-    }).then(res => res.value);
+        { label: 'OK', value: 'ok' as any, style: 'primary', isDefault: true },
+      ],
+    }).then((res) => res.value);
   }
 
-  public async showConflictDialog(
-    itemName: string,
-    isDirectory: boolean
-  ): Promise<DialogResult<ConflictAction>> {
+  public async showConflictDialog(itemName: string, isDirectory: boolean): Promise<DialogResult<ConflictAction>> {
     const actionName = isDirectory ? 'Merge' : 'Replace';
-    const detailMsg = isDirectory 
+    const detailMsg = isDirectory
       ? 'Do you want to merge the folders? Files with the same names will be replaced.'
       : 'Do you want to replace it with the one you are moving?';
-      
+
     const buttons: MessageBoxOptions<ConflictAction>['buttons'] = [
       { label: 'Cancel', value: 'cancel', style: 'normal' },
-      { label: 'Skip', value: 'skip', style: 'normal' }
+      { label: 'Skip', value: 'skip', style: 'normal' },
     ];
 
     if (!isDirectory) {
       buttons.push({ label: 'Keep Both', value: 'keep_both', style: 'normal' });
     }
-    
+
     buttons.push({ label: actionName, value: isDirectory ? 'merge' : 'replace', style: 'primary', isDefault: true });
 
     return await this.showMessageBox<ConflictAction>({
@@ -194,9 +191,9 @@ export class DialogService {
       type: 'warning',
       checkbox: {
         label: 'Do this for all current conflicts',
-        defaultChecked: false
+        defaultChecked: false,
       },
-      buttons
+      buttons,
     });
   }
 
@@ -213,13 +210,22 @@ export class DialogService {
       // Header
       const header = document.createElement('div');
       header.className = 'px-4 py-3 border-b border-border-main bg-panel flex items-center gap-2';
-      
+
       let icon = '';
       let iconColor = '';
-      if (options.type === 'info') { icon = 'ℹ️'; iconColor = 'text-primary'; }
-      else if (options.type === 'warning') { icon = '⚠️'; iconColor = 'text-warning'; }
-      else if (options.type === 'error') { icon = '❌'; iconColor = 'text-error'; }
-      else if (options.type === 'question') { icon = '❓'; iconColor = 'text-primary'; }
+      if (options.type === 'info') {
+        icon = 'ℹ️';
+        iconColor = 'text-primary';
+      } else if (options.type === 'warning') {
+        icon = '⚠️';
+        iconColor = 'text-warning';
+      } else if (options.type === 'error') {
+        icon = '❌';
+        iconColor = 'text-error';
+      } else if (options.type === 'question') {
+        icon = '❓';
+        iconColor = 'text-primary';
+      }
 
       header.innerHTML = `${icon ? `<span class="${iconColor}">${icon}</span>` : ''}<span class="font-bold text-sm text-text-main">${options.title}</span>`;
 
@@ -234,7 +240,8 @@ export class DialogService {
 
       if (options.detail) {
         const detailEl = document.createElement('div');
-        detailEl.className = 'text-xs text-text-muted whitespace-pre-wrap bg-card border border-border-main p-2 rounded';
+        detailEl.className =
+          'text-xs text-text-muted whitespace-pre-wrap bg-card border border-border-main p-2 rounded';
         detailEl.textContent = options.detail;
         body.appendChild(detailEl);
       }
@@ -256,12 +263,12 @@ export class DialogService {
       if (options.checkbox) {
         const cbContainer = document.createElement('label');
         cbContainer.className = 'flex items-center gap-2 mt-2 cursor-pointer';
-        
+
         checkboxEl = document.createElement('input');
         checkboxEl.type = 'checkbox';
         checkboxEl.checked = options.checkbox.defaultChecked || false;
         checkboxEl.className = 'w-4 h-4 rounded border-border-main text-primary focus:ring-primary cursor-pointer';
-        
+
         const cbLabel = document.createElement('span');
         cbLabel.className = 'text-xs font-bold text-text-muted';
         cbLabel.textContent = options.checkbox.label;
@@ -290,7 +297,7 @@ export class DialogService {
 
         resolve({
           value: finalValue,
-          checkboxChecked: checkboxEl ? checkboxEl.checked : false
+          checkboxChecked: checkboxEl ? checkboxEl.checked : false,
         });
       };
 
@@ -310,7 +317,12 @@ export class DialogService {
         footer.appendChild(btnEl);
 
         if (btn.isDefault) defaultBtnEl = btnEl;
-        if (btn.label.toLowerCase() === 'cancel' || btn.value === null || btn.value === false || btn.value === 'cancel') {
+        if (
+          btn.label.toLowerCase() === 'cancel' ||
+          btn.value === null ||
+          btn.value === false ||
+          btn.value === 'cancel'
+        ) {
           cancelBtnEl = btnEl;
         }
       });

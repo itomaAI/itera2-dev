@@ -83,8 +83,8 @@ export class ProcessMonitorModal {
         type: 'warning',
         buttons: [
           { label: 'Cancel', value: false, style: 'normal' },
-          { label: 'Kill All', value: true, style: 'danger', isDefault: true }
-        ]
+          { label: 'Kill All', value: true, style: 'danger', isDefault: true },
+        ],
       });
 
       if (res && res.value) {

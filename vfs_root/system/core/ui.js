@@ -206,6 +206,6 @@
       let val = getComputedStyle(root).getPropertyValue(`--c-${tokenName}`).trim();
       if (!val) return '#888888';
       return val.includes(' ') ? `rgb(${val.split(' ').join(', ')})` : val;
-    }
+    },
   };
 })(window);

@@ -660,10 +660,10 @@ export class TreeView {
       prompt: { defaultValue: type === 'folder' ? 'New Folder' : 'Untitled' },
       buttons: [
         { label: 'Cancel', value: null, style: 'normal' },
-        { label: 'Create', value: 'create', style: 'primary', isDefault: true }
-      ]
+        { label: 'Create', value: 'create', style: 'primary', isDefault: true },
+      ],
     });
-    
+
     const name = res?.value;
     if (!name || name === 'cancel') return;
 
@@ -681,5 +681,4 @@ export class TreeView {
       if (parentPath) this.expandedPaths.add(parentPath);
     }
   }
-
 }

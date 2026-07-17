@@ -379,8 +379,8 @@ export class ChatPanel {
         type: 'warning',
         buttons: [
           { label: 'Cancel', value: false, style: 'normal' },
-          { label: 'Delete', value: true, style: 'danger', isDefault: true }
-        ]
+          { label: 'Delete', value: true, style: 'danger', isDefault: true },
+        ],
       });
       if (res && res.value && this.events['delete_turn']) {
         this.events['delete_turn'](turn.id);

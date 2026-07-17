@@ -265,8 +265,8 @@ export class SystemModal {
       type: 'warning',
       buttons: [
         { label: 'Cancel', value: false, style: 'normal', isDefault: true },
-        { label: 'Restore Index', value: true, style: 'danger' }
-      ]
+        { label: 'Restore Index', value: true, style: 'danger' },
+      ],
     });
     if (!res || !res.value) {
       input.value = '';

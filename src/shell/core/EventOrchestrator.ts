@@ -283,8 +283,8 @@ export class EventOrchestrator {
         type: 'warning',
         buttons: [
           { label: 'Cancel', value: false, style: 'normal' },
-          { label: 'Clear History', value: true, style: 'danger', isDefault: true }
-        ]
+          { label: 'Clear History', value: true, style: 'danger', isDefault: true },
+        ],
       });
       if (res && res.value) {
         this.sessionManager.clearSession({

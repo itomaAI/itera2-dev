@@ -283,12 +283,13 @@ export class DesktopEnvironment {
     } else {
       const res = await window.AppUI?.showMessageBox({
         title: 'Enable Sudo Mode',
-        message: 'WARNING: Enabling System Privileges (Sudo) allows you to modify or delete core OS files.\n\nIncorrect actions may break the system. Are you sure you want to proceed?',
+        message:
+          'WARNING: Enabling System Privileges (Sudo) allows you to modify or delete core OS files.\n\nIncorrect actions may break the system. Are you sure you want to proceed?',
         type: 'warning',
         buttons: [
           { label: 'Cancel', value: false, style: 'normal' },
-          { label: 'Enable Sudo', value: true, style: 'danger', isDefault: true }
-        ]
+          { label: 'Enable Sudo', value: true, style: 'danger', isDefault: true },
+        ],
       });
       if (res && res.value) {
         this.isSudoMode = true;

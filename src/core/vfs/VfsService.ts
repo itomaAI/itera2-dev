@@ -224,7 +224,7 @@ export class VfsService {
   getTree(principal: Principal): TreeNode[] {
     const fullTree = this.pathResolver.buildTree();
     const filtered = this._filterTreeByPermission(principal, fullTree);
-    
+
     if (this.providerManager) {
       const attachMountPoints = (nodes: TreeNode[]) => {
         for (const node of nodes) {
@@ -236,7 +236,7 @@ export class VfsService {
       };
       attachMountPoints(filtered);
     }
-    
+
     return filtered;
   }
 

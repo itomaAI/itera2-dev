@@ -63,7 +63,7 @@ export class ProviderManager {
       node: null,
       path: path,
       changedProperties: ['isMountPoint'],
-      sourcePrincipal: { type: 'system', id: 'kernel' }
+      sourcePrincipal: { type: 'system', id: 'kernel' },
     });
   }
 
