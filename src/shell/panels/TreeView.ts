@@ -72,53 +72,69 @@ export class TreeView {
   }
 
   // ==========================================
-  // 2. Surgical DOM Update (差分更新)
+  // 2. Surgical DOM Update (差分更新 / 宣言的修復)
   // ==========================================
 
-  applyEvents(events: VfsEvent[]) {
+  // 引数に VfsService と Principal を渡し、必要に応じて自身で全再描画（Re-render）をトリガーできるようにする
+  applyMutations(mutations: any[], getTreeFn: () => TreeNode[]) {
     if (!this.container) return;
 
-    for (const event of events) {
-      switch (event.type) {
-        case 'create':
-          this._handleNodeCreated(event);
-          break;
-        case 'delete':
-          this._handleNodeDeleted(event);
-          break;
-        case 'rename':
-        case 'move':
-          this._handlePathChanged(event.oldPath, event.path);
-          this._handleNodeDeleted(event);
-          this._handleNodeCreated(event);
-          break;
-        case 'trash':
-        case 'restore':
-          // これらはすべて「別の場所への移動」なので、一度消して新しい場所に作る
-          this._handleNodeDeleted(event);
-          this._handleNodeCreated(event);
-          break;
-        case 'update':
-          this._handleNodeUpdated(event);
-          break;
+    let needsFullRender = false;
+
+    for (const mutation of mutations) {
+      if (mutation.type === 'DETACH') {
+        const targetDiv = document.querySelector(`div[data-path="${mutation.path}"]`) as HTMLElement;
+        if (targetDiv) {
+          // 削除されたのがディレクトリなら、配下の子ノードも消えるため安全のために全再描画フラグを立てる
+          if (targetDiv.dataset.kind === 'directory') {
+            needsFullRender = true;
+          }
+          const targetLi = targetDiv.parentElement;
+          if (targetLi) targetLi.remove();
+        }
+        
+        // 内部状態のCascade Purge (巻き込み削除)
+        if (this.selectedPath === mutation.path || this.selectedPath?.startsWith(mutation.path + '/')) {
+          this.selectedPath = null;
+        }
+        for (const p of this.expandedPaths) {
+          if (p === mutation.path || p.startsWith(mutation.path + '/')) {
+            this.expandedPaths.delete(p);
+          }
+        }
+      } 
+      else if (mutation.type === 'ATTACH') {
+        if (!mutation.node || mutation.node.flags?.isHidden || mutation.node.name === '.keep') continue;
+
+        // ディレクトリがアタッチされた場合（移動・コピー・新規作成）、
+        // ツリー構造の再構築が必要になるため全再描画を行う
+        if (mutation.node.kind === 'directory') {
+          needsFullRender = true;
+        } else {
+          this._handleNodeAttached(mutation);
+        }
+      } 
+      else if (mutation.type === 'MUTATE') {
+        this._handleNodeMutated(mutation);
       }
+    }
+
+    if (needsFullRender) {
+       this.render(getTreeFn());
     }
   }
 
-  private _handleNodeCreated(event: VfsEvent) {
-    if (!event.node) return;
-    if (event.node.name === '.keep' || event.node.flags.isHidden) return;
-
-    if (document.getElementById(`vfs-node-${event.nodeId}`)) return;
+  private _handleNodeAttached(mutation: any) {
+    if (document.getElementById(`vfs-node-${mutation.nodeId}`)) return;
 
     let parentUl: HTMLElement | null = null;
     let indentLevel = 0;
 
-    if (event.node.parentId === null) {
+    if (mutation.node.parentId === null) {
       parentUl = document.getElementById('vfs-tree-root');
     } else {
-      parentUl = document.getElementById(`vfs-children-${event.node.parentId}`);
-      const parentDiv = document.querySelector(`div[data-node-id="${event.node.parentId}"]`) as HTMLElement;
+      parentUl = document.getElementById(`vfs-children-${mutation.node.parentId}`);
+      const parentDiv = document.querySelector(`div[data-node-id="${mutation.node.parentId}"]`) as HTMLElement;
       if (parentDiv) {
         const paddingRaw = parentDiv.style.paddingLeft || '8px';
         const parentPadding = parseInt(paddingRaw.replace('px', ''), 10);
@@ -129,11 +145,11 @@ export class TreeView {
     if (!parentUl) return;
 
     const newLi = this._createNodeElement(
-      event.node.id,
-      event.node.name,
-      event.path,
-      event.node.kind,
-      event.node.meta,
+      mutation.node.id,
+      mutation.node.name,
+      mutation.path,
+      mutation.node.kind,
+      mutation.node.meta,
       indentLevel,
     );
 
@@ -141,29 +157,22 @@ export class TreeView {
     this._sortChildren(parentUl);
   }
 
-  private _handleNodeDeleted(event: VfsEvent) {
-    const targetLi = document.getElementById(`vfs-node-${event.nodeId}`);
-    if (targetLi) {
-      targetLi.remove();
-    }
-  }
-
-  private _handleNodeUpdated(event: VfsEvent) {
-    if (!event.node) return;
-    const targetDiv = document.querySelector(`div[data-node-id="${event.nodeId}"]`) as HTMLElement;
+  private _handleNodeMutated(mutation: any) {
+    if (!mutation.node) return;
+    const targetDiv = document.querySelector(`div[data-node-id="${mutation.nodeId}"]`) as HTMLElement;
 
     if (targetDiv) {
-      const sizeKB = (event.node.meta.size / 1024).toFixed(1) + ' KB';
-      const updated = new Date(event.node.meta.updatedAt).toLocaleString();
+      const sizeKB = (mutation.node.meta.size / 1024).toFixed(1) + ' KB';
+      const updated = new Date(mutation.node.meta.updatedAt).toLocaleString();
       targetDiv.title = `Size: ${sizeKB}\nUpdated: ${updated}`;
 
-      // UI上の状態（syncStateや名前）が変化した可能性があるので内部HTMLを再構築
-      const name = event.node.name;
-      const path = event.path;
-      const isStub = event.node.meta && event.node.meta.syncState === 'stub';
+      const name = mutation.node.name;
+      const path = mutation.path;
+      const isStub = mutation.node.meta && mutation.node.meta.syncState === 'stub';
       const stubIndicator = isStub ? '<span class="ml-1 text-primary text-[10px]" title="Cloud Only">☁️</span>' : '';
       let icon =
-        event.node.kind === 'directory' ? (this.expandedPaths.has(path) ? '📂' : '📁') : this._getFileIcon(name);
+        mutation.node.kind === 'directory' ? (this.expandedPaths.has(path) ? '📂' : '📁') : this._getFileIcon(name);
+
       if (path === 'trash') icon = '🗑️';
       if (path === 'system') icon = '⚙️';
 
@@ -185,32 +194,10 @@ export class TreeView {
           e.preventDefault();
           const rect = menuBtn.getBoundingClientRect();
           this.selectedPath = path;
-          this._showContextMenu(rect.left, rect.bottom, path, event.node!.kind, name);
+          this._showContextMenu(rect.left, rect.bottom, path, mutation.node!.kind, name);
         };
       }
     }
-  }
-
-  private _handlePathChanged(oldPath?: string, newPath?: string) {
-    if (!oldPath || !newPath) return;
-
-    if (this.selectedPath === oldPath) {
-      this.selectedPath = newPath;
-    } else if (this.selectedPath && this.selectedPath.startsWith(oldPath + '/')) {
-      this.selectedPath = this.selectedPath.replace(oldPath, newPath);
-    }
-
-    const newExpanded = new Set<string>();
-    for (const p of this.expandedPaths) {
-      if (p === oldPath) {
-        newExpanded.add(newPath);
-      } else if (p.startsWith(oldPath + '/')) {
-        newExpanded.add(p.replace(oldPath, newPath));
-      } else {
-        newExpanded.add(p);
-      }
-    }
-    this.expandedPaths = newExpanded;
   }
 
   private _sortChildren(ul: HTMLElement) {

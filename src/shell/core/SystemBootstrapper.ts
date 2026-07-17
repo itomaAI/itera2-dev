@@ -42,6 +42,8 @@ import { SessionManager } from '../services/SessionManager';
 import { ThemeService } from '../services/ThemeService';
 import { MaintenanceDaemon } from '../services/MaintenanceDaemon';
 import { DialogService } from '../services/DialogService';
+import { EventTranslator } from '../services/EventTranslator';
+import { ProviderManager } from '../../core/vfs/ProviderManager';
 
 export class SystemBootstrapper {
   public static async boot(): Promise<void> {
@@ -125,6 +127,10 @@ export class SystemBootstrapper {
     // 5. IPC Routing & Event Orchestration
     // ==========================================
     const transport = new HostTransport();
+    
+    // プロバイダマネージャーの初期化と VFS への注入
+    const providerManager = new ProviderManager(eventBus, transport, processManager, pathResolver);
+    vfs.setProviderManager(providerManager);
 
     // セキュリティ: PID偽装防止のための発信元検証
     transport.setSourceValidator((pid: string, sourceWindow: Window) => {
@@ -171,6 +177,10 @@ export class SystemBootstrapper {
       resolver,
       eventBus,
     );
+
+    // EventTranslator の初期化と起動
+    const eventTranslator = new EventTranslator(eventBus, history);
+    eventTranslator.start();
 
     // ==========================================
     // 6. Final Bindings & Boot Execution

@@ -199,17 +199,13 @@ export class EventOrchestrator {
   // 3. VFS Events (Filesystem Changes)
   // ==========================================
   private _bindVfsEvents(): void {
-    this.eventBus.subscribe((events) => {
+    this.eventBus.subscribe((mutations) => {
       this.desktop.updateStorageUI(this.vfs.getUsage(this.desktop.getActivePrincipal()));
 
-      for (const event of events) {
-        if (!event.path.startsWith('system/logs/')) {
-          // 稼働中のゲストアプリへ変更を通知
-          this.processManager.broadcast('file_changed', {
-            type: event.type,
-            path: event.path,
-            source: event.source,
-          });
+      for (const mutation of mutations) {
+        if (!mutation.path.startsWith('system/logs/')) {
+          // 稼働中のゲストアプリへ新しいMutation形式で状態変更を通知
+          this.processManager.broadcast('vfs_mutation', mutation);
         }
       }
     });

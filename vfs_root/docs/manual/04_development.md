@@ -82,6 +82,21 @@ if (window.MetaOS) {
 }
 ```
 
+### Reactive UI with VFS Mutations
+To keep your app's UI perfectly synced with the file system without polling, listen to the `vfs_mutation` event. This uses a Change Data Capture (CDC) model.
+
+```javascript
+if (window.MetaOS) {
+    MetaOS.system.on('vfs_mutation', (mutation) => {
+        // mutation.type can be 'ATTACH', 'DETACH', or 'MUTATE'
+        if (mutation.path.startsWith('data/my_app/')) {
+            console.log('Fact changed:', mutation.type, mutation.path);
+            refreshUI();
+        }
+    });
+}
+```
+
 ## 4. Exposing Dynamic Tools to the AI
 
 Guest apps can expose custom JS functions to the AI using `MetaOS.tools.register()`.

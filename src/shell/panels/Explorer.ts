@@ -74,19 +74,10 @@ export class Explorer {
 
   private _bindVFS(): void {
     this.treeView.render(this.vfs.getTree(this.getActivePrincipal()));
-    this.eventBus.subscribe((events) => {
-      // ディレクトリの大規模な構造変更が含まれている場合はツリー全体を再構築する
-      const needsFullRender = events.some(
-        (e) =>
-          (e.type === 'move' || e.type === 'rename' || e.type === 'trash' || e.type === 'restore') &&
-          e.node?.kind === 'directory',
-      );
-
-      if (needsFullRender) {
-        this.treeView.render(this.vfs.getTree(this.getActivePrincipal()));
-      } else {
-        this.treeView.applyEvents(events);
-      }
+    
+    this.eventBus.subscribe((mutations) => {
+      // Mutation 配列と、再描画が必要になった際に最新のツリーを取得する関数を渡す
+      this.treeView.applyMutations(mutations, () => this.vfs.getTree(this.getActivePrincipal()));
     });
   }
 

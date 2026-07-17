@@ -7,7 +7,7 @@
 // 1. Core Data Models (Metadata)
 // ==========================================
 
-export type PrincipalType = 'system' | 'user' | 'agent' | 'group' | 'any';
+export type PrincipalType = 'system' | 'user' | 'agent' | 'group' | 'app' | 'any';
 
 export interface Principal {
   type: PrincipalType;
@@ -70,18 +70,43 @@ export interface AppHints {
 }
 
 // ==========================================
-// 2. Event System (Pub/Sub for UI & Sync)
+// 2. Mutation System (CDC for UI & Sync)
 // ==========================================
 
-export type VfsEventType = 'create' | 'update' | 'rename' | 'move' | 'trash' | 'restore' | 'delete';
+export type VfsMutationType = 'ATTACH' | 'DETACH' | 'MUTATE';
 
-export interface VfsEvent {
-  type: VfsEventType;
+export interface VfsMutation {
+  type: VfsMutationType;
   nodeId: string;
+  
+  /** 
+   * ATTACH/MUTATE の場合は、変更後の最新ノードが含まれる
+   * DETACH の場合は null となる
+   */
   node: VfsNode | null;
+  
+  /**
+   * ATTACH/MUTATE の場合は現在のパス
+   * DETACH の場合は削除される直前のパス
+   */
   path: string;
-  oldPath?: string;
-  source?: string;
+  
+  /**
+   * MUTATE の場合、変更されたプロパティのキーの一覧が格納される
+   * 例: ['size', 'hash', 'updatedAt']
+   */
+  changedProperties?: string[];
+  
+  /**
+   * Mutation の発生元となる Principal
+   * これにより OS レベルでのエコーキャンセル（自身が起こした変更は自身に通知しない）を実現する
+   */
+  sourcePrincipal: Principal;
+}
+
+export interface SyncProviderConfig {
+  onMutate: (mutations: VfsMutation[]) => Promise<void>;
+  onFetchContent: (path: string) => Promise<boolean>;
 }
 
 // ==========================================
@@ -136,26 +161,16 @@ export interface ReadOptions {
 export interface WriteOptions {
   overwrite?: boolean;
   system?: boolean;
-  source?: string;
 }
 
 export interface DeleteOptions {
   permanent?: boolean;
-  source?: string;
 }
 
-export interface MkdirOptions {
-  source?: string;
-}
+export interface MkdirOptions {}
 
-export interface RenameOptions {
-  source?: string;
-}
+export interface RenameOptions {}
 
-export interface CopyOptions {
-  source?: string;
-}
+export interface CopyOptions {}
 
-export interface StubOptions {
-  source?: string;
-}
+export interface StubOptions {}

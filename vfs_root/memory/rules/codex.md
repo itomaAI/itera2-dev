@@ -222,7 +222,10 @@ Do not use `fetch('./data.json')` to retrieve local files in VFS (CORS errors). 
 When your app saves data frequently, use `{ silent: true }` in `MetaOS.fs.write` to prevent flooding the chat history with event logs.
 Also, in V2, if you intend to overwrite an existing file, you MUST explicitly pass `{ overwrite: true }` in the options.
 
-**4. Documentation Duty**
+**4. Listening to VFS Mutations (CDC)**
+To keep your UI apps perfectly synced with the file system without polling, listen to the `vfs_mutation` event using a Change Data Capture (CDC) model: `MetaOS.system.on('vfs_mutation', (mutation) => { ... })`. The mutation object provides the fact of change (`ATTACH`, `DETACH`, or `MUTATE`), allowing your app to update seamlessly.
+
+**5. Documentation Duty**
 When you create a new app or daemon, you **MUST** create a markdown manual explaining what it is and how it works, and save it in `memory/rules/`.
 
 ---

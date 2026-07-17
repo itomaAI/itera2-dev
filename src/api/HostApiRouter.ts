@@ -127,122 +127,114 @@ export class HostApiRouter {
       return content;
     };
 
-    t.registerHandler('fs:read', async ({ path, opts }) => {
+    // ヘルパー: 送信元PIDからPrincipalを生成する
+    const getPrincipal = (sourcePid: string): any => {
+      return { type: 'app', id: sourcePid };
+    };
+
+    t.registerHandler('fs:read', async ({ path, opts }, sourcePid) => {
+      const principal = getPrincipal(sourcePid);
       if (opts && opts.encoding) {
         if (opts.encoding === 'binary') {
-          const blob = await d.vfs.readBlob(USER_PRINCIPAL, path, opts);
+          const blob = await d.vfs.readBlob(principal, path, opts);
           const buffer = await blob.arrayBuffer();
-          // postMessageでそのまま送受信可能な Uint8Array として返す
           return new Uint8Array(buffer);
         } else if (opts.encoding === 'base64' || opts.encoding === 'dataurl') {
-          const blob = await d.vfs.readBlob(USER_PRINCIPAL, path, opts);
+          const blob = await d.vfs.readBlob(principal, path, opts);
           const dataUrl = await new Promise<string>((resolve, reject) => {
             const reader = new FileReader();
             reader.onloadend = () => resolve(reader.result as string);
             reader.onerror = reject;
             reader.readAsDataURL(blob);
           });
-          if (opts.encoding === 'dataurl') {
-            return dataUrl;
-          }
+          if (opts.encoding === 'dataurl') return dataUrl;
           return dataUrl.split(',')[1] || '';
         }
       }
-      return await d.vfs.readFile(USER_PRINCIPAL, path, opts);
+      return await d.vfs.readFile(principal, path, opts);
     });
 
-    t.registerHandler('fs:write', async ({ path, content, opts }) => {
+    t.registerHandler('fs:write', async ({ path, content, opts }, sourcePid) => {
+      const principal = getPrincipal(sourcePid);
       const finalContent = prepareWriteContent(content, opts?.encoding);
-      const res = await d.vfs.writeFile(USER_PRINCIPAL, path, finalContent, opts);
-      this._checkAndEmitEvent(opts, 'file_edited', `User App edited file: ${path}`);
+      const res = await d.vfs.writeFile(principal, path, finalContent, opts);
+      this._checkAndEmitEvent(opts, 'file_edited', `App [${sourcePid}] edited file: ${path}`);
       return res;
     });
 
-    t.registerHandler('fs:append', async ({ path, content, opts }) => {
-      const res = await d.vfs.appendFile(USER_PRINCIPAL, path, content, {
-        system: opts?.system,
-      });
-      this._checkAndEmitEvent(opts, 'file_edited', `User App appended to file: ${path}`);
+    t.registerHandler('fs:append', async ({ path, content, opts }, sourcePid) => {
+      const principal = getPrincipal(sourcePid);
+      const res = await d.vfs.appendFile(principal, path, content, opts);
+      this._checkAndEmitEvent(opts, 'file_edited', `App [${sourcePid}] appended to file: ${path}`);
       return res;
     });
 
-    t.registerHandler('fs:delete', async ({ path, opts }) => {
-      const res = await d.vfs.deleteFile(USER_PRINCIPAL, path, opts);
-      this._checkAndEmitEvent(opts, 'file_deleted', `User App deleted file: ${path}`);
+    t.registerHandler('fs:delete', async ({ path, opts }, sourcePid) => {
+      const principal = getPrincipal(sourcePid);
+      const res = await d.vfs.deleteFile(principal, path, opts);
+      this._checkAndEmitEvent(opts, 'file_deleted', `App [${sourcePid}] deleted file: ${path}`);
       return res;
     });
 
-    t.registerHandler('fs:rename', async ({ oldPath, newPath, opts }) => {
-      const res = await d.vfs.rename(USER_PRINCIPAL, oldPath, newPath, opts);
-      this._checkAndEmitEvent(opts, 'file_moved', `User App renamed file: ${oldPath} -> ${newPath}`);
+    t.registerHandler('fs:rename', async ({ oldPath, newPath, opts }, sourcePid) => {
+      const principal = getPrincipal(sourcePid);
+      const res = await d.vfs.rename(principal, oldPath, newPath, opts);
+      this._checkAndEmitEvent(opts, 'file_moved', `App [${sourcePid}] renamed file: ${oldPath} -> ${newPath}`);
       return res;
     });
 
-    t.registerHandler('fs:copy', async ({ srcPath, destPath, opts }) => {
-      const res = await d.vfs.copyFile(USER_PRINCIPAL, srcPath, destPath, opts);
-      this._checkAndEmitEvent(opts, 'file_copied', `User App copied file: ${srcPath} -> ${destPath}`);
+    t.registerHandler('fs:copy', async ({ srcPath, destPath, opts }, sourcePid) => {
+      const principal = getPrincipal(sourcePid);
+      const res = await d.vfs.copyFile(principal, srcPath, destPath, opts);
+      this._checkAndEmitEvent(opts, 'file_copied', `App [${sourcePid}] copied file: ${srcPath} -> ${destPath}`);
       return res;
     });
 
-    t.registerHandler('fs:mkdir', async ({ path, opts }) => {
-      const res = await d.vfs.mkdir(USER_PRINCIPAL, path, opts);
-      this._checkAndEmitEvent(opts, 'folder_created', `User App created folder: ${path}`);
+    t.registerHandler('fs:mkdir', async ({ path, opts }, sourcePid) => {
+      const principal = getPrincipal(sourcePid);
+      const res = await d.vfs.mkdir(principal, path, opts);
+      this._checkAndEmitEvent(opts, 'folder_created', `App [${sourcePid}] created folder: ${path}`);
       return res;
     });
 
-    t.registerHandler('fs:stat', async ({ path }) => d.vfs.stat(USER_PRINCIPAL, path));
-    t.registerHandler('fs:list', async ({ path, opts }) => d.vfs.listFiles(USER_PRINCIPAL, { path, ...opts }));
-    t.registerHandler('fs:exists', async ({ path }) => d.vfs.exists(USER_PRINCIPAL, path));
-    t.registerHandler('fs:get_sync_state', async ({ path }) => d.vfs.getSyncState(USER_PRINCIPAL, path || ''));
+    t.registerHandler('fs:stat', async ({ path }, sourcePid) => d.vfs.stat(getPrincipal(sourcePid), path));
+    t.registerHandler('fs:list', async ({ path, opts }, sourcePid) => d.vfs.listFiles(getPrincipal(sourcePid), { path, ...opts }));
+    t.registerHandler('fs:exists', async ({ path }, sourcePid) => d.vfs.exists(getPrincipal(sourcePid), path));
+    t.registerHandler('fs:get_sync_state', async ({ path }, sourcePid) => d.vfs.getSyncState(getPrincipal(sourcePid), path || ''));
+    
     t.registerHandler('fs:resolve_url', async ({ path }, sourcePid) => {
       if (!d.processManager) throw new Error('ProcessManager not connected.');
       return d.processManager.resolveUrl(path, sourcePid);
     });
 
-    // ★ 追加: ACLの取得と更新
-    t.registerHandler('fs:get_acl', async ({ path }) => {
-      return d.vfs.getAcl(USER_PRINCIPAL, path);
+    t.registerHandler('fs:get_acl', async ({ path }, sourcePid) => {
+      return d.vfs.getAcl(getPrincipal(sourcePid), path);
     });
 
-    t.registerHandler('fs:set_acl', async ({ path, acl, opts }) => {
+    t.registerHandler('fs:set_acl', async ({ path, acl, opts }, sourcePid) => {
+      const principal = getPrincipal(sourcePid);
       if (opts?.recursive) {
-        await d.vfs.setAclRecursive(USER_PRINCIPAL, path, acl);
+        await d.vfs.setAclRecursive(principal, path, acl);
       } else {
-        await d.vfs.setAcl(USER_PRINCIPAL, path, acl);
+        await d.vfs.setAcl(principal, path, acl);
       }
-      this._checkAndEmitEvent(opts, 'permission_changed', `User App changed permissions for: ${path}`);
+      this._checkAndEmitEvent(opts, 'permission_changed', `App [${sourcePid}] changed permissions for: ${path}`);
       return true;
     });
 
-    t.registerHandler('fs:mount', async ({ path }, sourcePid) => {
-      d.vfs.mountProvider(path, sourcePid);
+    t.registerHandler('fs:create_stub', async ({ path, meta, opts }, sourcePid) => {
+      return await d.vfs.createStub(getPrincipal(sourcePid), path, meta, opts);
+    });
 
-      if (!d.vfs.missingContentHandler) {
-        d.vfs.missingContentHandler = async (reqPath: string, providerPid: string) => {
-          if (!d.processManager) return false;
-          const proc = d.processManager.processes.get(providerPid);
-          if (!proc || !proc.iframe || !proc.iframe.contentWindow) {
-            console.warn(`[HostApiRouter] Provider process ${providerPid} is not running.`);
-            return false;
-          }
-          try {
-            return await t.invokeGuest(providerPid, 'fs:resolve_missing', { path: reqPath }, proc.iframe.contentWindow);
-          } catch (e) {
-            console.error(`[HostApiRouter] Failed to resolve missing content via provider ${providerPid}`, e);
-            return false;
-          }
-        };
-      }
+    // 新しいSync Provider API
+    t.registerHandler('fs:register_provider', async ({ path }, sourcePid) => {
+      d.vfs.getProviderManager()?.registerProvider(path, sourcePid);
       return true;
     });
 
-    t.registerHandler('fs:unmount', async ({ path }) => {
-      d.vfs.unmountProvider(path);
+    t.registerHandler('fs:unregister_provider', async ({ path }) => {
+      d.vfs.getProviderManager()?.unregisterProvider(path);
       return true;
-    });
-
-    t.registerHandler('fs:create_stub', async ({ path, meta, opts }) => {
-      return await d.vfs.createStub(USER_PRINCIPAL, path, meta, opts);
     });
 
     // ==========================================

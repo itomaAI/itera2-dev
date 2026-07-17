@@ -141,40 +141,59 @@ export class NodeStore {
   }
 
   async putNode(node: VfsNode): Promise<void> {
-    // 既存ノードがあれば、インデックスからいったん削除（移動やリネーム対応のため）
-    const existingNode = this.memoryMap.get(node.id);
-    if (existingNode) {
-      this._removeFromIndex(existingNode);
-    }
-
-    this.memoryMap.set(node.id, node);
-    this._addToIndex(node);
-
-    try {
-      await this._tx('readwrite', (store) => store.put(node));
-    } catch (e) {
-      console.error(
-        `[NodeStore] Failed to persist node ${node.id} to IndexedDB. Memory state might be out of sync.`,
-        e,
-      );
-      throw e;
-    }
+    await this.commitTransaction([node], []);
   }
 
   async deleteNode(id: string): Promise<void> {
-    const existingNode = this.memoryMap.get(id);
-    if (existingNode) {
-      this._removeFromIndex(existingNode);
-    }
+    await this.commitTransaction([], [id]);
+  }
 
-    this.memoryMap.delete(id);
+  /**
+   * 複数の追加・更新と削除を、単一のIndexedDBトランザクションでアトミックに実行する
+   * トランザクションが成功した場合のみ、メモリ上のマップとインデックスを更新する。
+   */
+  async commitTransaction(puts: VfsNode[], deletes: string[]): Promise<void> {
+    const db = await this.dbPromise;
 
-    try {
-      await this._tx('readwrite', (store) => store.delete(id));
-    } catch (e) {
-      console.error(`[NodeStore] Failed to delete node ${id} from IndexedDB. Memory state might be out of sync.`, e);
-      throw e;
-    }
+    return new Promise((resolve, reject) => {
+      const transaction = db.transaction([this.storeName], 'readwrite');
+      const store = transaction.objectStore(this.storeName);
+
+      transaction.oncomplete = () => {
+        // DBへの書き込みが完全に成功した場合のみ、メモリとインデックスを更新する
+        for (const id of deletes) {
+          const existing = this.memoryMap.get(id);
+          if (existing) {
+            this._removeFromIndex(existing);
+            this.memoryMap.delete(id);
+          }
+        }
+
+        for (const node of puts) {
+          const existing = this.memoryMap.get(node.id);
+          if (existing) {
+            this._removeFromIndex(existing);
+          }
+          this.memoryMap.set(node.id, node);
+          this._addToIndex(node);
+        }
+
+        resolve();
+      };
+
+      transaction.onerror = (e) => {
+        console.error('[NodeStore] Transaction failed:', (e.target as any).error);
+        reject((e.target as any).error);
+      };
+
+      // IndexedDBのトランザクション内では同期的にリクエストを発行する必要がある
+      for (const id of deletes) {
+        store.delete(id);
+      }
+      for (const node of puts) {
+        store.put(node);
+      }
+    });
   }
 
   async clearAll(): Promise<void> {

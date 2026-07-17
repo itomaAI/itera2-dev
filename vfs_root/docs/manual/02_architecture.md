@@ -56,8 +56,8 @@ The **Guest** environment (where apps run) is isolated from the **Host** (where 
     *   `.getSyncState(path)`: Returns a lightweight, flat dictionary of file versions and hashes (`{ "path/to/file": { hash, version, updatedAt } }`) optimized for fast directory tree synchronization.
     *   `.resolveUrl(path)`: Resolves a VFS path to a usable Blob URL for `img.src` or CSS.
     *   `.createStub(path, meta)`: Creates a metadata-only entry (placeholder) in the VFS without uploading actual content. Useful for Cloud Sync providers.
-    *   `.mount(path, onFetchMissing)`: Declares that the current app is a Sync Provider for the given directory. When the OS tries to read a stub file, `onFetchMissing(path)` will be called so your app can download the real content.
-    *   `.unmount(path)`: Removes the sync provider registration.
+    *   `.registerSyncProvider(path, { onMutate, onFetchContent })`: Declares that the current app is a Sync Provider. `onFetchContent(path)` is called to download real content for stubs. `onMutate(mutations)` receives array of VfsMutation (`ATTACH`, `DETACH`, `MUTATE`) avoiding echo-loops automatically.
+    *   `.unregisterSyncProvider(path)`: Removes the sync provider registration.
 
 *   **System & IPC (`MetaOS.system`)**:
     *   `.spawn(path, opts)`: Navigates the main window or starts a daemon.

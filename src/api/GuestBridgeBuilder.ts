@@ -170,15 +170,24 @@ export class GuestBridgeBuilder {
             resolveUrl: async (path) => transport.requestHost('fs:resolve_url', { path }),
             getAcl: async (path) => transport.requestHost('fs:get_acl', { path }),
             setAcl: async (path, acl, opts = {}) => transport.requestHost('fs:set_acl', { path, acl, opts }),
-            mount: async (path, onFetchMissing) => {
+            registerSyncProvider: async (path, handlers) => {
                 let normPath = path.replace(/\\\\/g, '/').replace(/^\\/+/, '').replace(/\\/+$/, '');
-                mountHandlers.set(normPath, onFetchMissing);
-                return transport.requestHost('fs:mount', { path: normPath });
+                if (handlers.onFetchContent) mountHandlers.set(normPath, handlers.onFetchContent);
+                
+                // OSから降ってくる onMutate を購読
+                if (handlers.onMutate) {
+                    transport.on('sync:onMutate', (payload) => {
+                        // 対象が複数の場合もあるため、まとめて渡す
+                        handlers.onMutate(payload.mutations);
+                    });
+                }
+                
+                return transport.requestHost('fs:register_provider', { path: normPath });
             },
-            unmount: async (path) => {
+            unregisterSyncProvider: async (path) => {
                 let normPath = path.replace(/\\\\/g, '/').replace(/^\\/+/, '').replace(/\\/+$/, '');
                 mountHandlers.delete(normPath);
-                return transport.requestHost('fs:unmount', { path: normPath });
+                return transport.requestHost('fs:unregister_provider', { path: normPath });
             },
             createStub: async (path, meta, opts = {}) => transport.requestHost('fs:create_stub', { path, meta, opts })
         },
