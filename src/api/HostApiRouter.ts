@@ -492,8 +492,19 @@ export class HostApiRouter {
     t.registerHandler('net:oauth', async ({ providerId, authUrl, instructions }) => {
       window.open(authUrl, '_blank', 'noopener,noreferrer');
       if (window.AppUI) {
-        const token = await window.AppUI.prompt(instructions || `Paste access token for '${providerId}':`, providerId);
-        if (token && token.trim()) {
+        const res = await window.AppUI.showMessageBox({
+          title: providerId,
+          message: instructions || `Paste access token for '${providerId}':`,
+          type: 'question',
+          prompt: { defaultValue: '' },
+          buttons: [
+            { label: 'Cancel', value: null, style: 'normal' },
+            { label: 'Save Token', value: 'save', style: 'primary', isDefault: true }
+          ]
+        });
+        
+        const token = res?.value;
+        if (token && token !== 'cancel' && token.trim()) {
           const creds = d.configManager.get('credentials') || {};
           creds[providerId] = {
             type: 'header',

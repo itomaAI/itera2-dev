@@ -373,8 +373,16 @@ export class ChatPanel {
     btnDelete.innerHTML = '×';
     btnDelete.onclick = async (e) => {
       e.stopPropagation();
-      const confirmed = await window.AppUI?.confirm('Delete this message?');
-      if (confirmed && this.events['delete_turn']) {
+      const res = await window.AppUI?.showMessageBox({
+        title: 'Delete Message',
+        message: 'Are you sure you want to delete this message from the history?',
+        type: 'warning',
+        buttons: [
+          { label: 'Cancel', value: false, style: 'normal' },
+          { label: 'Delete', value: true, style: 'danger', isDefault: true }
+        ]
+      });
+      if (res && res.value && this.events['delete_turn']) {
         this.events['delete_turn'](turn.id);
       }
     };

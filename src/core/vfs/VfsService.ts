@@ -223,7 +223,21 @@ export class VfsService {
 
   getTree(principal: Principal): TreeNode[] {
     const fullTree = this.pathResolver.buildTree();
-    return this._filterTreeByPermission(principal, fullTree);
+    const filtered = this._filterTreeByPermission(principal, fullTree);
+    
+    if (this.providerManager) {
+      const attachMountPoints = (nodes: TreeNode[]) => {
+        for (const node of nodes) {
+          if (this.providerManager!.isMountPoint(node.path)) {
+            node.isMountPoint = true;
+          }
+          if (node.children) attachMountPoints(node.children);
+        }
+      };
+      attachMountPoints(filtered);
+    }
+    
+    return filtered;
   }
 
   getSyncState(principal: Principal, path: string = ''): SyncStateTree {

@@ -106,38 +106,73 @@ export class DialogService {
   }
 
   public alert(message: string, title: string = 'System Alert'): Promise<void> {
-    return this._createDialog({
-      type: 'alert',
-      message,
+    return this.showMessageBox<void>({
       title,
-    }) as Promise<void>;
+      message,
+      type: 'warning',
+      buttons: [{ label: 'OK', value: undefined as any, style: 'primary', isDefault: true }]
+    }).then(() => undefined);
   }
 
   public confirm(message: string, title: string = 'Confirmation'): Promise<boolean> {
-    return this._createDialog({
-      type: 'confirm',
-      message,
+    return this.showMessageBox<boolean>({
       title,
-    }) as Promise<boolean>;
+      message,
+      type: 'question',
+      buttons: [
+        { label: 'Cancel', value: false, style: 'normal' },
+        { label: 'OK', value: true, style: 'primary', isDefault: true }
+      ]
+    }).then(res => res.value);
   }
 
   public prompt(message: string, defaultValue: string = '', title: string = 'Input Required'): Promise<string | null> {
-    return this._createDialog({
-      type: 'prompt',
-      message,
+    return this.showMessageBox<string | null>({
       title,
-      defaultValue,
-    }) as Promise<string | null>;
+      message,
+      type: 'question',
+      prompt: { defaultValue },
+      buttons: [
+        { label: 'Cancel', value: null, style: 'normal' },
+        { label: 'OK', value: 'ok' as any, style: 'primary', isDefault: true }
+      ]
+    }).then(res => res.value);
   }
 
-  private _createDialog(options: {
-    type: string;
-    message: string;
-    title: string;
-    defaultValue?: string;
-  }): Promise<any> {
-    const { type, message, title, defaultValue } = options;
+  public async showConflictDialog(
+    itemName: string,
+    isDirectory: boolean
+  ): Promise<DialogResult<ConflictAction>> {
+    const actionName = isDirectory ? 'Merge' : 'Replace';
+    const detailMsg = isDirectory 
+      ? 'Do you want to merge the folders? Files with the same names will be replaced.'
+      : 'Do you want to replace it with the one you are moving?';
+      
+    const buttons: MessageBoxOptions<ConflictAction>['buttons'] = [
+      { label: 'Cancel', value: 'cancel', style: 'normal' },
+      { label: 'Skip', value: 'skip', style: 'normal' }
+    ];
 
+    if (!isDirectory) {
+      buttons.push({ label: 'Keep Both', value: 'keep_both', style: 'normal' });
+    }
+    
+    buttons.push({ label: actionName, value: isDirectory ? 'merge' : 'replace', style: 'primary', isDefault: true });
+
+    return await this.showMessageBox<ConflictAction>({
+      title: 'Item Already Exists',
+      message: `An item named "${itemName}" already exists in this location.`,
+      detail: detailMsg,
+      type: 'warning',
+      checkbox: {
+        label: 'Do this for all current conflicts',
+        defaultChecked: false
+      },
+      buttons
+    });
+  }
+
+  public showMessageBox<T>(options: MessageBoxOptions<T>): Promise<DialogResult<T>> {
     return new Promise((resolve) => {
       const overlay = document.createElement('div');
       overlay.className =
@@ -149,51 +184,108 @@ export class DialogService {
 
       // Header
       const header = document.createElement('div');
-      header.className = 'px-4 py-3 border-b border-border-main bg-panel flex items-center';
-      header.innerHTML = `<span class="font-bold text-sm text-text-main">${title}</span>`;
+      header.className = 'px-4 py-3 border-b border-border-main bg-panel flex items-center gap-2';
+      
+      let icon = '';
+      let iconColor = '';
+      if (options.type === 'info') { icon = 'ℹ️'; iconColor = 'text-primary'; }
+      else if (options.type === 'warning') { icon = '⚠️'; iconColor = 'text-warning'; }
+      else if (options.type === 'error') { icon = '❌'; iconColor = 'text-error'; }
+      else if (options.type === 'question') { icon = '❓'; iconColor = 'text-primary'; }
+
+      header.innerHTML = `${icon ? `<span class="${iconColor}">${icon}</span>` : ''}<span class="font-bold text-sm text-text-main">${options.title}</span>`;
 
       // Body
       const body = document.createElement('div');
-      body.className = 'p-4 text-sm text-text-main whitespace-pre-wrap leading-relaxed';
-      body.textContent = message;
+      body.className = 'p-4 text-sm text-text-main leading-relaxed flex flex-col gap-3';
 
-      let input: HTMLInputElement | null = null;
-      if (type === 'prompt') {
-        input = document.createElement('input');
-        input.type = 'text';
-        input.value = defaultValue || '';
-        input.className =
-          'w-full mt-3 bg-app border border-border-main rounded p-2 text-sm text-text-main focus:outline-none focus:border-primary transition';
-        input.setAttribute('autocomplete', 'off');
-        input.setAttribute('spellcheck', 'false');
-        body.appendChild(input);
+      const msgEl = document.createElement('div');
+      msgEl.className = 'whitespace-pre-wrap';
+      msgEl.textContent = options.message;
+      body.appendChild(msgEl);
+
+      if (options.detail) {
+        const detailEl = document.createElement('div');
+        detailEl.className = 'text-xs text-text-muted whitespace-pre-wrap bg-card border border-border-main p-2 rounded';
+        detailEl.textContent = options.detail;
+        body.appendChild(detailEl);
+      }
+
+      let inputEl: HTMLInputElement | null = null;
+      if (options.prompt) {
+        inputEl = document.createElement('input');
+        inputEl.type = 'text';
+        inputEl.value = options.prompt.defaultValue || '';
+        if (options.prompt.placeholder) inputEl.placeholder = options.prompt.placeholder;
+        inputEl.className =
+          'w-full bg-app border border-border-main rounded p-2 text-sm text-text-main focus:outline-none focus:border-primary transition';
+        inputEl.setAttribute('autocomplete', 'off');
+        inputEl.setAttribute('spellcheck', 'false');
+        body.appendChild(inputEl);
+      }
+
+      let checkboxEl: HTMLInputElement | null = null;
+      if (options.checkbox) {
+        const cbContainer = document.createElement('label');
+        cbContainer.className = 'flex items-center gap-2 mt-2 cursor-pointer';
+        
+        checkboxEl = document.createElement('input');
+        checkboxEl.type = 'checkbox';
+        checkboxEl.checked = options.checkbox.defaultChecked || false;
+        checkboxEl.className = 'w-4 h-4 rounded border-border-main text-primary focus:ring-primary cursor-pointer';
+        
+        const cbLabel = document.createElement('span');
+        cbLabel.className = 'text-xs font-bold text-text-muted';
+        cbLabel.textContent = options.checkbox.label;
+
+        cbContainer.appendChild(checkboxEl);
+        cbContainer.appendChild(cbLabel);
+        body.appendChild(cbContainer);
       }
 
       // Footer
       const footer = document.createElement('div');
-      footer.className = 'px-4 py-3 border-t border-border-main bg-panel flex justify-end gap-2';
+      footer.className = 'px-4 py-3 border-t border-border-main bg-panel flex justify-end gap-2 flex-wrap';
 
-      const closeDialog = (val: any) => {
+      let isClosed = false;
+      const closeDialog = (btnValue: T) => {
+        if (isClosed) return;
+        isClosed = true;
+
         overlay.style.opacity = '0';
         setTimeout(() => overlay.remove(), 200);
-        resolve(val);
+
+        let finalValue = btnValue;
+        if (inputEl && btnValue !== null && btnValue !== false && (btnValue as any) !== 'cancel') {
+          finalValue = inputEl.value as any;
+        }
+
+        resolve({
+          value: finalValue,
+          checkboxChecked: checkboxEl ? checkboxEl.checked : false
+        });
       };
 
-      const btnCancel = document.createElement('button');
-      btnCancel.className =
-        'px-4 py-1.5 rounded text-xs font-bold text-text-muted hover:text-text-main hover:bg-hover transition';
-      btnCancel.textContent = 'Cancel';
-      btnCancel.onclick = () => closeDialog(type === 'prompt' ? null : false);
+      let defaultBtnEl: HTMLButtonElement | null = null;
+      let cancelBtnEl: HTMLButtonElement | null = null;
 
-      const btnOk = document.createElement('button');
-      btnOk.className = 'px-4 py-1.5 rounded text-xs font-bold bg-primary text-white hover:bg-primary/90 transition';
-      btnOk.textContent = 'OK';
-      btnOk.onclick = () => closeDialog(type === 'prompt' ? (input ? input.value : '') : true);
+      options.buttons.forEach(btn => {
+        const btnEl = document.createElement('button');
+        let bgClass = 'bg-card hover:bg-hover text-text-main';
+        if (btn.style === 'primary') bgClass = 'bg-primary hover:bg-primary/90 text-white';
+        else if (btn.style === 'danger') bgClass = 'bg-error hover:bg-error/90 text-white';
 
-      if (type !== 'alert') {
-        footer.appendChild(btnCancel);
-      }
-      footer.appendChild(btnOk);
+        btnEl.className = `px-4 py-1.5 rounded text-xs font-bold transition shadow-sm ${bgClass}`;
+        btnEl.textContent = btn.label;
+        btnEl.onclick = () => closeDialog(btn.value);
+
+        footer.appendChild(btnEl);
+
+        if (btn.isDefault) defaultBtnEl = btnEl;
+        if (btn.label.toLowerCase() === 'cancel' || btn.value === null || btn.value === false || btn.value === 'cancel') {
+          cancelBtnEl = btnEl;
+        }
+      });
 
       box.appendChild(header);
       box.appendChild(body);
@@ -202,24 +294,24 @@ export class DialogService {
       document.body.appendChild(overlay);
 
       // Focus & Keyboard Navigation
-      if (input) {
+      if (inputEl) {
         setTimeout(() => {
-          input!.focus();
-          input!.select();
+          inputEl!.focus();
+          inputEl!.select();
         }, 50);
-        input.addEventListener('keydown', (e) => {
-          if (e.key === 'Enter') btnOk.click();
-          if (e.key === 'Escape') btnCancel.click();
-        });
-      } else {
-        setTimeout(() => btnOk.focus(), 50);
-        overlay.addEventListener('keydown', (e) => {
-          if (e.key === 'Escape') {
-            if (type === 'alert') btnOk.click();
-            else btnCancel.click();
-          }
-        });
+      } else if (defaultBtnEl) {
+        setTimeout(() => defaultBtnEl!.focus(), 50);
       }
+
+      overlay.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+          if (inputEl && document.activeElement !== inputEl) return;
+          if (defaultBtnEl) defaultBtnEl.click();
+        } else if (e.key === 'Escape') {
+          if (cancelBtnEl) cancelBtnEl.click();
+          else if (defaultBtnEl && options.type === 'alert') defaultBtnEl.click();
+        }
+      });
     });
   }
 }

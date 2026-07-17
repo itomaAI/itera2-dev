@@ -15,7 +15,7 @@ All guest applications MUST include the UI Kit library in their `<head>` section
 This library automatically injects:
 1.  **Tailwind Configuration**: Maps semantic tokens to CSS variables.
 2.  **Global Styles**: Sets the default typography and scrollbar styling.
-3.  **AppUI Helpers**: Utilities for navigation and native dialogs (`AppUI.alert`, `AppUI.prompt`).
+3.  **AppUI Helpers**: Utilities for navigation and OS-native dialogs (`AppUI.alert`, `AppUI.confirm`, `AppUI.prompt`, and `AppUI.showMessageBox`).
 
 ## Semantic Tokens Reference
 

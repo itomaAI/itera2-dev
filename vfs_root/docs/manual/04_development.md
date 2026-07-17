@@ -135,7 +135,36 @@ console.log(res.data);
 const imageBase64 = await MetaOS.device.takePhoto({ facingMode: 'environment' });
 ```
 
-## 6. Best Practices
+## 6. Using OS-Native Dialogs (AppUI)
+
+To maintain a consistent look and feel, **do not use browser native `alert()`, `confirm()`, or `prompt()`**. Instead, use the injected `window.AppUI` methods.
+
+```javascript
+// Simple Prompts
+await AppUI.alert('Operation completed successfully.', 'Success');
+const isSure = await AppUI.confirm('Are you sure you want to delete this?', 'Warning');
+const name = await AppUI.prompt('Enter your name:', 'John Doe', 'Identity');
+
+// Advanced Message Box
+const result = await AppUI.showMessageBox({
+    title: 'Unsaved Changes',
+    message: 'You have unsaved changes. What would you like to do?',
+    type: 'warning',
+    buttons: [
+        { label: 'Cancel', value: 'cancel', style: 'normal' },
+        { label: 'Discard', value: 'discard', style: 'danger' },
+        { label: 'Save', value: 'save', style: 'primary', isDefault: true }
+    ],
+    checkbox: {
+        label: 'Do not ask me again',
+        defaultChecked: false
+    }
+});
+// result.value will be 'cancel', 'discard', or 'save'
+// result.checkboxChecked will be true or false
+```
+
+## 7. Best Practices
 1. **Semantic Colors**: Always use `bg-app`, `text-text-main`, `bg-panel` etc. (See 03_design_system.md).
 2. **Context Awareness**: Use `App.AI.logEvent()` when the user performs an important action so the AI knows what's happening.
 3. **Write Manuals**: When you build a complex app, write a `.md` manual in `docs/apps/` so both you and the AI understand how to use it.

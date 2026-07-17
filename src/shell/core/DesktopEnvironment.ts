@@ -115,7 +115,6 @@ export class DesktopEnvironment {
       audio: this._audioModal,
       system: this._systemModal,
       apiSettings: this._apiSettingsModal,
-      sync: this._syncModal,
       taskSwitcher: this._taskSwitcherModal,
       processMonitor: this._processMonitorModal,
       properties: this._propertiesModal,
@@ -285,11 +284,16 @@ export class DesktopEnvironment {
       this._updateSudoUI();
       if (window.AppUI) window.AppUI.notify('System privileges disabled.', 'info');
     } else {
-      const confirmed = await window.AppUI?.confirm(
-        'WARNING: Enabling System Privileges (Sudo) allows you to modify or delete core OS files.\\n\\nIncorrect actions may break the system. Are you sure you want to proceed?',
-        'Enable Sudo Mode',
-      );
-      if (confirmed) {
+      const res = await window.AppUI?.showMessageBox({
+        title: 'Enable Sudo Mode',
+        message: 'WARNING: Enabling System Privileges (Sudo) allows you to modify or delete core OS files.\n\nIncorrect actions may break the system. Are you sure you want to proceed?',
+        type: 'warning',
+        buttons: [
+          { label: 'Cancel', value: false, style: 'normal' },
+          { label: 'Enable Sudo', value: true, style: 'danger', isDefault: true }
+        ]
+      });
+      if (res && res.value) {
         this.isSudoMode = true;
         this.activePrincipal = SYSTEM_PRINCIPAL;
         this._updateSudoUI();

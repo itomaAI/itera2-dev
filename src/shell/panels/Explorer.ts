@@ -59,6 +59,7 @@ export class Explorer {
     this._bindTreeEvents();
     this._bindUploads();
     this._bindSidebarDnD();
+    this._initRootDropZone();
     this._initResizer();
   }
 
@@ -511,6 +512,185 @@ export class Explorer {
     document.addEventListener('mousemove', move);
     document.addEventListener('mouseup', stop);
     window.addEventListener('blur', stop);
+  }
+
+  private async _promptRename(path: string) {
+    const res = await window.AppUI?.showMessageBox({
+      title: 'Rename or Move',
+      message: `Edit path to rename or move the item:`,
+      type: 'question',
+      prompt: { defaultValue: path },
+      buttons: [
+        { label: 'Cancel', value: null, style: 'normal' },
+        { label: 'Rename', value: 'rename', style: 'primary', isDefault: true }
+      ]
+    });
+    
+    const newPath = res?.value;
+    if (!newPath || newPath === 'cancel' || newPath === path) return;
+    if (this.events['rename']) this.events['rename'](path, newPath);
+  }
+
+  private async _confirmDelete(path: string, name: string) {
+    const res = await window.AppUI?.showMessageBox({
+      title: 'Delete Item',
+      message: `Are you sure you want to delete "${name}"?`,
+      type: 'warning',
+      buttons: [
+        { label: 'Cancel', value: false, style: 'normal' },
+        { label: 'Delete', value: true, style: 'danger', isDefault: true }
+      ]
+    });
+
+    if (res && res.value) {
+      try {
+        await this.vfs.deleteFile(this.getActivePrincipal(), path);
+        this._emitHistory('file_deleted', `User deleted: ${path}`);
+      } catch (e: any) {
+        if (window.AppUI) window.AppUI.notify(e.message, 'error');
+      }
+    }
+  }
+
+  private async _emitMove(srcPath: string, destFolder: string) {
+    if (srcPath === destFolder) return;
+
+    const fileName = srcPath.split('/').pop()!;
+    let newPath = destFolder ? (destFolder === srcPath ? srcPath : `${destFolder}/${fileName}`) : fileName;
+    
+    // destFolder === srcPath の場合に newPathがディレクトリ名と被る対策として
+    if (!destFolder) newPath = fileName;
+    else if (destFolder !== srcPath) newPath = `${destFolder}/${fileName}`;
+    else newPath = srcPath;
+
+    if (srcPath === newPath) return;
+    if (destFolder.startsWith(srcPath + '/')) {
+      if (window.AppUI) window.AppUI.showMessageBox({
+        title: 'Invalid Move',
+        message: 'Cannot move a folder into its own subfolder.',
+        type: 'error',
+        buttons: [{ label: 'OK', value: null, style: 'primary', isDefault: true }]
+      });
+      return;
+    }
+
+    if (this.vfs.exists(this.getActivePrincipal(), newPath)) {
+      const stat = this.vfs.stat(this.getActivePrincipal(), newPath);
+      const isDir = stat.kind === 'directory';
+      
+      const res = await window.AppUI?.showConflictDialog(fileName, isDir);
+      if (!res || res.value === 'cancel') return;
+      
+      if (res.value === 'skip') return;
+      
+      if (res.value === 'keep_both') {
+         const dotIndex = newPath.lastIndexOf('.');
+         const base = dotIndex !== -1 ? newPath.substring(0, dotIndex) : newPath;
+         const ext = dotIndex !== -1 ? newPath.substring(dotIndex) : '';
+         let counter = 1;
+         while (this.vfs.exists(this.getActivePrincipal(), newPath)) {
+           newPath = `${base}_copy${counter}${ext}`;
+           counter++;
+         }
+         try {
+           await this.vfs.rename(this.getActivePrincipal(), srcPath, newPath);
+           this._emitHistory('file_moved', `User moved file: ${srcPath} -> ${newPath}`);
+         } catch(e: any) {
+           if (window.AppUI) window.AppUI.notify(e.message, 'error');
+         }
+         return;
+      }
+
+      if (res.value === 'merge') {
+        await this._mergeDirectory(srcPath, newPath, false);
+        return;
+      }
+      
+      if (res.value === 'replace') {
+        try {
+           await this.vfs.deleteFile(this.getActivePrincipal(), newPath, { permanent: true });
+           await this.vfs.rename(this.getActivePrincipal(), srcPath, newPath);
+           this._emitHistory('file_moved', `User moved and replaced file: ${srcPath} -> ${newPath}`);
+        } catch (e: any) {
+           if (window.AppUI) window.AppUI.notify(`Replace failed: ${e.message}`, 'error');
+        }
+        return;
+      }
+    }
+
+    try {
+      await this.vfs.rename(this.getActivePrincipal(), srcPath, newPath);
+      this._emitHistory('file_moved', `User moved file: ${srcPath} -> ${newPath}`);
+    } catch(e: any) {
+      if (window.AppUI) window.AppUI.notify(e.message, 'error');
+    }
+  }
+
+  private async _mergeDirectory(srcPath: string, destPath: string, keepOriginal: boolean = false) {
+     if (window.AppUI) window.AppUI.showLoading('Merging directories...');
+
+     let applyToAllAction: string | null = null;
+     
+     const traverseAndMerge = async (currentSrc: string, currentDest: string) => {
+         const children = this.vfs.listFiles(this.getActivePrincipal(), { path: currentSrc, detail: true }) as VfsStat[];
+         for (const child of children) {
+             const childDest = `${currentDest}/${child.name}`;
+             if (child.kind === 'directory') {
+                 if (!this.vfs.exists(this.getActivePrincipal(), childDest)) {
+                     await this.vfs.mkdir(this.getActivePrincipal(), childDest);
+                 }
+                 const success = await traverseAndMerge(child.path, childDest);
+                 if (!success) return false;
+             } else {
+                 let action = 'replace';
+                 if (this.vfs.exists(this.getActivePrincipal(), childDest)) {
+                     if (applyToAllAction) {
+                         action = applyToAllAction;
+                     } else {
+                         const res = await window.AppUI?.showConflictDialog(child.name, false);
+                         if (!res || res.value === 'cancel') return false; 
+                         action = res.value;
+
+                         if (res.checkboxChecked) applyToAllAction = action;
+                     }
+                 }
+                 
+                 if (action === 'skip') continue;
+                 
+                 let writePath = childDest;
+                 if (action === 'keep_both') {
+                     const dotIndex = childDest.lastIndexOf('.');
+                     const base = dotIndex !== -1 ? childDest.substring(0, dotIndex) : childDest;
+                     const ext = dotIndex !== -1 ? childDest.substring(dotIndex) : '';
+                     let counter = 1;
+                     while (this.vfs.exists(this.getActivePrincipal(), writePath)) {
+                       writePath = `${base}_copy${counter}${ext}`;
+                       counter++;
+                     }
+                 }
+                 
+                 try {
+                     const blob = await this.vfs.readBlob(this.getActivePrincipal(), child.path);
+                     await this.vfs.writeFile(this.getActivePrincipal(), writePath, blob, { overwrite: true });
+                 } catch (e) {
+                     console.error(`Failed to copy ${child.path}`, e);
+                 }
+             }
+         }
+         return true;
+     };
+
+     try {
+         const success = await traverseAndMerge(srcPath, destPath);
+         if (success && !keepOriginal) {
+             await this.vfs.deleteFile(this.getActivePrincipal(), srcPath, { permanent: true });
+         }
+         this._emitHistory('folder_merged', `User merged folder: ${srcPath} into ${destPath}`);
+     } catch (e: any) {
+         if (window.AppUI) window.AppUI.notify(`Merge failed: ${e.message}`, 'error');
+     } finally {
+         if (window.AppUI) window.AppUI.hideLoading();
+     }
   }
 
   private _emitHistory(type: string, desc: string): void {

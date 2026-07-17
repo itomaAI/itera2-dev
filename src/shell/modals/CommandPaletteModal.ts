@@ -249,13 +249,6 @@ export class CommandPaletteModal {
         uri: 'metaos://system/api_keys',
       },
       {
-        id: 'sys-sync',
-        title: 'Cloud Sync',
-        sub: 'Backup and sync to Google Drive',
-        icon: '☁️',
-        uri: 'metaos://system/sync',
-      },
-      {
         id: 'sys-monitor',
         title: 'Activity Monitor',
         sub: 'View background processes',

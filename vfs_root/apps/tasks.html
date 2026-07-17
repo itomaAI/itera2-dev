@@ -390,7 +390,16 @@
 
       async function deleteFromModal() {
         const id = document.getElementById('edit-id').value;
-        if (confirm('Delete this task permanently?')) {
+        const res = await AppUI.showMessageBox({
+          title: 'Delete Task',
+          message: 'Delete this task permanently?',
+          type: 'warning',
+          buttons: [
+            { label: 'Cancel', value: false, style: 'normal' },
+            { label: 'Delete', value: true, style: 'danger', isDefault: true }
+          ]
+        });
+        if (res && res.value) {
           await App.deleteTask(id);
           closeTaskModal();
           render();

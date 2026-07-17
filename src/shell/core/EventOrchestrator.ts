@@ -183,8 +183,6 @@ export class EventOrchestrator {
         this.desktop.modals.system.open();
       } else if (target === 'api_keys') {
         this.desktop.modals.apiSettings.open();
-      } else if (target === 'sync') {
-        this.desktop.modals.sync.open();
       } else if (target === 'monitor') {
         this.desktop.modals.processMonitor.open();
       } else {
@@ -279,7 +277,16 @@ export class EventOrchestrator {
     chat.on('stop', () => this.engine.stop());
 
     chat.on('clear', async () => {
-      if (await window.AppUI?.confirm('Clear chat history and media cache?')) {
+      const res = await window.AppUI?.showMessageBox({
+        title: 'Clear Chat History',
+        message: 'Are you sure you want to clear the chat history and media cache?',
+        type: 'warning',
+        buttons: [
+          { label: 'Cancel', value: false, style: 'normal' },
+          { label: 'Clear History', value: true, style: 'danger', isDefault: true }
+        ]
+      });
+      if (res && res.value) {
         this.sessionManager.clearSession({
           purgeMedia: true,
           triggerLlm: false,

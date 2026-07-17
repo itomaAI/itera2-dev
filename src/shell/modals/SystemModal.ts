@@ -259,10 +259,16 @@ export class SystemModal {
     const file = input.files?.[0];
     if (!file) return;
 
-    const confirmed = await window.AppUI?.confirm(
-      `CAUTION: This will overwrite your entire file system index with "${file.name}".\nAre you sure you want to proceed?`,
-    );
-    if (!confirmed) {
+    const res = await window.AppUI?.showMessageBox({
+      title: 'Restore Index',
+      message: `CAUTION: This will overwrite your entire file system index with "${file.name}".\nAre you sure you want to proceed?`,
+      type: 'warning',
+      buttons: [
+        { label: 'Cancel', value: false, style: 'normal', isDefault: true },
+        { label: 'Restore Index', value: true, style: 'danger' }
+      ]
+    });
+    if (!res || !res.value) {
       input.value = '';
       return;
     }

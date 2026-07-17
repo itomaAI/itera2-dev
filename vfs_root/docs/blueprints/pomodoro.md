@@ -200,7 +200,12 @@ Please execute the installation by strictly following these phases:
 
         function notifyCompletion(finishedMode, whileAway) {
             if (!whileAway && window.AppUI) {
-                AppUI.alert(finishedMode === 'focus' ? "Focus session complete! Take a break." : "Break is over! Back to work.");
+                AppUI.showMessageBox({
+                    title: finishedMode === 'focus' ? 'Focus Complete' : 'Break Over',
+                    message: finishedMode === 'focus' ? "Focus session complete! Take a break." : "Break is over! Back to work.",
+                    type: 'info',
+                    buttons: [{ label: 'OK', value: true, style: 'primary', isDefault: true }]
+                });
             }
             if (window.MetaOS && MetaOS.ai && MetaOS.ai.log) {
                 const logMsg = finishedMode === 'focus' ? "User completed a focus session." : "User completed a break.";

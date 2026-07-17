@@ -557,11 +557,19 @@
       }
 
       async function newNote() {
-        const name = prompt(
-          "Enter file name (e.g. 'notes/Meeting.md' or 'projects/Design.md'):\nDefault goes to 'data/notes/'",
-          'Untitled.md',
-        );
-        if (!name) return;
+        const res = await AppUI.showMessageBox({
+          title: 'New Note',
+          message: "Enter file name (e.g. 'notes/Meeting.md' or 'projects/Design.md'):\nDefault goes to 'data/notes/'",
+          type: 'question',
+          prompt: { defaultValue: 'Untitled.md' },
+          buttons: [
+            { label: 'Cancel', value: null, style: 'normal' },
+            { label: 'Create', value: 'create', style: 'primary', isDefault: true }
+          ]
+        });
+        
+        const name = res?.value;
+        if (!name || name === 'cancel') return;
 
         let path = name;
         if (!path.includes('/')) {

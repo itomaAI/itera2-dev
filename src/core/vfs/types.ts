@@ -127,6 +127,7 @@ export interface VfsStat {
   syncState?: 'synced' | 'stub';
   flags: VfsNodeFlags;
   acl: AccessControlList;
+  isMountPoint?: boolean;
 }
 
 export interface TreeNode {
@@ -136,6 +137,7 @@ export interface TreeNode {
   kind: 'file' | 'directory';
   meta: VfsNodeMeta;
   children?: TreeNode[];
+  isMountPoint?: boolean;
 }
 
 export interface SyncStateItem {

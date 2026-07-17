@@ -36,16 +36,35 @@ export class ProviderManager {
     this._bindEventBus();
   }
 
+  isMountPoint(path: string): boolean {
+    const normPath = this.pathResolver.normalizePath(path);
+    return this.mounts.has(normPath);
+  }
+
   registerProvider(path: string, pid: string): void {
     const normPath = this.pathResolver.normalizePath(path);
     this.mounts.set(normPath, { mountPath: normPath, pid });
     console.log(`[ProviderManager] Registered Sync Provider: PID '${pid}' at '/${normPath}'`);
+    this._notifyMountChange(normPath);
   }
 
   unregisterProvider(path: string): void {
     const normPath = this.pathResolver.normalizePath(path);
     this.mounts.delete(normPath);
     console.log(`[ProviderManager] Unregistered Sync Provider at '/${normPath}'`);
+    this._notifyMountChange(normPath);
+  }
+
+  private _notifyMountChange(path: string): void {
+    // UIを強制的に再描画させるためのダミーMUTATEイベントを発行
+    this.eventBus.publish({
+      type: 'MUTATE',
+      nodeId: 'dummy_mount',
+      node: null,
+      path: path,
+      changedProperties: ['isMountPoint'],
+      sourcePrincipal: { type: 'system', id: 'kernel' }
+    });
   }
 
   findProviderForPath(path: string): ProviderInfo | null {

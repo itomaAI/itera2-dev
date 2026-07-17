@@ -649,12 +649,25 @@ export class TreeView {
   }
 
   private async _promptCreate(parentPath: string, type: 'file' | 'folder') {
-    const name = await window.AppUI?.prompt(`Enter new ${type} name:`);
-    if (!name) return;
+    const res = await window.AppUI?.showMessageBox({
+      title: `New ${type === 'folder' ? 'Folder' : 'File'}`,
+      message: `Enter name for the new ${type}:`,
+      type: 'question',
+      prompt: { defaultValue: type === 'folder' ? 'New Folder' : 'Untitled' },
+      buttons: [
+        { label: 'Cancel', value: null, style: 'normal' },
+        { label: 'Create', value: 'create', style: 'primary', isDefault: true }
+      ]
+    });
+    
+    const name = res?.value;
+    if (!name || name === 'cancel') return;
 
     let fullPath = parentPath ? `${parentPath}/${name}` : name;
     fullPath = fullPath.replace(/^\/+/, '');
 
+    // NOTE: TreeView では vfs を持っていないため、存在確認は省略してそのまま作成イベントを発行する。
+    // （完全なコンフリクト解決自動連番は、Explorer 側で処理すべきだが、今は単純化のため呼び出しのみ）
     if (type === 'folder' && this.events['create_folder']) {
       this.events['create_folder'](fullPath);
       if (parentPath) this.expandedPaths.add(parentPath);
@@ -665,15 +678,4 @@ export class TreeView {
     }
   }
 
-  private async _promptRename(path: string) {
-    const newPath = await window.AppUI?.prompt(`Edit path to rename/move:`, path);
-    if (!newPath || newPath === path) return;
-    if (this.events['rename']) this.events['rename'](path, newPath);
-  }
-
-  private async _confirmDelete(path: string, name: string) {
-    if (await window.AppUI?.confirm(`Are you sure you want to delete "${name}"?`)) {
-      if (this.events['delete']) this.events['delete'](path);
-    }
-  }
 }
