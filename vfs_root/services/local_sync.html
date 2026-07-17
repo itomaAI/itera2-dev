@@ -18,6 +18,15 @@
         const { mountPath, serverUrl } = config;
         let ws = null;
 
+        // 指定されたディレクトリが存在しなければ作成する
+        if (!(await MetaOS.fs.exists(mountPath))) {
+          try {
+            await MetaOS.fs.mkdir(mountPath);
+          } catch (err) {
+            // 親ディレクトリがない場合などのエラーハンドリング
+          }
+        }
+
         // 1. Sync Providerの登録（マウント、オンデマンドフェッチ、ローカル変更の監視を統合）
         try {
           await MetaOS.fs.registerSyncProvider(mountPath, {

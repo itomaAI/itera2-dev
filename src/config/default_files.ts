@@ -1,6 +1,6 @@
 /**
  * AUTO-GENERATED FILE - DO NOT EDIT MANUALLY
- * Generated on: 2026-07-17T01:41:17.352Z
+ * Generated on: 2026-07-17T03:48:59.794Z
  */
 
 export const DEFAULT_FILES: Record<string, string> = {
@@ -4168,6 +4168,15 @@ Attributes:
         const { mountPath, serverUrl } = config;
         let ws = null;
 
+        // 指定されたディレクトリが存在しなければ作成する
+        if (!(await MetaOS.fs.exists(mountPath))) {
+          try {
+            await MetaOS.fs.mkdir(mountPath);
+          } catch (err) {
+            // 親ディレクトリがない場合などのエラーハンドリング
+          }
+        }
+
         // 1. Sync Providerの登録（マウント、オンデマンドフェッチ、ローカル変更の監視を統合）
         try {
           await MetaOS.fs.registerSyncProvider(mountPath, {
@@ -4254,6 +4263,17 @@ Attributes:
             const fullPath = \`\${mountPath}/\${data.path}\`;
 
             if (data.type === 'create' || data.type === 'update') {
+              try {
+                // 外部エコーの防止: サーバーから通知されたファイルとローカルのファイルのハッシュを比較
+                // 自分がアップロードした結果の通知であれば、ハッシュが一致するため実体をスタブで破壊しない
+                const stat = await MetaOS.fs.stat(fullPath);
+                if (stat && stat.hash === data.meta.hash) {
+                  return; // すでに最新の状態（実体あり）なのでスキップ
+                }
+              } catch (err) {
+                // localにファイルが存在しない（エラーになる）場合はスタブを作ってよい
+              }
+
               await MetaOS.fs.createStub(fullPath, {
                 size: data.meta.size,
                 updatedAt: data.meta.updatedAt,
@@ -6457,4 +6477,4 @@ Attributes:
 }, null, 2)
 };
 
-export const BUILD_TIME = 1784252477352;
+export const BUILD_TIME = 1784260139794;

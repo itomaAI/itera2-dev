@@ -79,10 +79,25 @@ export class VfsInitializer {
           await this.vfs.mkdir(SYSTEM_PRINCIPAL, upstreamPath);
         }
       } else {
-        await this.vfs.writeFile(SYSTEM_PRINCIPAL, upstreamPath, content, {
-          overwrite: true,
-          system: true,
-        });
+        let shouldWrite = true;
+        if (this.vfs.exists(SYSTEM_PRINCIPAL, upstreamPath)) {
+          try {
+            // パフォーマンス最適化: 既存ファイルと内容が完全に一致する場合は上書き(イベント発火)をスキップ
+            const currentContent = await this.vfs.readFile(SYSTEM_PRINCIPAL, upstreamPath, { bypassFetch: true });
+            if (currentContent === content) {
+              shouldWrite = false;
+            }
+          } catch (e) {
+            // 読み込みに失敗した場合は安全のため上書きする
+          }
+        }
+
+        if (shouldWrite) {
+          await this.vfs.writeFile(SYSTEM_PRINCIPAL, upstreamPath, content, {
+            overwrite: true,
+            system: true,
+          });
+        }
       }
 
       // 領域の判定
