@@ -24,7 +24,6 @@ import { EditorModal } from '../modals/EditorModal';
 import { MediaViewer } from '../modals/MediaViewer';
 import { SystemModal } from '../modals/SystemModal';
 import { ApiSettingsModal } from '../modals/ApiSettingsModal';
-import { SyncModal } from '../modals/SyncModal';
 import { TaskSwitcherModal } from '../modals/TaskSwitcherModal';
 import { CameraModal } from '../modals/CameraModal';
 import { AudioModal } from '../modals/AudioModal';
@@ -82,7 +81,6 @@ export class DesktopEnvironment {
 
     // ApiSettingsModal は duck typing で CognitiveManager を渡す (getMergedProviders を持つため)
     this._apiSettingsModal = new ApiSettingsModal(cognitiveManager);
-    this._syncModal = new SyncModal();
     this._taskSwitcherModal = new TaskSwitcherModal(processManager, appRegistry);
     this._processMonitorModal = new ProcessMonitorModal(processManager, appRegistry);
     this._propertiesModal = new PropertiesModal(vfs);

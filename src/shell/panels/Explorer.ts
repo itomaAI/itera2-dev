@@ -368,21 +368,6 @@ export class Explorer {
     input.value = '';
   }
 
-  private async _handleDrop(e: DragEvent, targetFolderPath: string, element: HTMLElement) {
-    element.classList.remove('bg-primary', 'text-text-inverted');
-
-    if (e.dataTransfer && e.dataTransfer.types.includes('application/itera-file')) {
-      e.preventDefault();
-      e.stopPropagation();
-
-      const rawData = e.dataTransfer.getData('application/itera-file');
-      if (!rawData) return;
-
-      const data = JSON.parse(rawData);
-      await this._emitMove(data.path, targetFolderPath);
-    }
-  }
-
   private _initRootDropZone() {
     if (!this.els.CONTAINER) return;
 

@@ -192,7 +192,7 @@ export class TreeView {
           e.preventDefault();
           const rect = menuBtn.getBoundingClientRect();
           this.selectedPath = path;
-          this._showContextMenu(rect.left, rect.bottom, path, mutation.node!.kind, name);
+          this._showContextMenu(rect.left, rect.bottom, path, mutation.node!.kind);
         };
       }
     }
@@ -274,7 +274,7 @@ export class TreeView {
     `;
 
     div.onclick = (e) => this._handleClick(e, path, kind);
-    div.oncontextmenu = (e) => this._handleContextMenu(e, path, kind, name);
+    div.oncontextmenu = (e) => this._handleContextMenu(e, path, kind);
 
     const menuBtn = div.querySelector('.menu-btn') as HTMLButtonElement;
     if (menuBtn) {
@@ -283,7 +283,7 @@ export class TreeView {
         e.preventDefault();
         const rect = menuBtn.getBoundingClientRect();
         this.selectedPath = path;
-        this._showContextMenu(rect.left, rect.bottom, path, kind, name);
+        this._showContextMenu(rect.left, rect.bottom, path, kind);
       };
     }
 
@@ -479,7 +479,7 @@ export class TreeView {
       this.container.addEventListener('contextmenu', (e) => {
         if (e.target === this.container || (e.target as HTMLElement).classList.contains('tree-root')) {
           e.preventDefault();
-          this._showContextMenu(e.pageX, e.pageY, '', 'directory', 'root');
+          this._showContextMenu(e.pageX, e.pageY, '', 'directory');
         }
       });
 
@@ -497,14 +497,14 @@ export class TreeView {
     }
   }
 
-  private _handleContextMenu(e: MouseEvent, path: string, kind: 'file' | 'directory', name: string) {
+  private _handleContextMenu(e: MouseEvent, path: string, kind: 'file' | 'directory') {
     e.preventDefault();
     e.stopPropagation();
     this.selectedPath = path;
-    this._showContextMenu(e.pageX, e.pageY, path, kind, name);
+    this._showContextMenu(e.pageX, e.pageY, path, kind);
   }
 
-  private _showContextMenu(x: number, y: number, path: string, kind: 'file' | 'directory', name: string) {
+  private _showContextMenu(x: number, y: number, path: string, kind: 'file' | 'directory') {
     if (!this.contextMenu) return;
 
     this.contextMenu.innerHTML = '';

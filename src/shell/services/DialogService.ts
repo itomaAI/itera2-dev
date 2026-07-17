@@ -337,7 +337,7 @@ export class DialogService {
           if (defaultBtnEl) defaultBtnEl.click();
         } else if (e.key === 'Escape') {
           if (cancelBtnEl) cancelBtnEl.click();
-          else if (defaultBtnEl && options.type === 'alert') defaultBtnEl.click();
+          else if (defaultBtnEl && options.type === 'warning') defaultBtnEl.click();
         }
       });
     });
