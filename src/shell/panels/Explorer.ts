@@ -423,7 +423,8 @@ export class Explorer {
         const rawData = e.dataTransfer.getData('application/itera-file');
         if (rawData) {
           const data = JSON.parse(rawData);
-          await this._handleTransfer(data.path, '', 'move');
+          const fileName = data.path.split('/').pop();
+          await this._handleTransfer(data.path, fileName, 'move');
         }
       }
     });
@@ -660,19 +661,14 @@ export class Explorer {
     }
   }
 
-  private async _handleTransfer(srcPath: string, destFolder: string, mode: 'move' | 'copy' = 'move') {
-    if (srcPath === destFolder) return;
+  private async _handleTransfer(srcPath: string, destPath: string, mode: 'move' | 'copy' = 'move') {
+    if (srcPath === destPath) return;
 
     const fileName = srcPath.split('/').pop()!;
-    let newPath = destFolder ? (destFolder === srcPath ? srcPath : `${destFolder}/${fileName}`) : fileName;
+    let newPath = destPath;
+    const destParentFolder = newPath.includes('/') ? newPath.substring(0, newPath.lastIndexOf('/')) : '';
 
-    if (!destFolder) newPath = fileName;
-    else if (destFolder !== srcPath) newPath = `${destFolder}/${fileName}`;
-    else newPath = srcPath;
-
-    if (srcPath === newPath) return;
-
-    if (destFolder.startsWith(srcPath + '/')) {
+    if (destParentFolder && (destParentFolder === srcPath || destParentFolder.startsWith(srcPath + '/'))) {
       if (window.AppUI) {
         window.AppUI.showMessageBox({
           title: `Invalid ${mode === 'move' ? 'Move' : 'Copy'}`,

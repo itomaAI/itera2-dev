@@ -121,7 +121,6 @@ export class EventOrchestrator {
           await this.processManager.spawn({
             path: targetPath + searchAndHash,
             show: true,
-            forceReload: true,
             args: queryArgs,
             currentUri: fullUri,
           });
@@ -160,7 +159,6 @@ export class EventOrchestrator {
         await this.processManager.spawn({
           path: executablePath,
           show: true,
-          forceReload: true,
           args,
           currentUri: fullUri,
         });
