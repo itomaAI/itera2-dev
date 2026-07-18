@@ -211,21 +211,24 @@ export class ProcessManager {
         currentUri: uri,
       });
 
+      if (type === 'app') this._enforceLRU();
+
+      // 先にフォアグラウンド/バックグラウンドの状態を確定させる
+      if (show) {
+        this._focusApp(pid);
+        this._updateAddressBar(uri);
+      }
+
+      // 状態が確定した後にイベントを発行する
       if (this.events['process_spawned']) {
         this.events['process_spawned'].forEach((cb) => cb(this.processes.get(pid)));
       }
 
-      if (type === 'app') this._enforceLRU();
-
+      // 非同期でのIframeロードを実行
       if (entryUrl) {
         await this._loadIframe(iframe, entryUrl);
       } else if (type === 'app') {
         iframe.srcdoc = `<div style="color:#888; padding:20px; font-family:sans-serif;">No ${path} found.</div>`;
-      }
-
-      if (show) {
-        this._focusApp(pid);
-        this._updateAddressBar(uri);
       }
 
       console.log(`[ProcessManager] Spawned [${pid}] (Type:${type}, Show:${show}) -> ${path}`);
