@@ -208,17 +208,26 @@
           try {
             const files = await MetaOS.fs.list('data/tasks');
             const all = [];
-            for (const f of files.filter(x => x.endsWith('.json'))) {
-              all.push(...await App.FS.readJson(f, []));
+            for (const f of files.filter((x) => x.endsWith('.json'))) {
+              all.push(...(await App.FS.readJson(f, [])));
             }
             return all;
-          } catch (e) { return []; }
+          } catch (e) {
+            return [];
+          }
         },
         async addTask(title, dueDate = '', priority = 'medium') {
           const monthKey = new Date().toISOString().slice(0, 7);
           const path = `data/tasks/${monthKey}.json`;
           const tasks = await App.FS.readJson(path, []);
-          const newTask = { id: Date.now().toString(), title: title.trim(), status: 'pending', dueDate, priority, created_at: new Date().toISOString() };
+          const newTask = {
+            id: Date.now().toString(),
+            title: title.trim(),
+            status: 'pending',
+            dueDate,
+            priority,
+            created_at: new Date().toISOString(),
+          };
           tasks.push(newTask);
           await App.FS.writeJson(path, tasks);
           App.AI.logEvent(`User added a new task: "${newTask.title}"`, 'task_added');
@@ -228,9 +237,9 @@
           if (!window.MetaOS) return false;
           try {
             const files = await MetaOS.fs.list('data/tasks');
-            for (const f of files.filter(x => x.endsWith('.json'))) {
+            for (const f of files.filter((x) => x.endsWith('.json'))) {
               let tasks = await App.FS.readJson(f, []);
-              const idx = tasks.findIndex(t => t.id === id);
+              const idx = tasks.findIndex((t) => t.id === id);
               if (idx !== -1) {
                 tasks = fn(tasks, idx);
                 await App.FS.writeJson(f, tasks);
@@ -242,19 +251,30 @@
         },
         async updateTask(id, updates) {
           let title = '';
-          const ok = await this._update(id, (tasks, i) => { tasks[i] = { ...tasks[i], ...updates }; title = tasks[i].title; return tasks; });
+          const ok = await this._update(id, (tasks, i) => {
+            tasks[i] = { ...tasks[i], ...updates };
+            title = tasks[i].title;
+            return tasks;
+          });
           if (ok && updates.title) App.AI.logEvent(`User updated task: "${title}"`, 'task_updated');
           return ok;
         },
         async toggleTask(id) {
-          return await this._update(id, (tasks, i) => { tasks[i].status = tasks[i].status === 'completed' ? 'pending' : 'completed'; return tasks; });
+          return await this._update(id, (tasks, i) => {
+            tasks[i].status = tasks[i].status === 'completed' ? 'pending' : 'completed';
+            return tasks;
+          });
         },
         async deleteTask(id) {
           let title = '';
-          const ok = await this._update(id, (tasks, i) => { title = tasks[i].title; tasks.splice(i, 1); return tasks; });
+          const ok = await this._update(id, (tasks, i) => {
+            title = tasks[i].title;
+            tasks.splice(i, 1);
+            return tasks;
+          });
           if (ok) App.AI.logEvent(`User deleted task: "${title}"`, 'task_deleted');
           return ok;
-        }
+        },
       };
 
       const GroupUI = {

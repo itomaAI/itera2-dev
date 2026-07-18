@@ -332,7 +332,7 @@ export class Explorer {
       const hasExtension = type === 'file' && dotIndex !== -1 && dotIndex > fullPath.lastIndexOf('/');
       const base = hasExtension ? fullPath.substring(0, dotIndex) : fullPath;
       const ext = hasExtension ? fullPath.substring(dotIndex) : '';
-      
+
       let counter = 1;
       while (this.vfs.exists(this.getActivePrincipal(), fullPath)) {
         fullPath = `${base}_${counter}${ext}`;
@@ -669,7 +669,10 @@ export class Explorer {
         try {
           if (mode === 'move') await this.vfs.rename(this.getActivePrincipal(), srcPath, newPath);
           else await this.vfs.copyFile(this.getActivePrincipal(), srcPath, newPath);
-          this._emitHistory('file_' + (mode === 'move' ? 'moved' : 'copied'), `User ${mode} file: ${srcPath} -> ${newPath}`);
+          this._emitHistory(
+            'file_' + (mode === 'move' ? 'moved' : 'copied'),
+            `User ${mode} file: ${srcPath} -> ${newPath}`,
+          );
         } catch (e: any) {
           if (window.AppUI) window.AppUI.notify(e.message, 'error');
         }
@@ -686,7 +689,10 @@ export class Explorer {
           await this.vfs.deleteFile(this.getActivePrincipal(), newPath, { permanent: true });
           if (mode === 'move') await this.vfs.rename(this.getActivePrincipal(), srcPath, newPath);
           else await this.vfs.copyFile(this.getActivePrincipal(), srcPath, newPath);
-          this._emitHistory('file_' + (mode === 'move' ? 'moved' : 'copied'), `User ${mode} and replaced file: ${srcPath} -> ${newPath}`);
+          this._emitHistory(
+            'file_' + (mode === 'move' ? 'moved' : 'copied'),
+            `User ${mode} and replaced file: ${srcPath} -> ${newPath}`,
+          );
         } catch (e: any) {
           if (window.AppUI) window.AppUI.notify(`Replace failed: ${e.message}`, 'error');
         }
@@ -697,7 +703,10 @@ export class Explorer {
     try {
       if (mode === 'move') await this.vfs.rename(this.getActivePrincipal(), srcPath, newPath);
       else await this.vfs.copyFile(this.getActivePrincipal(), srcPath, newPath);
-      this._emitHistory('file_' + (mode === 'move' ? 'moved' : 'copied'), `User ${mode} file: ${srcPath} -> ${newPath}`);
+      this._emitHistory(
+        'file_' + (mode === 'move' ? 'moved' : 'copied'),
+        `User ${mode} file: ${srcPath} -> ${newPath}`,
+      );
     } catch (e: any) {
       if (window.AppUI) window.AppUI.notify(e.message, 'error');
     }

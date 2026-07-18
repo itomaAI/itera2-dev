@@ -67,12 +67,13 @@ export class SystemModal {
       this.els.BTN_RESET.onclick = async () => {
         const res = await window.AppUI?.showMessageBox({
           title: 'Factory Reset',
-          message: 'WARNING: This will permanently delete ALL files and settings.\n\nAre you absolutely sure you want to proceed?',
+          message:
+            'WARNING: This will permanently delete ALL files and settings.\n\nAre you absolutely sure you want to proceed?',
           type: 'error',
           buttons: [
             { label: 'Cancel', value: false, style: 'normal', isDefault: true },
-            { label: 'Reset System', value: true, style: 'danger' }
-          ]
+            { label: 'Reset System', value: true, style: 'danger' },
+          ],
         });
         if (res && res.action) {
           if (this.events['reset']) this.events['reset']();
@@ -163,8 +164,8 @@ export class SystemModal {
       type: 'warning',
       buttons: [
         { label: 'Cancel', value: false, style: 'normal', isDefault: true },
-        { label: 'Restore', value: true, style: 'danger' }
-      ]
+        { label: 'Restore', value: true, style: 'danger' },
+      ],
     });
     if (!res || !res.action) {
       input.value = '';

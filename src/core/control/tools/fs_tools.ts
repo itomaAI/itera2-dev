@@ -103,9 +103,7 @@ export function registerFSTools(registry: ToolRegistry): void {
       const showNum = params.line_numbers === 'true';
 
       // startIdx を基準にすることで、負のインデックス指定時でも元のファイル内の正しい行番号を算出
-      const contentStr = showNum 
-        ? sliced.map((l, i) => `${startIdx + i + 1} | ${l}`).join('\n') 
-        : sliced.join('\n');
+      const contentStr = showNum ? sliced.map((l, i) => `${startIdx + i + 1} | ${l}`).join('\n') : sliced.join('\n');
 
       let logMsg = `Lines ${startIdx + 1}-${endIdx} of ${lines.length}:\n${contentStr}`;
 

@@ -238,13 +238,13 @@
         async getCalendarItems(monthKey) {
           const events = await this.getEvents(monthKey);
           const formattedEvents = events.map((e) => ({ ...e, type: 'event' }));
-          
+
           // Fetch tasks locally
           let allTasks = [];
           try {
             const files = await MetaOS.fs.list('data/tasks');
-            for (const f of files.filter(x => x.endsWith('.json'))) {
-              allTasks.push(...await App.FS.readJson(f, []));
+            for (const f of files.filter((x) => x.endsWith('.json'))) {
+              allTasks.push(...(await App.FS.readJson(f, [])));
             }
           } catch (e) {}
 
@@ -252,7 +252,7 @@
             .filter((t) => t.dueDate && t.dueDate.startsWith(monthKey) && t.status !== 'completed')
             .map((t) => ({ id: t.id, title: t.title, date: t.dueDate, time: '', type: 'task', priority: t.priority }));
           return [...formattedEvents, ...formattedTasks];
-        }
+        },
       };
 
       // --- State Management ---

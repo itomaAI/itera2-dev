@@ -26,7 +26,10 @@ export class ProcessEventRecorder {
 
     this.processManager.on('process_killed', (pid: string, proc?: Process) => {
       // kill時は既にプロセス情報が失われている場合に備えてフォールバックを用意
-      this._logEvent('killed', proc || ({ pid, type: 'unknown', path: 'unknown', mode: 'unknown' } as unknown as Process));
+      this._logEvent(
+        'killed',
+        proc || ({ pid, type: 'unknown', path: 'unknown', mode: 'unknown' } as unknown as Process),
+      );
     });
 
     this.processManager.on('process_error', (proc: Process, errorData: any) => {
@@ -44,7 +47,7 @@ export class ProcessEventRecorder {
       path: proc.path,
       mode: proc.mode,
       ...(proc.args ? { args: proc.args } : {}),
-      ...(errorData ? { error: errorData } : {})
+      ...(errorData ? { error: errorData } : {}),
     };
 
     this.logger.log('process_events', payload);

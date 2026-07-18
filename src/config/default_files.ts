@@ -1,6 +1,6 @@
 /**
  * AUTO-GENERATED FILE - DO NOT EDIT MANUALLY
- * Generated on: 2026-07-17T06:03:28.213Z
+ * Generated on: 2026-07-18T03:54:42.051Z
  */
 
 export const DEFAULT_FILES: Record<string, string> = {
@@ -206,6 +206,62 @@ export const DEFAULT_FILES: Record<string, string> = {
     </div>
 
     <script>
+      // --- Domain API ---
+      const CalendarAPI = {
+        async getEvents(monthKey) {
+          const path = \`data/events/\${monthKey}.json\`;
+          const events = await App.FS.readJson(path, []);
+          return events.sort((a, b) => a.date.localeCompare(b.date));
+        },
+        async addEvent(title, date, time = '', note = '', endTime = '') {
+          const monthKey = date.slice(0, 7);
+          const path = \`data/events/\${monthKey}.json\`;
+          const events = await App.FS.readJson(path, []);
+          const newEvent = { id: Date.now().toString(), title: title.trim(), date, time, endTime, note };
+          events.push(newEvent);
+          await App.FS.writeJson(path, events);
+          App.AI.logEvent(\`User added a calendar event: "\${title}" on \${date}\`, 'event_added');
+          return newEvent;
+        },
+        async deleteEvent(id, dateStr) {
+          const monthKey = dateStr.slice(0, 7);
+          const path = \`data/events/\${monthKey}.json\`;
+          let events = await App.FS.readJson(path, []);
+          const initialLen = events.length;
+          const eventToDelete = events.find((e) => e.id === id);
+          events = events.filter((e) => e.id !== id);
+          if (events.length !== initialLen) {
+            await App.FS.writeJson(path, events);
+            if (eventToDelete) App.AI.logEvent(\`User deleted event: "\${eventToDelete.title}"\`, 'event_deleted');
+            return true;
+          }
+          return false;
+        },
+        async updateEvent(id, updates) {
+          const { originalDate, date, title, time, endTime, note } = updates;
+          await this.deleteEvent(id, originalDate || date);
+          return await this.addEvent(title, date, time, note, endTime);
+        },
+        async getCalendarItems(monthKey) {
+          const events = await this.getEvents(monthKey);
+          const formattedEvents = events.map((e) => ({ ...e, type: 'event' }));
+
+          // Fetch tasks locally
+          let allTasks = [];
+          try {
+            const files = await MetaOS.fs.list('data/tasks');
+            for (const f of files.filter((x) => x.endsWith('.json'))) {
+              allTasks.push(...(await App.FS.readJson(f, [])));
+            }
+          } catch (e) {}
+
+          const formattedTasks = allTasks
+            .filter((t) => t.dueDate && t.dueDate.startsWith(monthKey) && t.status !== 'completed')
+            .map((t) => ({ id: t.id, title: t.title, date: t.dueDate, time: '', type: 'task', priority: t.priority }));
+          return [...formattedEvents, ...formattedTasks];
+        },
+      };
+
       // --- State Management ---
       const State = {
         currentDate: new Date(),
@@ -228,7 +284,7 @@ export const DEFAULT_FILES: Record<string, string> = {
         });
 
         // Fetch events and tasks for this month
-        State.events = await App.getCalendarItems(monthKey).catch(() => []);
+        State.events = await CalendarAPI.getCalendarItems(monthKey).catch(() => []);
 
         const firstDay = new Date(year, month, 1).getDay();
         const daysInMonth = new Date(year, month + 1, 0).getDate();
@@ -419,9 +475,9 @@ export const DEFAULT_FILES: Record<string, string> = {
 
         AppUI.showLoading('Saving...');
         if (id) {
-          await App.updateEvent(id, { title, date, time, endTime, note, originalDate });
+          await CalendarAPI.updateEvent(id, { title, date, time, endTime, note, originalDate });
         } else {
-          await App.addEvent(title, date, time, note, endTime);
+          await CalendarAPI.addEvent(title, date, time, note, endTime);
         }
         AppUI.hideLoading();
 
@@ -436,13 +492,13 @@ export const DEFAULT_FILES: Record<string, string> = {
           message: 'Are you sure you want to delete this event?',
           type: 'warning',
           buttons: [
-            { label: 'Cancel', value: false, style: 'normal' },
+            { label: 'Cancel', value: false, style: 'normal', isCancel: true },
             { label: 'Delete', value: true, style: 'danger', isDefault: true },
           ],
         });
-        if (res && res.value) {
+        if (res && res.action) {
           AppUI.showLoading('Deleting...');
-          await App.deleteEvent(id, State.modalDate);
+          await CalendarAPI.deleteEvent(id, State.modalDate);
           AppUI.hideLoading();
           await render();
           openDayModal(State.modalDate);
@@ -696,7 +752,7 @@ export const DEFAULT_FILES: Record<string, string> = {
       >
         <div class="p-4 border-b border-border-main flex justify-between items-center">
           <h3 class="font-bold text-lg text-text-main">Task Details</h3>
-          <button onclick="closeDashboardTaskModal()" class="text-text-muted hover:text-text-main">
+          <button onclick="DashTask.close()" class="text-text-muted hover:text-text-main">
             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
             </svg>
@@ -749,18 +805,16 @@ export const DEFAULT_FILES: Record<string, string> = {
         </div>
 
         <div class="p-4 border-t border-border-main flex justify-between items-center bg-card/50 rounded-b-xl">
-          <button onclick="deleteDashboardTask()" class="text-error text-sm hover:underline font-medium">
-            Delete Task
-          </button>
+          <button onclick="DashTask.del()" class="text-error text-sm hover:underline font-medium">Delete Task</button>
           <div class="flex gap-2">
             <button
-              onclick="closeDashboardTaskModal()"
+              onclick="DashTask.close()"
               class="px-4 py-2 rounded-lg text-sm font-medium hover:bg-hover transition text-text-main"
             >
               Cancel
             </button>
             <button
-              onclick="saveDashboardTaskChanges()"
+              onclick="DashTask.save()"
               class="px-4 py-2 rounded-lg bg-primary text-text-inverted text-sm font-bold hover:bg-primary/90 shadow transition"
             >
               Save
@@ -824,8 +878,16 @@ export const DEFAULT_FILES: Record<string, string> = {
         const refreshWidgets = async () => {
           if (!window.App) return;
 
-          // Tasks Widget
-          State.tasks = await App.getTasks().catch(() => []);
+          // Fetch Tasks Locally
+          let allTasks = [];
+          try {
+            const files = await MetaOS.fs.list('data/tasks');
+            for (const f of files.filter((x) => x.endsWith('.json'))) {
+              allTasks.push(...(await App.FS.readJson(f, [])));
+            }
+          } catch (e) {}
+          State.tasks = allTasks;
+
           const pOrder = { high: 0, medium: 1, low: 2 };
           const pending = State.tasks
             .filter((t) => t.status !== 'completed')
@@ -848,7 +910,16 @@ export const DEFAULT_FILES: Record<string, string> = {
             : '<div class="text-text-muted text-xs italic py-2">No active tasks.</div>';
 
           // Notes Widget
-          const notes = await App.getRecentNotes(5).catch(() => []);
+          let notes = [];
+          try {
+            const files = await MetaOS.fs.list('data', { recursive: true, detail: true });
+            notes = files
+              .filter((f) => f.path.endsWith('.md'))
+              .sort((a, b) => b.updatedAt - a.updatedAt)
+              .slice(0, 5)
+              .map((f) => f.path);
+          } catch (e) {}
+
           DOM('widget-notes').innerHTML = notes.length
             ? notes
                 .map(
@@ -874,12 +945,30 @@ export const DEFAULT_FILES: Record<string, string> = {
             DOM('edit-modal').classList.remove('hidden');
           },
           close: () => DOM('edit-modal').classList.add('hidden'),
+          _updateTaskFile: async (id, fn) => {
+            try {
+              const files = await MetaOS.fs.list('data/tasks');
+              for (const f of files.filter((x) => x.endsWith('.json'))) {
+                let tasks = await App.FS.readJson(f, []);
+                const idx = tasks.findIndex((t) => t.id === id);
+                if (idx !== -1) {
+                  tasks = fn(tasks, idx);
+                  await App.FS.writeJson(f, tasks);
+                  return true;
+                }
+              }
+            } catch (e) {}
+            return false;
+          },
           save: async () => {
             const [id, title, priority, dueDate, description] = ['id', 'title', 'priority', 'date', 'desc'].map(
               (k) => DOM(\`edit-\${k}\`).value,
             );
             if (title.trim()) {
-              await App.updateTask(id, { title, priority, dueDate, description });
+              await DashTask._updateTaskFile(id, (tasks, i) => {
+                tasks[i] = { ...tasks[i], title, priority, dueDate, description };
+                return tasks;
+              });
               DashTask.close();
               refreshWidgets();
             }
@@ -890,30 +979,27 @@ export const DEFAULT_FILES: Record<string, string> = {
               message: 'Are you sure you want to delete this task permanently?',
               type: 'warning',
               buttons: [
-                { label: 'Cancel', value: false, style: 'normal' },
+                { label: 'Cancel', value: false, style: 'normal', isCancel: true },
                 { label: 'Delete', value: true, style: 'danger', isDefault: true },
               ],
             });
-            if (res && res.value) {
-              await App.deleteTask(DOM('edit-id').value);
+            if (res && res.action) {
+              await DashTask._updateTaskFile(DOM('edit-id').value, (tasks, i) => {
+                tasks.splice(i, 1);
+                return tasks;
+              });
               DashTask.close();
               refreshWidgets();
             }
           },
           toggle: async (id) => {
-            await App.toggleTask(id);
+            await DashTask._updateTaskFile(id, (tasks, i) => {
+              tasks[i].status = tasks[i].status === 'completed' ? 'pending' : 'completed';
+              return tasks;
+            });
             refreshWidgets();
           },
         };
-
-        // Backwards compatibility for inline handlers
-        Object.assign(window, {
-          openDashboardTaskModal: DashTask.edit,
-          closeDashboardTaskModal: DashTask.close,
-          saveDashboardTaskChanges: DashTask.save,
-          deleteDashboardTask: DashTask.del,
-          toggleDashboardTask: DashTask.toggle,
-        });
 
         // --- Boot Sequence ---
         const boot = async () => {
@@ -1511,13 +1597,14 @@ export const DEFAULT_FILES: Record<string, string> = {
           type: 'question',
           prompt: { defaultValue: 'Untitled.md' },
           buttons: [
-            { label: 'Cancel', value: null, style: 'normal' },
+            { label: 'Cancel', value: null, style: 'normal', isCancel: true },
             { label: 'Create', value: 'create', style: 'primary', isDefault: true },
           ],
         });
 
-        const name = res?.value;
-        if (!name || name === 'cancel') return;
+        if (!res || res.action === 'cancel' || res.action === null) return;
+        const name = res.value;
+        if (!name) return;
 
         let path = name;
         if (!path.includes('/')) {
@@ -1903,7 +1990,7 @@ if __name__ == "__main__":
         await App.Config.update('local_sync', { mountPath, serverUrl });
 
         if (start) {
-          await MetaOS.system.spawn('services/local_sync.html', { pid: PID, mode: 'background' });
+          await MetaOS.system.spawn('system/services/local_sync.html', { pid: PID, mode: 'background' });
           AppUI.notify('Sync daemon started.', 'success');
         } else {
           await MetaOS.system.kill(PID);
@@ -2139,6 +2226,81 @@ if __name__ == "__main__":
 
       const DOM = (id) => document.getElementById(id);
 
+      const TaskAPI = {
+        async getTasks() {
+          if (!window.MetaOS) return [];
+          try {
+            const files = await MetaOS.fs.list('data/tasks');
+            const all = [];
+            for (const f of files.filter((x) => x.endsWith('.json'))) {
+              all.push(...(await App.FS.readJson(f, [])));
+            }
+            return all;
+          } catch (e) {
+            return [];
+          }
+        },
+        async addTask(title, dueDate = '', priority = 'medium') {
+          const monthKey = new Date().toISOString().slice(0, 7);
+          const path = \`data/tasks/\${monthKey}.json\`;
+          const tasks = await App.FS.readJson(path, []);
+          const newTask = {
+            id: Date.now().toString(),
+            title: title.trim(),
+            status: 'pending',
+            dueDate,
+            priority,
+            created_at: new Date().toISOString(),
+          };
+          tasks.push(newTask);
+          await App.FS.writeJson(path, tasks);
+          App.AI.logEvent(\`User added a new task: "\${newTask.title}"\`, 'task_added');
+          return newTask;
+        },
+        async _update(id, fn) {
+          if (!window.MetaOS) return false;
+          try {
+            const files = await MetaOS.fs.list('data/tasks');
+            for (const f of files.filter((x) => x.endsWith('.json'))) {
+              let tasks = await App.FS.readJson(f, []);
+              const idx = tasks.findIndex((t) => t.id === id);
+              if (idx !== -1) {
+                tasks = fn(tasks, idx);
+                await App.FS.writeJson(f, tasks);
+                return true;
+              }
+            }
+          } catch (e) {}
+          return false;
+        },
+        async updateTask(id, updates) {
+          let title = '';
+          const ok = await this._update(id, (tasks, i) => {
+            tasks[i] = { ...tasks[i], ...updates };
+            title = tasks[i].title;
+            return tasks;
+          });
+          if (ok && updates.title) App.AI.logEvent(\`User updated task: "\${title}"\`, 'task_updated');
+          return ok;
+        },
+        async toggleTask(id) {
+          return await this._update(id, (tasks, i) => {
+            tasks[i].status = tasks[i].status === 'completed' ? 'pending' : 'completed';
+            return tasks;
+          });
+        },
+        async deleteTask(id) {
+          let title = '';
+          const ok = await this._update(id, (tasks, i) => {
+            title = tasks[i].title;
+            tasks.splice(i, 1);
+            return tasks;
+          });
+          if (ok) App.AI.logEvent(\`User deleted task: "\${title}"\`, 'task_deleted');
+          return ok;
+        },
+      };
+
       const GroupUI = {
         overdue: { label: 'Overdue', icon: '🔥', color: 'text-error' },
         today: { label: 'Today', icon: '🌟', color: 'text-text-muted' },
@@ -2178,7 +2340,7 @@ if __name__ == "__main__":
       async function render() {
         const list = DOM('task-list');
         try {
-          allTasks = await App.getTasks();
+          allTasks = await TaskAPI.getTasks();
           const tasks = allTasks.filter(
             (t) =>
               currentFilter === 'all' ||
@@ -2268,7 +2430,7 @@ if __name__ == "__main__":
 
         if (!input.value.trim()) return;
 
-        await App.addTask(input.value, dateInput.value, priority);
+        await TaskAPI.addTask(input.value, dateInput.value, priority);
 
         input.value = '';
         dateInput.value = ''; // Reset date
@@ -2276,12 +2438,21 @@ if __name__ == "__main__":
       }
 
       async function toggle(id) {
-        await App.toggleTask(id);
+        await TaskAPI.toggleTask(id);
         render();
       }
       async function del(id) {
-        if (confirm('Delete task?')) {
-          await App.deleteTask(id);
+        const res = await AppUI.showMessageBox({
+          title: 'Delete Task',
+          message: 'Are you sure you want to delete this task permanently?',
+          type: 'warning',
+          buttons: [
+            { label: 'Cancel', value: false, style: 'normal', isCancel: true },
+            { label: 'Delete', value: true, style: 'danger', isDefault: true },
+          ],
+        });
+        if (res && res.action) {
+          await TaskAPI.deleteTask(id);
           render();
         }
       }
@@ -2313,8 +2484,7 @@ if __name__ == "__main__":
 
         if (!title.trim()) return;
 
-        // We use updateTask from std.js. Note: std.js doesn't validate fields, so we can add description.
-        await App.updateTask(id, {
+        await TaskAPI.updateTask(id, {
           title,
           priority,
           dueDate,
@@ -2332,12 +2502,12 @@ if __name__ == "__main__":
           message: 'Delete this task permanently?',
           type: 'warning',
           buttons: [
-            { label: 'Cancel', value: false, style: 'normal' },
+            { label: 'Cancel', value: false, style: 'normal', isCancel: true },
             { label: 'Delete', value: true, style: 'danger', isDefault: true },
           ],
         });
-        if (res && res.value) {
-          await App.deleteTask(id);
+        if (res && res.action) {
+          await TaskAPI.deleteTask(id);
           closeTaskModal();
           render();
         }
@@ -3120,14 +3290,12 @@ The Virtual File System is organized into specific domains. Some areas are stric
 │   ├── init.md             # The AI's boot protocol
 │   └── rules/              # AI knowledge and behavior guidelines
 │
-├── services/               # [Background Daemons Layer] (Read/Write)
-│   └── ...                 # Headless background tasks
-│
 ├── system/                 # [System Core Layer] (Strictly Protected)
 │   ├── apps/               # OS built-in apps (Settings, etc.)
 │   ├── config/             # Dynamic OS configuration
 │   ├── core/               # Shared core libraries (std.js, ui.js)
 │   ├── registry/           # App and Service registries
+│   ├── services/           # OS built-in background daemons
 │   ├── temp/               # [Volatile Layer] User uploads and screenshots. Purged on session reset.
 │   └── themes/             # UI Themes (.json)
 │
@@ -3300,7 +3468,7 @@ To show your app in the Launcher, you must add it to the system registry at \`sy
 
 Daemons are invisible HTML/JS files that run continuously in the background. They are perfect for timers, WebSocket connections (like Nostr), or cron jobs.
 
-### Creating a Daemon (\`services/logger.html\`)
+### Creating a Daemon (\`system/services/logger.html\`)
 \`\`\`html
 <script>
     // Runs every 10 minutes
@@ -3322,7 +3490,7 @@ To make your daemon start automatically when Itera OS boots, register it in \`sy
         "id": "sys_logger",
         "name": "System Logger",
         "icon": "📝",
-        "path": "services/logger.html",
+        "path": "system/services/logger.html",
         "description": "Periodically logs system health.",
         "autoStart": true
     }
@@ -3510,7 +3678,7 @@ Defines background services and whether they should start silently when the OS b
         "id": "my_crawler_daemon",
         "name": "Crawler Daemon",
         "icon": "🕷️",
-        "path": "services/crawler.html",
+        "path": "system/services/crawler.html",
         "description": "Fetches data in the background.",
         "autoStart": true
     }
@@ -3639,16 +3807,15 @@ This is the absolute physical layout of your universe.
     *   \`memory/init.md\`: The boot sequence you run on startup.
     *   \`memory/rules/\`: Manuals and guidelines for specific tools or daemons.
     *   \`memory/knowledge/\`: (You are here). Store user profiles or project states here.
-*   **\`services/\`**
-    *   Background daemons and headless scripts.
 *   **\`system/\`**
     *   **PROTECTED SYSTEM CORE**. You have limited read-only access to core files, but can modify configs and registries.
     *   \`system/apps/\`: OS built-in tools (e.g., \`settings.html\`).
     *   \`system/config/\`: System-wide settings (\`preferences.json\`, \`llm.json\`, etc.).
+    *   \`system/core/\`: The underlying Javascript engine (\`std.js\`, \`ui.js\`). Do not touch unless explicitly instructed.
     *   \`system/registry/\`: OS catalogs (\`apps.json\`, \`associations.json\`, \`services.json\`).
+    *   \`system/services/\`: OS built-in background daemons.
     *   \`system/temp/\`: Volatile space. \`system/temp/media/\` holds user uploads and screenshots. Purged on session reset.
     *   \`system/themes/\`: UI color palettes.
-    *   \`system/core/\`: The underlying Javascript engine (\`std.js\`, \`ui.js\`). Do not touch unless explicitly instructed.
 *   **\`trash/\`**
     *   Deleted items.
 
@@ -3931,438 +4098,6 @@ Errors are inevitable. What matters is learning from errors and how to recover.
 Use this Codex as a guidepost, and build a better Itera OS together with the user.
 
 **End of Codex.**
-`.trim(),
-
-  "services/git.html": `
-<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <title>Git Daemon</title>
-  </head>
-  <body>
-    <script type="module">
-      import git from 'https://esm.sh/isomorphic-git@1.24.5';
-      import http from 'https://esm.sh/isomorphic-git@1.24.5/http/web';
-
-      // ==========================================
-      // 1. FS Adapter for isomorphic-git
-      // ==========================================
-      const IgitFs = {
-        promises: {
-          async readFile(filepath, opts) {
-            const encoding = (opts && typeof opts === 'object' ? opts.encoding : opts) || 'binary';
-            const isText = encoding === 'utf8' || encoding === 'utf-8';
-            try {
-              const data = await MetaOS.fs.read(filepath, { encoding: isText ? undefined : 'binary' });
-              return isText ? data : new Uint8Array(data);
-            } catch (e) {
-              const err = new Error(e.message);
-              err.code = 'ENOENT';
-              throw err;
-            }
-          },
-          async writeFile(filepath, data, opts) {
-            try {
-              await MetaOS.fs.write(filepath, data, { overwrite: true, silent: true });
-            } catch (e) {
-              const err = new Error(e.message);
-              err.code = 'ENOENT';
-              throw err;
-            }
-          },
-          async unlink(filepath) {
-            try {
-              await MetaOS.fs.delete(filepath, { permanent: true });
-            } catch (e) {
-              const err = new Error(e.message);
-              err.code = 'ENOENT';
-              throw err;
-            }
-          },
-          async readdir(filepath) {
-            try {
-              const st = await MetaOS.fs.stat(filepath);
-              if (st.kind === 'file') {
-                const err = new Error('ENOTDIR: not a directory');
-                err.code = 'ENOTDIR';
-                throw err;
-              }
-              const stats = await MetaOS.fs.list(filepath, { detail: true });
-              return stats.map((s) => s.name);
-            } catch (e) {
-              const err = new Error(e.message);
-              err.code = e.code === 'ENOTDIR' ? 'ENOTDIR' : 'ENOENT';
-              throw err;
-            }
-          },
-          async mkdir(filepath) {
-            try {
-              await MetaOS.fs.mkdir(filepath);
-            } catch (e) {} // 既存なら無視
-          },
-          async rmdir(filepath) {
-            try {
-              await MetaOS.fs.delete(filepath, { permanent: true });
-            } catch (e) {
-              const err = new Error(e.message);
-              err.code = 'ENOENT';
-              throw err;
-            }
-          },
-          async stat(filepath) {
-            try {
-              const st = await MetaOS.fs.stat(filepath);
-              const isDir = st.kind === 'directory';
-              return {
-                type: isDir ? 'dir' : 'file',
-                mode: isDir ? 0o040000 : 0o100644,
-                size: st.size || 0,
-                ino: 0,
-                mtimeMs: st.updatedAt,
-                ctimeMs: st.createdAt,
-                isDirectory: () => isDir,
-                isFile: () => !isDir,
-                isSymbolicLink: () => false,
-              };
-            } catch (e) {
-              const err = new Error(e.message);
-              err.code = 'ENOENT';
-              throw err;
-            }
-          },
-          async lstat(filepath) {
-            return this.stat(filepath);
-          },
-          async readlink() {
-            throw new Error('Symlinks not supported');
-          },
-          async symlink() {
-            throw new Error('Symlinks not supported');
-          },
-        },
-      };
-
-      // ==========================================
-      // 2. Git Command Handler
-      // ==========================================
-      async function initDaemon() {
-        if (!window.MetaOS) return setTimeout(initDaemon, 100);
-
-        // ★ 同時実行を防ぐための非同期キュー
-        let gitQueue = Promise.resolve();
-
-        const definition = \`<define_tag name="git">
-Executes a Git command.
-Attributes:
-- command (required): init | clone | status | add | commit | push | pull | log | checkout | branch
-- dir (required): Target directory path in VFS (e.g., 'projects/my_app').
-- url: Repository URL (for clone/pull/push).
-- filepath: File to add or checkout. Use '.' for all files.
-- message: Commit message.
-- author_name: Name for commit.
-- author_email: Email for commit.
-- token: Personal Access Token (PAT) for remote auth.
-- ref: Branch name.
-- depth: Clone depth (default 1 to save memory).
-- corsProxy: CORS proxy URL (default: 'https://cors.isomorphic-git.org').
-</define_tag>\`;
-
-        await MetaOS.tools.register({
-          name: 'git',
-          description: 'Git version control operations',
-          definition,
-          handler: (p) => {
-            // ★ キューの最後尾に自身の処理を連結する (必ず順番に実行される)
-            return new Promise((resolve) => {
-              gitQueue = gitQueue
-                .then(async () => {
-                  const dir = p.dir || '';
-                  const corsProxy = p.corsProxy || 'https://cors.isomorphic-git.org';
-                  const onAuth = () => ({ username: p.token });
-
-                  let log = '';
-
-                  try {
-                    switch (p.command) {
-                      case 'init':
-                        await git.init({ fs: IgitFs, dir });
-                        log = \`Initialized empty Git repository in \${dir}\`;
-                        break;
-
-                      case 'clone':
-                        await git.clone({
-                          fs: IgitFs,
-                          http,
-                          dir,
-                          url: p.url,
-                          corsProxy,
-                          depth: p.depth ? parseInt(p.depth) : 1, // Default Shallow Clone
-                          singleBranch: true,
-                          onAuth: p.token ? onAuth : undefined,
-                        });
-                        log = \`Cloned \${p.url} into \${dir}\`;
-                        break;
-
-                      case 'status':
-                        const matrix = await git.statusMatrix({ fs: IgitFs, dir });
-                        const changes = matrix.filter((row) => row[1] !== row[2] || row[2] !== row[3]);
-                        if (changes.length === 0) {
-                          log = 'Nothing to commit, working tree clean';
-                        } else {
-                          log =
-                            'Changes:\\n' +
-                            changes
-                              .map((row) => {
-                                let status = 'modified';
-                                if (row[1] === 0) status = 'added';
-                                if (row[2] === 0) status = 'deleted';
-                                return \`- \${status}: \${row[0]}\`;
-                              })
-                              .join('\\n');
-                        }
-                        break;
-
-                      case 'add':
-                        if (p.filepath === '.') {
-                          const m = await git.statusMatrix({ fs: IgitFs, dir });
-                          for (const row of m) {
-                            if (row[2] === 0) await git.remove({ fs: IgitFs, dir, filepath: row[0] });
-                            else if (row[1] !== row[2] || row[2] !== row[3])
-                              await git.add({ fs: IgitFs, dir, filepath: row[0] });
-                          }
-                          log = \`Added all changes in \${dir}\`;
-                        } else {
-                          await git.add({ fs: IgitFs, dir, filepath: p.filepath });
-                          log = \`Added \${p.filepath}\`;
-                        }
-                        break;
-
-                      case 'commit':
-                        const sha = await git.commit({
-                          fs: IgitFs,
-                          dir,
-                          message: p.message || 'Update',
-                          author: { name: p.author_name || 'Itera AI', email: p.author_email || 'ai@itera.os' },
-                        });
-                        log = \`Committed \${sha.substring(0, 7)}: \${p.message}\`;
-                        break;
-
-                      case 'push':
-                        const pushRes = await git.push({
-                          fs: IgitFs,
-                          http,
-                          dir,
-                          corsProxy,
-                          onAuth: p.token ? onAuth : undefined,
-                        });
-                        log = pushRes.ok ? 'Pushed successfully' : \`Push failed: \${pushRes.error}\`;
-                        break;
-
-                      case 'pull':
-                        await git.pull({
-                          fs: IgitFs,
-                          http,
-                          dir,
-                          corsProxy,
-                          author: { name: p.author_name || 'Itera AI', email: p.author_email || 'ai@itera.os' },
-                          onAuth: p.token ? onAuth : undefined,
-                        });
-                        log = \`Pulled successfully\`;
-                        break;
-
-                      case 'log':
-                        const commits = await git.log({ fs: IgitFs, dir, depth: p.depth ? parseInt(p.depth) : 5 });
-                        log = commits
-                          .map((c) => \`* \${c.oid.substring(0, 7)} - \${c.commit.author.name}: \${c.commit.message}\`)
-                          .join('\\n');
-                        break;
-
-                      case 'branch':
-                        await git.branch({ fs: IgitFs, dir, ref: p.ref });
-                        log = \`Created branch \${p.ref}\`;
-                        break;
-
-                      case 'checkout':
-                        await git.checkout({ fs: IgitFs, dir, ref: p.ref });
-                        log = \`Checked out \${p.ref}\`;
-                        break;
-
-                      default:
-                        throw new Error(\`Unknown git command: \${p.command}\`);
-                    }
-                    resolve({ log, ui: \`🐙 Git \${p.command} executed\` });
-                  } catch (err) {
-                    resolve({ error: true, log: \`Git Error: \${err.message}\`, ui: \`❌ Git Error\` });
-                  }
-                })
-                .catch((e) => {
-                  // キュー自体がコケて停止しないように保護
-                  resolve({ error: true, log: \`Queue Error: \${e.message}\`, ui: \`❌ Git Error\` });
-                });
-            });
-          },
-        });
-
-        MetaOS.ai.log(
-          definition + '\\n\\n[System] Git client tool is now available in the background.',
-          'tool_available',
-        );
-      }
-
-      initDaemon();
-    </script>
-  </body>
-</html>
-`.trim(),
-
-  "services/local_sync.html": `
-<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <title>Local Sync Daemon</title>
-  </head>
-  <body>
-    <script>
-      async function initSyncDaemon() {
-        if (!window.MetaOS) return setTimeout(initSyncDaemon, 100);
-
-        let config = { mountPath: 'data/local_sync', serverUrl: 'http://127.0.0.1:8000' };
-        try {
-          const confData = await MetaOS.fs.read('system/config/local_sync.json');
-          config = { ...config, ...JSON.parse(confData) };
-        } catch (e) {}
-
-        const { mountPath, serverUrl } = config;
-        let ws = null;
-
-        // 指定されたディレクトリが存在しなければ作成する
-        if (!(await MetaOS.fs.exists(mountPath))) {
-          try {
-            await MetaOS.fs.mkdir(mountPath);
-          } catch (err) {
-            // 親ディレクトリがない場合などのエラーハンドリング
-          }
-        }
-
-        // 1. Sync Providerの登録（マウント、オンデマンドフェッチ、ローカル変更の監視を統合）
-        try {
-          await MetaOS.fs.registerSyncProvider(mountPath, {
-            onFetchContent: async (reqPath) => {
-              const relPath = reqPath.substring(mountPath.length + 1);
-              try {
-                const res = await fetch(\`\${serverUrl}/api/file/\${relPath}\`);
-                if (!res.ok) return false;
-                const arrayBuffer = await res.arrayBuffer();
-
-                // 実体を VFS に書き込む (OSレベルでエコーキャンセルされるため source フラグは不要)
-                await MetaOS.fs.write(reqPath, new Uint8Array(arrayBuffer), {
-                  overwrite: true,
-                  silent: true,
-                });
-                return true;
-              } catch (e) {
-                console.error('[SyncDaemon] Fetch failed:', e);
-                return false;
-              }
-            },
-            onMutate: async (mutations) => {
-              // OSから渡されるローカルの変更（自身が起こした変更は除外済み）
-              for (const m of mutations) {
-                const getRelPath = (p) => p.substring(mountPath.length + 1);
-
-                if (m.type === 'ATTACH' || m.type === 'MUTATE') {
-                  // ディレクトリの場合はスキップ
-                  if (m.node && m.node.kind === 'directory') continue;
-
-                  try {
-                    const relPath = getRelPath(m.path);
-                    const u8 = await MetaOS.fs.read(m.path, { encoding: 'binary' });
-                    await fetch(\`\${serverUrl}/api/file/\${relPath}\`, { method: 'PUT', body: u8 });
-                  } catch (e) {
-                    console.error('[SyncDaemon] Upload failed:', e);
-                  }
-                } else if (m.type === 'DETACH') {
-                  try {
-                    const relPath = getRelPath(m.path);
-                    await fetch(\`\${serverUrl}/api/file/\${relPath}\`, { method: 'DELETE' });
-                  } catch (e) {
-                    console.error('[SyncDaemon] Delete failed:', e);
-                  }
-                }
-              }
-            },
-          });
-          MetaOS.ai.log(\`Local Sync Daemon successfully mounted at /\${mountPath}\`, 'system');
-        } catch (e) {
-          console.error('[SyncDaemon] Provider registration failed:', e);
-          return;
-        }
-
-        // 2. 初期同期 (サーバーのメタデータを取得して VFS にスタブを作成)
-        try {
-          const res = await fetch(\`\${serverUrl}/api/meta\`);
-          const remoteMeta = await res.json();
-          const localState = await MetaOS.fs.getSyncState(mountPath);
-
-          for (const [relPath, meta] of Object.entries(remoteMeta)) {
-            const fullPath = \`\${mountPath}/\${relPath}\`;
-            const local = localState[fullPath];
-
-            if (!local || local.hash !== meta.hash) {
-              await MetaOS.fs.createStub(fullPath, {
-                size: meta.size,
-                updatedAt: meta.updatedAt,
-                hash: meta.hash,
-              });
-            }
-          }
-        } catch (e) {
-          console.error('[SyncDaemon] Initial sync failed:', e);
-        }
-
-        // 3. リアルタイム監視 (WebSocket: サーバー -> Itera OS)
-        const connectWs = () => {
-          const wsUrl = serverUrl.replace(/^http/, 'ws') + '/ws';
-          ws = new WebSocket(wsUrl);
-
-          ws.onmessage = async (e) => {
-            const data = JSON.parse(e.data);
-            const fullPath = \`\${mountPath}/\${data.path}\`;
-
-            if (data.type === 'create' || data.type === 'update') {
-              try {
-                // 外部エコーの防止: サーバーから通知されたファイルとローカルのファイルのハッシュを比較
-                // 自分がアップロードした結果の通知であれば、ハッシュが一致するため実体をスタブで破壊しない
-                const stat = await MetaOS.fs.stat(fullPath);
-                if (stat && stat.hash === data.meta.hash) {
-                  return; // すでに最新の状態（実体あり）なのでスキップ
-                }
-              } catch (err) {
-                // localにファイルが存在しない（エラーになる）場合はスタブを作ってよい
-              }
-
-              await MetaOS.fs.createStub(fullPath, {
-                size: data.meta.size,
-                updatedAt: data.meta.updatedAt,
-                hash: data.meta.hash,
-              });
-            } else if (data.type === 'delete') {
-              try {
-                await MetaOS.fs.delete(fullPath, { permanent: true });
-              } catch (err) {}
-            }
-          };
-          ws.onclose = () => setTimeout(connectWs, 5000);
-        };
-        connectWs();
-      }
-
-      initSyncDaemon();
-    </script>
-  </body>
-</html>
 `.trim(),
 
   "system/apps/billing.html": `
@@ -4779,7 +4514,7 @@ Attributes:
         try {
           if (!window.App) return setTimeout(loadApps, 50);
 
-          const apps = await App.getApps();
+          const apps = await App.FS.readJson('system/registry/apps.json', []);
 
           grid.innerHTML = '';
           apps.forEach((app, index) => {
@@ -5657,171 +5392,7 @@ Attributes:
     },
   };
 
-  // ==========================================
-  // Domain Specific APIs (Tasks, Calendar, etc.)
-  // ==========================================
-  const Domain = {
-    // --- Tasks ---
-    async getTasks() {
-      if (!global.MetaOS) return [];
-      try {
-        const files = await global.MetaOS.fs.list('data/tasks');
-        const taskFiles = files.filter((f) => f.endsWith('.json'));
-        const allTasks = [];
-        for (const path of taskFiles) {
-          const tasks = await Utils.safeReadJson(path, []);
-          if (Array.isArray(tasks)) allTasks.push(...tasks);
-        }
-        return allTasks;
-      } catch (e) {
-        return [];
-      }
-    },
-
-    async addTask(title, dueDate = '', priority = 'medium') {
-      if (!title.trim()) return;
-      const monthKey = Utils.getMonthKey();
-      const path = \`data/tasks/\${monthKey}.json\`;
-      const tasks = await Utils.safeReadJson(path, []);
-      const newTask = {
-        id: Date.now().toString(),
-        title: title.trim(),
-        status: 'pending',
-        dueDate: dueDate,
-        priority: priority,
-        created_at: new Date().toISOString(),
-      };
-      tasks.push(newTask);
-      await Utils.safeWriteJson(path, tasks);
-      AI.logEvent(\`User added a new task: "\${newTask.title}" (Due: \${dueDate || 'None'})\`, 'task_added');
-      return newTask;
-    },
-
-    async _updateTaskInFile(id, updaterFn) {
-      if (!global.MetaOS) return false;
-      try {
-        const files = await global.MetaOS.fs.list('data/tasks');
-        const taskFiles = files.filter((f) => f.endsWith('.json'));
-        for (const path of taskFiles) {
-          let tasks = await Utils.safeReadJson(path, []);
-          const index = tasks.findIndex((t) => t.id === id);
-          if (index !== -1) {
-            tasks = updaterFn(tasks, index);
-            await Utils.safeWriteJson(path, tasks);
-            return true;
-          }
-        }
-      } catch (e) {}
-      return false;
-    },
-
-    async updateTask(id, updates) {
-      let updatedTitle = '';
-      const success = await this._updateTaskInFile(id, (tasks, index) => {
-        tasks[index] = { ...tasks[index], ...updates };
-        updatedTitle = tasks[index].title;
-        return tasks;
-      });
-      if (success && updates.title) AI.logEvent(\`User updated task: "\${updatedTitle}"\`, 'task_updated');
-      return success;
-    },
-
-    async toggleTask(id) {
-      return await this._updateTaskInFile(id, (tasks, index) => {
-        tasks[index].status = tasks[index].status === 'completed' ? 'pending' : 'completed';
-        return tasks;
-      });
-    },
-
-    async deleteTask(id) {
-      let deletedTitle = '';
-      const success = await this._updateTaskInFile(id, (tasks, index) => {
-        deletedTitle = tasks[index].title;
-        tasks.splice(index, 1);
-        return tasks;
-      });
-      if (success) AI.logEvent(\`User deleted task: "\${deletedTitle}"\`, 'task_deleted');
-      return success;
-    },
-
-    // --- Events (Calendar) ---
-    async getEvents(monthKey) {
-      const path = \`data/events/\${monthKey}.json\`;
-      let events = await Utils.safeReadJson(path, []);
-      events.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
-      return events;
-    },
-
-    async addEvent(title, date, time = '', note = '') {
-      if (!title.trim() || !date) return;
-      const monthKey = date.slice(0, 7);
-      const path = \`data/events/\${monthKey}.json\`;
-      let events = await Utils.safeReadJson(path, []);
-      const newEvent = { id: Date.now().toString(), title: title.trim(), date, time, note };
-      events.push(newEvent);
-      await Utils.safeWriteJson(path, events);
-      AI.logEvent(\`User added a calendar event: "\${title}" on \${date} \${time}\`, 'event_added');
-      return newEvent;
-    },
-
-    async updateEvent(id, updates) {
-      const { originalDate, date, title, time, note } = updates;
-      await this.deleteEvent(id, originalDate || date);
-      return await this.addEvent(title, date, time, note);
-    },
-
-    async deleteEvent(id, dateStr) {
-      if (!dateStr) return false;
-      const monthKey = dateStr.slice(0, 7);
-      const path = \`data/events/\${monthKey}.json\`;
-      let events = await Utils.safeReadJson(path, []);
-      const initialLen = events.length;
-      const eventToDelete = events.find((e) => e.id === id);
-      events = events.filter((e) => e.id !== id);
-      if (events.length !== initialLen) {
-        await Utils.safeWriteJson(path, events);
-        if (eventToDelete)
-          AI.logEvent(
-            \`User deleted calendar event: "\${eventToDelete.title}" on \${eventToDelete.date}\`,
-            'event_deleted',
-          );
-        return true;
-      }
-      return false;
-    },
-
-    async getCalendarItems(monthKey) {
-      const events = await this.getEvents(monthKey);
-      const formattedEvents = events.map((e) => ({ ...e, type: 'event' }));
-      const allTasks = await this.getTasks();
-      const formattedTasks = allTasks
-        .filter((t) => t.dueDate && t.dueDate.startsWith(monthKey) && t.status !== 'completed')
-        .map((t) => ({ id: t.id, title: t.title, date: t.dueDate, time: '', type: 'task', priority: t.priority }));
-      return [...formattedEvents, ...formattedTasks];
-    },
-
-    // --- Notes & Apps ---
-    async getRecentNotes(limit = 5) {
-      if (!global.MetaOS) return [];
-      try {
-        const files = await global.MetaOS.fs.list('data', { recursive: true, detail: true });
-        return files
-          .filter((f) => f.path.endsWith('.md'))
-          .sort((a, b) => b.updatedAt - a.updatedAt)
-          .slice(0, limit)
-          .map((f) => f.path);
-      } catch (e) {
-        return [];
-      }
-    },
-
-    async getApps() {
-      // V2 ではレジストリから取得
-      return await Utils.safeReadJson('system/registry/apps.json', []);
-    },
-  };
-
-  global.App = { FS, Context, Storage, Config, AI, ...Domain };
+  global.App = { FS, Context, Storage, Config, AI };
 })(window);
 `.trim(),
 
@@ -5926,108 +5497,124 @@ Attributes:
       if (global.MetaOS) global.MetaOS.system.spawn('apps/home.html', { pid: 'main' });
     },
     notify: (message, type = 'info', duration) => {
-      let container = document.getElementById('__itera-toast-container');
-      if (!container) {
-        container = document.createElement('div');
-        container.id = '__itera-toast-container';
-        Object.assign(container.style, {
-          position: 'fixed',
-          bottom: '1.25rem',
-          right: '1.25rem',
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'flex-end',
-          gap: '0.5rem',
-          zIndex: '99999',
-          pointerEvents: 'none',
-        });
-        document.body.appendChild(container);
+      if (global.MetaOS) {
+        global.MetaOS.host.notify(message, type, duration);
+      } else {
+        console.log(\`[Notification: \${type}] \${message}\`);
       }
+    },
+    alert: async (message, title = 'System Alert') => {
+      if (global.MetaOS) {
+        return await global.MetaOS.host
+          .showMessageBox({
+            title,
+            message,
+            type: 'warning',
+            buttons: [{ label: 'OK', value: undefined, style: 'primary', isDefault: true }],
+          })
+          .then(() => undefined);
+      } else {
+        window.alert(\`\${title}\\n\\n\${message}\`);
+        return undefined;
+      }
+    },
+    confirm: async (message, title = 'Confirmation') => {
+      if (global.MetaOS) {
+        return await global.MetaOS.host
+          .showMessageBox({
+            title,
+            message,
+            type: 'question',
+            buttons: [
+              { label: 'Cancel', value: false, style: 'normal', isCancel: true },
+              { label: 'OK', value: true, style: 'primary', isDefault: true },
+            ],
+          })
+          .then((res) => (res ? res.action : false));
+      } else {
+        return window.confirm(\`\${title}\\n\\n\${message}\`);
+      }
+    },
+    prompt: async (message, defaultValue = '', title = 'Input Required') => {
+      if (global.MetaOS) {
+        return await global.MetaOS.host
+          .showMessageBox({
+            title,
+            message,
+            type: 'question',
+            prompt: { defaultValue },
+            buttons: [
+              { label: 'Cancel', value: null, style: 'normal', isCancel: true },
+              { label: 'OK', value: 'ok', style: 'primary', isDefault: true },
+            ],
+          })
+          .then((res) => {
+            if (res && res.action === 'ok') {
+              return res.value !== undefined ? res.value : null;
+            }
+            return null;
+          });
+      } else {
+        return window.prompt(\`\${title}\\n\\n\${message}\`, defaultValue);
+      }
+    },
+    showConflictDialog: async (itemName, isDirectory) => {
+      if (global.MetaOS) {
+        const actionName = isDirectory ? 'Merge' : 'Replace';
+        const detailMsg = isDirectory
+          ? 'Do you want to merge the folders? Files with the same names will be replaced.'
+          : 'Do you want to replace it with the one you are moving?';
 
-      const TYPES = {
-        info: { icon: 'ℹ️', color: 'rgb(var(--c-accent-primary))' },
-        success: { icon: '✅', color: 'rgb(var(--c-accent-success))' },
-        warning: { icon: '⚠️', color: 'rgb(var(--c-accent-warning))' },
-        error: { icon: '❌', color: 'rgb(var(--c-accent-error))' },
-      };
-      const { icon, color } = TYPES[type] || TYPES.info;
+        const buttons = [
+          { label: 'Cancel', value: 'cancel', style: 'normal', isCancel: true },
+          { label: 'Skip', value: 'skip', style: 'normal' },
+        ];
 
-      const toast = document.createElement('div');
-      toast.className = 'itera-animate-fade';
-      Object.assign(toast.style, {
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        gap: '0.75rem',
-        padding: '0.5rem 0.75rem',
-        borderRadius: '0.25rem',
-        background: 'rgb(var(--c-bg-panel))',
-        color: 'rgb(var(--c-text-main))',
-        border: \`1px solid \${color}\`,
-        boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
-        fontSize: '0.75rem',
-        pointerEvents: 'auto',
-        minWidth: '240px',
-        maxWidth: '320px',
-        wordBreak: 'break-word',
-        transition: 'opacity 0.2s ease, transform 0.2s ease',
-      });
-
-      toast.innerHTML = \`
-        <div style="display: flex; align-items: center; gap: 0.5rem; flex: 1;">
-          <div style="width:3px; height:100%; min-height:1.25rem; background:\\\${color}; border-radius:1px; flex-shrink:0;"></div>
-          <span>\\\${icon}</span>
-          <span>\\\${message}</span>
-        </div>
-        <button class="text-text-muted hover:text-text-main transition flex-shrink-0" style="padding: 2px; line-height: 1;">✕</button>
-      \`;
-
-      const closeBtn = toast.querySelector('button');
-      const closeToast = () => {
-        if (document.body.contains(toast)) {
-          toast.style.opacity = '0';
-          toast.style.transform = 'translateY(10px)';
-          setTimeout(() => toast.remove(), 200);
+        if (!isDirectory) {
+          buttons.push({ label: 'Keep Both', value: 'keep_both', style: 'normal' });
         }
-      };
 
-      if (closeBtn) {
-        closeBtn.onclick = closeToast;
+        buttons.push({
+          label: actionName,
+          value: isDirectory ? 'merge' : 'replace',
+          style: 'primary',
+          isDefault: true,
+        });
+
+        const res = await global.MetaOS.host.showMessageBox({
+          title: 'Item Already Exists',
+          message: \`An item named "\${itemName}" already exists in this location.\`,
+          detail: detailMsg,
+          type: 'warning',
+          checkbox: {
+            label: 'Do this for all current conflicts',
+            defaultChecked: false,
+          },
+          buttons,
+        });
+        return { action: res.action, checkboxChecked: res.checkboxChecked };
       }
-
-      container.appendChild(toast);
-
-      const shouldAutoDismiss = duration !== undefined ? duration > 0 : type === 'info' || type === 'success';
-      const timeoutMs = duration && duration > 0 ? duration : 3000;
-
-      if (shouldAutoDismiss) {
-        setTimeout(closeToast, timeoutMs);
+      return { action: 'cancel', checkboxChecked: false };
+    },
+    showMessageBox: async (options) => {
+      if (global.MetaOS) {
+        return await global.MetaOS.host.showMessageBox(options);
+      } else {
+        window.alert(\`\${options.title}\\n\\n\${options.message}\`);
+        return { action: options.buttons[0]?.value, value: undefined, checkboxChecked: false };
       }
-    },
-    alert: (message, title = 'System Alert') => {
-      return AppUI._createDialog({ type: 'alert', message, title });
-    },
-    confirm: (message, title = 'Confirmation') => {
-      return AppUI._createDialog({ type: 'confirm', message, title });
-    },
-    prompt: (message, defaultValue = '', title = 'Input Required') => {
-      return AppUI._createDialog({ type: 'prompt', message, title, defaultValue });
     },
     showLoading: (message = 'Processing...') => {
-      AppUI.hideLoading();
-      const overlay = document.createElement('div');
-      overlay.id = '__itera-loading-overlay';
-      overlay.className =
-        'fixed inset-0 bg-app/80 backdrop-blur-sm z-[9999] flex flex-col items-center justify-center itera-animate-fade';
-      overlay.innerHTML = \`
-                <div class="itera-loader mb-4"></div>
-                <div class="text-sm font-bold text-text-muted tracking-wider uppercase animate-pulse">\${message}</div>
-            \`;
-      document.body.appendChild(overlay);
+      if (global.MetaOS) {
+        global.MetaOS.host.showLoading(message);
+      } else {
+        console.log(\`[Loading] \${message}\`);
+      }
     },
     hideLoading: () => {
-      const overlay = document.getElementById('__itera-loading-overlay');
-      if (overlay) overlay.remove();
+      if (global.MetaOS) {
+        global.MetaOS.host.hideLoading();
+      }
     },
     getThemeColor: (tokenName) => {
       const root = document.documentElement;
@@ -6338,7 +5925,7 @@ Attributes:
     "id": "git_daemon",
     "name": "Git Client",
     "icon": "🐙",
-    "path": "services/git.html",
+    "path": "system/services/git.html",
     "description": "Background service providing Git operations.",
     "autoStart": false
   },
@@ -6346,11 +5933,443 @@ Attributes:
     "id": "local_sync_daemon",
     "name": "Local Sync Daemon",
     "icon": "🔄",
-    "path": "services/local_sync.html",
+    "path": "system/services/local_sync.html",
     "description": "Bi-directional sync with local python server.",
     "autoStart": false
   }
 ], null, 2),
+
+  "system/services/git.html": `
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Git Daemon</title>
+  </head>
+  <body>
+    <script type="module">
+      import git from 'https://esm.sh/isomorphic-git@1.24.5';
+      import http from 'https://esm.sh/isomorphic-git@1.24.5/http/web';
+
+      // ==========================================
+      // 1. FS Adapter for isomorphic-git
+      // ==========================================
+      const IgitFs = {
+        promises: {
+          async readFile(filepath, opts) {
+            const encoding = (opts && typeof opts === 'object' ? opts.encoding : opts) || 'binary';
+            const isText = encoding === 'utf8' || encoding === 'utf-8';
+            try {
+              const data = await MetaOS.fs.read(filepath, { encoding: isText ? undefined : 'binary' });
+              return isText ? data : new Uint8Array(data);
+            } catch (e) {
+              const err = new Error(e.message);
+              err.code = 'ENOENT';
+              throw err;
+            }
+          },
+          async writeFile(filepath, data, opts) {
+            try {
+              await MetaOS.fs.write(filepath, data, { overwrite: true, silent: true });
+            } catch (e) {
+              const err = new Error(e.message);
+              err.code = 'ENOENT';
+              throw err;
+            }
+          },
+          async unlink(filepath) {
+            try {
+              await MetaOS.fs.delete(filepath, { permanent: true });
+            } catch (e) {
+              const err = new Error(e.message);
+              err.code = 'ENOENT';
+              throw err;
+            }
+          },
+          async readdir(filepath) {
+            try {
+              const st = await MetaOS.fs.stat(filepath);
+              if (st.kind === 'file') {
+                const err = new Error('ENOTDIR: not a directory');
+                err.code = 'ENOTDIR';
+                throw err;
+              }
+              const stats = await MetaOS.fs.list(filepath, { detail: true });
+              return stats.map((s) => s.name);
+            } catch (e) {
+              const err = new Error(e.message);
+              err.code = e.code === 'ENOTDIR' ? 'ENOTDIR' : 'ENOENT';
+              throw err;
+            }
+          },
+          async mkdir(filepath) {
+            try {
+              await MetaOS.fs.mkdir(filepath);
+            } catch (e) {} // 既存なら無視
+          },
+          async rmdir(filepath) {
+            try {
+              await MetaOS.fs.delete(filepath, { permanent: true });
+            } catch (e) {
+              const err = new Error(e.message);
+              err.code = 'ENOENT';
+              throw err;
+            }
+          },
+          async stat(filepath) {
+            try {
+              const st = await MetaOS.fs.stat(filepath);
+              const isDir = st.kind === 'directory';
+              return {
+                type: isDir ? 'dir' : 'file',
+                mode: isDir ? 0o040000 : 0o100644,
+                size: st.size || 0,
+                ino: 0,
+                mtimeMs: st.updatedAt,
+                ctimeMs: st.createdAt,
+                isDirectory: () => isDir,
+                isFile: () => !isDir,
+                isSymbolicLink: () => false,
+              };
+            } catch (e) {
+              const err = new Error(e.message);
+              err.code = 'ENOENT';
+              throw err;
+            }
+          },
+          async lstat(filepath) {
+            return this.stat(filepath);
+          },
+          async readlink() {
+            throw new Error('Symlinks not supported');
+          },
+          async symlink() {
+            throw new Error('Symlinks not supported');
+          },
+        },
+      };
+
+      // ==========================================
+      // 2. Git Command Handler
+      // ==========================================
+      async function initDaemon() {
+        if (!window.MetaOS) return setTimeout(initDaemon, 100);
+
+        // ★ 同時実行を防ぐための非同期キュー
+        let gitQueue = Promise.resolve();
+
+        const definition = \`<define_tag name="git">
+Executes a Git command.
+Attributes:
+- command (required): init | clone | status | add | commit | push | pull | log | checkout | branch
+- dir (required): Target directory path in VFS (e.g., 'projects/my_app').
+- url: Repository URL (for clone/pull/push).
+- filepath: File to add or checkout. Use '.' for all files.
+- message: Commit message.
+- author_name: Name for commit.
+- author_email: Email for commit.
+- token: Personal Access Token (PAT) for remote auth.
+- ref: Branch name.
+- depth: Clone depth (default 1 to save memory).
+- corsProxy: CORS proxy URL (default: 'https://cors.isomorphic-git.org').
+</define_tag>\`;
+
+        await MetaOS.tools.register({
+          name: 'git',
+          description: 'Git version control operations',
+          definition,
+          handler: (p) => {
+            // ★ キューの最後尾に自身の処理を連結する (必ず順番に実行される)
+            return new Promise((resolve) => {
+              gitQueue = gitQueue
+                .then(async () => {
+                  const dir = p.dir || '';
+                  const corsProxy = p.corsProxy || 'https://cors.isomorphic-git.org';
+                  const onAuth = () => ({ username: p.token });
+
+                  let log = '';
+
+                  try {
+                    switch (p.command) {
+                      case 'init':
+                        await git.init({ fs: IgitFs, dir });
+                        log = \`Initialized empty Git repository in \${dir}\`;
+                        break;
+
+                      case 'clone':
+                        await git.clone({
+                          fs: IgitFs,
+                          http,
+                          dir,
+                          url: p.url,
+                          corsProxy,
+                          depth: p.depth ? parseInt(p.depth) : 1, // Default Shallow Clone
+                          singleBranch: true,
+                          onAuth: p.token ? onAuth : undefined,
+                        });
+                        log = \`Cloned \${p.url} into \${dir}\`;
+                        break;
+
+                      case 'status':
+                        const matrix = await git.statusMatrix({ fs: IgitFs, dir });
+                        const changes = matrix.filter((row) => row[1] !== row[2] || row[2] !== row[3]);
+                        if (changes.length === 0) {
+                          log = 'Nothing to commit, working tree clean';
+                        } else {
+                          log =
+                            'Changes:\\n' +
+                            changes
+                              .map((row) => {
+                                let status = 'modified';
+                                if (row[1] === 0) status = 'added';
+                                if (row[2] === 0) status = 'deleted';
+                                return \`- \${status}: \${row[0]}\`;
+                              })
+                              .join('\\n');
+                        }
+                        break;
+
+                      case 'add':
+                        if (p.filepath === '.') {
+                          const m = await git.statusMatrix({ fs: IgitFs, dir });
+                          for (const row of m) {
+                            if (row[2] === 0) await git.remove({ fs: IgitFs, dir, filepath: row[0] });
+                            else if (row[1] !== row[2] || row[2] !== row[3])
+                              await git.add({ fs: IgitFs, dir, filepath: row[0] });
+                          }
+                          log = \`Added all changes in \${dir}\`;
+                        } else {
+                          await git.add({ fs: IgitFs, dir, filepath: p.filepath });
+                          log = \`Added \${p.filepath}\`;
+                        }
+                        break;
+
+                      case 'commit':
+                        const sha = await git.commit({
+                          fs: IgitFs,
+                          dir,
+                          message: p.message || 'Update',
+                          author: { name: p.author_name || 'Itera AI', email: p.author_email || 'ai@itera.os' },
+                        });
+                        log = \`Committed \${sha.substring(0, 7)}: \${p.message}\`;
+                        break;
+
+                      case 'push':
+                        const pushRes = await git.push({
+                          fs: IgitFs,
+                          http,
+                          dir,
+                          corsProxy,
+                          onAuth: p.token ? onAuth : undefined,
+                        });
+                        log = pushRes.ok ? 'Pushed successfully' : \`Push failed: \${pushRes.error}\`;
+                        break;
+
+                      case 'pull':
+                        await git.pull({
+                          fs: IgitFs,
+                          http,
+                          dir,
+                          corsProxy,
+                          author: { name: p.author_name || 'Itera AI', email: p.author_email || 'ai@itera.os' },
+                          onAuth: p.token ? onAuth : undefined,
+                        });
+                        log = \`Pulled successfully\`;
+                        break;
+
+                      case 'log':
+                        const commits = await git.log({ fs: IgitFs, dir, depth: p.depth ? parseInt(p.depth) : 5 });
+                        log = commits
+                          .map((c) => \`* \${c.oid.substring(0, 7)} - \${c.commit.author.name}: \${c.commit.message}\`)
+                          .join('\\n');
+                        break;
+
+                      case 'branch':
+                        await git.branch({ fs: IgitFs, dir, ref: p.ref });
+                        log = \`Created branch \${p.ref}\`;
+                        break;
+
+                      case 'checkout':
+                        await git.checkout({ fs: IgitFs, dir, ref: p.ref });
+                        log = \`Checked out \${p.ref}\`;
+                        break;
+
+                      default:
+                        throw new Error(\`Unknown git command: \${p.command}\`);
+                    }
+                    resolve({ log, ui: \`🐙 Git \${p.command} executed\` });
+                  } catch (err) {
+                    resolve({ error: true, log: \`Git Error: \${err.message}\`, ui: \`❌ Git Error\` });
+                  }
+                })
+                .catch((e) => {
+                  // キュー自体がコケて停止しないように保護
+                  resolve({ error: true, log: \`Queue Error: \${e.message}\`, ui: \`❌ Git Error\` });
+                });
+            });
+          },
+        });
+
+        MetaOS.ai.log(
+          definition + '\\n\\n[System] Git client tool is now available in the background.',
+          'tool_available',
+        );
+      }
+
+      initDaemon();
+    </script>
+  </body>
+</html>
+`.trim(),
+
+  "system/services/local_sync.html": `
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Local Sync Daemon</title>
+  </head>
+  <body>
+    <script>
+      async function initSyncDaemon() {
+        if (!window.MetaOS) return setTimeout(initSyncDaemon, 100);
+
+        let config = { mountPath: 'data/local_sync', serverUrl: 'http://127.0.0.1:8000' };
+        try {
+          const confData = await MetaOS.fs.read('system/config/local_sync.json');
+          config = { ...config, ...JSON.parse(confData) };
+        } catch (e) {}
+
+        const { mountPath, serverUrl } = config;
+        let ws = null;
+
+        // 指定されたディレクトリが存在しなければ作成する
+        if (!(await MetaOS.fs.exists(mountPath))) {
+          try {
+            await MetaOS.fs.mkdir(mountPath);
+          } catch (err) {
+            // 親ディレクトリがない場合などのエラーハンドリング
+          }
+        }
+
+        // 1. Sync Providerの登録（マウント、オンデマンドフェッチ、ローカル変更の監視を統合）
+        try {
+          await MetaOS.fs.registerSyncProvider(mountPath, {
+            onFetchContent: async (reqPath) => {
+              const relPath = reqPath.substring(mountPath.length + 1);
+              try {
+                const res = await fetch(\`\${serverUrl}/api/file/\${relPath}\`);
+                if (!res.ok) return false;
+                const arrayBuffer = await res.arrayBuffer();
+
+                // 実体を VFS に書き込む (OSレベルでエコーキャンセルされるため source フラグは不要)
+                await MetaOS.fs.write(reqPath, new Uint8Array(arrayBuffer), {
+                  overwrite: true,
+                  silent: true,
+                });
+                return true;
+              } catch (e) {
+                console.error('[SyncDaemon] Fetch failed:', e);
+                return false;
+              }
+            },
+            onMutate: async (mutations) => {
+              // OSから渡されるローカルの変更（自身が起こした変更は除外済み）
+              for (const m of mutations) {
+                const getRelPath = (p) => p.substring(mountPath.length + 1);
+
+                if (m.type === 'ATTACH' || m.type === 'MUTATE') {
+                  // ディレクトリの場合はスキップ
+                  if (m.node && m.node.kind === 'directory') continue;
+
+                  try {
+                    const relPath = getRelPath(m.path);
+                    const u8 = await MetaOS.fs.read(m.path, { encoding: 'binary' });
+                    await fetch(\`\${serverUrl}/api/file/\${relPath}\`, { method: 'PUT', body: u8 });
+                  } catch (e) {
+                    console.error('[SyncDaemon] Upload failed:', e);
+                  }
+                } else if (m.type === 'DETACH') {
+                  try {
+                    const relPath = getRelPath(m.path);
+                    await fetch(\`\${serverUrl}/api/file/\${relPath}\`, { method: 'DELETE' });
+                  } catch (e) {
+                    console.error('[SyncDaemon] Delete failed:', e);
+                  }
+                }
+              }
+            },
+          });
+          MetaOS.ai.log(\`Local Sync Daemon successfully mounted at /\${mountPath}\`, 'system');
+        } catch (e) {
+          console.error('[SyncDaemon] Provider registration failed:', e);
+          return;
+        }
+
+        // 2. 初期同期 (サーバーのメタデータを取得して VFS にスタブを作成)
+        try {
+          const res = await fetch(\`\${serverUrl}/api/meta\`);
+          const remoteMeta = await res.json();
+          const localState = await MetaOS.fs.getSyncState(mountPath);
+
+          for (const [relPath, meta] of Object.entries(remoteMeta)) {
+            const fullPath = \`\${mountPath}/\${relPath}\`;
+            const local = localState[fullPath];
+
+            if (!local || local.hash !== meta.hash) {
+              await MetaOS.fs.createStub(fullPath, {
+                size: meta.size,
+                updatedAt: meta.updatedAt,
+                hash: meta.hash,
+              });
+            }
+          }
+        } catch (e) {
+          console.error('[SyncDaemon] Initial sync failed:', e);
+        }
+
+        // 3. リアルタイム監視 (WebSocket: サーバー -> Itera OS)
+        const connectWs = () => {
+          const wsUrl = serverUrl.replace(/^http/, 'ws') + '/ws';
+          ws = new WebSocket(wsUrl);
+
+          ws.onmessage = async (e) => {
+            const data = JSON.parse(e.data);
+            const fullPath = \`\${mountPath}/\${data.path}\`;
+
+            if (data.type === 'create' || data.type === 'update') {
+              try {
+                // 外部エコーの防止: サーバーから通知されたファイルとローカルのファイルのハッシュを比較
+                // 自分がアップロードした結果の通知であれば、ハッシュが一致するため実体をスタブで破壊しない
+                const stat = await MetaOS.fs.stat(fullPath);
+                if (stat && stat.hash === data.meta.hash) {
+                  return; // すでに最新の状態（実体あり）なのでスキップ
+                }
+              } catch (err) {
+                // localにファイルが存在しない（エラーになる）場合はスタブを作ってよい
+              }
+
+              await MetaOS.fs.createStub(fullPath, {
+                size: data.meta.size,
+                updatedAt: data.meta.updatedAt,
+                hash: data.meta.hash,
+              });
+            } else if (data.type === 'delete') {
+              try {
+                await MetaOS.fs.delete(fullPath, { permanent: true });
+              } catch (err) {}
+            }
+          };
+          ws.onclose = () => setTimeout(connectWs, 5000);
+        };
+        connectWs();
+      }
+
+      initSyncDaemon();
+    </script>
+  </body>
+</html>
+`.trim(),
 
   "system/themes/dark.json": JSON.stringify({
   "meta": {
@@ -6473,4 +6492,4 @@ Attributes:
 }, null, 2)
 };
 
-export const BUILD_TIME = 1784268208213;
+export const BUILD_TIME = 1784346882051;

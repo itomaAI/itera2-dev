@@ -106,12 +106,14 @@
     },
     alert: async (message, title = 'System Alert') => {
       if (global.MetaOS) {
-        return await global.MetaOS.host.showMessageBox({
-          title,
-          message,
-          type: 'warning',
-          buttons: [{ label: 'OK', value: undefined, style: 'primary', isDefault: true }],
-        }).then(() => undefined);
+        return await global.MetaOS.host
+          .showMessageBox({
+            title,
+            message,
+            type: 'warning',
+            buttons: [{ label: 'OK', value: undefined, style: 'primary', isDefault: true }],
+          })
+          .then(() => undefined);
       } else {
         window.alert(`${title}\n\n${message}`);
         return undefined;
@@ -119,36 +121,40 @@
     },
     confirm: async (message, title = 'Confirmation') => {
       if (global.MetaOS) {
-        return await global.MetaOS.host.showMessageBox({
-          title,
-          message,
-          type: 'question',
-          buttons: [
-            { label: 'Cancel', value: false, style: 'normal', isCancel: true },
-            { label: 'OK', value: true, style: 'primary', isDefault: true },
-          ],
-        }).then(res => res ? res.action : false);
+        return await global.MetaOS.host
+          .showMessageBox({
+            title,
+            message,
+            type: 'question',
+            buttons: [
+              { label: 'Cancel', value: false, style: 'normal', isCancel: true },
+              { label: 'OK', value: true, style: 'primary', isDefault: true },
+            ],
+          })
+          .then((res) => (res ? res.action : false));
       } else {
         return window.confirm(`${title}\n\n${message}`);
       }
     },
     prompt: async (message, defaultValue = '', title = 'Input Required') => {
       if (global.MetaOS) {
-        return await global.MetaOS.host.showMessageBox({
-          title,
-          message,
-          type: 'question',
-          prompt: { defaultValue },
-          buttons: [
-            { label: 'Cancel', value: null, style: 'normal', isCancel: true },
-            { label: 'OK', value: 'ok', style: 'primary', isDefault: true },
-          ],
-        }).then(res => {
-          if (res && res.action === 'ok') {
-            return res.value !== undefined ? res.value : null;
-          }
-          return null;
-        });
+        return await global.MetaOS.host
+          .showMessageBox({
+            title,
+            message,
+            type: 'question',
+            prompt: { defaultValue },
+            buttons: [
+              { label: 'Cancel', value: null, style: 'normal', isCancel: true },
+              { label: 'OK', value: 'ok', style: 'primary', isDefault: true },
+            ],
+          })
+          .then((res) => {
+            if (res && res.action === 'ok') {
+              return res.value !== undefined ? res.value : null;
+            }
+            return null;
+          });
       } else {
         return window.prompt(`${title}\n\n${message}`, defaultValue);
       }
@@ -169,7 +175,12 @@
           buttons.push({ label: 'Keep Both', value: 'keep_both', style: 'normal' });
         }
 
-        buttons.push({ label: actionName, value: isDirectory ? 'merge' : 'replace', style: 'primary', isDefault: true });
+        buttons.push({
+          label: actionName,
+          value: isDirectory ? 'merge' : 'replace',
+          style: 'primary',
+          isDefault: true,
+        });
 
         const res = await global.MetaOS.host.showMessageBox({
           title: 'Item Already Exists',

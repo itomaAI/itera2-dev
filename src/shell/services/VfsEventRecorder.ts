@@ -34,7 +34,7 @@ export class VfsEventRecorder {
         path: m.path,
         source: `${m.sourcePrincipal.type}:${m.sourcePrincipal.id}`,
         // MUTATE時の変更されたプロパティもログに残しておく
-        ...(m.changedProperties ? { changed: m.changedProperties } : {})
+        ...(m.changedProperties ? { changed: m.changedProperties } : {}),
       });
     }
   }

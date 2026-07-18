@@ -311,12 +311,20 @@ export class DialogService {
         handleKeydown: (e: KeyboardEvent) => {
           if (e.key === 'Enter') {
             if (inputEl && document.activeElement !== inputEl) return;
-            if (defaultBtnEl) { e.preventDefault(); defaultBtnEl.click(); }
+            if (defaultBtnEl) {
+              e.preventDefault();
+              defaultBtnEl.click();
+            }
           } else if (e.key === 'Escape') {
-            if (cancelBtnEl) { e.preventDefault(); cancelBtnEl.click(); }
-            else if (defaultBtnEl && options.type === 'warning') { e.preventDefault(); defaultBtnEl.click(); }
+            if (cancelBtnEl) {
+              e.preventDefault();
+              cancelBtnEl.click();
+            } else if (defaultBtnEl && options.type === 'warning') {
+              e.preventDefault();
+              defaultBtnEl.click();
+            }
           }
-        }
+        },
       };
       this.activeDialogs.push(dialogContext);
 
@@ -360,7 +368,7 @@ export class DialogService {
 
       if (!cancelBtnEl && options.buttons.length > 0) {
         cancelBtnEl = Array.from(footer.querySelectorAll('button')).find(
-          b => b.textContent?.toLowerCase() === 'cancel'
+          (b) => b.textContent?.toLowerCase() === 'cancel',
         ) as HTMLButtonElement | null;
       }
 

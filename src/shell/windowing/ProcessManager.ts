@@ -108,7 +108,7 @@ export class ProcessManager {
         }
 
         if (this.events['process_resumed']) {
-          this.events['process_resumed'].forEach(cb => cb(existingProc));
+          this.events['process_resumed'].forEach((cb) => cb(existingProc));
         }
 
         // 再描画等のためにイベントを飛ばす
@@ -168,7 +168,7 @@ export class ProcessManager {
       });
 
       if (this.events['process_spawned']) {
-        this.events['process_spawned'].forEach(cb => cb(this.processes.get(pid)));
+        this.events['process_spawned'].forEach((cb) => cb(this.processes.get(pid)));
       }
 
       if (type === 'app') this._enforceLRU();
@@ -248,7 +248,7 @@ export class ProcessManager {
     this.processes.delete(pid);
 
     if (this.events['process_killed']) {
-      this.events['process_killed'].forEach(cb => cb(pid, proc));
+      this.events['process_killed'].forEach((cb) => cb(pid, proc));
     }
 
     if (proc.state === 'foreground') {
@@ -276,7 +276,7 @@ export class ProcessManager {
     const proc = this.processes.get(pid);
     if (!proc) return;
     if (this.events['process_error']) {
-      this.events['process_error'].forEach(cb => cb(proc, errorData));
+      this.events['process_error'].forEach((cb) => cb(proc, errorData));
     }
   }
 
