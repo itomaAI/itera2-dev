@@ -40,7 +40,7 @@ export interface IShell {
   _closeMobileDrawers(): void;
   getMergedProviders?(): Promise<any[]>;
   panels: { chat: any };
-  modals: { editor: any; camera: any; audio: any };
+  modals: { editor: any; camera: any; audio: any; filePicker?: any };
 }
 export interface IToolRegistry {
   registerDynamicTool(name: string, sourcePid: string, definition: any): void;
@@ -382,6 +382,11 @@ export class HostApiRouter {
       window.open(url, '_blank', 'noopener,noreferrer');
       return true;
     });
+    t.registerHandler('host:show_open_dialog', async ({ options }) => {
+      if (!d.shell || !d.shell.modals.filePicker) return null;
+      return await d.shell.modals.filePicker.open(options);
+    });
+
     t.registerHandler('host:address_bar', async ({ path }) => {
       if (!d.processManager) return false;
       const fgApp = Array.from(d.processManager.processes.values()).find((p) => p.state === 'foreground');

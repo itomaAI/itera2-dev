@@ -249,6 +249,7 @@ export class GuestBridgeBuilder {
             getProviders: async () => transport.requestHost('sys:get_providers', {})
         },
         host: {
+            showOpenDialog: async (options = {}) => transport.requestHost('host:show_open_dialog', { options }),
             openEditor: async (path) => transport.requestHost('host:open_editor', { path }),
             notify: async (message, type, duration) => transport.requestHost('host:notify', { message, type, duration }),
             copyText: async (text) => transport.requestHost('host:copy', { text }),

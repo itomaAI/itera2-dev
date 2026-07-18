@@ -594,9 +594,15 @@ export class TreeView {
       },
     });
     actions.push({
-      label: 'Rename (Move)',
+      label: 'Rename',
       action: () => {
         if (this.events['rename_request']) this.events['rename_request'](path);
+      },
+    });
+    actions.push({
+      label: 'Move',
+      action: () => {
+        if (this.events['move_request']) this.events['move_request'](path);
       },
     });
     actions.push({

@@ -390,7 +390,8 @@ All methods (except \`on/off\`) are **Asynchronous** and return a \`Promise\`.
 - \`getArgs()\`: Returns the args object provided when the app was spawned (e.g., to get the target file path).
 
 **Host UI (MetaOS.host)**:
-- \`openEditor(path)\`, \`notify(message, title)\`, \`copyText(text)\`, \`openExternal(url)\`, \`updateAddressBar(path)\`
+- \`showOpenDialog(opts)\`: Opens the OS native file picker modal. \`opts\` can include \`{ title, filters: ['.md', '.txt'] }\`. Returns the selected VFS path or null.
+- \`openEditor(path)\`, \`notify(message, title)\`, \`copyText(text)\`, \`openExternal(url)\`, \`updateAddressBar(path)\`, \`showMessageBox(options)\`, \`showLoading(message)\`, \`hideLoading()\`
 
 **Network & Auth (MetaOS.net)**:
 - \`fetch(url, opts)\`: HTTP requests. \`opts.useProxy=true\` bypasses CORS. \`opts.credentialId\` injects API keys safely. You can specify \`opts.responseType = 'arraybuffer'\` to get binary data as a \`Uint8Array\` in \`response.data\`.

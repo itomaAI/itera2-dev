@@ -30,6 +30,7 @@ import { AudioModal } from '../modals/AudioModal';
 import { ProcessMonitorModal } from '../modals/ProcessMonitorModal';
 import { PropertiesModal } from '../modals/PropertiesModal';
 import { CommandPaletteModal } from '../modals/CommandPaletteModal';
+import { FilePickerModal } from '../modals/FilePickerModal';
 // Services
 import { LpmlRenderer } from '../services/LpmlRenderer';
 
@@ -48,6 +49,7 @@ export class DesktopEnvironment {
   private _taskSwitcherModal: TaskSwitcherModal;
   private _processMonitorModal: ProcessMonitorModal;
   private _propertiesModal: PropertiesModal;
+  private _filePickerModal: FilePickerModal;
 
   private saveFeedbackTimer: ReturnType<typeof setTimeout> | null = null;
   private activePrincipal: Principal = USER_PRINCIPAL;
@@ -84,6 +86,7 @@ export class DesktopEnvironment {
     this._taskSwitcherModal = new TaskSwitcherModal(processManager, appRegistry);
     this._processMonitorModal = new ProcessMonitorModal(processManager, appRegistry);
     this._propertiesModal = new PropertiesModal(vfs);
+    this._filePickerModal = new FilePickerModal(vfs, () => this.getActivePrincipal());
     this.commandPalette = new CommandPaletteModal(vfs, appRegistry, uriRouter, () => this.getActivePrincipal());
 
     this._bindMobileNavigation();
@@ -115,6 +118,7 @@ export class DesktopEnvironment {
       taskSwitcher: this._taskSwitcherModal,
       processMonitor: this._processMonitorModal,
       properties: this._propertiesModal,
+      filePicker: this._filePickerModal,
     };
   }
 

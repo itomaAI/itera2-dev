@@ -158,6 +158,10 @@ export class Explorer {
       this._promptRename(path);
     });
 
+    this.treeView.on('move_request', (path: string) => {
+      this._promptMove(path);
+    });
+
     this.treeView.on('move', async (srcPath: string, destPath: string) => {
       try {
         await this._handleTransfer(srcPath, destPath, 'move');
@@ -583,11 +587,14 @@ export class Explorer {
   }
 
   public async _promptRename(path: string) {
+    const fileName = path.split('/').pop()!;
+    const parentPath = path.substring(0, path.lastIndexOf('/'));
+
     const res = await window.AppUI?.showMessageBox({
-      title: 'Rename or Move',
-      message: `Edit path to rename or move the item:`,
+      title: 'Rename',
+      message: `Enter new name for the item:`,
       type: 'question',
-      prompt: { defaultValue: path },
+      prompt: { defaultValue: fileName },
       buttons: [
         { label: 'Cancel', value: null, style: 'normal', isCancel: true },
         { label: 'Rename', value: 'rename', style: 'primary', isDefault: true },
@@ -595,12 +602,38 @@ export class Explorer {
     });
 
     if (!res || res.action === 'cancel' || res.action === null) return;
-    const newPath = res.value;
-    if (!newPath || newPath === path) return;
-    
+    const newName = res.value;
+    if (!newName || newName === fileName) return;
+
+    const newPath = parentPath ? `${parentPath}/${newName}` : newName;
+
     try {
       await this.vfs.rename(this.getActivePrincipal(), path, newPath);
       this._emitHistory('file_moved', `User renamed: ${path} -> ${newPath}`);
+    } catch (e: any) {
+      if (window.AppUI) window.AppUI.notify(e.message, 'error');
+    }
+  }
+
+  public async _promptMove(path: string) {
+    const res = await window.AppUI?.showMessageBox({
+      title: 'Move',
+      message: `Edit path to move the item:`,
+      type: 'question',
+      prompt: { defaultValue: path },
+      buttons: [
+        { label: 'Cancel', value: null, style: 'normal', isCancel: true },
+        { label: 'Move', value: 'move', style: 'primary', isDefault: true },
+      ],
+    });
+
+    if (!res || res.action === 'cancel' || res.action === null) return;
+    const newPath = res.value;
+    if (!newPath || newPath === path) return;
+
+    try {
+      await this.vfs.rename(this.getActivePrincipal(), path, newPath);
+      this._emitHistory('file_moved', `User moved: ${path} -> ${newPath}`);
     } catch (e: any) {
       if (window.AppUI) window.AppUI.notify(e.message, 'error');
     }
