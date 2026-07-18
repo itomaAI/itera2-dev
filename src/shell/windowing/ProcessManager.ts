@@ -25,7 +25,7 @@ export class ProcessManager {
   private compiler: GuestCompiler;
   public processes: Map<string, Process> = new Map();
   private MAX_APPS = 5;
-  private events: Record<string, Function> = {};
+  private events: Record<string, Function[]> = {};
   private els: Record<string, HTMLElement | null> = {};
 
   constructor(vfs: VfsService) {
@@ -36,7 +36,8 @@ export class ProcessManager {
   }
 
   on(event: string, callback: Function): void {
-    this.events[event] = callback;
+    if (!this.events[event]) this.events[event] = [];
+    this.events[event].push(callback);
   }
 
   private _initElements(): void {
@@ -106,6 +107,10 @@ export class ProcessManager {
           this._updateAddressBar(existingProc.currentUri);
         }
 
+        if (this.events['process_resumed']) {
+          this.events['process_resumed'].forEach(cb => cb(existingProc));
+        }
+
         // 再描画等のためにイベントを飛ばす
         if (existingProc.iframe.contentWindow) {
           const evtMsg = {
@@ -161,6 +166,10 @@ export class ProcessManager {
         args,
         currentUri: uri,
       });
+
+      if (this.events['process_spawned']) {
+        this.events['process_spawned'].forEach(cb => cb(this.processes.get(pid)));
+      }
 
       if (type === 'app') this._enforceLRU();
 
@@ -239,7 +248,7 @@ export class ProcessManager {
     this.processes.delete(pid);
 
     if (this.events['process_killed']) {
-      this.events['process_killed'](pid);
+      this.events['process_killed'].forEach(cb => cb(pid, proc));
     }
 
     if (proc.state === 'foreground') {
@@ -260,6 +269,14 @@ export class ProcessManager {
   killAll(): void {
     for (const pid of this.processes.keys()) {
       this.kill(pid);
+    }
+  }
+
+  reportError(pid: string, errorData: any): void {
+    const proc = this.processes.get(pid);
+    if (!proc) return;
+    if (this.events['process_error']) {
+      this.events['process_error'].forEach(cb => cb(proc, errorData));
     }
   }
 

@@ -27,6 +27,7 @@ export interface IProcessManager {
   captureScreenshot(pid?: string): Promise<string>;
   resolveUrl(path: string, pid: string): Promise<string>;
   getArgs(pid: string): Record<string, string> | null;
+  reportError(pid: string, errorData: any): void;
   processes: Map<string, any>;
   _updateAddressBar(path: string): void;
 }
@@ -350,6 +351,13 @@ export class HostApiRouter {
     t.registerHandler('sys:get_providers', async () => {
       if (!d.shell || !d.shell.getMergedProviders) return [];
       return await d.shell.getMergedProviders();
+    });
+
+    t.registerHandler('sys:report_error', async (payload, sourcePid) => {
+      if (d.processManager) {
+        d.processManager.reportError(sourcePid, payload);
+      }
+      return true;
     });
 
     // ==========================================

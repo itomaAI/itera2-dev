@@ -125,6 +125,45 @@ export class GuestBridgeBuilder {
     const localToolHandlers = new Map();
     const mountHandlers = new Map();
 
+    const reportedErrors = new Set();
+    let errorCount = 0;
+    const MAX_ERRORS = 10;
+
+    window.addEventListener('error', (e) => {
+        if (errorCount >= MAX_ERRORS) return;
+        const errKey = e.message + ':' + e.lineno;
+        if (reportedErrors.has(errKey)) return;
+        reportedErrors.add(errKey);
+        errorCount++;
+        transport.requestHost('sys:report_error', {
+            message: e.message,
+            filename: e.filename,
+            line: e.lineno,
+            col: e.colno,
+            stack: e.error ? e.error.stack : null
+        }).catch(() => {});
+    });
+
+    window.addEventListener('unhandledrejection', (e) => {
+        if (errorCount >= MAX_ERRORS) return;
+        let msg = 'Unhandled Rejection';
+        let stack = null;
+        if (e.reason instanceof Error) {
+            msg = e.reason.message;
+            stack = e.reason.stack;
+        } else {
+            msg = String(e.reason);
+        }
+        const errKey = 'promise:' + msg;
+        if (reportedErrors.has(errKey)) return;
+        reportedErrors.add(errKey);
+        errorCount++;
+        transport.requestHost('sys:report_error', {
+            message: msg,
+            stack: stack
+        }).catch(() => {});
+    });
+
     transport.registerHandler('fs:resolve_missing', async (payload) => {
         let longestMatch = '';
         let matchedHandler = null;

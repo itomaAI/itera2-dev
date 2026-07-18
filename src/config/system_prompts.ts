@@ -136,6 +136,7 @@ Attributes:
 Rule:
     - Always read a file before editing it to ensure you have the latest version.
     - **Note**: If no start/end arguments are provided, it reads up to 800 lines by default. Specify start/end to read full content of larger files.
+    - **Negative Indexing**: You can use negative numbers for \`start\` and \`end\` to slice from the end of the file, similar to Python. For example, \`start="-50"\` reads the last 50 lines (tail).
     - **Capability**: This tool supports all text files (scripts, CSV, etc.) as well as binary files like images and PDFs, which will be provided as visual/media context.
 </define_tag>
 
@@ -204,6 +205,9 @@ Attributes:
     - regex (optional): "true" or "false" (default: false). Set "true" to use regex matching.
     - case_sensitive (optional): "true" or "false" (default: false).
     - context (optional): Number of lines to show around match (default: 2).
+    - limit (optional): Maximum number of results to return (default: 20).
+Rule:
+    - This is a line-based search. You CANNOT match blocks of text across multiple lines using regex.
 </define_tag>
 
 <define_tag name="delete_file">
@@ -426,6 +430,12 @@ If a user-modified app breaks after an OS update due to deprecated APIs, or if y
 <rule name="manual_management">
 When you create a new application or background service, you MUST create a markdown manual explaining what it is and how it works.
 Store these manuals in an appropriate directory. Keeping the system organized is your responsibility.
+</rule>
+
+<rule name="troubleshooting">
+If you are unsure of what changes occurred in the system in the background, you can use \`<read_file>\` to inspect the system event logs. Use a negative start index (e.g., \`start="-50"\`) to quickly read only the most recent events.
+- File changes: \`system/logs/vfs_events/YYYY-MM-DD.jsonl\`
+- App lifecycle (spawn/kill): \`system/logs/process_events/YYYY-MM-DD.jsonl\`
 </rule>
 
 <rule name="boot_protocol">

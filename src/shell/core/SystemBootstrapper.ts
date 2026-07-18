@@ -42,7 +42,8 @@ import { SessionManager } from '../services/SessionManager';
 import { ThemeService } from '../services/ThemeService';
 import { MaintenanceDaemon } from '../services/MaintenanceDaemon';
 import { DialogService } from '../services/DialogService';
-import { EventTranslator } from '../services/EventTranslator';
+import { VfsEventRecorder } from '../services/VfsEventRecorder';
+import { ProcessEventRecorder } from '../services/ProcessEventRecorder';
 import { ProviderManager } from '../../core/vfs/ProviderManager';
 
 export class SystemBootstrapper {
@@ -178,9 +179,13 @@ export class SystemBootstrapper {
       eventBus,
     );
 
-    // EventTranslator の初期化と起動
-    const eventTranslator = new EventTranslator(eventBus, history);
-    eventTranslator.start();
+    // VfsEventRecorder の初期化と起動
+    const vfsEventRecorder = new VfsEventRecorder(eventBus, logger);
+    vfsEventRecorder.start();
+
+    // ProcessEventRecorder の初期化と起動
+    const processEventRecorder = new ProcessEventRecorder(processManager, logger);
+    processEventRecorder.start();
 
     // ==========================================
     // 6. Final Bindings & Boot Execution

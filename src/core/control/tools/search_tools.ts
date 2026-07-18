@@ -32,6 +32,8 @@ export function registerSearchTools(registry: ToolRegistry): void {
         ? params.include.split(',').map((e: string) => e.trim().toLowerCase().replace(/^\*/, ''))
         : [];
       const contextLines = parseInt(params.context || '2', 10);
+      const parsedLimit = parseInt(params.limit, 10);
+      const limit = isNaN(parsedLimit) || parsedLimit <= 0 ? 20 : parsedLimit;
 
       const useRegex = params.regex && params.regex.toLowerCase() === 'true';
       const isCaseSensitive = params.case_sensitive && params.case_sensitive.toLowerCase() === 'true';
@@ -74,7 +76,7 @@ export function registerSearchTools(registry: ToolRegistry): void {
           results.push(`[Path Match] ${filePath}\n---`);
         }
 
-        if (results.length >= 20) {
+        if (results.length >= limit) {
           results.push('... (Search truncated: Too many matches)');
           break;
         }
@@ -125,7 +127,7 @@ export function registerSearchTools(registry: ToolRegistry): void {
           // 読み込みエラーはスキップ
         }
 
-        if (results.length >= 20) {
+        if (results.length >= limit) {
           results.push('... (Search truncated: Too many matches)');
           break;
         }

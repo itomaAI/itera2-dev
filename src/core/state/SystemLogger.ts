@@ -9,6 +9,8 @@ import { SYSTEM_PRINCIPAL, type VfsStat } from '../vfs/types';
 export class SystemLogger {
   private vfs: VfsService;
   private baseDir = 'system/logs';
+  private logBuffer: Map<string, any[]> = new Map();
+  private flushTimerId: ReturnType<typeof setTimeout> | null = null;
 
   constructor(vfs: VfsService) {
     this.vfs = vfs;
@@ -19,29 +21,53 @@ export class SystemLogger {
   }
 
   /**
-   * 汎用ロギングメソッド。VFSに対して安全に非同期で追記する。
+   * 汎用ロギングメソッド。メモリにバッファリングし、無音になってから一括で追記する。
    * @param category ログのカテゴリ (例: 'system', 'usage', 'error')
    * @param payload 記録したい任意のデータオブジェクト
    */
   async log(category: string, payload: any): Promise<void> {
     if (!category || !payload) return;
 
+    if (!this.logBuffer.has(category)) {
+      this.logBuffer.set(category, []);
+    }
+
+    const entry = {
+      timestamp: new Date().toISOString(),
+      ...payload,
+    };
+
+    this.logBuffer.get(category)!.push(entry);
+
+    if (this.flushTimerId !== null) {
+      clearTimeout(this.flushTimerId);
+    }
+
+    this.flushTimerId = setTimeout(() => {
+      this._flush();
+    }, 2000);
+  }
+
+  private async _flush(): Promise<void> {
+    const bufferToFlush = this.logBuffer;
+    this.logBuffer = new Map();
+    this.flushTimerId = null;
+
     const dateStr = this._getDateString();
-    const path = `${this.baseDir}/${category}/${dateStr}.jsonl`;
 
-    try {
-      const entry = {
-        timestamp: new Date().toISOString(),
-        ...payload,
-      };
-      const line = JSON.stringify(entry);
+    for (const [category, entries] of bufferToFlush.entries()) {
+      if (entries.length === 0) continue;
 
-      // VFS側のアトミックな appendFile を使用する
-      await this.vfs.appendFile(SYSTEM_PRINCIPAL, path, line, {
-        system: true,
-      });
-    } catch (e) {
-      console.error(`[SystemLogger] Failed to write log to ${path}:`, e);
+      const path = `${this.baseDir}/${category}/${dateStr}.jsonl`;
+      const chunk = entries.map((entry) => JSON.stringify(entry)).join('\n');
+
+      try {
+        await this.vfs.appendFile(SYSTEM_PRINCIPAL, path, chunk, {
+          system: true,
+        });
+      } catch (e) {
+        console.error(`[SystemLogger] Failed to write batched logs to ${path}:`, e);
+      }
     }
   }
 

@@ -67,30 +67,47 @@ export function registerFSTools(registry: ToolRegistry): void {
 
       const lines = content.split(/\r?\n/);
 
-      let s = parseInt(params.start, 10);
-      let e = parseInt(params.end, 10);
+      const s = parseInt(params.start, 10);
+      const e = parseInt(params.end, 10);
 
       const hasStart = !isNaN(s);
       const hasEnd = !isNaN(e);
 
-      if (!hasStart) s = 1;
-      if (!hasEnd) {
-        if (hasStart) {
-          e = lines.length;
+      let startIdx = 0;
+      let endIdx = lines.length;
+
+      if (hasStart) {
+        if (s < 0) {
+          startIdx = Math.max(0, lines.length + s);
+        } else if (s > 0) {
+          startIdx = Math.max(0, s - 1);
         } else {
-          e = Math.min(lines.length, 800);
+          startIdx = 0;
         }
       }
 
-      const startIdx = Math.max(0, s - 1);
-      const endIdx = Math.min(lines.length, e);
+      if (hasEnd) {
+        if (e < 0) {
+          endIdx = Math.max(0, Math.min(lines.length, lines.length + e + 1));
+        } else if (e > 0) {
+          endIdx = Math.min(lines.length, e);
+        } else {
+          endIdx = 0;
+        }
+      } else if (!hasStart) {
+        // デフォルト: 開始/終了の指定が両方ない場合は、コンテキスト溢れ防止のため先頭800行に制限
+        endIdx = Math.min(lines.length, 800);
+      }
 
       const sliced = lines.slice(startIdx, endIdx);
       const showNum = params.line_numbers === 'true';
 
-      const contentStr = showNum ? sliced.map((l, i) => `${s + i} | ${l}`).join('\n') : sliced.join('\n');
+      // startIdx を基準にすることで、負のインデックス指定時でも元のファイル内の正しい行番号を算出
+      const contentStr = showNum 
+        ? sliced.map((l, i) => `${startIdx + i + 1} | ${l}`).join('\n') 
+        : sliced.join('\n');
 
-      let logMsg = `Lines ${s}-${endIdx} of ${lines.length}:\n${contentStr}`;
+      let logMsg = `Lines ${startIdx + 1}-${endIdx} of ${lines.length}:\n${contentStr}`;
 
       if (endIdx < lines.length) {
         logMsg += `\n\n... (File truncated. ${lines.length - endIdx} more lines. Use start=${endIdx + 1} to read more)`;
