@@ -59,7 +59,6 @@ export class Explorer {
     this._bindTreeEvents();
     this._bindUploads();
     this._bindSidebarDnD();
-    this._initRootDropZone();
     this._initResizer();
   }
 
@@ -390,55 +389,6 @@ export class Explorer {
     }
 
     input.value = '';
-  }
-
-  private _initRootDropZone() {
-    if (!this.els.CONTAINER) return;
-
-    this.els.CONTAINER.addEventListener('dragover', (e) => {
-      if (e.dataTransfer && e.dataTransfer.types.includes('application/itera-file')) {
-        e.preventDefault();
-        e.stopPropagation();
-        e.dataTransfer.dropEffect = 'move';
-        this.els.CONTAINER!.classList.add('bg-card', 'ring-2', 'ring-primary', 'ring-inset');
-      }
-    });
-
-    this.els.CONTAINER.addEventListener('dragleave', (e) => {
-      if (e.dataTransfer && e.dataTransfer.types.includes('application/itera-file')) {
-        e.preventDefault();
-        e.stopPropagation();
-        if (!this.els.CONTAINER!.contains(e.relatedTarget as Node)) {
-          this.els.CONTAINER!.classList.remove('bg-card', 'ring-2', 'ring-primary', 'ring-inset');
-        }
-      }
-    });
-
-    this.els.CONTAINER.addEventListener('drop', async (e) => {
-      if (e.dataTransfer && e.dataTransfer.types.includes('application/itera-file')) {
-        e.preventDefault();
-        e.stopPropagation();
-        this.els.CONTAINER!.classList.remove('bg-card', 'ring-2', 'ring-primary', 'ring-inset');
-
-        const rawData = e.dataTransfer.getData('application/itera-file');
-        if (rawData) {
-          const data = JSON.parse(rawData);
-          const fileName = data.path.split('/').pop();
-          await this._handleTransfer(data.path, fileName, 'move');
-        }
-      }
-    });
-
-    document.addEventListener('dragend', (e) => {
-      if (
-        e.target &&
-        (e.target as HTMLElement).classList &&
-        (e.target as HTMLElement).classList.contains('tree-content')
-      ) {
-        (e.target as HTMLElement).style.opacity = '1';
-      }
-      this.els.CONTAINER!.classList.remove('bg-card', 'ring-2', 'ring-primary', 'ring-inset');
-    });
   }
 
   private _bindSidebarDnD(): void {
