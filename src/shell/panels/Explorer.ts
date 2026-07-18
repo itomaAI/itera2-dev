@@ -154,13 +154,8 @@ export class Explorer {
       }
     });
 
-    this.treeView.on('rename', async (oldPath: string, newPath: string) => {
-      try {
-        await this.vfs.rename(this.getActivePrincipal(), oldPath, newPath);
-        this._emitHistory('file_moved', `User renamed: ${oldPath} -> ${newPath}`);
-      } catch (e: any) {
-        if (window.AppUI) window.AppUI.notify(e.message, 'error');
-      }
+    this.treeView.on('rename_request', (path: string) => {
+      this._promptRename(path);
     });
 
     this.treeView.on('move', async (srcPath: string, destPath: string) => {
@@ -602,7 +597,13 @@ export class Explorer {
     if (!res || res.action === 'cancel' || res.action === null) return;
     const newPath = res.value;
     if (!newPath || newPath === path) return;
-    if (this.events['rename']) this.events['rename'](path, newPath);
+    
+    try {
+      await this.vfs.rename(this.getActivePrincipal(), path, newPath);
+      this._emitHistory('file_moved', `User renamed: ${path} -> ${newPath}`);
+    } catch (e: any) {
+      if (window.AppUI) window.AppUI.notify(e.message, 'error');
+    }
   }
 
   public async _confirmDelete(path: string, name: string) {
