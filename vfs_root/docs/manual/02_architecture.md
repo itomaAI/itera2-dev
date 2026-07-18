@@ -58,9 +58,8 @@ The **Guest** environment (where apps run) is isolated from the **Host** (where 
     *   `.unregisterSyncProvider(path)`: Removes the sync provider registration.
 
 *   **System & IPC (`MetaOS.system`)**:
-    *   `.spawn(path, opts)`: Navigates the main window or starts a daemon.
-    *   `.broadcast(event, payload)`: Emits an IPC event to all running apps.
-    *   `.getArgs()`: Gets arguments passed to the app when it was spawned.
+    *   `.spawn(path, opts)`: Starts a process. \`opts: { pid, type, show, forceReload, args }\`. (\`show=true\` brings the app to the foreground, set \`forceReload=true\` to ignore cache. The OS automatically resolves the correct PID if omitted.)
+    *   `.kill(pid)`: Terminates a process.
     
 *   **Host UI (`MetaOS.host`)**:
     *   `.openEditor(path)`: Opens the Host's code editor fallback.

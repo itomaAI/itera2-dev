@@ -330,7 +330,7 @@ if __name__ == "__main__":
         await App.Config.update('local_sync', { mountPath, serverUrl });
 
         if (start) {
-          await MetaOS.system.spawn('system/services/local_sync.html', { pid: PID, mode: 'background' });
+          await MetaOS.system.spawn('system/services/local_sync.html', { pid: PID, type: 'daemon' });
           AppUI.notify('Sync daemon started.', 'success');
         } else {
           await MetaOS.system.kill(PID);

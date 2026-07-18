@@ -45,7 +45,7 @@ export class ProcessEventRecorder {
       pid: proc.pid,
       type: proc.type,
       path: proc.path,
-      mode: proc.mode,
+      state: proc.state,
       ...(proc.args ? { args: proc.args } : {}),
       ...(errorData ? { error: errorData } : {}),
     };

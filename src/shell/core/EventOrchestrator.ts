@@ -118,7 +118,13 @@ export class EventOrchestrator {
 
         if (resolvedApp.appId === 'HostRunner') {
           const fullUri = `metaos://run/${targetPath}${searchAndHash}`;
-          await this.processManager.spawn('main', targetPath + searchAndHash, 'foreground', true, queryArgs, fullUri);
+          await this.processManager.spawn({
+            path: targetPath + searchAndHash,
+            show: true,
+            forceReload: true,
+            args: queryArgs,
+            currentUri: fullUri,
+          });
         } else if (resolvedApp.appId === 'HostEditor') {
           const content = await this.vfs.readFile(this.desktop.getActivePrincipal(), targetPath);
           this.desktop.modals.editor.open(targetPath, content);
@@ -131,7 +137,13 @@ export class EventOrchestrator {
           const args = { file: targetPath, ...queryArgs };
           const fullUri = `metaos://open/${targetPath}${searchAndHash}`;
           // V2仕様: args として起動パラメータを渡す
-          await this.processManager.spawn(resolvedApp.appId, resolvedApp.appPath!, 'foreground', false, args, fullUri);
+          await this.processManager.spawn({
+            pid: resolvedApp.appId,
+            path: resolvedApp.appPath!,
+            show: true,
+            args,
+            currentUri: fullUri,
+          });
         }
       } catch (e: any) {
         if (window.AppUI) window.AppUI.notify(`Cannot open: ${e.message}`, 'error');
@@ -145,7 +157,13 @@ export class EventOrchestrator {
       try {
         const args = { ...queryArgs };
         const fullUri = `metaos://run/${executablePath}${searchAndHash}`;
-        await this.processManager.spawn('main', executablePath, 'foreground', true, args, fullUri);
+        await this.processManager.spawn({
+          path: executablePath,
+          show: true,
+          forceReload: true,
+          args,
+          currentUri: fullUri,
+        });
       } catch (e: any) {
         if (window.AppUI) window.AppUI.notify(`Cannot run: ${e.message}`, 'error');
         this._restoreAddressBar();
@@ -234,14 +252,13 @@ export class EventOrchestrator {
         } else {
           // Guestアプリを明示指定で開く
           const currentUri = `metaos://open/${path}`;
-          await this.processManager.spawn(
-            resolvedApp.appId,
-            resolvedApp.appPath!,
-            'foreground',
-            false,
-            { file: path },
+          await this.processManager.spawn({
+            pid: resolvedApp.appId,
+            path: resolvedApp.appPath!,
+            show: true,
+            args: { file: path },
             currentUri,
-          );
+          });
         }
       }
     });

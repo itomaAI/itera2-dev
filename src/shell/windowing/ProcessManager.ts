@@ -4,13 +4,13 @@
  */
 
 import type { VfsService } from '../../core/vfs/VfsService';
+import type { AppRegistry } from '../../core/sys/AppRegistry';
 import { USER_PRINCIPAL } from '../../core/vfs/types';
 import { GuestCompiler } from './GuestCompiler';
 
 export interface Process {
   pid: string;
   path: string;
-  mode: string;
   type: 'app' | 'daemon';
   state: 'foreground' | 'background' | 'running';
   iframe: HTMLIFrameElement;
@@ -20,16 +20,28 @@ export interface Process {
   currentUri: string;
 }
 
+export interface SpawnOptions {
+  pid?: string;
+  path: string;
+  type?: 'app' | 'daemon';
+  show?: boolean;
+  forceReload?: boolean;
+  args?: Record<string, string>;
+  currentUri?: string;
+}
+
 export class ProcessManager {
   private vfs: VfsService;
   private compiler: GuestCompiler;
+  private appRegistry: AppRegistry;
   public processes: Map<string, Process> = new Map();
   private MAX_APPS = 5;
   private events: Record<string, Function[]> = {};
   private els: Record<string, HTMLElement | null> = {};
 
-  constructor(vfs: VfsService) {
+  constructor(vfs: VfsService, appRegistry: AppRegistry) {
     this.vfs = vfs;
+    this.appRegistry = appRegistry;
     this.compiler = new GuestCompiler();
     this._initElements();
     this._bindEvents();
@@ -56,53 +68,87 @@ export class ProcessManager {
       this.els.BTN_REFRESH.onclick = () => {
         let targetProc = Array.from(this.processes.values()).find((p) => p.state === 'foreground');
         if (targetProc) {
-          this.spawn(targetProc.pid, targetProc.path, 'foreground', true, targetProc.args, targetProc.currentUri);
+          this.spawn({
+            pid: targetProc.pid,
+            path: targetProc.path,
+            type: targetProc.type,
+            show: true,
+            forceReload: true,
+            args: targetProc.args,
+            currentUri: targetProc.currentUri,
+          });
         } else {
-          this.spawn('main', 'apps/home.html', 'foreground', true, undefined, 'metaos://run/apps/home.html');
+          this.spawn({ path: 'apps/home.html', show: true, forceReload: true });
         }
       };
     }
     if (this.els.BTN_HOME) {
       this.els.BTN_HOME.onclick = () => {
-        this.spawn('main', 'apps/home.html', 'foreground', false, undefined, 'metaos://run/apps/home.html');
+        this.spawn({ path: 'apps/home.html', show: true });
       };
     }
+  }
+
+  private _resolveProcessInfo(options: SpawnOptions) {
+    const basePath = options.path.split(/[?#]/)[0];
+    let pid = options.pid || '';
+    let type: 'app' | 'daemon' | undefined = options.type;
+
+    // レジストリ検索（指定がない場合）
+    if (!pid || !type) {
+      const apps = this.appRegistry.getAllApps();
+      const svcs = this.appRegistry.getAllServices();
+      const foundApp = apps.find((a) => a.path === basePath);
+      const foundSvc = svcs.find((s) => s.path === basePath);
+
+      if (foundApp) {
+        if (!pid) pid = foundApp.id;
+        if (!type) type = 'app';
+      } else if (foundSvc) {
+        if (!pid) pid = foundSvc.id;
+        if (!type) type = 'daemon';
+      } else if (basePath === 'apps/home.html') {
+        if (!pid) pid = 'home';
+        if (!type) type = 'app';
+      }
+    }
+
+    // 野良アプリのフォールバック
+    if (!pid) {
+      const safeName = basePath.replace(/[^a-zA-Z0-9_-]/g, '_');
+      pid = `app_${safeName}`;
+    }
+    if (!type) {
+      type = 'app';
+    }
+
+    // デーモンは強制的に非表示、アプリは未指定なら表示(true)
+    const show = type === 'daemon' ? false : options.show !== false;
+
+    return { pid, type, show };
   }
 
   /**
    * プロセスを起動、またはバックグラウンドにあるアプリをフォアグラウンドに引き出す
    */
-  async spawn(
-    pid: string,
-    path: string,
-    mode: string = 'background',
-    forceReload: boolean = false,
-    args?: Record<string, string>,
-    currentUri?: string,
-  ): Promise<void> {
-    // V1のハック継承: 'main' が指定された場合はパスベースのPIDに変換し、強制的にフォアグラウンドにする
-    if (pid === 'main') {
-      mode = 'foreground';
-      const basePath = path.split(/[?#]/)[0];
-      const safeName = basePath.replace(/[^a-zA-Z0-9_-]/g, '_');
-      pid = `app_${safeName}`;
-    }
+  async spawn(options: SpawnOptions): Promise<void> {
+    const { path, forceReload = false, args, currentUri } = options;
+    const { pid, type, show } = this._resolveProcessInfo(options);
 
-    const type = mode === 'foreground' || pid.startsWith('app_') ? 'app' : 'daemon';
-    const existingProc = this.processes.get(pid);
     const uri = currentUri || `metaos://run/${path}`;
+    const existingProc = this.processes.get(pid);
 
     if (existingProc && existingProc.iframe) {
-      const isExactPathMatch = existingProc.path === path;
+      // 厳密なパス一致ではなくベースパスの一致でResumeを判定する（引数だけの変化を許容）
+      const isExactBasePathMatch = existingProc.path.split(/[?#]/)[0] === path.split(/[?#]/)[0];
 
-      // 同じアプリがすでに生きていれば Resume
-      if (!forceReload && isExactPathMatch && existingProc.type === type) {
+      if (!forceReload && isExactBasePathMatch && existingProc.type === type) {
         console.log(`[ProcessManager] Resume [${pid}] -> ${path}`);
         existingProc.path = path;
         existingProc.args = args;
         existingProc.currentUri = uri;
 
-        if (mode === 'foreground') {
+        if (show) {
           this._focusApp(pid);
           this._updateAddressBar(existingProc.currentUri);
         }
@@ -111,7 +157,6 @@ export class ProcessManager {
           this.events['process_resumed'].forEach((cb) => cb(existingProc));
         }
 
-        // 再描画等のためにイベントを飛ばす
         if (existingProc.iframe.contentWindow) {
           const evtMsg = {
             protocol: 'itera:ipc:v2',
@@ -132,7 +177,7 @@ export class ProcessManager {
     // 新規起動または強制リロード
     this.kill(pid);
 
-    if (mode === 'foreground' && this.els.LOADER) {
+    if (show && this.els.LOADER) {
       this.els.LOADER.classList.remove('hidden');
     }
 
@@ -157,7 +202,6 @@ export class ProcessManager {
       this.processes.set(pid, {
         pid,
         path,
-        mode,
         type,
         state: type === 'app' ? 'background' : 'running',
         iframe,
@@ -179,19 +223,19 @@ export class ProcessManager {
         iframe.srcdoc = `<div style="color:#888; padding:20px; font-family:sans-serif;">No ${path} found.</div>`;
       }
 
-      if (mode === 'foreground') {
+      if (show) {
         this._focusApp(pid);
         this._updateAddressBar(uri);
       }
 
-      console.log(`[ProcessManager] Spawned [${pid}] (Type:${type}, Mode:${mode}) -> ${path}`);
+      console.log(`[ProcessManager] Spawned [${pid}] (Type:${type}, Show:${show}) -> ${path}`);
     } catch (e) {
       console.error(`[ProcessManager] Spawn error (${pid}):`, e);
       if (type === 'app' && window.AppUI) {
         window.AppUI.notify(`Failed to launch ${path}`, 'error');
       }
     } finally {
-      if (mode === 'foreground' && this.els.LOADER) {
+      if (show && this.els.LOADER) {
         setTimeout(() => {
           this.els.LOADER!.classList.add('hidden');
         }, 200);
@@ -258,7 +302,7 @@ export class ProcessManager {
         this._focusApp(apps[0].pid);
         this._updateAddressBar(apps[0].currentUri);
       } else {
-        this.spawn('main', 'apps/home.html', 'foreground', false, undefined, 'metaos://run/apps/home.html');
+        this.spawn({ path: 'apps/home.html', show: true });
       }
     }
 

@@ -49,7 +49,7 @@ export class MaintenanceDaemon {
       for (const svc of services) {
         // 新スキーマ: id が指定されており、autoStart が true のものだけを起動
         if (svc.id && svc.path && svc.autoStart) {
-          await this.processManager.spawn(svc.id, svc.path, 'background');
+          await this.processManager.spawn({ pid: svc.id, path: svc.path, type: 'daemon' });
         }
       }
     } catch (e) {

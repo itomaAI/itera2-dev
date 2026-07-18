@@ -91,11 +91,11 @@
 
   global.AppUI = {
     go: (path) => {
-      if (global.MetaOS) global.MetaOS.system.spawn(path, { pid: 'main' });
+      if (global.MetaOS) global.MetaOS.system.spawn(path, { show: true });
       else window.location.href = path;
     },
     home: () => {
-      if (global.MetaOS) global.MetaOS.system.spawn('apps/home.html', { pid: 'main' });
+      if (global.MetaOS) global.MetaOS.system.spawn('apps/home.html', { show: true });
     },
     notify: (message, type = 'info', duration) => {
       if (global.MetaOS) {

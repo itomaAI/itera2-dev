@@ -13,14 +13,7 @@ export interface IHistoryManager {
   append(role: string, content: any, meta?: any): any;
 }
 export interface IProcessManager {
-  spawn(
-    pid: string,
-    path: string,
-    mode?: string,
-    forceReload?: boolean,
-    args?: Record<string, string>,
-    currentUri?: string,
-  ): Promise<void>;
+  spawn(options: any): Promise<void>;
   kill(pid: string): boolean;
   list(): any[];
   broadcast(eventName: string, payload: any): void;
@@ -316,13 +309,16 @@ export class HostApiRouter {
     // ==========================================
     t.registerHandler('sys:spawn', async ({ path, opts }) => {
       if (!d.processManager) return false;
-      const pid = opts?.pid || 'main';
-      const mode = opts?.mode || 'background';
-      const force = opts?.forceReload || false;
-      const args = opts?.args; // V2 新機能: args渡し
-      const currentUri = `metaos://run/${path}`;
-      await d.processManager.spawn(pid, path, mode, force, args, currentUri);
-      if (mode === 'foreground' && d.shell) d.shell._closeMobileDrawers();
+
+      const spawnOptions: any = { path };
+      if (opts?.pid) spawnOptions.pid = opts.pid;
+      if (opts?.type) spawnOptions.type = opts.type;
+      if (opts?.show !== undefined) spawnOptions.show = opts.show;
+      if (opts?.forceReload !== undefined) spawnOptions.forceReload = opts.forceReload;
+      if (opts?.args) spawnOptions.args = opts.args;
+
+      await d.processManager.spawn(spawnOptions);
+      if (spawnOptions.show !== false && d.shell) d.shell._closeMobileDrawers();
       return true;
     });
 
@@ -331,7 +327,7 @@ export class HostApiRouter {
     t.registerHandler('sys:info', async (_, sourcePid) => {
       if (!d.processManager) return null;
       const p = d.processManager.processes.get(sourcePid);
-      return p ? { pid: p.pid, path: p.path, mode: p.mode } : null;
+      return p ? { pid: p.pid, path: p.path, type: p.type, state: p.state } : null;
     });
     t.registerHandler('sys:broadcast', async ({ eventName, payload }) => {
       if (d.processManager) d.processManager.broadcast(eventName, payload);

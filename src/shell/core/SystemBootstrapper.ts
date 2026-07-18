@@ -98,7 +98,7 @@ export class SystemBootstrapper {
     registerUITools(toolRegistry);
 
     const translator = new Translator();
-    const processManager = new ProcessManager(vfs);
+    const processManager = new ProcessManager(vfs, appRegistry);
     const uriRouter = new UriRouter('open');
 
     // ==========================================
@@ -230,8 +230,7 @@ export class SystemBootstrapper {
     await maintenanceDaemon.start();
 
     // ダッシュボードの起動
-    const fullUri = 'metaos://run/apps/home.html';
-    await processManager.spawn('main', 'apps/home.html', 'foreground', false, undefined, fullUri);
+    await processManager.spawn({ path: 'apps/home.html', show: true });
 
     logger.log('system', {
       action: 'boot',

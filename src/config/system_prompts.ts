@@ -235,14 +235,15 @@ Attributes:
 <define_tag name="spawn">
 Starts or restarts a process (application or daemon) directly.
 Attributes:
-    - pid: Process ID. Provide a unique ID for the app/daemon (e.g., "app_notes").
     - path: Path to the HTML executable in VFS.
-    - mode (optional): "foreground" or "background" (defaults based on pid).
-    - force (optional): "true" or "false". MUST be "true" if you just edited the source code.
+    - type (optional): "app" or "daemon". If omitted, OS auto-detects from registry or defaults to "app".
+    - show (optional): "true" or "false" (default: true). Determines if the app should be brought to the foreground. Ignored for daemons.
+    - force (optional): "true" or "false" (default: false). MUST be "true" if you just edited the source code.
+    - pid (optional): Custom Process ID. Usually omit this and let the OS automatically resolve the singleton ID.
     - file (optional): The path of a data file to open. In Itera OS, apps expect to receive the target file via the 'file' argument.
     - [any_other_attribute]: Any other attributes provided will be passed to the app as arguments (args).
 Rule: 
-    - When launching or switching apps, provide a unique ID to \`pid\` and set \`mode="foreground"\`. If the app is already running in the background, this will simply bring it to the front instantly.
+    - To launch an app normally and bring it to the front, simply specify the \`path\`. The OS will automatically handle ID resolution and bring it to the foreground.
     - IMPORTANT: If you edited the source code of a process, you MUST include force="true" to apply the new code and force a reload.
     - CRITICAL TIMING RULE: Do NOT use \`<spawn>\` in the same turn as \`<edit_file>\` or \`<create_file>\`. To ensure your code changes are saved to the file system before compilation, you MUST execute the file edits, end your turn with \`<yield />\`, wait for the successful \`<tool_output>\`, and then use \`<spawn>\` in the NEXT turn.
 </define_tag>
@@ -381,7 +382,7 @@ All methods (except \`on/off\`) are **Asynchronous** and return a \`Promise\`.
 - \`stop()\`: Aborts current AI generation.
 
 **System & IPC (MetaOS.system)**:
-- \`spawn(path, opts)\`: Starts a process. \`opts: { pid, mode, forceReload, args }\`. (pid="main" changes foreground view, set forceReload=true to ignore cache)
+- \`spawn(path, opts)\`: Starts a process. \`opts: { pid, type, show, forceReload, args }\`. (show=true brings to foreground view, set forceReload=true to ignore cache)
 - \`kill(pid)\`: Terminates a process.
 - \`ps()\`: Returns array of processes \`[{ pid, path, type, state }]\`.
 - \`info()\`, \`capture(pid)\`

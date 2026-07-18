@@ -121,7 +121,7 @@ export class TaskSwitcherModal {
       // アプリをクリックして切り替え
       iconWrapper.onclick = () => {
         // フォアグラウンドモードで起動 (ProcessManager 側で再利用/前面引き上げを判断)
-        this.processManager.spawn(app.pid, app.path, 'foreground', false, app.args);
+        this.processManager.spawn({ pid: app.pid, path: app.path, show: true, args: app.args });
         this.close();
       };
 

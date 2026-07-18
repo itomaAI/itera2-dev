@@ -15,29 +15,31 @@ export function registerUITools(registry: ToolRegistry): void {
     name: 'spawn',
     description: 'Spawn process.',
     impl: async (params: any, context: any) => {
-      let pid = params.pid || 'main';
-      const path = params.path || 'apps/home.html';
-      let mode = params.mode || 'background';
-      const forceReload = params.force === 'true';
+      const path = params.path;
+      if (!path) throw new Error("Attribute 'path' is required.");
 
-      if (pid === 'main') {
-        mode = 'foreground';
-        const basePath = path.split(/[?#]/)[0];
-        pid = `app_${basePath.replace(/[^a-zA-Z0-9_-]/g, '_')}`;
-      }
+      const pid = params.pid || undefined;
+      const type = params.type || undefined;
+      const show = params.show !== 'false'; // default true
+      const forceReload = params.force === 'true';
 
       const args: Record<string, string> = {};
       for (const [k, v] of Object.entries(params)) {
-        if (!['pid', 'path', 'mode', 'force', 'content'].includes(k)) {
+        if (!['pid', 'path', 'type', 'show', 'force', 'content'].includes(k)) {
           args[k] = String(v);
         }
       }
 
-      const currentUri = `metaos://run/${path}`;
-
       if (context.shell?.processManager) {
-        await context.shell.processManager.spawn(pid, path, mode, forceReload, args, currentUri);
-        return { log: `Process started.`, ui: `🚀 Spawned [${pid}]` };
+        await context.shell.processManager.spawn({
+          pid,
+          path,
+          type,
+          show,
+          forceReload,
+          args,
+        });
+        return { log: `Process spawn requested for ${path}.`, ui: `🚀 Spawned process` };
       }
       return { log: 'ProcessManager not available.', error: true };
     },

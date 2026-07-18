@@ -1,6 +1,6 @@
 /**
  * AUTO-GENERATED FILE - DO NOT EDIT MANUALLY
- * Generated on: 2026-07-18T06:37:54.548Z
+ * Generated on: 2026-07-18T14:30:32.641Z
  */
 
 export const DEFAULT_FILES: Record<string, string> = {
@@ -924,7 +924,7 @@ export const DEFAULT_FILES: Record<string, string> = {
             ? notes
                 .map(
                   (path) => \`
-                    <div class="flex items-center gap-2 p-2 rounded hover:bg-hover transition cursor-pointer group" onclick="MetaOS.system.spawn('apps/notes.html', { pid: 'main', args: { file: '\${path}' } })">
+                    <div class="flex items-center gap-2 p-2 rounded hover:bg-hover transition cursor-pointer group" onclick="MetaOS.system.spawn('apps/notes.html', { show: true, args: { file: '\${path}' } })">
                         <svg class="w-4 h-4 text-text-muted group-hover:text-primary transition" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
                         <span class="text-sm text-text-main truncate font-mono opacity-90">\${path.split('/').pop().replace('.md', '')}</span>
                     </div>\`,
@@ -1990,7 +1990,7 @@ if __name__ == "__main__":
         await App.Config.update('local_sync', { mountPath, serverUrl });
 
         if (start) {
-          await MetaOS.system.spawn('system/services/local_sync.html', { pid: PID, mode: 'background' });
+          await MetaOS.system.spawn('system/services/local_sync.html', { pid: PID, type: 'daemon' });
           AppUI.notify('Sync daemon started.', 'success');
         } else {
           await MetaOS.system.kill(PID);
@@ -3323,9 +3323,8 @@ The **Guest** environment (where apps run) is isolated from the **Host** (where 
     *   \`.unregisterSyncProvider(path)\`: Removes the sync provider registration.
 
 *   **System & IPC (\`MetaOS.system\`)**:
-    *   \`.spawn(path, opts)\`: Navigates the main window or starts a daemon.
-    *   \`.broadcast(event, payload)\`: Emits an IPC event to all running apps.
-    *   \`.getArgs()\`: Gets arguments passed to the app when it was spawned.
+    *   \`.spawn(path, opts)\`: Starts a process. \\\`opts: { pid, type, show, forceReload, args }\\\`. (\\\`show=true\\\` brings the app to the foreground, set \\\`forceReload=true\\\` to ignore cache. The OS automatically resolves the correct PID if omitted.)
+    *   \`.kill(pid)\`: Terminates a process.
     
 *   **Host UI (\`MetaOS.host\`)**:
     *   \`.openEditor(path)\`: Opens the Host's code editor fallback.
@@ -5490,11 +5489,11 @@ Use this Codex as a guidepost, and build a better Itera OS together with the use
 
   global.AppUI = {
     go: (path) => {
-      if (global.MetaOS) global.MetaOS.system.spawn(path, { pid: 'main' });
+      if (global.MetaOS) global.MetaOS.system.spawn(path, { show: true });
       else window.location.href = path;
     },
     home: () => {
-      if (global.MetaOS) global.MetaOS.system.spawn('apps/home.html', { pid: 'main' });
+      if (global.MetaOS) global.MetaOS.system.spawn('apps/home.html', { show: true });
     },
     notify: (message, type = 'info', duration) => {
       if (global.MetaOS) {
@@ -6492,4 +6491,4 @@ Attributes:
 }, null, 2)
 };
 
-export const BUILD_TIME = 1784356674548;
+export const BUILD_TIME = 1784385032641;
