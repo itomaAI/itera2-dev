@@ -407,10 +407,13 @@ export class Explorer {
     });
 
     sidebar.addEventListener('dragover', (e) => {
-      if (e.dataTransfer && !e.dataTransfer.types.includes('application/itera-file')) {
+      // 内部ドラッグ中の場合はコピーエフェクトを出さない
+      if ((window as any).__iteraDragData) return;
+
+      if (e.dataTransfer) {
         e.dataTransfer.dropEffect = 'copy';
-        sidebar.classList.add('bg-hover');
       }
+      sidebar.classList.add('bg-hover');
     });
 
     sidebar.addEventListener('dragleave', () => {
@@ -420,7 +423,8 @@ export class Explorer {
     sidebar.addEventListener('drop', async (e) => {
       sidebar.classList.remove('bg-hover');
 
-      if (e.dataTransfer && e.dataTransfer.types.includes('application/itera-file')) return;
+      // 内部ドラッグのドロップ処理は TreeView 側で行うのでアップロード処理からは弾く
+      if ((window as any).__iteraDragData) return;
 
       const items = e.dataTransfer?.items;
       if (!items) return;

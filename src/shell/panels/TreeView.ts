@@ -360,24 +360,29 @@ export class TreeView {
 
   private _handleDragStart(e: DragEvent, path: string, kind: 'file' | 'directory') {
     e.stopPropagation();
+    
+    // フォールバックと他アプリ向けに標準の dataTransfer もセットしておく
     if (e.dataTransfer) {
       e.dataTransfer.effectAllowed = 'move';
       e.dataTransfer.setData('application/itera-file', JSON.stringify({ path, kind }));
     }
+    // モバイルSafari等の制約回避のため、グローバル変数に状態を退避
+    (window as any).__iteraDragData = { path, kind };
+
     (e.target as HTMLElement).style.opacity = '0.5';
   }
 
   private _handleDragOver(e: DragEvent, element: HTMLElement) {
-    if (e.dataTransfer && e.dataTransfer.types.includes('application/itera-file')) {
+    if ((window as any).__iteraDragData) {
       e.preventDefault();
       e.stopPropagation();
-      e.dataTransfer.dropEffect = 'move';
+      if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
       element.classList.add('bg-primary', 'text-text-inverted');
     }
   }
 
   private _handleDragLeave(e: DragEvent, element: HTMLElement) {
-    if (e.dataTransfer && e.dataTransfer.types.includes('application/itera-file')) {
+    if ((window as any).__iteraDragData) {
       e.preventDefault();
       e.stopPropagation();
       element.classList.remove('bg-primary', 'text-text-inverted');
@@ -387,15 +392,12 @@ export class TreeView {
   private _handleDrop(e: DragEvent, targetFolderPath: string, element: HTMLElement) {
     element.classList.remove('bg-primary', 'text-text-inverted');
 
-    if (e.dataTransfer && e.dataTransfer.types.includes('application/itera-file')) {
+    const dragData = (window as any).__iteraDragData;
+    if (dragData) {
       e.preventDefault();
       e.stopPropagation();
-
-      const rawData = e.dataTransfer.getData('application/itera-file');
-      if (!rawData) return;
-
-      const data = JSON.parse(rawData);
-      this._emitMove(data.path, targetFolderPath);
+      this._emitMove(dragData.path, targetFolderPath);
+      (window as any).__iteraDragData = null; // リセット
     }
   }
 
@@ -403,16 +405,16 @@ export class TreeView {
     if (!this.container) return;
 
     this.container.addEventListener('dragover', (e) => {
-      if (e.dataTransfer && e.dataTransfer.types.includes('application/itera-file')) {
+      if ((window as any).__iteraDragData) {
         e.preventDefault();
         e.stopPropagation();
-        e.dataTransfer.dropEffect = 'move';
+        if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
         this.container.classList.add('bg-card', 'ring-2', 'ring-primary', 'ring-inset');
       }
     });
 
     this.container.addEventListener('dragleave', (e) => {
-      if (e.dataTransfer && e.dataTransfer.types.includes('application/itera-file')) {
+      if ((window as any).__iteraDragData) {
         e.preventDefault();
         e.stopPropagation();
         if (!this.container.contains(e.relatedTarget as Node)) {
@@ -422,16 +424,13 @@ export class TreeView {
     });
 
     this.container.addEventListener('drop', (e) => {
-      if (e.dataTransfer && e.dataTransfer.types.includes('application/itera-file')) {
+      const dragData = (window as any).__iteraDragData;
+      if (dragData) {
         e.preventDefault();
         e.stopPropagation();
         this.container.classList.remove('bg-card', 'ring-2', 'ring-primary', 'ring-inset');
-
-        const rawData = e.dataTransfer.getData('application/itera-file');
-        if (rawData) {
-          const data = JSON.parse(rawData);
-          this._emitMove(data.path, '');
-        }
+        this._emitMove(dragData.path, '');
+        (window as any).__iteraDragData = null; // リセット
       }
     });
 
@@ -444,6 +443,9 @@ export class TreeView {
         (e.target as HTMLElement).style.opacity = '1';
       }
       this.container.classList.remove('bg-card', 'ring-2', 'ring-primary', 'ring-inset');
+      
+      // キャンセル時などに備えた確実な状態リセット
+      (window as any).__iteraDragData = null;
     });
   }
 
