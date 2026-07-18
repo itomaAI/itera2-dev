@@ -583,8 +583,7 @@ export class Explorer {
     if (!newPath || newPath === path) return;
 
     try {
-      await this.vfs.rename(this.getActivePrincipal(), path, newPath);
-      this._emitHistory('file_moved', `User moved: ${path} -> ${newPath}`);
+      await this._handleTransfer(path, newPath, 'move');
     } catch (e: any) {
       if (window.AppUI) window.AppUI.notify(e.message, 'error');
     }
