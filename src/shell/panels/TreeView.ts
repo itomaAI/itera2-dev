@@ -360,7 +360,7 @@ export class TreeView {
 
   private _handleDragStart(e: DragEvent, path: string, kind: 'file' | 'directory') {
     e.stopPropagation();
-    
+
     // フォールバックと他アプリ向けに標準の dataTransfer もセットしておく
     if (e.dataTransfer) {
       e.dataTransfer.effectAllowed = 'move';
@@ -443,7 +443,7 @@ export class TreeView {
         (e.target as HTMLElement).style.opacity = '1';
       }
       this.container.classList.remove('bg-card', 'ring-2', 'ring-primary', 'ring-inset');
-      
+
       // キャンセル時などに備えた確実な状態リセット
       (window as any).__iteraDragData = null;
     });
