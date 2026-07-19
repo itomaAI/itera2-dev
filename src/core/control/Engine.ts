@@ -3,7 +3,8 @@
  * Itera OS v2: Autonomous Execution Loop
  */
 
-import type { HistoryManager, Turn, TurnMeta } from '../state/HistoryManager';
+import type { HistoryManager, Turn, TurnContent, TurnMeta } from '../state/HistoryManager';
+import type { ToolExecutionEntry } from '../types/tools';
 import type { VfsService } from '../vfs/VfsService';
 import type { ConfigManager } from '../sys/ConfigManager';
 import type { BaseProjector } from '../cognitive/Projector';
@@ -133,7 +134,7 @@ export class Engine {
     return recentTurns.some((t) => t.meta && t.meta.trigger_llm === true);
   }
 
-  async injectUserTurn(inputContent: any, meta: TurnMeta = {}): Promise<void> {
+  async injectUserTurn(inputContent: TurnContent, meta: TurnMeta = {}): Promise<void> {
     const turnMeta: TurnMeta = {
       type: TurnType.USER_INPUT,
       trigger_llm: true,
@@ -154,7 +155,7 @@ export class Engine {
       ...meta,
     };
 
-    const turnContent = [
+    const turnContent: ToolExecutionEntry[] = [
       {
         actionType: actionType,
         output: {
@@ -306,7 +307,7 @@ export class Engine {
       ...this.extraContext,
     };
 
-    const combinedResults = actions.map((action) => {
+    const combinedResults: ToolExecutionEntry[] = actions.map((action) => {
       const { content, ...safeParams } = action.params || {};
       return {
         actionType: action.type,
@@ -316,7 +317,7 @@ export class Engine {
           log: `[Pending] Executing ${action.type}...`,
           ui: `⚙️ Executing ${action.type}...`,
           trigger_llm: false,
-        } as any,
+        },
       };
     });
 

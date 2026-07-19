@@ -3,14 +3,9 @@
  * Itera OS v2: IPC Message Definitions
  */
 
-export const PROTOCOL_VERSION = 'itera:ipc:v2';
+import { generateId } from '../utils/id';
 
-export function generateId(): string {
-  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
-    return crypto.randomUUID();
-  }
-  return Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
-}
+export const PROTOCOL_VERSION = 'itera:ipc:v2';
 
 export interface IpcMessageData {
   protocol: string;

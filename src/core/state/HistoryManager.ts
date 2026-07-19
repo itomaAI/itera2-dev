@@ -3,7 +3,12 @@
  * Itera OS v2: Epistemic History Manager
  */
 
+import type { MediaContentNode, TextContentNode } from '../types/content';
+import type { ToolExecutionEntry } from '../types/tools';
+import { generateId } from '../../utils/id';
+
 export type Role = 'user' | 'model' | 'system';
+export type TurnContent = string | Array<TextContentNode | MediaContentNode | ToolExecutionEntry>;
 
 export interface TurnMeta {
   type?: string; // 'message' | 'tool_execution' | 'event_log' | 'error'
@@ -17,7 +22,7 @@ export interface Turn {
   id: string;
   timestamp: number;
   role: Role;
-  content: any; // string または array
+  content: TurnContent;
   meta: TurnMeta;
 }
 
@@ -28,11 +33,6 @@ export interface HistoryEventPayload {
 }
 
 export type HistorySubscriber = (payload: HistoryEventPayload) => void;
-
-function generateId(): string {
-  if (typeof crypto !== 'undefined' && crypto.randomUUID) return crypto.randomUUID();
-  return Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
-}
 
 export class HistoryManager {
   private turns: Turn[] = [];
@@ -148,7 +148,7 @@ export class HistoryManager {
     this._notify('load');
   }
 
-  append(role: Role, content: any, meta: TurnMeta = {}): Turn {
+  append(role: Role, content: TurnContent, meta: TurnMeta = {}): Turn {
     const turn: Turn = {
       id: generateId(),
       timestamp: Date.now(),
@@ -166,7 +166,7 @@ export class HistoryManager {
     return turn;
   }
 
-  update(id: string, content?: any, meta: TurnMeta = {}): Turn | null {
+  update(id: string, content?: TurnContent, meta: TurnMeta = {}): Turn | null {
     const index = this.turns.findIndex((t) => t.id === id);
     if (index !== -1) {
       if (content !== undefined) {

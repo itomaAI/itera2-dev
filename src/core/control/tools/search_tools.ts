@@ -5,7 +5,7 @@
 
 import type { ToolRegistry } from '../ToolRegistry';
 import type { VfsService } from '../../vfs/VfsService';
-import type { Principal } from '../../vfs/types';
+import { AGENT_PRINCIPAL } from '../../vfs/types';
 
 const yieldToMain = () => new Promise((resolve) => setTimeout(resolve, 0));
 
@@ -17,8 +17,6 @@ const isBinary = (path: string) =>
 export function registerSearchTools(registry: ToolRegistry): void {
   const setId = 'system:search';
   const setName = 'System: Search & indexing';
-
-  const AGENT_PRINCIPAL: Principal = { type: 'agent', id: 'Itera_AI' };
 
   registry.registerSystemTool(setId, setName, {
     name: 'search',

@@ -4,29 +4,53 @@
  */
 
 import type { AppRegistry } from '../sys/AppRegistry';
+import type { GuestToolInvoker } from './GuestToolInvoker';
+import { normalizeDynamicToolResult } from './ToolResultNormalizer';
+import type { ToolParams, ToolResult } from '../types/tools';
 
 export interface ToolDef {
   name: string;
   description: string;
   definition?: string;
-  impl?: (params: any, context: any) => Promise<any>;
+  impl?: (params: ToolParams, context: any) => Promise<ToolResult | null>;
 }
 
 export interface ToolSet {
   id: string; // "system:fs", "app_tasks" など
+  kind: 'system' | 'dynamic';
   name: string; // "System: File Operations", "App: Tasks" など
   description?: string;
   tools: Map<string, ToolDef>;
 }
 
+export interface DynamicToolDefinition {
+  description?: string;
+  definition?: string;
+}
+
+export class UnknownToolError extends Error {
+  readonly code = 'UNKNOWN_TOOL';
+  readonly actionType: string;
+
+  constructor(actionType: string) {
+    super(`Unknown Tool: <${actionType}> is not registered or not available.`);
+    this.actionType = actionType;
+  }
+}
+
 export class ToolRegistry {
   private toolSets: Map<string, ToolSet> = new Map();
   private appRegistry: AppRegistry | null = null;
+  private guestToolInvoker: GuestToolInvoker | null = null;
 
   constructor(appRegistry?: AppRegistry) {
     if (appRegistry) {
       this.appRegistry = appRegistry;
     }
+  }
+
+  setGuestToolInvoker(invoker: GuestToolInvoker): void {
+    this.guestToolInvoker = invoker;
   }
 
   // ==========================================
@@ -40,6 +64,7 @@ export class ToolRegistry {
     if (!this.toolSets.has(setId)) {
       this.toolSets.set(setId, {
         id: setId,
+        kind: 'system',
         name: setName,
         description,
         tools: new Map(),
@@ -64,7 +89,7 @@ export class ToolRegistry {
    * ゲストアプリからの動的ツールを登録する
    * sourcePidからよしなにアプリ情報を解決し、Toolsetに自動分類する
    */
-  registerDynamicTool(toolName: string, sourcePid: string, payload: any): void {
+  registerDynamicTool(toolName: string, sourcePid: string, payload: DynamicToolDefinition): void {
     const setId = sourcePid;
     let toolSet = this.toolSets.get(setId);
 
@@ -89,7 +114,7 @@ export class ToolRegistry {
         }
       }
 
-      toolSet = { id: setId, name: setName, description, tools: new Map() };
+      toolSet = { id: setId, kind: 'dynamic', name: setName, description, tools: new Map() };
       this.toolSets.set(setId, toolSet);
     }
 
@@ -144,8 +169,7 @@ export class ToolRegistry {
     const output: string[] = [];
 
     for (const toolSet of this.toolSets.values()) {
-      // システムツール（"system:" 始まり）は除外し、動的ツールのみを抽出
-      if (toolSet.id.startsWith('system:')) continue;
+      if (toolSet.kind === 'system') continue;
       if (toolSet.tools.size === 0) continue;
 
       let block = `<toolset name="${toolSet.name}" pid="${toolSet.id}"${toolSet.description ? ` description="${toolSet.description}"` : ''}>\n`;
@@ -183,30 +207,27 @@ export class ToolRegistry {
    * アクションを検索して実行する
    */
   async execute(
-    action: { type: string; params: any },
+    action: { type: string; params: ToolParams },
     context: { shell: any; engine: any } & Record<string, any>,
-  ): Promise<any> {
+  ): Promise<ToolResult | null> {
     // 1. 全Toolsetから対象のツールを検索する
     let foundTool: ToolDef | null = null;
-    let foundSetId: string | null = null;
+    let foundSet: ToolSet | null = null;
 
     for (const toolSet of this.toolSets.values()) {
       if (toolSet.tools.has(action.type)) {
         foundTool = toolSet.tools.get(action.type)!;
-        foundSetId = toolSet.id;
+        foundSet = toolSet;
         break;
       }
     }
 
-    if (!foundTool || !foundSetId) {
-      const err: any = new Error(`Unknown Tool: <${action.type}> is not registered or not available.`);
-      err.code = 'UNKNOWN_TOOL';
-      err.actionType = action.type;
-      throw err;
+    if (!foundTool || !foundSet) {
+      throw new UnknownToolError(action.type);
     }
 
     // 2. システムツールの実行
-    if (foundSetId.startsWith('system:')) {
+    if (foundSet.kind === 'system') {
       if (!foundTool.impl) {
         throw new Error(`[ToolRegistry] System tool <${action.type}> has no implementation.`);
       }
@@ -224,36 +245,13 @@ export class ToolRegistry {
 
     // 3. ゲストツールの実行 (逆方向RPC)
     try {
-      const pid = foundSetId; // ゲストツールの場合は SetID が PID そのもの
-      const pm = context.shell['processManager']; // Privateアクセスを回避するためブラケット記法
-
-      if (!pm) throw new Error('ProcessManager not connected to Shell context.');
-
-      const proc = pm.processes.get(pid);
-      if (!proc || !proc.iframe || !proc.iframe.contentWindow) {
-        throw new Error(`Target process '${pid}' is no longer available.`);
+      const pid = foundSet.id; // ゲストツールの場合は SetID が PID そのもの
+      if (!this.guestToolInvoker) {
+        throw new Error('ProcessManager not connected to Shell context.');
       }
 
-      // Shellが保持しているHostTransportを利用する
-      const transport = context.shell['transport'];
-      if (!transport) throw new Error('HostTransport not connected to Shell context.');
-
-      let result = await transport.invokeGuest(
-        pid,
-        'execute_tool',
-        { name: action.type, params: action.params },
-        proc.iframe.contentWindow,
-      );
-
-      // 戻り値の正規化
-      if (typeof result !== 'object' || result === null) {
-        result = { log: String(result), ui: `⚙️ ${action.type}` };
-      } else if (result.log === undefined) {
-        result.log = JSON.stringify(result);
-      }
-      if (!result.ui) result.ui = `⚙️ ${action.type}`;
-
-      return result;
+      const result = await this.guestToolInvoker.invokeTool(pid, action.type, action.params);
+      return normalizeDynamicToolResult(result, action.type);
     } catch (err: any) {
       console.error(`[ToolRegistry] Error executing dynamic tool <${action.type}>:`, err);
       return {

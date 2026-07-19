@@ -6,6 +6,7 @@
 import type { VfsService } from '../../core/vfs/VfsService';
 import { USER_PRINCIPAL } from '../../core/vfs/types';
 import { GuestBridgeBuilder } from '../../api/GuestBridgeBuilder';
+import { resolveRelativePath } from '../../utils/path';
 
 interface CachedAsset {
   url: string;
@@ -43,24 +44,6 @@ export class GuestCompiler {
     return { basePath, search, hash };
   }
 
-  private _resolveRelativePath(baseDir: string, relPath: string): string {
-    if (relPath.startsWith('/')) {
-      baseDir = '';
-      relPath = relPath.substring(1);
-    }
-    const stack = baseDir ? baseDir.split('/') : [];
-    const parts = relPath.split('/');
-
-    for (const part of parts) {
-      if (part === '.' || part === '') continue;
-      if (part === '..') {
-        if (stack.length > 0) stack.pop();
-      } else {
-        stack.push(part);
-      }
-    }
-    return stack.join('/');
-  }
 
   private _getScreenshotHelperCode(pid: string): string {
     return `
@@ -147,7 +130,7 @@ window.addEventListener('message', async (e) => {
       return requestPath;
     }
 
-    const absPath = this._resolveRelativePath(currentDir, basePath);
+    const absPath = resolveRelativePath(currentDir, basePath);
     const visitKey = absPath + search + hash;
 
     // 循環参照防止（すでにコンパイル済みのファイルはキャッシュのURLを返す）

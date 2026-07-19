@@ -3,9 +3,14 @@
  * Itera OS v2: LPML (LLM-Prompting Markup Language) Parser
  */
 
+import type { ToolParams } from '../types/tools';
+
+const PARSE_TERMINAL_TAGS = new Set(['yield', 'breathe', 'ask', 'finish']);
+const INTERRUPT_ACTION_TAGS = new Set(['ask', 'finish', 'breathe']);
+
 export interface ParsedAction {
   type: string;
-  params: Record<string, string>;
+  params: ToolParams;
   raw: any;
   originalIndex: number;
 }
@@ -228,7 +233,7 @@ export class Translator {
         stack[stack.length - 1].content.push(el);
 
         // ★ Terminal Tag Detection (Empty Tag)
-        if (['yield', 'breathe', 'ask', 'finish'].includes(name) && tagExclude === null && stack.length === 1) {
+        if (PARSE_TERMINAL_TAGS.has(name) && tagExclude === null && stack.length === 1) {
           terminalIndex = indTagEnd;
           break;
         }
@@ -240,7 +245,7 @@ export class Translator {
         else stack[stack.length - 1].content.push(tagStr);
 
         // ★ Terminal Tag Detection (End Tag)
-        if (['yield', 'breathe', 'ask', 'finish'].includes(name) && tagExclude === null && stack.length === 1) {
+        if (PARSE_TERMINAL_TAGS.has(name) && tagExclude === null && stack.length === 1) {
           terminalIndex = indTagEnd;
           break;
         }
@@ -274,8 +279,8 @@ export class Translator {
   private _sortActions(actions: ParsedAction[]): ParsedAction[] {
     const edits = actions.filter((a) => a.type === 'edit_file');
     const others = actions.filter((a) => a.type !== 'edit_file');
-    const interrupts = others.filter((a) => ['ask', 'finish', 'breathe'].includes(a.type));
-    const normalTools = others.filter((a) => !['ask', 'finish', 'breathe'].includes(a.type));
+    const interrupts = others.filter((a) => INTERRUPT_ACTION_TAGS.has(a.type));
+    const normalTools = others.filter((a) => !INTERRUPT_ACTION_TAGS.has(a.type));
 
     edits.sort((a, b) => {
       const pathA = a.params.path || '';

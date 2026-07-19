@@ -6,6 +6,7 @@
 import type { NodeStore } from './NodeStore';
 import type { ContentStore } from './ContentStore';
 import type { VfsNode } from './types';
+import { generateId } from '../../utils/id';
 
 export interface FsckReport {
   circularReferencesFixed: number;
@@ -25,8 +26,7 @@ export class VfsFsck {
   }
 
   private _generateId(): string {
-    if (typeof crypto !== 'undefined' && crypto.randomUUID) return crypto.randomUUID();
-    return Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+    return generateId();
   }
 
   /**

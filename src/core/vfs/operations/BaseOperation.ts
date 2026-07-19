@@ -13,6 +13,7 @@ import type { VfsAuth } from '../VfsAuth';
 import type { VfsService } from '../VfsService';
 import { VfsTransaction } from '../VfsTransaction';
 import type { ProviderManager } from '../ProviderManager';
+import { generateId } from '../../../utils/id';
 
 export interface VfsContext {
   nodeStore: NodeStore;
@@ -35,8 +36,7 @@ export abstract class BaseOperation<TArgs, TReturn> {
   abstract execute(principal: Principal, args: TArgs): Promise<TReturn>;
 
   protected generateId(): string {
-    if (typeof crypto !== 'undefined' && crypto.randomUUID) return crypto.randomUUID();
-    return Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+    return generateId();
   }
 
   protected async calculateHash(content: string | Uint8Array | Blob): Promise<string> {

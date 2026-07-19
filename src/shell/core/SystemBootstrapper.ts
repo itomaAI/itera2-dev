@@ -44,6 +44,7 @@ import { MaintenanceDaemon } from '../services/MaintenanceDaemon';
 import { DialogService } from '../services/DialogService';
 import { VfsEventRecorder } from '../services/VfsEventRecorder';
 import { ProcessEventRecorder } from '../services/ProcessEventRecorder';
+import { HostGuestToolInvoker } from '../services/HostGuestToolInvoker';
 import { ProviderManager } from '../../core/vfs/ProviderManager';
 
 export class SystemBootstrapper {
@@ -128,6 +129,7 @@ export class SystemBootstrapper {
     // 5. IPC Routing & Event Orchestration
     // ==========================================
     const transport = new HostTransport();
+    toolRegistry.setGuestToolInvoker(new HostGuestToolInvoker(processManager, transport));
 
     // プロバイダマネージャーの初期化と VFS への注入
     const providerManager = new ProviderManager(eventBus, transport, processManager, pathResolver);

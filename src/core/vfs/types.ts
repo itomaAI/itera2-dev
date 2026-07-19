@@ -29,6 +29,7 @@ export interface AccessControlList {
 // OS全体で使い回す共通のPrincipal定数
 export const SYSTEM_PRINCIPAL: Principal = { type: 'system', id: 'kernel' };
 export const USER_PRINCIPAL: Principal = { type: 'user', id: 'local_user' };
+export const AGENT_PRINCIPAL: Principal = { type: 'agent', id: 'Itera_AI' };
 
 export interface VfsNode {
   id: string;

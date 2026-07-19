@@ -5,8 +5,13 @@
 
 import { IpcMessage } from './Message';
 import { RpcManager } from './RpcManager';
+import type { HostApiAction, HostApiRequest, HostApiResponse } from '../api/HostApiContract';
 
 export type RequestHandler = (payload: any, sourcePid: string) => Promise<any>;
+export type TypedRequestHandler<K extends HostApiAction> = (
+  payload: HostApiRequest<K>,
+  sourcePid: string,
+) => Promise<HostApiResponse<K>>;
 export type SourceValidator = (pid: string, sourceWindow: Window) => boolean;
 
 export class HostTransport {
@@ -30,6 +35,8 @@ export class HostTransport {
   /**
    * Guestからのリクエストを処理するハンドラを登録する
    */
+  registerHandler<K extends HostApiAction>(action: K, handler: TypedRequestHandler<K>): void;
+  registerHandler(action: string, handler: RequestHandler): void;
   registerHandler(action: string, handler: RequestHandler): void {
     this.handlers.set(action, handler);
   }

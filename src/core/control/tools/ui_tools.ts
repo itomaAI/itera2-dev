@@ -71,17 +71,27 @@ export function registerUITools(registry: ToolRegistry): void {
               log: `Opened ${path} in Media Viewer`,
               ui: `🖼️ Opened Media`,
             };
+          } else if (resolvedApp.appId === 'HostRunner') {
+            const fullUri = `metaos://run/${path}`;
+            await context.shell.processManager.spawn({
+              path,
+              show: true,
+              currentUri: fullUri,
+            });
+            return {
+              log: `Ran ${path}`,
+              ui: `🚀 Ran [${path}]`,
+            };
           } else {
             const args = { file: path };
             const fullUri = `metaos://open/${path}`;
-            await context.shell.processManager.spawn(
-              resolvedApp.appId,
-              resolvedApp.appPath,
-              'foreground',
-              false,
+            await context.shell.processManager.spawn({
+              pid: resolvedApp.appId,
+              path: resolvedApp.appPath,
+              show: true,
               args,
-              fullUri,
-            );
+              currentUri: fullUri,
+            });
             return {
               log: `Opened ${path} in ${resolvedApp.appName}`,
               ui: `🚀 Opened [${resolvedApp.appId}]`,
