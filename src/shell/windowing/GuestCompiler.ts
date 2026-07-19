@@ -64,7 +64,7 @@ export class GuestCompiler {
 
   private _getScreenshotHelperCode(pid: string): string {
     return `
-<script src="https://cdnjs.cloudflare.com/ajax/libs/html-to-image/1.11.11/html-to-image.min.js"></script>
+<script src="./system/core/html-to-image.min.js"></script>
 <script>
 window.addEventListener('message', async (e) => {
     if (e.data.action === 'CAPTURE') {

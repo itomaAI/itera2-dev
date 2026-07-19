@@ -65,27 +65,31 @@ export class ProcessManager {
 
   private _bindEvents(): void {
     if (this.els.BTN_REFRESH) {
-      this.els.BTN_REFRESH.onclick = () => {
-        let targetProc = Array.from(this.processes.values()).find((p) => p.state === 'foreground');
-        if (targetProc) {
-          this.spawn({
-            pid: targetProc.pid,
-            path: targetProc.path,
-            type: targetProc.type,
-            show: true,
-            forceReload: true,
-            args: targetProc.args,
-            currentUri: targetProc.currentUri,
-          });
-        } else {
-          this.spawn({ path: 'apps/home.html', show: true, forceReload: true });
-        }
-      };
+      this.els.BTN_REFRESH.onclick = () => this._refreshForeground();
     }
     if (this.els.BTN_HOME) {
-      this.els.BTN_HOME.onclick = () => {
-        this.spawn({ path: 'apps/home.html', show: true });
-      };
+      this.els.BTN_HOME.onclick = () => this._spawnHome();
+    }
+  }
+
+  private _spawnHome(): void {
+    this.spawn({ path: 'apps/home.html', show: true });
+  }
+
+  private _refreshForeground(): void {
+    let targetProc = Array.from(this.processes.values()).find((p) => p.state === 'foreground');
+    if (targetProc) {
+      this.spawn({
+        pid: targetProc.pid,
+        path: targetProc.path,
+        type: targetProc.type,
+        show: true,
+        forceReload: true,
+        args: targetProc.args,
+        currentUri: targetProc.currentUri,
+      });
+    } else {
+      this.spawn({ path: 'apps/home.html', show: true, forceReload: true });
     }
   }
 
@@ -107,10 +111,7 @@ export class ProcessManager {
       } else if (foundSvc) {
         if (!pid) pid = foundSvc.id;
         if (!type) type = 'daemon';
-      } else if (basePath === 'apps/home.html') {
-        if (!pid) pid = 'home';
-        if (!type) type = 'app';
-      }
+
     }
 
     // 野良アプリのフォールバック
