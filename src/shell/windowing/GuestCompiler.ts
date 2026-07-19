@@ -44,7 +44,6 @@ export class GuestCompiler {
     return { basePath, search, hash };
   }
 
-
   private _getScreenshotHelperCode(pid: string): string {
     return `
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html-to-image/1.11.11/html-to-image.min.js"></script>

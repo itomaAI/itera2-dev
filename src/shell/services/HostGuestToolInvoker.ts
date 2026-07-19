@@ -22,11 +22,6 @@ export class HostGuestToolInvoker implements GuestToolInvoker {
       throw new Error(`Target process '${pid}' is no longer available.`);
     }
 
-    return this.transport.invokeGuest(
-      pid,
-      'execute_tool',
-      { name, params },
-      proc.iframe.contentWindow,
-    );
+    return this.transport.invokeGuest(pid, 'execute_tool', { name, params }, proc.iframe.contentWindow);
   }
 }
