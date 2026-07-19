@@ -86,7 +86,6 @@ export class AnthropicAdapter extends BaseLLMAdapter {
     let inputTokens = 0;
     let outputTokens = 0;
     let cachedTokens = 0;
-    let cachedTokens = 0;
 
     try {
       let eventType: string | null = null;
