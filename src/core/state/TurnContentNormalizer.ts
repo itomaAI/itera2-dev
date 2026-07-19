@@ -38,7 +38,6 @@ export function isToolExecutionEntry(value: unknown): value is ToolExecutionEntr
   );
 }
 
-
 export function getMessageContentNodes(turn: Turn): Array<TextContentNode | MediaContentNode> {
   if (!Array.isArray(turn.content)) return [];
 
