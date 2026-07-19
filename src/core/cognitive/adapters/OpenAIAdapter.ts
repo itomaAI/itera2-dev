@@ -119,13 +119,16 @@ export class OpenAIAdapter extends BaseLLMAdapter {
 
             // ★ OpenAIの include_usage: true 時のトークン消費量抽出
             if (data.usage && this.logger) {
+              const grossPrompt = data.usage.prompt_tokens || 0;
+              const cached = data.usage.prompt_tokens_details?.cached_tokens || 0;
               this.logger.log('usage', {
                 provider: 'openai_compatible',
                 model: this.modelName,
                 tokens: {
-                  input: data.usage.prompt_tokens,
-                  output: data.usage.completion_tokens,
-                  total: data.usage.total_tokens,
+                  input: Math.max(0, grossPrompt - cached),
+                  cached: cached,
+                  output: data.usage.completion_tokens || 0,
+                  total: data.usage.total_tokens || grossPrompt + (data.usage.completion_tokens || 0),
                 },
               });
             }

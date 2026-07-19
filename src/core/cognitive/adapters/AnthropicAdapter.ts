@@ -85,6 +85,8 @@ export class AnthropicAdapter extends BaseLLMAdapter {
 
     let inputTokens = 0;
     let outputTokens = 0;
+    let cachedTokens = 0;
+    let cachedTokens = 0;
 
     try {
       let eventType: string | null = null;
@@ -122,7 +124,10 @@ export class AnthropicAdapter extends BaseLLMAdapter {
 
               // ★ Anthropic のトークン消費量抽出
               if (eventType === 'message_start' && data.message?.usage) {
-                inputTokens = data.message.usage.input_tokens || 0;
+                const grossInput = data.message.usage.input_tokens || 0;
+                const cached = data.message.usage.cache_read_input_tokens || 0;
+                inputTokens = Math.max(0, grossInput - cached);
+                cachedTokens = cached;
               } else if (eventType === 'message_delta' && data.usage) {
                 outputTokens = data.usage.output_tokens || 0;
               } else if (eventType === 'content_block_delta') {
@@ -145,8 +150,9 @@ export class AnthropicAdapter extends BaseLLMAdapter {
           model: this.modelName,
           tokens: {
             input: inputTokens,
+            cached: cachedTokens,
             output: outputTokens,
-            total: inputTokens + outputTokens,
+            total: inputTokens + cachedTokens + outputTokens,
           },
         });
       }
