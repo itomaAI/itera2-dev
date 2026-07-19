@@ -15,9 +15,12 @@ import {
 import type { MediaRef } from '../types/content';
 import { serializeToolOutput, wrapUserInput } from './LpmlSerializer';
 
-export type PromptContentNode =
-  | { kind: 'text'; text: string }
-  | { kind: 'media'; media: MediaRef };
+export interface TextPromptNode {
+  kind: 'text';
+  text: string;
+}
+
+export type PromptContentNode = TextPromptNode | { kind: 'media'; media: MediaRef };
 
 export interface ToolPromptNode {
   shouldEmit: boolean;
@@ -74,7 +77,7 @@ export function buildUserPromptNodes(turn: Turn): PromptContentNode[] {
   return nodes;
 }
 
-export function buildTextPromptNodes(turn: Turn): PromptContentNode[] {
+export function buildTextPromptNodes(turn: Turn): TextPromptNode[] {
   return getMessageContentNodes(turn)
     .filter(isTextContentNode)
     .filter((item) => Boolean(item.text))
