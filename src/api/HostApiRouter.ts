@@ -6,16 +6,20 @@
 import type { HostTransport } from '../ipc/HostTransport';
 import type { VfsService } from '../core/vfs/VfsService';
 import type { ConfigManager } from '../core/sys/ConfigManager';
+import type { Role, Turn, TurnContent, TurnMeta } from '../core/state/HistoryManager';
+import type { DynamicToolRegistration, ProcessInfo } from './HostApiContract';
+import type { SpawnOptions } from '../shell/windowing/ProcessManager';
 import { USER_PRINCIPAL } from '../core/vfs/types';
+import { base64ToBlob, blobToDataUrl, dataUrlToBlob } from '../utils/binary';
 
 // 依存モジュールのダックタイピング・インターフェース (未実装モジュール用)
 export interface IHistoryManager {
-  append(role: string, content: any, meta?: any): any;
+  append(role: Role, content: TurnContent, meta?: TurnMeta): Turn;
 }
 export interface IProcessManager {
-  spawn(options: any): Promise<void>;
+  spawn(options: SpawnOptions): Promise<void>;
   kill(pid: string): boolean;
-  list(): any[];
+  list(): ProcessInfo[];
   broadcast(eventName: string, payload: any): void;
   captureScreenshot(pid?: string): Promise<string>;
   resolveUrl(path: string, pid: string): Promise<string>;
@@ -25,7 +29,7 @@ export interface IProcessManager {
   _updateAddressBar(path: string): void;
 }
 export interface IEngine {
-  injectUserTurn(content: any[], meta?: any): Promise<void>;
+  injectUserTurn(content: TurnContent, meta?: TurnMeta): Promise<void>;
   stop(): void;
 }
 export interface IShell {
@@ -36,7 +40,7 @@ export interface IShell {
   modals: { editor: any; camera: any; audio: any; filePicker?: any };
 }
 export interface IToolRegistry {
-  registerDynamicTool(name: string, sourcePid: string, definition: any): void;
+  registerDynamicTool(name: string, sourcePid: string, definition: DynamicToolRegistration): void;
   unregisterDynamicTool(name: string, sourcePid: string): void;
 }
 
@@ -94,26 +98,9 @@ export class HostApiRouter {
 
       if (typeof content === 'string') {
         if (encoding === 'base64') {
-          const bstr = atob(content);
-          let n = bstr.length;
-          const u8arr = new Uint8Array(n);
-          while (n--) {
-            u8arr[n] = bstr.charCodeAt(n);
-          }
-          return new Blob([u8arr], { type: 'application/octet-stream' });
+          return base64ToBlob(content);
         } else if (encoding === 'dataurl') {
-          const parts = content.split(',');
-          const mimeMatch = parts[0] ? parts[0].match(/:(.*?);/) : null;
-          const mime = mimeMatch ? mimeMatch[1] : 'application/octet-stream';
-          const base64Data = parts.length > 1 ? parts[1] : parts[0];
-
-          const bstr = atob(base64Data);
-          let n = bstr.length;
-          const u8arr = new Uint8Array(n);
-          while (n--) {
-            u8arr[n] = bstr.charCodeAt(n);
-          }
-          return new Blob([u8arr], { type: mime });
+          return dataUrlToBlob(content);
         }
       }
 
@@ -135,12 +122,7 @@ export class HostApiRouter {
           return new Uint8Array(buffer);
         } else if (opts.encoding === 'base64' || opts.encoding === 'dataurl') {
           const blob = await d.vfs.readBlob(principal, path, opts);
-          const dataUrl = await new Promise<string>((resolve, reject) => {
-            const reader = new FileReader();
-            reader.onloadend = () => resolve(reader.result as string);
-            reader.onerror = reject;
-            reader.readAsDataURL(blob);
-          });
+          const dataUrl = await blobToDataUrl(blob);
           if (opts.encoding === 'dataurl') return dataUrl;
           return dataUrl.split(',')[1] || '';
         }
@@ -486,12 +468,7 @@ export class HostApiRouter {
         responseObj.data = await res.json();
       } else if (responseType === 'dataURL') {
         const blob = await res.blob();
-        responseObj.data = await new Promise((r, j) => {
-          const reader = new FileReader();
-          reader.onloadend = () => r(reader.result);
-          reader.onerror = j;
-          reader.readAsDataURL(blob);
-        });
+        responseObj.data = await blobToDataUrl(blob);
       } else if (responseType === 'arraybuffer' || responseType === 'binary') {
         const arrayBuffer = await res.arrayBuffer();
         responseObj.data = new Uint8Array(arrayBuffer);

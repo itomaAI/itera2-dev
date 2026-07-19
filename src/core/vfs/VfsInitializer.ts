@@ -7,7 +7,7 @@ import { DEFAULT_FILES } from '../../config/default_files';
 import type { VfsService } from './VfsService';
 import type { NodeStore } from './NodeStore';
 import type { PathResolver } from './PathResolver';
-import { SYSTEM_PRINCIPAL, type AccessControlList } from './types';
+import { AGENT_PRINCIPAL, SYSTEM_PRINCIPAL, type AccessControlList } from './types';
 
 export class VfsInitializer {
   private vfs: VfsService;
@@ -145,7 +145,7 @@ export class VfsInitializer {
         owner: SYSTEM_PRINCIPAL,
         rules: [
           { principal: { type: 'user', id: 'local_user' }, permissions: ['read'] },
-          { principal: { type: 'agent', id: 'Itera_AI' }, permissions: ['read'] },
+          { principal: { ...AGENT_PRINCIPAL }, permissions: ['read'] },
           { principal: { type: 'any', id: '*' }, permissions: ['read'] },
         ],
       });
@@ -156,7 +156,7 @@ export class VfsInitializer {
       owner: SYSTEM_PRINCIPAL,
       rules: [
         { principal: { type: 'user', id: 'local_user' }, permissions: ['read', 'write', 'manage'] },
-        { principal: { type: 'agent', id: 'Itera_AI' }, permissions: ['read', 'write'] },
+        { principal: { ...AGENT_PRINCIPAL }, permissions: ['read', 'write'] },
         { principal: { type: 'any', id: '*' }, permissions: ['read', 'write'] },
       ],
     };
@@ -178,10 +178,10 @@ export class VfsInitializer {
     // 3. memory 領域の権限設定 (AIのみ読み書き可能、User/GuestはRead-Only)
     if (this.vfs.exists(SYSTEM_PRINCIPAL, 'memory')) {
       const memoryAcl: AccessControlList = {
-        owner: { type: 'agent', id: 'Itera_AI' },
+        owner: { ...AGENT_PRINCIPAL },
         rules: [
           {
-            principal: { type: 'agent', id: 'Itera_AI' },
+            principal: { ...AGENT_PRINCIPAL },
             permissions: ['read', 'write', 'manage'],
           },
           {

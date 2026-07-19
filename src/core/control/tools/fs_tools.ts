@@ -5,14 +5,11 @@
 
 import type { ToolRegistry } from '../ToolRegistry';
 import type { VfsService } from '../../vfs/VfsService';
-import type { Principal } from '../../vfs/types';
+import { AGENT_PRINCIPAL } from '../../vfs/types';
 
 export function registerFSTools(registry: ToolRegistry): void {
   const setId = 'system:fs';
   const setName = 'System: File Operations';
-
-  // AI（Agent）の身分証
-  const AGENT_PRINCIPAL: Principal = { type: 'agent', id: 'Itera_AI' };
 
   registry.registerSystemTool(setId, setName, {
     name: 'read_file',

@@ -7,6 +7,7 @@ import type { VfsService } from '../../core/vfs/VfsService';
 import type { AppRegistry } from '../../core/sys/AppRegistry';
 import { USER_PRINCIPAL } from '../../core/vfs/types';
 import { GuestCompiler } from './GuestCompiler';
+import { resolveRelativePath } from '../../utils/path';
 
 export interface Process {
   pid: string;
@@ -431,7 +432,7 @@ export class ProcessManager {
 
     let absPath = requestPath;
     if (requestPath.startsWith('./') || requestPath.startsWith('../') || requestPath.startsWith('/')) {
-      absPath = this._resolveRelativePath(currentDir, requestPath);
+      absPath = resolveRelativePath(currentDir, requestPath);
     }
 
     // 解決はユーザー権限で行う（セキュリティ確保のため）
@@ -450,22 +451,5 @@ export class ProcessManager {
     return url;
   }
 
-  private _resolveRelativePath(baseDir: string, relPath: string): string {
-    if (relPath.startsWith('/')) {
-      baseDir = '';
-      relPath = relPath.substring(1);
-    }
-    const stack = baseDir ? baseDir.split('/') : [];
-    const parts = relPath.split('/');
 
-    for (const part of parts) {
-      if (part === '.' || part === '') continue;
-      if (part === '..') {
-        if (stack.length > 0) stack.pop();
-      } else {
-        stack.push(part);
-      }
-    }
-    return stack.join('/');
-  }
 }

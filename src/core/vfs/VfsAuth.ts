@@ -4,7 +4,7 @@
  */
 
 import type { NodeStore } from './NodeStore';
-import { type Principal, type PermissionType, type VfsNode, type AccessControlList } from './types';
+import { AGENT_PRINCIPAL, type Principal, type PermissionType, type VfsNode, type AccessControlList } from './types';
 
 export class VfsAuth {
   private nodeStore: NodeStore;
@@ -77,7 +77,7 @@ export class VfsAuth {
       owner: { ...principal },
       rules: [
         { principal: { type: 'user', id: 'local_user' }, permissions: ['read', 'write', 'manage'] },
-        { principal: { type: 'agent', id: 'Itera_AI' }, permissions: ['read', 'write'] },
+        { principal: { ...AGENT_PRINCIPAL }, permissions: ['read', 'write'] },
         { principal: { type: 'any', id: '*' }, permissions: ['read', 'write'] },
       ],
     };

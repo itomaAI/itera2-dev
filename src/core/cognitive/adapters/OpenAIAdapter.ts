@@ -139,9 +139,6 @@ export class OpenAIAdapter extends BaseLLMAdapter {
           }
         }
       }
-    } catch (e: any) {
-      if (e.name === 'AbortError') throw e;
-      throw e;
     } finally {
       clearTimeout(idleTimeout!);
       if (signal) signal.removeEventListener('abort', onAbort);

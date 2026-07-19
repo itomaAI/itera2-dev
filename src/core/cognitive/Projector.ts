@@ -6,7 +6,12 @@
 import type { VfsService } from '../vfs/VfsService';
 import type { ConfigManager } from '../sys/ConfigManager';
 import type { HistoryManager, Turn } from '../state/HistoryManager';
+import type { MediaRef } from '../types/content';
+import type { Principal } from '../vfs/types';
+import { buildTextPromptNodes, buildToolPromptNodes, buildUserPromptNodes } from './PromptContentBuilder';
+import { wrapUserInput } from './LpmlSerializer';
 import { SYSTEM_PRINCIPAL } from '../vfs/types';
+import { blobToBase64 } from '../../utils/binary';
 
 export interface LlmCapabilities {
   maxMediaSizeMB: number;
@@ -82,8 +87,8 @@ export abstract class BaseProjector {
 
   protected async checkMediaSupport(
     vfs: VfsService,
-    mediaObj: any,
-    principal: any,
+    mediaObj: MediaRef,
+    principal: Principal,
   ): Promise<{ supported: boolean; reason?: 'mime' | 'size' }> {
     if (!this.isSupportedMimeType(mediaObj.mimeType)) {
       return { supported: false, reason: 'mime' };
@@ -102,17 +107,8 @@ export abstract class BaseProjector {
     return { supported: true };
   }
 
-  // Blob を Base64 文字列に変換するヘルパー
   protected async _blobToBase64(blob: Blob): Promise<string> {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        const result = reader.result as string;
-        resolve(result.split(',')[1] || result); // `data:...;base64,` のプレフィックスを削除した純粋なBase64
-      };
-      reader.onerror = reject;
-      reader.readAsDataURL(blob);
-    });
+    return blobToBase64(blob);
   }
 }
 
@@ -166,40 +162,27 @@ export class GeminiProjector extends BaseProjector {
   private async _convertTurnToParts(turn: Turn, vfs: VfsService, apiKey: string, signal?: AbortSignal): Promise<any[]> {
     if (typeof turn.content === 'string') {
       let text = turn.content;
-      if (turn.role === 'user') text = `<user_input>\n${text}\n</user_input>`;
+      if (turn.role === 'user') text = wrapUserInput(text);
       return [{ text: text }];
     }
 
     if (Array.isArray(turn.content)) {
       if (turn.meta && turn.meta.type === 'tool_execution') {
         const parts: any[] = [];
-        for (const c of turn.content) {
+        for (const node of buildToolPromptNodes(turn)) {
           if (signal && signal.aborted) throw new DOMException('Aborted', 'AbortError');
-          if (!c.output || (!c.output.log && !c.output.media)) continue;
+          if (!node.shouldEmit) continue;
 
-          const actionName = c.actionType || 'unknown';
-          const status = c.output.error ? 'error' : 'success';
-          let attrStr = `action="${actionName}" status="${status}"`;
+          parts.push({ text: node.text });
 
-          if (c.params) {
-            for (const [key, val] of Object.entries(c.params)) {
-              attrStr += ` ${key}="${String(val).replace(/"/g, '&quot;')}"`;
-            }
-          }
-
-          const logContent = c.output.log ? c.output.log.trim() : '';
-          parts.push({
-            text: logContent ? `<tool_output ${attrStr}>\n${logContent}\n</tool_output>` : `<tool_output ${attrStr} />`,
-          });
-
-          if (c.output.media) {
-            const support = await this.checkMediaSupport(vfs, c.output.media, SYSTEM_PRINCIPAL);
+          if (node.media) {
+            const support = await this.checkMediaSupport(vfs, node.media, SYSTEM_PRINCIPAL);
             if (support.supported) {
-              const fileData = await this._resolveMediaFile(c.output.media, vfs, apiKey, signal);
+              const fileData = await this._resolveMediaFile(node.media, vfs, apiKey, signal);
               if (fileData) parts.push({ fileData });
             } else {
               parts.push({
-                text: this.getUnsupportedMessage(c.output.media.path, c.output.media.mimeType, support.reason!),
+                text: this.getUnsupportedMessage(node.media.path, node.media.mimeType, support.reason!),
               });
             }
           }
@@ -209,45 +192,31 @@ export class GeminiProjector extends BaseProjector {
 
       if (turn.role === 'user') {
         const parts: any[] = [];
-        let textBuffer = '';
-        const flushText = () => {
-          if (textBuffer.trim())
-            parts.push({
-              text: `<user_input>\n${textBuffer.trim()}\n</user_input>`,
-            });
-          textBuffer = '';
-        };
 
-        for (const item of turn.content) {
-          if (item.text) {
-            if (item.text.trim().startsWith('<')) {
-              flushText();
-              parts.push({ text: item.text });
-            } else {
-              textBuffer += item.text + '\n';
-            }
-          } else if (item.media) {
-            flushText();
-            const support = await this.checkMediaSupport(vfs, item.media, SYSTEM_PRINCIPAL);
-            if (support.supported) {
-              const fileData = await this._resolveMediaFile(item.media, vfs, apiKey, signal);
-              if (fileData) parts.push({ fileData });
-              else
-                parts.push({
-                  text: `\n[System: The image file '${item.media.path}' could not be loaded from VFS.]\n`,
-                });
-            } else {
+        for (const node of buildUserPromptNodes(turn)) {
+          if (node.kind === 'text') {
+            parts.push({ text: node.text });
+            continue;
+          }
+
+          const support = await this.checkMediaSupport(vfs, node.media, SYSTEM_PRINCIPAL);
+          if (support.supported) {
+            const fileData = await this._resolveMediaFile(node.media, vfs, apiKey, signal);
+            if (fileData) parts.push({ fileData });
+            else
               parts.push({
-                text: this.getUnsupportedMessage(item.media.path, item.media.mimeType, support.reason!),
+                text: `\n[System: The image file '${node.media.path}' could not be loaded from VFS.]\n`,
               });
-            }
+          } else {
+            parts.push({
+              text: this.getUnsupportedMessage(node.media.path, node.media.mimeType, support.reason!),
+            });
           }
         }
-        flushText();
         return parts;
       }
 
-      return turn.content.map((c: any) => (c.text ? { text: c.text } : null)).filter(Boolean);
+      return buildTextPromptNodes(turn).map((node) => ({ text: node.text }));
     }
     return [];
   }
@@ -379,47 +348,36 @@ export class OpenAIProjector extends BaseProjector {
   private async _convertTurnToParts(turn: Turn, vfs: VfsService, signal?: AbortSignal): Promise<any[]> {
     if (typeof turn.content === 'string') {
       let text = turn.content;
-      if (turn.role === 'user') text = `<user_input>\n${text}\n</user_input>`;
+      if (turn.role === 'user') text = wrapUserInput(text);
       return [{ type: 'text', text: text }];
     }
 
     if (Array.isArray(turn.content)) {
       if (turn.meta && turn.meta.type === 'tool_execution') {
         const parts: any[] = [];
-        for (const c of turn.content) {
+        for (const node of buildToolPromptNodes(turn)) {
           if (signal && signal.aborted) throw new DOMException('Aborted', 'AbortError');
-          if (!c.output || (!c.output.log && !c.output.media)) continue;
+          if (!node.shouldEmit) continue;
 
-          const actionName = c.actionType || 'unknown';
-          const status = c.output.error ? 'error' : 'success';
-          let attrStr = `action="${actionName}" status="${status}"`;
-
-          if (c.params) {
-            for (const [key, val] of Object.entries(c.params)) {
-              attrStr += ` ${key}="${String(val).replace(/"/g, '&quot;')}"`;
-            }
-          }
-
-          const logContent = c.output.log ? c.output.log.trim() : '';
           parts.push({
             type: 'text',
-            text: logContent ? `<tool_output ${attrStr}>\n${logContent}\n</tool_output>` : `<tool_output ${attrStr} />`,
+            text: node.text,
           });
 
-          if (c.output.media) {
-            const support = await this.checkMediaSupport(vfs, c.output.media, SYSTEM_PRINCIPAL);
+          if (node.media) {
+            const support = await this.checkMediaSupport(vfs, node.media, SYSTEM_PRINCIPAL);
             if (support.supported) {
-              if (c.output.media.mimeType?.startsWith('image/')) {
-                const imgUrl = await this._resolveMediaDataUrl(c.output.media, vfs);
+              if (node.media.mimeType?.startsWith('image/')) {
+                const imgUrl = await this._resolveMediaDataUrl(node.media, vfs);
                 if (imgUrl) parts.push({ type: 'image_url', image_url: { url: imgUrl } });
               } else {
-                const fileData = await this._resolveFileData(c.output.media, vfs);
+                const fileData = await this._resolveFileData(node.media, vfs);
                 if (fileData) parts.push({ type: 'file', file: fileData });
               }
             } else {
               parts.push({
                 type: 'text',
-                text: this.getUnsupportedMessage(c.output.media.path, c.output.media.mimeType, support.reason!),
+                text: this.getUnsupportedMessage(node.media.path, node.media.mimeType, support.reason!),
               });
             }
           }
@@ -429,58 +387,43 @@ export class OpenAIProjector extends BaseProjector {
 
       if (turn.role === 'user') {
         const parts: any[] = [];
-        let textBuffer = '';
-        const flushText = () => {
-          if (textBuffer.trim())
+
+        for (const node of buildUserPromptNodes(turn)) {
+          if (node.kind === 'text') {
+            parts.push({ type: 'text', text: node.text });
+            continue;
+          }
+
+          const support = await this.checkMediaSupport(vfs, node.media, SYSTEM_PRINCIPAL);
+          if (support.supported) {
+            if (node.media.mimeType?.startsWith('image/')) {
+              const imgUrl = await this._resolveMediaDataUrl(node.media, vfs);
+              if (imgUrl) parts.push({ type: 'image_url', image_url: { url: imgUrl } });
+              else
+                parts.push({
+                  type: 'text',
+                  text: `\n[System: The image file '${node.media.path}' could not be loaded from VFS.]\n`,
+                });
+            } else {
+              const fileData = await this._resolveFileData(node.media, vfs);
+              if (fileData) parts.push({ type: 'file', file: fileData });
+              else
+                parts.push({
+                  type: 'text',
+                  text: `\n[System: The file '${node.media.path}' could not be loaded from VFS.]\n`,
+                });
+            }
+          } else {
             parts.push({
               type: 'text',
-              text: `<user_input>\n${textBuffer.trim()}\n</user_input>`,
+              text: this.getUnsupportedMessage(node.media.path, node.media.mimeType, support.reason!),
             });
-          textBuffer = '';
-        };
-
-        for (const item of turn.content) {
-          if (item.text) {
-            if (item.text.trim().startsWith('<')) {
-              flushText();
-              parts.push({ type: 'text', text: item.text });
-            } else {
-              textBuffer += item.text + '\n';
-            }
-          } else if (item.media) {
-            flushText();
-            const support = await this.checkMediaSupport(vfs, item.media, SYSTEM_PRINCIPAL);
-            if (support.supported) {
-              if (item.media.mimeType?.startsWith('image/')) {
-                const imgUrl = await this._resolveMediaDataUrl(item.media, vfs);
-                if (imgUrl) parts.push({ type: 'image_url', image_url: { url: imgUrl } });
-                else
-                  parts.push({
-                    type: 'text',
-                    text: `\n[System: The image file '${item.media.path}' could not be loaded from VFS.]\n`,
-                  });
-              } else {
-                const fileData = await this._resolveFileData(item.media, vfs);
-                if (fileData) parts.push({ type: 'file', file: fileData });
-                else
-                  parts.push({
-                    type: 'text',
-                    text: `\n[System: The file '${item.media.path}' could not be loaded from VFS.]\n`,
-                  });
-              }
-            } else {
-              parts.push({
-                type: 'text',
-                text: this.getUnsupportedMessage(item.media.path, item.media.mimeType, support.reason!),
-              });
-            }
           }
         }
-        flushText();
         return parts;
       }
 
-      return turn.content.map((c: any) => (c.text ? { type: 'text', text: c.text } : null)).filter(Boolean);
+      return buildTextPromptNodes(turn).map((node) => ({ type: 'text', text: node.text }));
     }
     return [];
   }
@@ -588,38 +531,27 @@ export class AnthropicProjector extends BaseProjector {
     const vfs = state.vfs;
     if (typeof turn.content === 'string') {
       let text = turn.content;
-      if (turn.role === 'user') text = `<user_input>\n${text}\n</user_input>`;
+      if (turn.role === 'user') text = wrapUserInput(text);
       return [{ type: 'text', text: text }];
     }
 
     if (Array.isArray(turn.content)) {
       if (turn.meta && turn.meta.type === 'tool_execution') {
         const parts: any[] = [];
-        for (const c of turn.content) {
+        for (const node of buildToolPromptNodes(turn)) {
           if (signal && signal.aborted) throw new DOMException('Aborted', 'AbortError');
-          if (!c.output || (!c.output.log && !c.output.media)) continue;
+          if (!node.shouldEmit) continue;
 
-          const actionName = c.actionType || 'unknown';
-          const status = c.output.error ? 'error' : 'success';
-          let attrStr = `action="${actionName}" status="${status}"`;
-
-          if (c.params) {
-            for (const [key, val] of Object.entries(c.params)) {
-              attrStr += ` ${key}="${String(val).replace(/"/g, '&quot;')}"`;
-            }
-          }
-
-          const logContent = c.output.log ? c.output.log.trim() : '';
           parts.push({
             type: 'text',
-            text: logContent ? `<tool_output ${attrStr}>\n${logContent}\n</tool_output>` : `<tool_output ${attrStr} />`,
+            text: node.text,
           });
 
-          if (c.output.media) {
-            const support = await this.checkMediaSupport(vfs, c.output.media, SYSTEM_PRINCIPAL);
+          if (node.media) {
+            const support = await this.checkMediaSupport(vfs, node.media, SYSTEM_PRINCIPAL);
             if (support.supported) {
               const fileObj = await this._resolveMediaFileAnthropic(
-                c.output.media,
+                node.media,
                 vfs,
                 this.apiKey,
                 state.configManager,
@@ -629,7 +561,7 @@ export class AnthropicProjector extends BaseProjector {
             } else {
               parts.push({
                 type: 'text',
-                text: this.getUnsupportedMessage(c.output.media.path, c.output.media.mimeType, support.reason!),
+                text: this.getUnsupportedMessage(node.media.path, node.media.mimeType, support.reason!),
               });
             }
           }
@@ -639,54 +571,39 @@ export class AnthropicProjector extends BaseProjector {
 
       if (turn.role === 'user') {
         const parts: any[] = [];
-        let textBuffer = '';
-        const flushText = () => {
-          if (textBuffer.trim())
-            parts.push({
-              type: 'text',
-              text: `<user_input>\n${textBuffer.trim()}\n</user_input>`,
-            });
-          textBuffer = '';
-        };
 
-        for (const item of turn.content) {
-          if (item.text) {
-            if (item.text.trim().startsWith('<')) {
-              flushText();
-              parts.push({ type: 'text', text: item.text });
-            } else {
-              textBuffer += item.text + '\n';
-            }
-          } else if (item.media) {
-            flushText();
-            const support = await this.checkMediaSupport(vfs, item.media, SYSTEM_PRINCIPAL);
-            if (support.supported) {
-              const fileObj = await this._resolveMediaFileAnthropic(
-                item.media,
-                vfs,
-                this.apiKey,
-                state.configManager,
-                signal,
-              );
-              if (fileObj) parts.push(fileObj);
-              else
-                parts.push({
-                  type: 'text',
-                  text: `\n[System: The file '${item.media.path}' could not be loaded from VFS.]\n`,
-                });
-            } else {
+        for (const node of buildUserPromptNodes(turn)) {
+          if (node.kind === 'text') {
+            parts.push({ type: 'text', text: node.text });
+            continue;
+          }
+
+          const support = await this.checkMediaSupport(vfs, node.media, SYSTEM_PRINCIPAL);
+          if (support.supported) {
+            const fileObj = await this._resolveMediaFileAnthropic(
+              node.media,
+              vfs,
+              this.apiKey,
+              state.configManager,
+              signal,
+            );
+            if (fileObj) parts.push(fileObj);
+            else
               parts.push({
                 type: 'text',
-                text: this.getUnsupportedMessage(item.media.path, item.media.mimeType, support.reason!),
+                text: `\n[System: The file '${node.media.path}' could not be loaded from VFS.]\n`,
               });
-            }
+          } else {
+            parts.push({
+              type: 'text',
+              text: this.getUnsupportedMessage(node.media.path, node.media.mimeType, support.reason!),
+            });
           }
         }
-        flushText();
         return parts;
       }
 
-      return turn.content.map((c: any) => (c.text ? { type: 'text', text: c.text } : null)).filter(Boolean);
+      return buildTextPromptNodes(turn).map((node) => ({ type: 'text', text: node.text }));
     }
     return [];
   }
