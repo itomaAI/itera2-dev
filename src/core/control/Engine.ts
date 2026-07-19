@@ -346,12 +346,8 @@ export class Engine {
       return isHalted ? false : willTrigger;
     };
 
-    actions.forEach(async (action, index) => {
-      // ツール実行の順序をある程度維持するため、インデックスに応じて開始をわずかに遅らせる (50ms間隔)
-      if (index > 0) {
-        await new Promise((resolve) => setTimeout(resolve, index * 50));
-      }
-
+    for (let index = 0; index < actions.length; index++) {
+      const action = actions[index];
       // 待機中にループが停止（Abort）された場合は実行をキャンセル
       if (this.abortController?.signal.aborted) {
         return;
@@ -406,7 +402,7 @@ export class Engine {
           this._emit('turn_end', { role: 'system', turn: warningTurn });
         }
       }
-    });
+    }
   }
 
   stop(): void {

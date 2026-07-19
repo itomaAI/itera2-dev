@@ -88,7 +88,12 @@ export class CognitiveManager {
 
     let secrets: any = {};
     try {
-      secrets = JSON.parse(localStorage.getItem('itera_llm_secrets') || '{}');
+      if (this.vfs.exists(SYSTEM_PRINCIPAL, 'system/config/llm_secrets.json')) {
+        const content = await this.vfs.readFile(SYSTEM_PRINCIPAL, 'system/config/llm_secrets.json');
+        secrets = JSON.parse(content);
+      } else {
+        secrets = JSON.parse(localStorage.getItem('itera_llm_secrets') || '{}');
+      }
     } catch (e) {}
 
     if (this.onStatusUpdate) {

@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head><meta charset="utf-8"><title>PR Creator</title></head>
+<body>
+<script>
+(async () => {
+  const args = await MetaOS.system.getArgs();
+  const token = args.token;
+  const head = args.head || 'fix/vfs-policy';
+  const base = args.base || 'main';
+  const owner = 'itomaAI';
+  const repo = 'itera2-dev';
+  const api = `https://api.github.com/repos/${owner}/${repo}/pulls`;
+
+  const body = {
+    title: '[VFS] Refactor: policy extraction, retry helper, structuredClone',
+    head: head,
+    base: base,
+    body: 'Resolves issues #1 #2 #3\n- Extract permanent-delete path rules to VFS_POLICY (src/core/vfs/policy.ts)\n- Add BaseOperation.runWithParentCheck to centralize lock+retry boilerplate (applied to MkdirOp)\n- Replace JSON.parse(JSON.stringify) with structuredClone and add VfsService._toStat mapper'
+  };
+
+  try {
+    const res = await MetaOS.net.fetch(api, {
+      method: 'POST',
+      useProxy: true,
+      headers: {
+        'Authorization': 'Bearer ' + token,
+        'Accept': 'application/vnd.github+json',
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(body)
+    });
+    if (res.ok) {
+      const data = await res.json();
+      MetaOS.host.notify('PR created: ' + data.html_url, 'GitHub PR');
+      MetaOS.ai.log('PR created: ' + data.html_url, 'info');
+    } else {
+      const err = await res.text();
+      MetaOS.host.notify('PR failed: ' + res.status, 'GitHub PR');
+      MetaOS.ai.log('PR failed: ' + res.status + ' ' + err, 'error');
+    }
+  } catch (e) {
+    MetaOS.host.notify('PR error: ' + e.message, 'GitHub PR');
+    MetaOS.ai.log('PR error: ' + e.message, 'error');
+  }
+})();
+</script>
+</body>
+</html>
