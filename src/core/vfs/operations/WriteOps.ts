@@ -12,45 +12,30 @@ export class MkdirOp extends BaseOperation<{ path: string; opts: MkdirOptions },
     const normPath = this.ctx.pathResolver.normalizePath(path);
     if (!normPath) return 'root';
 
-    const parts = normPath.split('/');
-    const name = parts.pop()!;
-    const parentPath = parts.join('/');
+    return this.runWithParentCheck(principal, normPath, async (parentId) => {
+      const existingId = this.ctx.pathResolver.getIdByPath(normPath);
+      if (existingId !== undefined) throw new Error(`Path already exists: ${normPath}`);
 
-    while (true) {
-      let shouldRetry = false;
-      const parentId = await this.ensureDir(principal, parentPath);
+      this.ctx.auth.checkNodePermission(principal, parentId, 'write');
 
-      const res = await this.ctx.lockManager.acquire(normPath, async () => {
-        if (parentId !== null && !this.ctx.nodeStore.getNode(parentId)) {
-          shouldRetry = true;
-          return null;
-        }
+      const parts = normPath.split('/');
+      const name = parts.pop()!;
+      const newNode: VfsNode = {
+        id: this.generateId(),
+        name,
+        parentId,
+        kind: 'directory',
+        flags: { isSystem: false, isTrashed: false },
+        meta: { size: 0, createdAt: Date.now(), updatedAt: Date.now(), version: 1 },
+        acl: this.ctx.auth.getDefaultAcl(principal, parentId),
+      };
 
-        const existingId = this.ctx.pathResolver.getIdByPath(normPath);
-        if (existingId !== undefined) throw new Error(`Path already exists: ${normPath}`);
+      const tx = this.createTransaction(principal);
+      tx.put(newNode);
+      await tx.commit();
 
-        this.ctx.auth.checkNodePermission(principal, parentId, 'write');
-
-        const newNode: VfsNode = {
-          id: this.generateId(),
-          name,
-          parentId,
-          kind: 'directory',
-          flags: { isSystem: false, isTrashed: false },
-          meta: { size: 0, createdAt: Date.now(), updatedAt: Date.now(), version: 1 },
-          acl: this.ctx.auth.getDefaultAcl(principal, parentId),
-        };
-
-        const tx = this.createTransaction(principal);
-        tx.put(newNode);
-        await tx.commit();
-
-        return `Created directory: ${normPath}`;
-      });
-
-      if (shouldRetry) continue;
-      return res!;
-    }
+      return `Created directory: ${normPath}`;
+    });
   }
 }
 

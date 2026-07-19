@@ -4,18 +4,14 @@
  */
 
 import { BaseOperation } from './BaseOperation';
+import { VFS_POLICY } from '../policy';
 import type { Principal, VfsNode, DeleteOptions, RenameOptions, CopyOptions } from '../types';
 
 export class DeleteFileOp extends BaseOperation<{ path: string; opts: DeleteOptions }, string> {
   async execute(principal: Principal, args: { path: string; opts: DeleteOptions }): Promise<string> {
     const { path, opts } = args;
     const normPath = this.ctx.pathResolver.normalizePath(path);
-    const isPermanent =
-      opts.permanent ||
-      normPath === 'trash' ||
-      normPath.startsWith('trash/') ||
-      normPath.startsWith('system/temp/') ||
-      normPath.startsWith('system/logs/');
+    const isPermanent = opts.permanent || VFS_POLICY.isPermanentDelete(normPath);
 
     if (!isPermanent) {
       await this.ctx.vfs._hydrateIfNeeded(principal, normPath, 'trash');

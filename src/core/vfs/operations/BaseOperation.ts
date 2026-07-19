@@ -59,6 +59,28 @@ export abstract class BaseOperation<TArgs, TReturn> {
     return new VfsTransaction(this.ctx.nodeStore, this.ctx.pathResolver, this.ctx.eventBus, principal);
   }
 
+  protected async runWithParentCheck(
+    principal: Principal,
+    path: string,
+    fn: (parentId: string | null) => Promise<string | null>,
+  ): Promise<string> {
+    const normPath = this.ctx.pathResolver.normalizePath(path);
+    while (true) {
+      let shouldRetry = false;
+      const parentPath = normPath.split('/').slice(0, -1).join('/');
+      const parentId = await this.ensureDir(principal, parentPath);
+      const res = await this.ctx.lockManager.acquire(normPath, async () => {
+        if (parentId !== null && !this.ctx.nodeStore.getNode(parentId)) {
+          shouldRetry = true;
+          return null;
+        }
+        return await fn(parentId);
+      });
+      if (shouldRetry) continue;
+      return res!;
+    }
+  }
+
   protected async ensureDir(principal: Principal, path: string): Promise<string | null> {
     const normPath = this.ctx.pathResolver.normalizePath(path);
     if (!normPath) return null; // root

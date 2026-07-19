@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Itera2-dev 設計評価スライド</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, "Hiragino Sans", sans-serif; background: #0f172a; color: #e2e8f0; height: 100vh; overflow: hidden; }
+  #deck { position: relative; width: 100%; height: 100%; }
+  .slide { position: absolute; inset: 0; padding: 24px; display: none; flex-direction: column; justify-content: center; }
+  .slide.active { display: flex; }
+  h1 { font-size: 1.6rem; margin-bottom: 12px; color: #38bdf8; }
+  h2 { font-size: 1.3rem; margin-bottom: 10px; color: #7dd3fc; border-bottom: 1px solid #334155; padding-bottom: 4px; }
+  ul { list-style: none; font-size: 0.92rem; line-height: 1.5; }
+  li { margin: 6px 0; padding-left: 12px; border-left: 3px solid #475569; }
+  .good { border-color: #22c55e; }
+  .bad { border-color: #ef4444; }
+  .num { font-size: 2.4rem; font-weight: bold; color: #fbbf24; text-align: center; margin-bottom: 8px; }
+  .nav { position: absolute; bottom: 12px; width: 100%; text-align: center; font-size: 0.8rem; color: #94a3b8; }
+  .progress { position: absolute; top: 0; left: 0; height: 4px; background: #38bdf8; transition: width 0.3s; }
+  .hint { position: absolute; top: 10px; right: 12px; font-size: 0.7rem; color: #64748b; }
+</style>
+</head>
+<body>
+<div id="deck">
+  <div class="progress" id="bar"></div>
+  <div class="hint">タップ/スワイプで進む</div>
+
+  <div class="slide active">
+    <h1>Itera OS v2 (itera2-dev)<br>設計評価まとめ</h1>
+    <ul>
+      <li>評価日: 2026-07-19</li>
+      <li>評価者: Itera (秘書AI)</li>
+      <li>観点: アーキテクチャ / VFS / AIループ / プロセス / モバイル</li>
+    </ul>
+  </div>
+
+  <div class="slide">
+    <h2>総評</h2>
+    <ul>
+      <li class="good">「OSを構築するOS」としての模範的モジュール設計</li>
+      <li class="good">責務分離が徹底 (core / shell / vfs / ipc)</li>
+      <li class="bad">モバイル運用で顕在化する依存・ハードコード課題</li>
+      <li class="bad">テスト基盤欠如・TS検査対象外のVFS_root</li>
+      <li>総合スコア: 8 / 10 (改善余地は明確)</li>
+    </ul>
+  </div>
+
+  <div class="slide">
+    <h2>アーキテクチャ観点</h2>
+    <ul>
+      <li class="good">層分離: cognitive / control / vfs / state / ipc</li>
+      <li class="good">Vite相対パス出力でポータブル</li>
+      <li class="good">strict TS設定 (noUnusedLocals等)</li>
+      <li class="bad">vfs_root内のHTML/JSが型チェック除外</li>
+      <li class="bad">テストフレームワーク未導入</li>
+    </ul>
+  </div>
+
+  <div class="slide">
+    <h2>VFS観点</h2>
+    <ul>
+      <li class="good">Facade + Operationパターン、ACL/トランザクション</li>
+      <li class="good">ProviderManagerでクラウド同期抽象化</li>
+      <li class="bad">パス文字列での永久削除判定 (ad-hoc)</li>
+      <li class="bad">lock+retryのコピペ boilarplate</li>
+      <li class="bad">JSON.parse(JSON.stringify)クローン蔓延</li>
+    </ul>
+  </div>
+
+  <div class="slide">
+    <h2>AIループ観点</h2>
+    <ul>
+      <li class="good">Max連続ツールguard・Abort安全設計</li>
+      <li class="good">debounceでping集約・起床判定分離</li>
+      <li class="bad">content文字列includesで分岐 (system_task)</li>
+      <li class="bad">setTimeout順次実行のad-hoc並列制御</li>
+      <li class="bad">localStorage直接参照でシークレット散在</li>
+    </ul>
+  </div>
+
+  <div class="slide">
+    <h2>プロセス観点</h2>
+    <ul>
+      <li class="good">RpcManagerのタイムアウト管理が堅牢</li>
+      <li class="good">GuestCompilerの循環参照防止</li>
+      <li class="bad">home.htmlだけ固定PID特例</li>
+      <li class="bad">DOMボタン直接結合 (責務混在)</li>
+      <li class="bad">スクリーンショットで外部CDN注入 (無効)</li>
+    </ul>
+  </div>
+
+  <div class="slide">
+    <h2>モバイル適性</h2>
+    <ul>
+      <li class="bad">CDN依存でオフライン時に機能喪失</li>
+      <li class="bad">多Manager/Operationでメモリ圧迫リスク</li>
+      <li class="good">viewport基準の設計だが実機413px未検証</li>
+      <li class="bad">take_screenshotが現在利用不可 (CDN起因)</li>
+    </ul>
+  </div>
+
+  <div class="slide">
+    <h2>改善優先度</h2>
+    <ul>
+      <li>1. スクリーンショット庫のVFS内包 (CDN削除)</li>
+      <li>2. VFSポリシー interface抽出 (パス判定)</li>
+      <li>3. BaseOperationへretryヘルパー集約</li>
+      <li>4. テスト導入 (Vitest)</li>
+      <li>5. TS include を vfs_root へ拡張</li>
+    </ul>
+  </div>
+
+  <div class="slide">
+    <h2>結論</h2>
+    <ul>
+      <li>設計思想は非常に優秀・拡張性高い</li>
+      <li>実用上の壁は「モバイル・オフライン」と「アドホック特例」</li>
+      <li>上記優先度を潰せば製品級のOS基盤へ</li>
+      <li>次ステップ: リファクタチケット化を提案可能</li>
+    </ul>
+    <div class="nav">— 終 —</div>
+  </div>
+
+</div>
+<script>
+  const slides = document.querySelectorAll('.slide');
+  let i = 0;
+  function show(n) {
+    slides[i].classList.remove('active');
+    i = (n + slides.length) % slides.length;
+    slides[i].classList.add('active');
+    document.getElementById('bar').style.width = ((i+1)/slides.length*100)+'%';
+  }
+  document.getElementById('deck').addEventListener('click', () => show(i+1));
+  let sx=0;
+  document.getElementById('deck').addEventListener('touchstart', e => sx=e.touches[0].clientX);
+  document.getElementById('deck').addEventListener('touchend', e => {
+    let dx = e.changedTouches[0].clientX - sx;
+    if (dx < -30) show(i+1);
+    else if (dx > 30) show(i-1);
+  });
+  show(0);
+</script>
+</body>
+</html>

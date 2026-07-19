@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head><meta charset="utf-8"><title>Issue Creator</title></head>
+<body>
+<script>
+(async () => {
+  const args = await MetaOS.system.getArgs();
+  const token = args.token;
+  const owner = 'itomaAI';
+  const repo = 'itera2-dev';
+  const apiBase = `https://api.github.com/repos/${owner}/${repo}/issues`;
+
+  const issues = [
+    { title: '[VFS] Extract permanent-delete path policy to VfsPolicy interface', body: 'Currently DeleteFileOp hardcodes prefixes like trash/, system/temp/, system/logs/ to decide permanent deletion. Move this to a configurable VfsPolicy so path conventions can change without code edits.' },
+    { title: '[VFS] Centralize lock+retry boilerplate into BaseOperation helper', body: 'MkdirOp, WriteFileOp, DeleteFileOp, RenameOp all repeat while(true){ shouldRetry; ensureDir; lockManager.acquire } pattern. Add a runWithParentCheck() helper in BaseOperation to reduce duplication.' },
+    { title: '[VFS] Replace JSON.parse(JSON.stringify) with structuredClone / toStat mapper', body: 'VfsService.stat and listFiles use JSON.parse(JSON.stringify) for ACL/flags clone and duplicate VfsStat assembly. Introduce a toStat(node) mapper and use structuredClone.' },
+    { title: '[AI] Replace content string match for system_task with structured meta flag', body: 'Engine._onHistoryChange uses turn.content.includes("<event type=\\"system_task\\">") to reset continuousToolCount. Use a dedicated meta flag (e.g., meta.resetToolCount) instead of string sniffing.' },
+    { title: '[AI] Replace setTimeout stagger in _dispatchActions with proper queue', body: 'Engine._dispatchActions uses index*50ms setTimeout to sequence async tool execution. Implement an explicit serializer or use Promise.all for true parallel as designed.' },
+    { title: '[AI] Move LLM secrets from localStorage to VFS credential store', body: 'CognitiveManager reads "itera_llm_secrets" from localStorage directly. Integrate with VFS system/config or MetaOS.net credentialId for consistency and security.' },
+    { title: '[Process] Remove hardcoded home.html PID special case', body: 'ProcessManager._resolveProcessInfo assigns pid "home" only for apps/home.html. Use manifest singleton:true or id field in apps.json for uniform handling.' },
+    { title: '[Process] Decouple ProcessManager from DOM buttons via event bus', body: '_bindEvents directly attaches onclick to BTN_REFRESH/BTN_HOME and calls spawn with inline options. Move UI bindings to DesktopEnvironment and use event bus.' },
+    { title: '[Process] Bundle html-to-image in VFS instead of CDN injection', body: 'GuestCompiler._getScreenshotHelperCode injects external CDN script for screenshots, failing offline/mobile. Place lib in system/core and inject via resolveUrl.' },
+    { title: '[General] Add Vitest test framework & CI', body: 'No test scripts in package.json. Add Vitest for VFS transactions, LPML parser, and engine loop to prevent regressions.' },
+    { title: '[General] Extend tsconfig include to vfs_root', body: 'Currently only "src" is type-checked; vfs_root HTML/JS (system/core/std.js etc.) escape checks. Include vfs_root in tsconfig or add separate check.' },
+    { title: '[Mobile] Profile memory footprint of Manager/Operation classes', body: 'Multiple Manager/Operation classes increase bundle size and memory pressure on mobile (viewport ~413px). Consider lazy-load or flatten for low-end devices.' }
+  ];
+
+  let created = 0;
+  for (const iss of issues) {
+    try {
+      const res = await MetaOS.net.fetch(apiBase, {
+        method: 'POST',
+        useProxy: true,
+        headers: {
+          'Authorization': 'Bearer ' + token,
+          'Accept': 'application/vnd.github+json',
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ title: iss.title, body: iss.body, labels: ['evaluation', 'refactor'] })
+      });
+      if (res.ok) {
+        created++;
+        const data = await res.json();
+        console.log('Created:', data.html_url);
+      } else {
+        console.error('Failed:', iss.title, res.status, await res.text());
+      }
+    } catch (e) {
+      console.error('Error', iss.title, e);
+    }
+  }
+  MetaOS.host.notify(`Created ${created}/${issues.length} issues on ${owner}/${repo}`, 'GitHub Issues');
+  MetaOS.ai.log(`Issue creation done: ${created}/${issues.length}`, 'info');
+})();
+</script>
+</body>
+</html>

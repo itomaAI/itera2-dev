@@ -133,11 +133,15 @@ export class VfsService {
         updatedAt: 0,
         version: 1,
         flags: { isSystem: true, isTrashed: false },
-        acl: this.auth.getDefaultAcl(SYSTEM_PRINCIPAL, null),
+        acl: structuredClone(this.auth.getDefaultAcl(SYSTEM_PRINCIPAL, null)),
       };
     }
 
     const node = this.nodeStore.getNode(id)!;
+    return this._toStat(node);
+  }
+
+  private _toStat(node: VfsNode): VfsStat {
     return {
       id: node.id,
       path: this.pathResolver.getPathById(node.id),
@@ -150,8 +154,8 @@ export class VfsService {
       version: node.meta.version,
       hash: node.meta.hash,
       syncState: node.meta.syncState,
-      flags: JSON.parse(JSON.stringify(node.flags)),
-      acl: JSON.parse(JSON.stringify(node.acl)),
+      flags: structuredClone(node.flags),
+      acl: structuredClone(node.acl),
     };
   }
 
@@ -186,21 +190,7 @@ export class VfsService {
         const p = this.pathResolver.getPathById(id);
         if (options.detail) {
           const node = this.nodeStore.getNode(id)!;
-          return {
-            id: node.id,
-            path: p,
-            name: node.name,
-            kind: node.kind,
-            size: node.meta.size,
-            createdAt: node.meta.createdAt,
-            updatedAt: node.meta.updatedAt,
-            mimeType: node.meta.mimeType,
-            version: node.meta.version,
-            hash: node.meta.hash,
-            syncState: node.meta.syncState,
-            flags: JSON.parse(JSON.stringify(node.flags)),
-            acl: JSON.parse(JSON.stringify(node.acl)),
-          } as VfsStat;
+          return this._toStat(node);
         }
         return p;
       })
