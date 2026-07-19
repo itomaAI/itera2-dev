@@ -5,6 +5,7 @@
 
 import type { AppRegistry } from '../sys/AppRegistry';
 import type { GuestToolInvoker } from './GuestToolInvoker';
+import type { ToolExecutionRecorder } from './ToolExecutionRecorder';
 import { normalizeDynamicToolResult } from './ToolResultNormalizer';
 import type { ToolParams, ToolResult } from '../types/tools';
 
@@ -42,10 +43,14 @@ export class ToolRegistry {
   private toolSets: Map<string, ToolSet> = new Map();
   private appRegistry: AppRegistry | null = null;
   private guestToolInvoker: GuestToolInvoker | null = null;
+  private executionRecorder: ToolExecutionRecorder | null = null;
 
-  constructor(appRegistry?: AppRegistry) {
+  constructor(appRegistry?: AppRegistry, executionRecorder?: ToolExecutionRecorder) {
     if (appRegistry) {
       this.appRegistry = appRegistry;
+    }
+    if (executionRecorder) {
+      this.executionRecorder = executionRecorder;
     }
   }
 
@@ -210,6 +215,8 @@ export class ToolRegistry {
     action: { type: string; params: ToolParams },
     context: { shell: any; engine: any } & Record<string, any>,
   ): Promise<ToolResult | null> {
+    const startedAt = Date.now();
+
     // 1. 全Toolsetから対象のツールを検索する
     let foundTool: ToolDef | null = null;
     let foundSet: ToolSet | null = null;
@@ -223,23 +230,31 @@ export class ToolRegistry {
     }
 
     if (!foundTool || !foundSet) {
-      throw new UnknownToolError(action.type);
+      const error = new UnknownToolError(action.type);
+      this._recordExecution(action, null, startedAt, undefined, error);
+      throw error;
     }
 
     // 2. システムツールの実行
     if (foundSet.kind === 'system') {
       if (!foundTool.impl) {
-        throw new Error(`[ToolRegistry] System tool <${action.type}> has no implementation.`);
+        const error = new Error(`[ToolRegistry] System tool <${action.type}> has no implementation.`);
+        this._recordExecution(action, foundSet, startedAt, undefined, error);
+        throw error;
       }
       try {
-        return await foundTool.impl(action.params, context);
+        const result = await foundTool.impl(action.params, context);
+        this._recordExecution(action, foundSet, startedAt, result);
+        return result;
       } catch (err: any) {
         console.error(`[ToolRegistry] Error executing system tool <${action.type}>:`, err);
-        return {
+        const result: ToolResult = {
           log: `Error executing <${action.type}>: ${err.message}`,
           ui: `❌ Error: ${err.message}`,
           error: true,
         };
+        this._recordExecution(action, foundSet, startedAt, result, err);
+        return result;
       }
     }
 
@@ -250,15 +265,61 @@ export class ToolRegistry {
         throw new Error('ProcessManager not connected to Shell context.');
       }
 
-      const result = await this.guestToolInvoker.invokeTool(pid, action.type, action.params);
-      return normalizeDynamicToolResult(result, action.type);
+      const rawResult = await this.guestToolInvoker.invokeTool(pid, action.type, action.params);
+      const rawResultSnapshot = structuredClone(rawResult);
+      const result = normalizeDynamicToolResult(rawResult, action.type);
+      this._recordExecution(action, foundSet, startedAt, result, undefined, rawResultSnapshot);
+      return result;
     } catch (err: any) {
       console.error(`[ToolRegistry] Error executing dynamic tool <${action.type}>:`, err);
-      return {
+      const result: ToolResult = {
         log: `Error executing dynamic tool <${action.type}>: ${err.message}`,
         ui: `❌ Error: ${err.message}`,
         error: true,
       };
+      this._recordExecution(action, foundSet, startedAt, result, err);
+      return result;
     }
+  }
+
+  private _recordExecution(
+    action: { type: string; params: ToolParams },
+    toolSet: ToolSet | null,
+    startedAt: number,
+    result?: ToolResult | null,
+    error?: unknown,
+    rawResult?: unknown,
+  ): void {
+    if (!this.executionRecorder) return;
+
+    const errorObject = error instanceof Error ? error : null;
+    const errorRecord = error
+      ? {
+          name: errorObject?.name,
+          message: errorObject?.message || String(error),
+          stack: errorObject?.stack,
+          code:
+            typeof error === 'object' && error !== null && 'code' in error
+              ? String((error as { code?: unknown }).code)
+              : undefined,
+        }
+      : undefined;
+
+    const completedAt = Date.now();
+
+    this.executionRecorder.record({
+      tool: action.type,
+      kind: toolSet?.kind || 'unknown',
+      toolSetId: toolSet?.id,
+      sourcePid: toolSet?.kind === 'dynamic' ? toolSet.id : undefined,
+      params: action.params,
+      status: error || result?.error ? 'error' : 'success',
+      startedAt: new Date(startedAt).toISOString(),
+      completedAt: new Date(completedAt).toISOString(),
+      durationMs: completedAt - startedAt,
+      result,
+      rawResult,
+      error: errorRecord,
+    });
   }
 }

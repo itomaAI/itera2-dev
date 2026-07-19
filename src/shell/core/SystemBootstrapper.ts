@@ -20,6 +20,7 @@ import { SystemLogger } from '../../core/state/SystemLogger';
 
 // Control & Cognitive
 import { ToolRegistry } from '../../core/control/ToolRegistry';
+import { ToolExecutionRecorder } from '../../core/control/ToolExecutionRecorder';
 import { Engine } from '../../core/control/Engine';
 import { Translator } from '../../core/cognitive/Translator';
 import { registerBasicTools } from '../../core/control/tools/basic_tools';
@@ -91,7 +92,8 @@ export class SystemBootstrapper {
     // ==========================================
     // 3. Control Layer Initialization
     // ==========================================
-    const toolRegistry = new ToolRegistry(appRegistry);
+    const toolExecutionRecorder = new ToolExecutionRecorder(logger);
+    const toolRegistry = new ToolRegistry(appRegistry, toolExecutionRecorder);
     registerBasicTools(toolRegistry);
     registerFSTools(toolRegistry);
     registerSearchTools(toolRegistry);
