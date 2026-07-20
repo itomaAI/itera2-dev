@@ -47,6 +47,7 @@ import { VfsEventRecorder } from '../services/VfsEventRecorder';
 import { ProcessEventRecorder } from '../services/ProcessEventRecorder';
 import { HostGuestToolInvoker } from '../services/HostGuestToolInvoker';
 import { ProviderManager } from '../../core/vfs/ProviderManager';
+import { HistoryEventRecorder } from '../services/HistoryEventRecorder';
 
 export class SystemBootstrapper {
   public static async boot(): Promise<void> {
@@ -190,6 +191,10 @@ export class SystemBootstrapper {
     // ProcessEventRecorder の初期化と起動
     const processEventRecorder = new ProcessEventRecorder(processManager, logger);
     processEventRecorder.start();
+
+    // HistoryEventRecorder の初期化と起動
+    const historyEventRecorder = new HistoryEventRecorder(history, logger);
+    historyEventRecorder.start();
 
     // ==========================================
     // 6. Final Bindings & Boot Execution

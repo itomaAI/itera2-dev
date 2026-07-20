@@ -26,11 +26,23 @@ export interface Turn {
   meta: TurnMeta;
 }
 
-export interface HistoryEventPayload {
-  type: 'append' | 'update' | 'delete' | 'clear' | 'load';
-  count: number;
-  turn: Turn | null;
-}
+export type HistoryEventPayload =
+  | {
+      type: 'append' | 'update' | 'delete';
+      count: number;
+      turn: Turn;
+    }
+  | {
+      type: 'clear';
+      count: number;
+      previousCount: number;
+      turn: null;
+    }
+  | {
+      type: 'load';
+      count: number;
+      turn: null;
+    };
 
 export type HistorySubscriber = (payload: HistoryEventPayload) => void;
 
@@ -93,7 +105,11 @@ export class HistoryManager {
 
       if (turns && Array.isArray(turns)) {
         this.turns = turns;
-        this._notify('load');
+        this._notify({
+          type: 'load',
+          count: this.turns.length,
+          turn: null,
+        });
         console.log(`[HistoryManager] Loaded ${this.turns.length} turns from DB.`);
       }
     } catch (e) {
@@ -116,16 +132,11 @@ export class HistoryManager {
 
   private saveTimeoutId: ReturnType<typeof setTimeout> | null = null;
 
-  private _notify(action: HistoryEventPayload['type'], turn: Turn | null = null): void {
-    const payload: HistoryEventPayload = {
-      type: action,
-      count: this.turns.length,
-      turn,
-    };
+  private _notify(payload: HistoryEventPayload): void {
     this.listeners.forEach((cb) => cb(payload));
 
     // ロード以外の変更時は自動でDBに保存する (デバウンス付き)
-    if (action !== 'load') {
+    if (payload.type !== 'load') {
       if (this.saveTimeoutId) {
         clearTimeout(this.saveTimeoutId);
       }
@@ -145,7 +156,11 @@ export class HistoryManager {
     } else {
       this.turns = [];
     }
-    this._notify('load');
+    this._notify({
+      type: 'load',
+      count: this.turns.length,
+      turn: null,
+    });
   }
 
   append(role: Role, content: TurnContent, meta: TurnMeta = {}): Turn {
@@ -162,7 +177,11 @@ export class HistoryManager {
       },
     };
     this.turns.push(turn);
-    this._notify('append', turn);
+    this._notify({
+      type: 'append',
+      count: this.turns.length,
+      turn,
+    });
     return turn;
   }
 
@@ -176,7 +195,11 @@ export class HistoryManager {
         ...this.turns[index].meta,
         ...meta,
       };
-      this._notify('update', this.turns[index]);
+      this._notify({
+        type: 'update',
+        count: this.turns.length,
+        turn: this.turns[index],
+      });
       return this.turns[index];
     }
     return null;
@@ -184,15 +207,26 @@ export class HistoryManager {
 
   delete(id: string): void {
     const initialLen = this.turns.length;
+    const deletedTurn = this.turns.find((t) => t.id === id);
     this.turns = this.turns.filter((t) => t.id !== id);
-    if (this.turns.length !== initialLen) {
-      this._notify('delete');
+    if (this.turns.length !== initialLen && deletedTurn) {
+      this._notify({
+        type: 'delete',
+        count: this.turns.length,
+        turn: deletedTurn,
+      });
     }
   }
 
   clear(): void {
+    const previousCount = this.turns.length;
     this.turns = [];
-    this._notify('clear');
+    this._notify({
+      type: 'clear',
+      count: this.turns.length,
+      previousCount,
+      turn: null,
+    });
   }
 
   get(): Turn[] {

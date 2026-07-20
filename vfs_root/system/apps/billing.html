@@ -63,7 +63,7 @@
 
       <main class="flex-1 overflow-y-auto no-scrollbar pb-10">
         <!-- Summary Cards -->
-        <div class="grid grid-cols-1 md:grid-cols-5 gap-4 mb-6">
+        <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-6 gap-4 mb-6">
           <div
             class="bg-panel border border-border-main rounded-xl p-5 shadow-sm border-l-4 border-l-primary relative overflow-hidden"
           >
@@ -88,7 +88,17 @@
             <h3 class="text-[10px] font-bold text-text-muted uppercase tracking-widest mb-1">7D Cached</h3>
             <p class="text-xl font-bold text-warning font-mono tabular-nums" id="totalCached">0</p>
           </div>
+          <div class="bg-panel border border-border-main rounded-xl p-5 shadow-sm">
+            <h3 class="text-[10px] font-bold text-text-muted uppercase tracking-widest mb-1">7D Cache Write</h3>
+            <p class="text-xl font-bold text-primary font-mono tabular-nums" id="totalCacheWrite">0</p>
+          </div>
         </div>
+
+        <div
+          id="pricingWarning"
+          class="hidden mb-6 rounded-xl border border-warning/40 bg-warning/10 px-4 py-3 text-sm text-warning"
+          role="status"
+        ></div>
 
         <!-- Charts -->
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
@@ -122,6 +132,7 @@
                   <th class="py-3 px-4 text-xs font-bold uppercase tracking-wider">Model</th>
                   <th class="py-3 px-4 text-xs font-bold uppercase tracking-wider text-right">Input (M)</th>
                   <th class="py-3 px-4 text-xs font-bold uppercase tracking-wider text-right">Cached (M)</th>
+                  <th class="py-3 px-4 text-xs font-bold uppercase tracking-wider text-right">Cache Write (M)</th>
                   <th class="py-3 px-4 text-xs font-bold uppercase tracking-wider text-right">Output (M)</th>
                   <th class="py-3 px-4 text-xs font-bold uppercase tracking-wider text-right">Cost (USD)</th>
                 </tr>
@@ -158,6 +169,68 @@
         return map;
       }
 
+      function toNonNegativeNumber(value) {
+        const number = Number(value);
+        return Number.isFinite(number) && number >= 0 ? number : 0;
+      }
+
+      function getUsageTokens(log) {
+        const tokens = log && typeof log.tokens === 'object' && log.tokens !== null ? log.tokens : {};
+        return {
+          input: toNonNegativeNumber(tokens.input),
+          cached: toNonNegativeNumber(tokens.cached),
+          cacheWrite: toNonNegativeNumber(tokens.cacheWrite),
+          output: toNonNegativeNumber(tokens.output),
+          total: toNonNegativeNumber(tokens.total),
+        };
+      }
+
+      function isValidRate(rate) {
+        const hasValidCachedRate =
+          rate &&
+          (rate.cached === null || (Number.isFinite(rate.cached) && rate.cached >= 0));
+
+        return (
+          rate &&
+          Number.isFinite(rate.input) &&
+          rate.input >= 0 &&
+          hasValidCachedRate &&
+          Number.isFinite(rate.output) &&
+          rate.output >= 0
+        );
+      }
+
+      function resolveRates(pricing, promptTokens) {
+        if (!pricing || typeof pricing !== 'object') return null;
+
+        if (Array.isArray(pricing.tiers) && pricing.tiers.length > 0) {
+          const tier =
+            pricing.tiers.find(
+              (candidate) =>
+                candidate &&
+                (candidate.maxTokens === null ||
+                  (Number.isFinite(candidate.maxTokens) && promptTokens <= candidate.maxTokens)),
+            ) || null;
+          return isValidRate(tier) ? tier : null;
+        }
+
+        return isValidRate(pricing) ? pricing : null;
+      }
+
+      function canPriceUsage(rates, cachedTokens, cacheWriteTokens) {
+        if (!rates) return false;
+        if (cachedTokens > 0 && !Number.isFinite(rates.cached)) return false;
+        if (cacheWriteTokens > 0 && !Number.isFinite(rates.cacheWrite)) return false;
+        return true;
+      }
+
+      function appendTextCell(row, text, className) {
+        const cell = document.createElement('td');
+        cell.className = className;
+        cell.textContent = text;
+        row.appendChild(cell);
+      }
+
       async function loadData() {
         if (!window.MetaOS) {
           console.error('MetaOS not found.');
@@ -173,11 +246,12 @@
           const now = new Date();
           const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
 
-          let dailyData = {};
-          let modelData = {};
-          let totalStats = { input: 0, output: 0, cached: 0, cost: 0 };
-          let costBreakdown = { input: 0, output: 0, cached: 0 };
-          let allLogs = [];
+          const dailyData = {};
+          const modelData = {};
+          const totalStats = { input: 0, output: 0, cached: 0, cacheWrite: 0, cost: 0 };
+          const costBreakdown = { input: 0, output: 0, cached: 0, cacheWrite: 0 };
+          const allLogs = [];
+          const unpricedModels = new Set();
 
           for (const file of files) {
             const filePath = typeof file === 'object' ? file.path || file.name : file;
@@ -201,65 +275,66 @@
                 const log = JSON.parse(line);
                 const dateObj = new Date(log.timestamp);
 
-                if (dateObj < sevenDaysAgo) continue;
+                if (!Number.isFinite(dateObj.getTime()) || dateObj < sevenDaysAgo) continue;
 
                 const dateStr = dateObj.toLocaleDateString('en-CA', { month: '2-digit', day: '2-digit' }); // MM-DD
+                const model = typeof log.model === 'string' && log.model ? log.model : 'unknown';
+                const tokens = getUsageTokens(log);
+                // Adapterが正規化した全入力区分の合計が、APIへ送ったprompt量。
+                const promptTokens = tokens.input + tokens.cached + tokens.cacheWrite;
+                const rates = resolveRates(pricingMap[model], promptTokens);
+                const hasApplicablePricing = canPriceUsage(rates, tokens.cached, tokens.cacheWrite);
 
-                const model = log.model || 'unknown';
-                const pricing = pricingMap[model] || {};
-                const totalTokens = log.tokens.total || 0;
+                if (!hasApplicablePricing) unpricedModels.add(model);
 
-                let rates = { input: 0, output: 0, cached: 0 };
+                const tIn = tokens.input;
+                const tOut = tokens.output;
+                const tCache = tokens.cached;
+                const tCacheWrite = tokens.cacheWrite;
 
-                if (pricing.tiers && pricing.tiers.length > 0) {
-                  const tier =
-                    pricing.tiers.find((t) => t.maxTokens === null || totalTokens <= t.maxTokens) ||
-                    pricing.tiers[pricing.tiers.length - 1];
-                  rates.input = tier.input || 0;
-                  rates.output = tier.output || 0;
-                  rates.cached = tier.cached !== undefined ? tier.cached : rates.input * 0.1;
-                } else if (pricing.input !== undefined) {
-                  rates.input = pricing.input;
-                  rates.output = pricing.output || 0;
-                  rates.cached = pricing.cached !== undefined ? pricing.cached : rates.input * 0.1;
-                }
-
-                const tIn = log.tokens.input || 0;
-                const tOut = log.tokens.output || 0;
-                const tCache = log.tokens.cached || 0;
-
-                const cIn = (tIn / 1000000) * rates.input;
-                const cOut = (tOut / 1000000) * rates.output;
-                const cCache = (tCache / 1000000) * rates.cached;
-                const cTotal = cIn + cOut + cCache;
+                const cIn = hasApplicablePricing ? (tIn / 1000000) * rates.input : 0;
+                const cOut = hasApplicablePricing ? (tOut / 1000000) * rates.output : 0;
+                const cCache =
+                  hasApplicablePricing && Number.isFinite(rates.cached)
+                    ? (tCache / 1000000) * rates.cached
+                    : 0;
+                const cCacheWrite =
+                  hasApplicablePricing && Number.isFinite(rates.cacheWrite)
+                    ? (tCacheWrite / 1000000) * rates.cacheWrite
+                    : 0;
+                const cTotal = cIn + cOut + cCache + cCacheWrite;
 
                 // Aggregate Daily
                 if (!dailyData[dateStr]) {
-                  dailyData[dateStr] = { cost: 0, input: 0, output: 0, cached: 0 };
+                  dailyData[dateStr] = { cost: 0, input: 0, output: 0, cached: 0, cacheWrite: 0 };
                 }
                 dailyData[dateStr].cost += cTotal;
                 dailyData[dateStr].input += tIn;
                 dailyData[dateStr].output += tOut;
                 dailyData[dateStr].cached += tCache;
+                dailyData[dateStr].cacheWrite += tCacheWrite;
 
                 // Aggregate Model
                 if (!modelData[model]) {
-                  modelData[model] = { input: 0, output: 0, cached: 0, cost: 0 };
+                  modelData[model] = { input: 0, output: 0, cached: 0, cacheWrite: 0, cost: 0 };
                 }
                 modelData[model].input += tIn;
                 modelData[model].output += tOut;
                 modelData[model].cached += tCache;
+                modelData[model].cacheWrite += tCacheWrite;
                 modelData[model].cost += cTotal;
 
                 // Total
                 totalStats.input += tIn;
                 totalStats.output += tOut;
                 totalStats.cached += tCache;
+                totalStats.cacheWrite += tCacheWrite;
                 totalStats.cost += cTotal;
 
                 costBreakdown.input += cIn;
                 costBreakdown.output += cOut;
                 costBreakdown.cached += cCache;
+                costBreakdown.cacheWrite += cCacheWrite;
 
                 allLogs.push(log);
               } catch (e) {
@@ -273,10 +348,21 @@
 
           let currentContext = 0;
           if (allLogs.length > 0) {
-            currentContext = allLogs[0].tokens.total || 0;
+            const latestTokens = getUsageTokens(allLogs[0]);
+            currentContext =
+              latestTokens.total > 0
+                ? latestTokens.total
+                : latestTokens.input + latestTokens.cached + latestTokens.cacheWrite + latestTokens.output;
           }
 
-          renderDashboard(dailyData, modelData, totalStats, costBreakdown, currentContext);
+          renderDashboard(
+            dailyData,
+            modelData,
+            totalStats,
+            costBreakdown,
+            currentContext,
+            Array.from(unpricedModels).sort(),
+          );
         } catch (error) {
           console.error('Failed to load logs:', error);
           AppUI.notify('Failed to aggregate data', 'error');
@@ -285,27 +371,58 @@
         }
       }
 
-      function renderDashboard(dailyData, modelData, totalStats, costBreakdown, sessionTotal) {
+      function renderDashboard(dailyData, modelData, totalStats, costBreakdown, sessionTotal, unpricedModels) {
         // Update Summary
         document.getElementById('sessionTotal').textContent = sessionTotal.toLocaleString();
         document.getElementById('totalCost').textContent = `$${totalStats.cost.toFixed(4)}`;
         document.getElementById('totalInput').textContent = (totalStats.input / 1000000).toFixed(2) + ' M';
         document.getElementById('totalOutput').textContent = (totalStats.output / 1000000).toFixed(2) + ' M';
         document.getElementById('totalCached').textContent = (totalStats.cached / 1000000).toFixed(2) + ' M';
+        document.getElementById('totalCacheWrite').textContent =
+          (totalStats.cacheWrite / 1000000).toFixed(2) + ' M';
+
+        const pricingWarning = document.getElementById('pricingWarning');
+        if (unpricedModels.length > 0) {
+          pricingWarning.textContent =
+            `Cost excludes models with missing or incomplete pricing: ${unpricedModels.join(', ')}`;
+          pricingWarning.classList.remove('hidden');
+        } else {
+          pricingWarning.textContent = '';
+          pricingWarning.classList.add('hidden');
+        }
 
         // Update Table
         const tbody = document.getElementById('modelTableBody');
-        tbody.innerHTML = '';
+        tbody.replaceChildren();
         for (const [model, stats] of Object.entries(modelData)) {
           const tr = document.createElement('tr');
           tr.className = 'border-b border-border-main/50 hover:bg-hover transition';
-          tr.innerHTML = `
-          <td class="py-3 px-4 text-sm font-bold text-text-main">${model}</td>
-          <td class="py-3 px-4 text-sm text-text-muted font-mono text-right">${(stats.input / 1000000).toFixed(3)}</td>
-          <td class="py-3 px-4 text-sm text-text-muted font-mono text-right">${(stats.cached / 1000000).toFixed(3)}</td>
-          <td class="py-3 px-4 text-sm text-text-muted font-mono text-right">${(stats.output / 1000000).toFixed(3)}</td>
-          <td class="py-3 px-4 text-sm font-bold text-primary font-mono text-right">$${stats.cost.toFixed(4)}</td>
-        `;
+          appendTextCell(tr, model, 'py-3 px-4 text-sm font-bold text-text-main');
+          appendTextCell(
+            tr,
+            (stats.input / 1000000).toFixed(3),
+            'py-3 px-4 text-sm text-text-muted font-mono text-right',
+          );
+          appendTextCell(
+            tr,
+            (stats.cached / 1000000).toFixed(3),
+            'py-3 px-4 text-sm text-text-muted font-mono text-right',
+          );
+          appendTextCell(
+            tr,
+            (stats.cacheWrite / 1000000).toFixed(3),
+            'py-3 px-4 text-sm text-text-muted font-mono text-right',
+          );
+          appendTextCell(
+            tr,
+            (stats.output / 1000000).toFixed(3),
+            'py-3 px-4 text-sm text-text-muted font-mono text-right',
+          );
+          appendTextCell(
+            tr,
+            `$${stats.cost.toFixed(4)}`,
+            'py-3 px-4 text-sm font-bold text-primary font-mono text-right',
+          );
           tbody.appendChild(tr);
         }
 
@@ -345,11 +462,16 @@
         breakdownChartInstance = new Chart(ctxBreakdown, {
           type: 'doughnut',
           data: {
-            labels: ['Input', 'Cached', 'Output'],
+            labels: ['Input', 'Cached', 'Cache Write', 'Output'],
             datasets: [
               {
-                data: [costBreakdown.input, costBreakdown.cached, costBreakdown.output],
-                backgroundColor: [colorPrimary, colorWarning, colorSuccess],
+                data: [
+                  costBreakdown.input,
+                  costBreakdown.cached,
+                  costBreakdown.cacheWrite,
+                  costBreakdown.output,
+                ],
+                backgroundColor: [colorPrimary, colorWarning, colorPrimary, colorSuccess],
                 borderWidth: 0,
               },
             ],
