@@ -152,7 +152,11 @@
         let longestMatch = '';
         let matchedHandler = null;
         for (const [mountedPath, handler] of mountHandlers.entries()) {
-            if (payload.path === mountedPath || payload.path.startsWith(mountedPath + '/')) {
+            // ルートマウント('')の場合は常にマッチさせる
+            if (mountedPath === '' || payload.path === mountedPath || payload.path.startsWith(mountedPath + '/')) {
+                // 空文字の場合は length が 0 なので、他のより深いマウントポイントがあればそちらが優先される
+                if (mountedPath === '' && longestMatch !== '') continue;
+                
                 if (mountedPath.length >= longestMatch.length) {
                     longestMatch = mountedPath;
                     matchedHandler = handler;
