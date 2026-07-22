@@ -123,36 +123,36 @@ export class OpenAIAdapter extends BaseLLMAdapter {
 
         if (dataStr === '[DONE]') break;
 
-          try {
-            const data = JSON.parse(dataStr);
+        try {
+          const data = JSON.parse(dataStr);
 
-            // ★ OpenAIの include_usage: true 時のトークン消費量抽出
-            if (data.usage && this.logger) {
-              const grossPrompt = data.usage.prompt_tokens || 0;
-              const promptDetails = data.usage.prompt_tokens_details || {};
-              const cached = promptDetails.cached_tokens || 0;
-              const cacheWrite = promptDetails.cache_write_tokens || 0;
-              this.logger.log('usage', {
-                provider: 'openai_compatible',
-                model: this.modelName,
-                tokens: {
-                  input: Math.max(0, grossPrompt - cached - cacheWrite),
-                  cached: cached,
-                  cacheWrite: cacheWrite,
-                  output: data.usage.completion_tokens || 0,
-                  total: data.usage.total_tokens || grossPrompt + (data.usage.completion_tokens || 0),
-                },
-              });
-            }
-
-            const delta = data.choices?.[0]?.delta;
-            if (delta && delta.content) {
-              onChunk(delta.content);
-            }
-          } catch (e) {
-            console.warn('[OpenAIAdapter] Stream Parse Warning:', e, dataStr);
+          // ★ OpenAIの include_usage: true 時のトークン消費量抽出
+          if (data.usage && this.logger) {
+            const grossPrompt = data.usage.prompt_tokens || 0;
+            const promptDetails = data.usage.prompt_tokens_details || {};
+            const cached = promptDetails.cached_tokens || 0;
+            const cacheWrite = promptDetails.cache_write_tokens || 0;
+            this.logger.log('usage', {
+              provider: 'openai_compatible',
+              model: this.modelName,
+              tokens: {
+                input: Math.max(0, grossPrompt - cached - cacheWrite),
+                cached: cached,
+                cacheWrite: cacheWrite,
+                output: data.usage.completion_tokens || 0,
+                total: data.usage.total_tokens || grossPrompt + (data.usage.completion_tokens || 0),
+              },
+            });
           }
+
+          const delta = data.choices?.[0]?.delta;
+          if (delta && delta.content) {
+            onChunk(delta.content);
+          }
+        } catch (e) {
+          console.warn('[OpenAIAdapter] Stream Parse Warning:', e, dataStr);
         }
+      }
     } finally {
       reader.releaseLock();
     }
