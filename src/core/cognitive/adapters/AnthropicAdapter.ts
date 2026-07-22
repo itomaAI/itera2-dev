@@ -56,9 +56,11 @@ export class AnthropicAdapter extends BaseLLMAdapter {
       }
     }
 
-    // 思考モード (thinking / output_config) 有効時は 400 エラー回避のため temperature を自動削除
+    // 思考モード (thinking / output_config) 有効時は 400 エラー回避のためサンプリングパラメータを自動削除
     if (payload.thinking || payload.output_config) {
       delete payload.temperature;
+      delete payload.top_p;
+      delete payload.top_k;
     }
 
     const response = await fetch(targetUrl, {

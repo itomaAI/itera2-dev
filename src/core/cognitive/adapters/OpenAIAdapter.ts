@@ -87,7 +87,7 @@ export class OpenAIAdapter extends BaseLLMAdapter {
         }
       }
 
-      // 思考モデル / reasoning 有効時は 400 エラー回避のため temperature を自動削除
+      // 思考モデル / reasoning 有効時は 400 エラー回避のためサンプリングパラメータを自動削除
       const hasReasoning = Boolean(
         this.config.reasoning_effort ||
         this.config.reasoning ||
@@ -96,6 +96,9 @@ export class OpenAIAdapter extends BaseLLMAdapter {
       );
       if (hasReasoning) {
         delete payload.temperature;
+        delete payload.top_p;
+        delete payload.frequency_penalty;
+        delete payload.presence_penalty;
       }
     }
 
