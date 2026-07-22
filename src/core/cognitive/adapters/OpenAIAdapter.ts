@@ -153,7 +153,6 @@ export class OpenAIAdapter extends BaseLLMAdapter {
             console.warn('[OpenAIAdapter] Stream Parse Warning:', e, dataStr);
           }
         }
-      }
     } finally {
       reader.releaseLock();
     }
