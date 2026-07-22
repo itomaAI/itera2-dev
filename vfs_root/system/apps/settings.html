@@ -370,7 +370,7 @@
           DOM('config-app-fontsize').value = configs.appearance.typography?.fontSize || 'medium';
           DOM('config-app-animations').checked = configs.appearance.layout?.animations !== false;
 
-          await loadLlmProfiles(configs.llm.model || 'gemini-3-flash-preview');
+          await loadLlmProfiles(configs.llm.model || 'gemini-3.6-flash');
           await loadThemes();
           await loadServices();
         } catch (e) {

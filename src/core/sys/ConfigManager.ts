@@ -19,7 +19,7 @@ export interface OsConfig {
     typography?: { uiFont: string; monoFont: string; fontSize: string };
     layout?: { animations: boolean };
   };
-  llm: { model: string; temperature: number };
+  llm: { model: string; [key: string]: any };
   network: { proxyUrl: string; allowCredentialsWithProxy: boolean };
   [category: string]: any;
 }
@@ -36,7 +36,7 @@ const DEFAULT_CONFIG: OsConfig = {
     typography: { uiFont: 'Inter', monoFont: 'monospace', fontSize: 'medium' },
     layout: { animations: true },
   },
-  llm: { model: 'gemini-3-flash-preview', temperature: 1.0 },
+  llm: { model: 'gemini-3.6-flash' },
   network: {
     proxyUrl: 'https://corsproxy.io/?',
     allowCredentialsWithProxy: false,

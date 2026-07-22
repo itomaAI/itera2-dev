@@ -5308,8 +5308,7 @@ Use this Codex as a guidepost, and build a better Itera OS together with the use
 
   'system/config/llm.json': JSON.stringify(
     {
-      model: 'gemini-3-flash-preview',
-      temperature: 1,
+      model: 'gemini-3.6-flash',
     },
     null,
     2,

@@ -13,7 +13,7 @@ export class GeminiAdapter extends BaseLLMAdapter {
 
   constructor(
     apiKey: string,
-    modelName: string = 'gemini-3-flash-preview',
+    modelName: string = 'gemini-3.6-flash',
     config: LlmConfig = {},
     logger: SystemLogger | null = null,
   ) {
