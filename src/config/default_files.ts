@@ -5184,31 +5184,25 @@ Use this Codex as a guidepost, and build a better Itera OS together with the use
         const providerData = (llmProfiles.providers || []).find((p) => p.id === provider);
         const modelData = (providerData?.models || []).find((m) => m.id === model);
 
-        const mergedParams = {};
-
-        if (providerData && providerData.defaultConfig) {
-          for (const [k, v] of Object.entries(providerData.defaultConfig)) {
-            if (v !== null && v !== undefined) {
-              mergedParams[k] = JSON.parse(JSON.stringify(v));
-            }
-          }
-        }
+        let template = providerData?.defaultConfig ? JSON.parse(JSON.stringify(providerData.defaultConfig)) : {};
 
         if (modelData && modelData.defaultConfig) {
-          for (const [k, v] of Object.entries(modelData.defaultConfig)) {
-            if (v !== null && v !== undefined) {
-              if (typeof v === 'object' && !Array.isArray(v) && mergedParams[k]) {
-                mergedParams[k] = { ...mergedParams[k], ...JSON.parse(JSON.stringify(v)) };
+          const modelCfg = JSON.parse(JSON.stringify(modelData.defaultConfig));
+          function mergeTemplate(target, source) {
+            for (const [k, v] of Object.entries(source)) {
+              if (v !== null && typeof v === 'object' && !Array.isArray(v) && target[k] && typeof target[k] === 'object') {
+                mergeTemplate(target[k], v);
               } else {
-                mergedParams[k] = JSON.parse(JSON.stringify(v));
+                target[k] = v;
               }
             }
           }
+          mergeTemplate(template, modelCfg);
         }
 
         const textarea = DOM('ui-llm-json-textarea');
         if (textarea) {
-          textarea.value = JSON.stringify(mergedParams, null, 2);
+          textarea.value = JSON.stringify(template, null, 2);
           validateAndSaveLlmJson();
         }
       };
