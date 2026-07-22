@@ -277,20 +277,24 @@ export class Translator {
   }
 
   private _sortActions(actions: ParsedAction[]): ParsedAction[] {
-    const edits = actions.filter((a) => a.type === 'edit_file');
-    const others = actions.filter((a) => a.type !== 'edit_file');
-    const interrupts = others.filter((a) => INTERRUPT_ACTION_TAGS.has(a.type));
-    const normalTools = others.filter((a) => !INTERRUPT_ACTION_TAGS.has(a.type));
+    return actions.sort((a, b) => {
+      // 1. 制御系 (Interrupts) は強制的に一番後ろへ
+      const isIntA = INTERRUPT_ACTION_TAGS.has(a.type);
+      const isIntB = INTERRUPT_ACTION_TAGS.has(b.type);
+      if (isIntA && !isIntB) return 1;
+      if (!isIntA && isIntB) return -1;
 
-    edits.sort((a, b) => {
-      const pathA = a.params.path || '';
-      const pathB = b.params.path || '';
-      if (pathA !== pathB) return pathA.localeCompare(pathB);
-      const startA = parseInt(a.params.start || '0', 10);
-      const startB = parseInt(b.params.start || '0', 10);
-      return startB - startA;
+      // 2. 両方が edit_file で、かつ対象パスが同じ場合のみ行番号の降順 (下から上)
+      if (a.type === 'edit_file' && b.type === 'edit_file' && a.params.path === b.params.path) {
+        const startA = parseInt(a.params.start || '0', 10);
+        const startB = parseInt(b.params.start || '0', 10);
+        if (startA !== startB) {
+          return startB - startA;
+        }
+      }
+
+      // 3. それ以外は LLM が出力した順番 (originalIndex) を維持する
+      return a.originalIndex - b.originalIndex;
     });
-
-    return [...normalTools, ...edits, ...interrupts];
   }
 }
