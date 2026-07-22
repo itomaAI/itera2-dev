@@ -5125,7 +5125,36 @@ Use this Codex as a guidepost, and build a better Itera OS together with the use
         const provider = currentProviderId;
         const model = DOM('ui-model-input').value.trim();
         if (!model) return;
-        configs.llm.model = provider === 'google' ? model : \`\${provider}/\${model}\`;
+
+        const modelString = provider === 'google' ? model : \`\${provider}/\${model}\`;
+
+        const providerData = (llmProfiles.providers || []).find((p) => p.id === provider);
+        const modelData = (providerData?.models || []).find((m) => m.id === model);
+
+        const newLlmConfig = { model: modelString };
+
+        if (providerData && providerData.defaultConfig) {
+          for (const [k, v] of Object.entries(providerData.defaultConfig)) {
+            if (v !== null && v !== undefined) {
+              newLlmConfig[k] = JSON.parse(JSON.stringify(v));
+            }
+          }
+        }
+
+        if (modelData && modelData.defaultConfig) {
+          for (const [k, v] of Object.entries(modelData.defaultConfig)) {
+            if (v !== null && v !== undefined) {
+              if (typeof v === 'object' && !Array.isArray(v) && newLlmConfig[k]) {
+                newLlmConfig[k] = { ...newLlmConfig[k], ...JSON.parse(JSON.stringify(v)) };
+              } else {
+                newLlmConfig[k] = JSON.parse(JSON.stringify(v));
+              }
+            }
+          }
+        }
+
+        configs.llm = newLlmConfig;
+
         clearTimeout(window._saveTimer);
         window._saveTimer = setTimeout(saveConfig, 500);
       }
