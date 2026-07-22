@@ -55,6 +55,9 @@ export class CognitiveManager {
                   ...vfsProv.defaultCapabilities,
                 };
               }
+              if (vfsProv.defaultConfig) {
+                baseProv.defaultConfig = vfsProv.defaultConfig;
+              }
             } else {
               merged.push(vfsProv);
             }
@@ -72,8 +75,7 @@ export class CognitiveManager {
     if (!this.engine) return;
 
     const llmConfig = this.configManager.get('llm') || {
-      model: 'gemini-3-flash-preview',
-      temperature: 1.0,
+      model: 'gemini-3.6-flash',
     };
     const rawModel = llmConfig.model;
 

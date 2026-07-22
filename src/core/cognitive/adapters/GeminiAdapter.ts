@@ -3,7 +3,7 @@
  * Itera OS v2: Google Gemini API Adapter
  */
 
-import { BaseLLMAdapter, type LlmConfig } from './BaseAdapter';
+import { BaseLLMAdapter, filterNestedObject, type LlmConfig } from './BaseAdapter';
 import type { SystemLogger } from '../../state/SystemLogger';
 
 export class GeminiAdapter extends BaseLLMAdapter {
@@ -13,7 +13,7 @@ export class GeminiAdapter extends BaseLLMAdapter {
 
   constructor(
     apiKey: string,
-    modelName: string = 'gemini-3-flash-preview',
+    modelName: string = 'gemini-3.6-flash',
     config: LlmConfig = {},
     logger: SystemLogger | null = null,
   ) {
@@ -26,10 +26,75 @@ export class GeminiAdapter extends BaseLLMAdapter {
     if (!this.apiKey) throw new Error('API Key is missing.');
 
     const url = `${this.baseUrl}/${this.modelName}:streamGenerateContent?key=${this.apiKey}`;
-    const generationConfig = {
-      temperature: this.config.temperature || 1.0,
-      maxOutputTokens: this.config.maxOutputTokens || 65536,
+
+    const GEMINI_ALLOWED_STRUCTURE = {
+      temperature: null,
+      maxOutputTokens: null,
+      topP: null,
+      topK: null,
+      stopSequences: null,
+      responseMimeType: null,
+      responseSchema: null,
+      candidateCount: null,
+      thinkingConfig: {
+        thinkingLevel: null,
+        thinkingBudget: null,
+        includeThoughts: null,
+      },
     };
+
+    const userGenConfig =
+      typeof this.config.generationConfig === 'object' && this.config.generationConfig !== null
+        ? this.config.generationConfig
+        : {};
+
+    const combinedInput = {
+      ...this.config,
+      ...userGenConfig,
+    };
+
+    // Extract & normalize flat or shorthand thinking settings
+    const thinkingLevel =
+      combinedInput.thinkingLevel ??
+      combinedInput.thinking_level ??
+      userGenConfig.thinkingConfig?.thinkingLevel ??
+      userGenConfig.thinkingConfig?.thinking_level ??
+      this.config.thinkingConfig?.thinkingLevel ??
+      this.config.thinkingConfig?.thinking_level;
+
+    const thinkingBudget =
+      combinedInput.thinkingBudget ??
+      combinedInput.thinking_budget ??
+      userGenConfig.thinkingConfig?.thinkingBudget ??
+      userGenConfig.thinkingConfig?.thinking_budget ??
+      this.config.thinkingConfig?.thinkingBudget ??
+      this.config.thinkingConfig?.thinking_budget;
+
+    if (thinkingLevel || thinkingBudget !== undefined) {
+      const existingTc = combinedInput.thinkingConfig && typeof combinedInput.thinkingConfig === 'object'
+        ? combinedInput.thinkingConfig
+        : {};
+      combinedInput.thinkingConfig = { ...existingTc };
+      if (thinkingLevel) combinedInput.thinkingConfig.thinkingLevel = thinkingLevel;
+      if (thinkingBudget !== undefined) combinedInput.thinkingConfig.thinkingBudget = thinkingBudget;
+    }
+
+    if ('max_output_tokens' in combinedInput) combinedInput.maxOutputTokens = combinedInput.max_output_tokens;
+    if ('stop_sequences' in combinedInput) combinedInput.stopSequences = combinedInput.stop_sequences;
+    if ('response_mime_type' in combinedInput) combinedInput.responseMimeType = combinedInput.response_mime_type;
+    if ('response_schema' in combinedInput) combinedInput.responseSchema = combinedInput.response_schema;
+    if ('candidate_count' in combinedInput) combinedInput.candidateCount = combinedInput.candidate_count;
+    if ('top_p' in combinedInput) combinedInput.topP = combinedInput.top_p;
+    if ('top_k' in combinedInput) combinedInput.topK = combinedInput.top_k;
+
+    const generationConfig = filterNestedObject(combinedInput, GEMINI_ALLOWED_STRUCTURE);
+
+    if (generationConfig.temperature === undefined) generationConfig.temperature = 1.0;
+    if (generationConfig.maxOutputTokens === undefined) generationConfig.maxOutputTokens = 65536;
+
+    if (generationConfig.thinkingConfig && generationConfig.thinkingConfig.thinkingLevel) {
+      delete generationConfig.thinkingConfig.thinkingBudget;
+    }
 
     const payload = {
       contents: messages,

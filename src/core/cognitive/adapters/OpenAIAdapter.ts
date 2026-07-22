@@ -3,7 +3,7 @@
  * Itera OS v2: OpenAI / Local (Ollama, LM Studio) API Adapter
  */
 
-import { BaseLLMAdapter, type LlmConfig } from './BaseAdapter';
+import { BaseLLMAdapter, filterNestedObject, type LlmConfig } from './BaseAdapter';
 import type { SystemLogger } from '../../state/SystemLogger';
 
 export class OpenAIAdapter extends BaseLLMAdapter {
@@ -39,16 +39,68 @@ export class OpenAIAdapter extends BaseLLMAdapter {
       headers['X-Title'] = 'Itera OS v2';
     }
 
+    const isOpenRouterOrCustom = this.baseUrl.includes('openrouter.ai') || !this.baseUrl.includes('api.openai.com');
+
+    const OPENAI_ALLOWED_STRUCTURE = {
+      temperature: null,
+      max_tokens: null,
+      max_completion_tokens: null,
+      reasoning_effort: null,
+      reasoning: {
+        effort: null,
+      },
+      text: {
+        verbosity: null,
+      },
+      response_format: null,
+      seed: null,
+      top_p: null,
+      frequency_penalty: null,
+      presence_penalty: null,
+      stop: null,
+      user: null,
+    };
+
+    const RESERVED_INTERNAL_KEYS = ['model', 'generationConfig', 'providerOptions', 'network'];
+
     const payload: any = {
       model: this.modelName,
       messages: messages,
       stream: true,
       // ★ OpenAI最新仕様: ストリームの最後に usage を含めるオプション
       stream_options: { include_usage: true },
-      temperature: this.config.temperature || 1.0,
+      temperature: this.config.temperature ?? 1.0,
     };
+
     if (this.config.maxOutputTokens) {
       payload.max_tokens = this.config.maxOutputTokens;
+    }
+
+    if (isOpenRouterOrCustom) {
+      // OpenRouter / Custom: 予約キー以外を完全パススルー
+      for (const [key, val] of Object.entries(this.config)) {
+        if (!RESERVED_INTERNAL_KEYS.includes(key) && val !== null) {
+          payload[key] = val;
+        }
+      }
+    } else {
+      // 本家 OpenAI: 階層テンプレートによるネストフィルタリング＆マージ
+      const filteredConfig = filterNestedObject(this.config, OPENAI_ALLOWED_STRUCTURE);
+      Object.assign(payload, filteredConfig);
+
+      // 思考モデル / reasoning 有効時は 400 エラー回避のためサンプリングパラメータを自動削除
+      const hasReasoning = Boolean(
+        payload.reasoning_effort ||
+        payload.reasoning ||
+        this.modelName.startsWith('o1') ||
+        this.modelName.startsWith('o3')
+      );
+      if (hasReasoning) {
+        delete payload.temperature;
+        delete payload.top_p;
+        delete payload.frequency_penalty;
+        delete payload.presence_penalty;
+      }
     }
 
     const response = await fetch(url, {

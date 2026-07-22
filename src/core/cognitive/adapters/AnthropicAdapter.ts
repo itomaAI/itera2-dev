@@ -3,7 +3,7 @@
  * Itera OS v2: Anthropic API Adapter
  */
 
-import { BaseLLMAdapter, type LlmConfig } from './BaseAdapter';
+import { BaseLLMAdapter, filterNestedObject, type LlmConfig } from './BaseAdapter';
 import type { SystemLogger } from '../../state/SystemLogger';
 
 export class AnthropicAdapter extends BaseLLMAdapter {
@@ -31,14 +31,41 @@ export class AnthropicAdapter extends BaseLLMAdapter {
       targetUrl = `${proxyUrl}${encodeURIComponent(baseUrl)}`;
     }
 
-    const payload = {
+    const ANTHROPIC_ALLOWED_STRUCTURE = {
+      temperature: null,
+      max_tokens: null,
+      top_k: null,
+      top_p: null,
+      stop_sequences: null,
+      thinking: {
+        type: null,
+        budget_tokens: null,
+        display: null,
+      },
+      output_config: {
+        effort: null,
+        format: null,
+      },
+    };
+
+    const payload: any = {
       model: this.modelName,
-      max_tokens: this.config.maxOutputTokens || 8192,
+      max_tokens: this.config.max_tokens ?? this.config.maxOutputTokens ?? 8192,
       system: system,
       messages: messages,
       stream: true,
-      temperature: this.config.temperature || 1.0,
+      temperature: this.config.temperature ?? 1.0,
     };
+
+    const filteredConfig = filterNestedObject(this.config, ANTHROPIC_ALLOWED_STRUCTURE);
+    Object.assign(payload, filteredConfig);
+
+    // 思考モード (thinking / output_config) 有効時は 400 エラー回避のためサンプリングパラメータを自動削除
+    if (payload.thinking || payload.output_config) {
+      delete payload.temperature;
+      delete payload.top_p;
+      delete payload.top_k;
+    }
 
     const response = await fetch(targetUrl, {
       method: 'POST',
