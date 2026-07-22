@@ -93,7 +93,7 @@ export class OpenAIAdapter extends BaseLLMAdapter {
         payload.reasoning_effort ||
         payload.reasoning ||
         this.modelName.startsWith('o1') ||
-        this.modelName.startsWith('o3')
+        this.modelName.startsWith('o3'),
       );
       if (hasReasoning) {
         delete payload.temperature;

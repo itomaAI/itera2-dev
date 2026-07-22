@@ -213,14 +213,28 @@
             </div>
 
             <!-- Advanced Model Parameters (Accordion) -->
-            <details id="llm-advanced-details" class="group bg-card/40 border border-border-main rounded-xl overflow-hidden transition-all">
-              <summary class="flex items-center justify-between p-3.5 cursor-pointer select-none hover:bg-hover/50 transition font-medium text-xs text-text-main">
+            <details
+              id="llm-advanced-details"
+              class="group bg-card/40 border border-border-main rounded-xl overflow-hidden transition-all"
+            >
+              <summary
+                class="flex items-center justify-between p-3.5 cursor-pointer select-none hover:bg-hover/50 transition font-medium text-xs text-text-main"
+              >
                 <div class="flex items-center gap-2">
-                  <svg class="w-3.5 h-3.5 text-text-muted transition-transform group-open:rotate-90" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg
+                    class="w-3.5 h-3.5 text-text-muted transition-transform group-open:rotate-90"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
                   </svg>
                   <span class="font-bold uppercase tracking-wider text-[11px]">Advanced Parameters (JSON)</span>
-                  <span id="llm-json-badge" class="hidden text-[9px] px-1.5 py-0.5 rounded bg-primary/20 text-primary font-mono">Custom Active</span>
+                  <span
+                    id="llm-json-badge"
+                    class="hidden text-[9px] px-1.5 py-0.5 rounded bg-primary/20 text-primary font-mono"
+                    >Custom Active</span
+                  >
                 </div>
                 <span id="llm-json-status" class="text-[10px] font-mono text-text-muted">Valid JSON 🟢</span>
               </summary>
@@ -228,10 +242,20 @@
                 <div class="flex justify-between items-center text-[10px] text-text-muted">
                   <span>Provider-specific raw JSON parameters (e.g. thinkingConfig, reasoning_effort)</span>
                   <div class="flex gap-2">
-                    <button type="button" id="btn-llm-preset" onclick="loadModelTemplateIntoJson()" class="px-2 py-1 rounded bg-card hover:bg-hover border border-border-main text-text-main transition flex items-center gap-1 shadow-sm">
+                    <button
+                      type="button"
+                      id="btn-llm-preset"
+                      onclick="loadModelTemplateIntoJson()"
+                      class="px-2 py-1 rounded bg-card hover:bg-hover border border-border-main text-text-main transition flex items-center gap-1 shadow-sm"
+                    >
                       🔄 Load Preset
                     </button>
-                    <button type="button" id="btn-llm-format" onclick="formatLlmJsonTextarea()" class="px-2 py-1 rounded bg-card hover:bg-hover border border-border-main text-text-main transition flex items-center gap-1 shadow-sm">
+                    <button
+                      type="button"
+                      id="btn-llm-format"
+                      onclick="formatLlmJsonTextarea()"
+                      class="px-2 py-1 rounded bg-card hover:bg-hover border border-border-main text-text-main transition flex items-center gap-1 shadow-sm"
+                    >
                       ✨ Format
                     </button>
                   </div>
@@ -612,7 +636,7 @@
         }
       }
 
-      window.loadModelTemplateIntoJson = function() {
+      window.loadModelTemplateIntoJson = function () {
         const provider = currentProviderId;
         const model = DOM('ui-model-input').value.trim();
         const providerData = (llmProfiles.providers || []).find((p) => p.id === provider);
@@ -624,7 +648,13 @@
           const modelCfg = JSON.parse(JSON.stringify(modelData.defaultConfig));
           function mergeTemplate(target, source) {
             for (const [k, v] of Object.entries(source)) {
-              if (v !== null && typeof v === 'object' && !Array.isArray(v) && target[k] && typeof target[k] === 'object') {
+              if (
+                v !== null &&
+                typeof v === 'object' &&
+                !Array.isArray(v) &&
+                target[k] &&
+                typeof target[k] === 'object'
+              ) {
                 mergeTemplate(target[k], v);
               } else {
                 target[k] = v;
@@ -641,7 +671,7 @@
         }
       };
 
-      window.formatLlmJsonTextarea = function() {
+      window.formatLlmJsonTextarea = function () {
         const textarea = DOM('ui-llm-json-textarea');
         if (!textarea) return;
 

@@ -186,9 +186,7 @@
       }
 
       function isValidRate(rate) {
-        const hasValidCachedRate =
-          rate &&
-          (rate.cached === null || (Number.isFinite(rate.cached) && rate.cached >= 0));
+        const hasValidCachedRate = rate && (rate.cached === null || (Number.isFinite(rate.cached) && rate.cached >= 0));
 
         return (
           rate &&
@@ -295,9 +293,7 @@
                 const cIn = hasApplicablePricing ? (tIn / 1000000) * rates.input : 0;
                 const cOut = hasApplicablePricing ? (tOut / 1000000) * rates.output : 0;
                 const cCache =
-                  hasApplicablePricing && Number.isFinite(rates.cached)
-                    ? (tCache / 1000000) * rates.cached
-                    : 0;
+                  hasApplicablePricing && Number.isFinite(rates.cached) ? (tCache / 1000000) * rates.cached : 0;
                 const cCacheWrite =
                   hasApplicablePricing && Number.isFinite(rates.cacheWrite)
                     ? (tCacheWrite / 1000000) * rates.cacheWrite
@@ -378,13 +374,11 @@
         document.getElementById('totalInput').textContent = (totalStats.input / 1000000).toFixed(2) + ' M';
         document.getElementById('totalOutput').textContent = (totalStats.output / 1000000).toFixed(2) + ' M';
         document.getElementById('totalCached').textContent = (totalStats.cached / 1000000).toFixed(2) + ' M';
-        document.getElementById('totalCacheWrite').textContent =
-          (totalStats.cacheWrite / 1000000).toFixed(2) + ' M';
+        document.getElementById('totalCacheWrite').textContent = (totalStats.cacheWrite / 1000000).toFixed(2) + ' M';
 
         const pricingWarning = document.getElementById('pricingWarning');
         if (unpricedModels.length > 0) {
-          pricingWarning.textContent =
-            `Cost excludes models with missing or incomplete pricing: ${unpricedModels.join(', ')}`;
+          pricingWarning.textContent = `Cost excludes models with missing or incomplete pricing: ${unpricedModels.join(', ')}`;
           pricingWarning.classList.remove('hidden');
         } else {
           pricingWarning.textContent = '';
@@ -465,12 +459,7 @@
             labels: ['Input', 'Cached', 'Cache Write', 'Output'],
             datasets: [
               {
-                data: [
-                  costBreakdown.input,
-                  costBreakdown.cached,
-                  costBreakdown.cacheWrite,
-                  costBreakdown.output,
-                ],
+                data: [costBreakdown.input, costBreakdown.cached, costBreakdown.cacheWrite, costBreakdown.output],
                 backgroundColor: [colorPrimary, colorWarning, colorPrimary, colorSuccess],
                 borderWidth: 0,
               },

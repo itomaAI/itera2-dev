@@ -71,9 +71,10 @@ export class GeminiAdapter extends BaseLLMAdapter {
       this.config.thinkingConfig?.thinking_budget;
 
     if (thinkingLevel || thinkingBudget !== undefined) {
-      const existingTc = combinedInput.thinkingConfig && typeof combinedInput.thinkingConfig === 'object'
-        ? combinedInput.thinkingConfig
-        : {};
+      const existingTc =
+        combinedInput.thinkingConfig && typeof combinedInput.thinkingConfig === 'object'
+          ? combinedInput.thinkingConfig
+          : {};
       combinedInput.thinkingConfig = { ...existingTc };
       if (thinkingLevel) combinedInput.thinkingConfig.thinkingLevel = thinkingLevel;
       if (thinkingBudget !== undefined) combinedInput.thinkingConfig.thinkingBudget = thinkingBudget;

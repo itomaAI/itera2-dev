@@ -3,18 +3,9 @@
  * Itera OS v2: Text-only History Event Recorder
  */
 
-import type {
-  HistoryEventPayload,
-  HistoryManager,
-  Role,
-  Turn,
-  TurnMeta,
-} from '../../core/state/HistoryManager';
+import type { HistoryEventPayload, HistoryManager, Role, Turn, TurnMeta } from '../../core/state/HistoryManager';
 import type { SystemLogger } from '../../core/state/SystemLogger';
-import {
-  isMediaContentNode,
-  isTextContentNode,
-} from '../../core/state/TurnContentNormalizer';
+import { isMediaContentNode, isTextContentNode } from '../../core/state/TurnContentNormalizer';
 
 interface HistoryLogMeta {
   type?: string;
@@ -48,10 +39,7 @@ interface HistoryClearLogEntry {
   removedTurns: number;
 }
 
-type HistoryLogEntry =
-  | HistoryTurnLogEntry
-  | HistoryDeleteLogEntry
-  | HistoryClearLogEntry;
+type HistoryLogEntry = HistoryTurnLogEntry | HistoryDeleteLogEntry | HistoryClearLogEntry;
 
 interface TextProjection {
   text: string;
@@ -137,11 +125,7 @@ export class HistoryEventRecorder {
     return turn.meta.type === 'tool_execution';
   }
 
-  private createTurnLogEntry(
-    action: 'append' | 'update',
-    totalTurns: number,
-    turn: Turn,
-  ): HistoryTurnLogEntry {
+  private createTurnLogEntry(action: 'append' | 'update', totalTurns: number, turn: Turn): HistoryTurnLogEntry {
     const projection = this.projectTextOnly(turn);
 
     return {
