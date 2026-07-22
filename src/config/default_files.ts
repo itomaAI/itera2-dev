@@ -4777,6 +4777,39 @@ Use this Codex as a guidepost, and build a better Itera OS together with the use
               <div class="flex flex-wrap gap-2 mb-3" id="cap-badges"></div>
               <div id="cap-pricing" class="text-[10px] text-text-muted font-mono flex gap-4"></div>
             </div>
+
+            <!-- Advanced Model Parameters (Accordion) -->
+            <details id="llm-advanced-details" class="group bg-card/40 border border-border-main rounded-xl overflow-hidden transition-all">
+              <summary class="flex items-center justify-between p-3.5 cursor-pointer select-none hover:bg-hover/50 transition font-medium text-xs text-text-main">
+                <div class="flex items-center gap-2">
+                  <svg class="w-3.5 h-3.5 text-text-muted transition-transform group-open:rotate-90" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+                  </svg>
+                  <span class="font-bold uppercase tracking-wider text-[11px]">Advanced Parameters (JSON)</span>
+                  <span id="llm-json-badge" class="hidden text-[9px] px-1.5 py-0.5 rounded bg-primary/20 text-primary font-mono">Custom Active</span>
+                </div>
+                <span id="llm-json-status" class="text-[10px] font-mono text-text-muted">Valid JSON 🟢</span>
+              </summary>
+              <div class="p-4 border-t border-border-main/50 space-y-3 bg-panel/50">
+                <div class="flex justify-between items-center text-[10px] text-text-muted">
+                  <span>Provider-specific raw JSON parameters (e.g. thinkingConfig, reasoning_effort)</span>
+                  <div class="flex gap-2">
+                    <button type="button" id="btn-llm-preset" onclick="loadModelTemplateIntoJson()" class="px-2 py-1 rounded bg-card hover:bg-hover border border-border-main text-text-main transition flex items-center gap-1 shadow-sm">
+                      🔄 Load Preset
+                    </button>
+                    <button type="button" id="btn-llm-format" onclick="formatLlmJsonTextarea()" class="px-2 py-1 rounded bg-card hover:bg-hover border border-border-main text-text-main transition flex items-center gap-1 shadow-sm">
+                      ✨ Format
+                    </button>
+                  </div>
+                </div>
+                <textarea
+                  id="ui-llm-json-textarea"
+                  rows="6"
+                  class="w-full font-mono text-xs bg-card border border-border-main rounded-lg p-3 text-text-main focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/30 transition shadow-inner no-scrollbar"
+                  placeholder="{}"
+                ></textarea>
+              </div>
+            </details>
           </div>
         </section>
 
@@ -5045,17 +5078,23 @@ Use this Codex as a guidepost, and build a better Itera OS together with the use
           updateModelDatalist();
           const pData = llmProfiles.providers.find((p) => p.id === currentProviderId);
           DOM('ui-model-input').value = pData && pData.models && pData.models.length > 0 ? pData.models[0].id : '';
-          saveLlmConfig();
+          loadModelTemplateIntoJson();
         });
 
         const modelInput = DOM('ui-model-input');
         modelInput.value = initialModel;
         modelInput.addEventListener('input', () => {
           updateCapabilityPanel();
-          saveLlmConfig();
+          loadModelTemplateIntoJson();
         });
 
+        const jsonTextarea = DOM('ui-llm-json-textarea');
+        if (jsonTextarea) {
+          jsonTextarea.addEventListener('input', validateAndSaveLlmJson);
+        }
+
         updateModelDatalist();
+        populateTextareaFromConfig(configs.llm);
       }
 
       function updateModelDatalist() {
@@ -5121,22 +5160,36 @@ Use this Codex as a guidepost, and build a better Itera OS together with the use
         }
       }
 
-      function saveLlmConfig() {
+      function populateTextareaFromConfig(llmConfig) {
+        if (!llmConfig) return;
+        const { model, ...extraParams } = llmConfig;
+        const textarea = DOM('ui-llm-json-textarea');
+        const badge = DOM('llm-json-badge');
+
+        if (textarea) {
+          if (Object.keys(extraParams).length > 0) {
+            textarea.value = JSON.stringify(extraParams, null, 2);
+            if (badge) badge.classList.remove('hidden');
+          } else {
+            textarea.value = '{}';
+            if (badge) badge.classList.add('hidden');
+          }
+          validateLlmJsonTextarea();
+        }
+      }
+
+      window.loadModelTemplateIntoJson = function() {
         const provider = currentProviderId;
         const model = DOM('ui-model-input').value.trim();
-        if (!model) return;
-
-        const modelString = provider === 'google' ? model : \`\${provider}/\${model}\`;
-
         const providerData = (llmProfiles.providers || []).find((p) => p.id === provider);
         const modelData = (providerData?.models || []).find((m) => m.id === model);
 
-        const newLlmConfig = { model: modelString };
+        const mergedParams = {};
 
         if (providerData && providerData.defaultConfig) {
           for (const [k, v] of Object.entries(providerData.defaultConfig)) {
             if (v !== null && v !== undefined) {
-              newLlmConfig[k] = JSON.parse(JSON.stringify(v));
+              mergedParams[k] = JSON.parse(JSON.stringify(v));
             }
           }
         }
@@ -5144,12 +5197,102 @@ Use this Codex as a guidepost, and build a better Itera OS together with the use
         if (modelData && modelData.defaultConfig) {
           for (const [k, v] of Object.entries(modelData.defaultConfig)) {
             if (v !== null && v !== undefined) {
-              if (typeof v === 'object' && !Array.isArray(v) && newLlmConfig[k]) {
-                newLlmConfig[k] = { ...newLlmConfig[k], ...JSON.parse(JSON.stringify(v)) };
+              if (typeof v === 'object' && !Array.isArray(v) && mergedParams[k]) {
+                mergedParams[k] = { ...mergedParams[k], ...JSON.parse(JSON.stringify(v)) };
               } else {
-                newLlmConfig[k] = JSON.parse(JSON.stringify(v));
+                mergedParams[k] = JSON.parse(JSON.stringify(v));
               }
             }
+          }
+        }
+
+        const textarea = DOM('ui-llm-json-textarea');
+        if (textarea) {
+          textarea.value = JSON.stringify(mergedParams, null, 2);
+          validateAndSaveLlmJson();
+        }
+      };
+
+      window.formatLlmJsonTextarea = function() {
+        const textarea = DOM('ui-llm-json-textarea');
+        if (!textarea) return;
+
+        try {
+          const val = textarea.value.trim();
+          if (!val) {
+            textarea.value = '{}';
+            validateAndSaveLlmJson();
+            return;
+          }
+          const parsed = JSON.parse(val);
+          textarea.value = JSON.stringify(parsed, null, 2);
+          validateAndSaveLlmJson();
+        } catch (e) {
+          validateLlmJsonTextarea();
+        }
+      };
+
+      function validateLlmJsonTextarea() {
+        const statusEl = DOM('llm-json-status');
+        const badgeEl = DOM('llm-json-badge');
+        const textarea = DOM('ui-llm-json-textarea');
+        if (!textarea) return true;
+
+        const val = textarea.value.trim();
+
+        if (!val || val === '{}') {
+          if (statusEl) {
+            statusEl.textContent = 'Valid JSON 🟢';
+            statusEl.className = 'text-[10px] font-mono text-text-muted';
+          }
+          if (badgeEl) badgeEl.classList.add('hidden');
+          return true;
+        }
+
+        try {
+          const parsed = JSON.parse(val);
+          if (typeof parsed !== 'object' || Array.isArray(parsed)) {
+            throw new Error('Must be a JSON object');
+          }
+          if (statusEl) {
+            statusEl.textContent = 'Valid JSON 🟢';
+            statusEl.className = 'text-[10px] font-mono text-success';
+          }
+          if (badgeEl) badgeEl.classList.remove('hidden');
+          return true;
+        } catch (e) {
+          if (statusEl) {
+            statusEl.textContent = 'Invalid JSON 🔴';
+            statusEl.className = 'text-[10px] font-mono text-error font-bold';
+          }
+          return false;
+        }
+      }
+
+      function validateAndSaveLlmJson() {
+        if (validateLlmJsonTextarea()) {
+          saveLlmConfig();
+        }
+      }
+
+      function saveLlmConfig() {
+        const provider = currentProviderId;
+        const model = DOM('ui-model-input').value.trim();
+        if (!model) return;
+
+        const modelString = provider === 'google' ? model : \`\${provider}/\${model}\`;
+        const newLlmConfig = { model: modelString };
+
+        const textarea = DOM('ui-llm-json-textarea');
+        if (textarea) {
+          const rawText = textarea.value.trim();
+          if (rawText && rawText !== '{}') {
+            try {
+              const parsedExtra = JSON.parse(rawText);
+              if (typeof parsedExtra === 'object' && !Array.isArray(parsedExtra)) {
+                Object.assign(newLlmConfig, parsedExtra);
+              }
+            } catch (e) {}
           }
         }
 
