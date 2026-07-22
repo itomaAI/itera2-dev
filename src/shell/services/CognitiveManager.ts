@@ -55,6 +55,9 @@ export class CognitiveManager {
                   ...vfsProv.defaultCapabilities,
                 };
               }
+              if (vfsProv.defaultConfig) {
+                baseProv.defaultConfig = vfsProv.defaultConfig;
+              }
             } else {
               merged.push(vfsProv);
             }
