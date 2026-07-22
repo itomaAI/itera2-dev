@@ -110,61 +110,18 @@ export class OpenAIAdapter extends BaseLLMAdapter {
       signal,
     });
 
-    if (!response.ok) {
-      let errText = await response.text();
-      try {
-        const errJson = JSON.parse(errText);
-        errText = errJson.error?.message || errText;
-      } catch (e) {}
-      throw new Error(`OpenAI API Error (${response.status}): ${errText}`);
-    }
+    await this.checkError(response, 'OpenAI');
 
     const reader = response.body!.getReader();
-    const decoder = new TextDecoder('utf-8');
-    let buffer = '';
-
-    const onAbort = () => {
-      reader.cancel(new DOMException('Aborted', 'AbortError')).catch(() => {});
-    };
-    if (signal) signal.addEventListener('abort', onAbort);
-
-    let idleTimeout: ReturnType<typeof setTimeout>;
-    let isIdleTimeout = false;
-    const resetIdleTimeout = () => {
-      clearTimeout(idleTimeout);
-      idleTimeout = setTimeout(() => {
-        isIdleTimeout = true;
-        reader.cancel(new Error('Stream Idle Timeout'));
-      }, 15000);
-    };
-
-    resetIdleTimeout();
 
     try {
-      while (true) {
-        if (signal && signal.aborted) throw new DOMException('Aborted', 'AbortError');
-        const { done, value } = await reader.read();
+      for await (const line of this.readSSELines(reader, signal)) {
+        const trimmedLine = line.trim();
+        if (!trimmedLine || !trimmedLine.startsWith('data: ')) continue;
 
-        if (isIdleTimeout) {
-          throw new Error('Stream Idle Timeout: No response from API for 15 seconds.');
-        }
+        const dataStr = trimmedLine.substring(6);
 
-        resetIdleTimeout();
-
-        if (done) break;
-
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split('\n');
-
-        buffer = lines.pop() || '';
-
-        for (const line of lines) {
-          const trimmedLine = line.trim();
-          if (!trimmedLine || !trimmedLine.startsWith('data: ')) continue;
-
-          const dataStr = trimmedLine.substring(6);
-
-          if (dataStr === '[DONE]') break;
+        if (dataStr === '[DONE]') break;
 
           try {
             const data = JSON.parse(dataStr);
@@ -198,8 +155,7 @@ export class OpenAIAdapter extends BaseLLMAdapter {
         }
       }
     } finally {
-      clearTimeout(idleTimeout!);
-      if (signal) signal.removeEventListener('abort', onAbort);
+      reader.releaseLock();
     }
   }
 }

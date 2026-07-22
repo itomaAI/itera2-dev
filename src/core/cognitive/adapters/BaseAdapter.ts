@@ -56,4 +56,71 @@ export abstract class BaseLLMAdapter {
    * @param signal - 中断用のAbortSignal
    */
   abstract generateStream(messages: any, onChunk: (text: string) => void, signal?: AbortSignal): Promise<void>;
+
+  protected async checkError(response: Response, providerName: string): Promise<void> {
+    if (!response.ok) {
+      let errText = await response.text();
+      try {
+        const errJson = JSON.parse(errText);
+        errText = errJson.error?.message || errText;
+      } catch (e) {}
+      throw new Error(`${providerName} API Error (${response.status}): ${errText}`);
+    }
+  }
+
+  protected async *monitorStream(reader: ReadableStreamDefaultReader<Uint8Array>, signal?: AbortSignal) {
+    let idleTimeout: ReturnType<typeof setTimeout>;
+    let isIdleTimeout = false;
+
+    const onAbort = () => {
+      reader.cancel(new DOMException('Aborted', 'AbortError')).catch(() => {});
+    };
+    if (signal) signal.addEventListener('abort', onAbort);
+
+    const resetIdleTimeout = () => {
+      clearTimeout(idleTimeout);
+      idleTimeout = setTimeout(() => {
+        isIdleTimeout = true;
+        reader.cancel(new Error('Stream Idle Timeout')).catch(() => {});
+      }, 15000);
+    };
+
+    resetIdleTimeout();
+
+    try {
+      while (true) {
+        if (signal && signal.aborted) throw new DOMException('Aborted', 'AbortError');
+        const { done, value } = await reader.read();
+
+        if (isIdleTimeout) {
+          throw new Error('Stream Idle Timeout: No response from API for 15 seconds.');
+        }
+
+        resetIdleTimeout();
+
+        if (done) break;
+        if (value) yield value;
+      }
+    } finally {
+      clearTimeout(idleTimeout!);
+      if (signal) signal.removeEventListener('abort', onAbort);
+    }
+  }
+
+  protected async *readSSELines(reader: ReadableStreamDefaultReader<Uint8Array>, signal?: AbortSignal) {
+    const decoder = new TextDecoder('utf-8');
+    let buffer = '';
+
+    for await (const chunk of this.monitorStream(reader, signal)) {
+      buffer += decoder.decode(chunk, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop() || '';
+      for (const line of lines) {
+        yield line;
+      }
+    }
+    if (buffer) {
+      yield buffer;
+    }
+  }
 }

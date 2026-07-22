@@ -53,41 +53,6 @@ export class GeminiAdapter extends BaseLLMAdapter {
       ...userGenConfig,
     };
 
-    // Extract & normalize flat or shorthand thinking settings
-    const thinkingLevel =
-      combinedInput.thinkingLevel ??
-      combinedInput.thinking_level ??
-      userGenConfig.thinkingConfig?.thinkingLevel ??
-      userGenConfig.thinkingConfig?.thinking_level ??
-      this.config.thinkingConfig?.thinkingLevel ??
-      this.config.thinkingConfig?.thinking_level;
-
-    const thinkingBudget =
-      combinedInput.thinkingBudget ??
-      combinedInput.thinking_budget ??
-      userGenConfig.thinkingConfig?.thinkingBudget ??
-      userGenConfig.thinkingConfig?.thinking_budget ??
-      this.config.thinkingConfig?.thinkingBudget ??
-      this.config.thinkingConfig?.thinking_budget;
-
-    if (thinkingLevel || thinkingBudget !== undefined) {
-      const existingTc =
-        combinedInput.thinkingConfig && typeof combinedInput.thinkingConfig === 'object'
-          ? combinedInput.thinkingConfig
-          : {};
-      combinedInput.thinkingConfig = { ...existingTc };
-      if (thinkingLevel) combinedInput.thinkingConfig.thinkingLevel = thinkingLevel;
-      if (thinkingBudget !== undefined) combinedInput.thinkingConfig.thinkingBudget = thinkingBudget;
-    }
-
-    if ('max_output_tokens' in combinedInput) combinedInput.maxOutputTokens = combinedInput.max_output_tokens;
-    if ('stop_sequences' in combinedInput) combinedInput.stopSequences = combinedInput.stop_sequences;
-    if ('response_mime_type' in combinedInput) combinedInput.responseMimeType = combinedInput.response_mime_type;
-    if ('response_schema' in combinedInput) combinedInput.responseSchema = combinedInput.response_schema;
-    if ('candidate_count' in combinedInput) combinedInput.candidateCount = combinedInput.candidate_count;
-    if ('top_p' in combinedInput) combinedInput.topP = combinedInput.top_p;
-    if ('top_k' in combinedInput) combinedInput.topK = combinedInput.top_k;
-
     const generationConfig = filterNestedObject(combinedInput, GEMINI_ALLOWED_STRUCTURE);
 
     if (generationConfig.temperature === undefined) generationConfig.temperature = 1.0;
@@ -109,52 +74,16 @@ export class GeminiAdapter extends BaseLLMAdapter {
       signal,
     });
 
-    if (!response.ok) {
-      let errText = await response.text();
-      try {
-        const errJson = JSON.parse(errText);
-        errText = errJson.error?.message || errText;
-      } catch (e) {}
-      throw new Error(`Gemini API Error (${response.status}): ${errText}`);
-    }
+    await this.checkError(response, 'Gemini');
 
     const reader = response.body!.getReader();
-    const decoder = new TextDecoder();
+    const decoder = new TextDecoder('utf-8');
     let buffer = '';
-
-    const onAbort = () => {
-      reader.cancel(new DOMException('Aborted', 'AbortError')).catch(() => {});
-    };
-    if (signal) signal.addEventListener('abort', onAbort);
-
-    let idleTimeout: ReturnType<typeof setTimeout>;
-    let isIdleTimeout = false;
-    const resetIdleTimeout = () => {
-      clearTimeout(idleTimeout);
-      idleTimeout = setTimeout(() => {
-        isIdleTimeout = true;
-        reader.cancel(new Error('Stream Idle Timeout'));
-      }, 15000);
-    };
-
-    resetIdleTimeout();
-
     let finalUsageMetadata: any = null;
 
     try {
-      while (true) {
-        if (signal && signal.aborted) throw new DOMException('Aborted', 'AbortError');
-        const { done, value } = await reader.read();
-
-        if (isIdleTimeout) {
-          throw new Error('Stream Idle Timeout: No response from API for 15 seconds.');
-        }
-
-        resetIdleTimeout();
-
-        if (done) break;
-
-        buffer += decoder.decode(value, { stream: true });
+      for await (const chunk of this.monitorStream(reader, signal)) {
+        buffer += decoder.decode(chunk, { stream: true });
 
         while (true) {
           const textKeyIdx = buffer.indexOf('"text"');
@@ -224,8 +153,7 @@ export class GeminiAdapter extends BaseLLMAdapter {
         });
       }
     } finally {
-      clearTimeout(idleTimeout!);
-      if (signal) signal.removeEventListener('abort', onAbort);
+      reader.releaseLock();
     }
   }
 }

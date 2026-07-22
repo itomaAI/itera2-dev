@@ -80,36 +80,9 @@ export class AnthropicAdapter extends BaseLLMAdapter {
       signal,
     });
 
-    if (!response.ok) {
-      let errText = await response.text();
-      try {
-        const errJson = JSON.parse(errText);
-        errText = errJson.error?.message || errText;
-      } catch (e) {}
-      throw new Error(`Anthropic API Error (${response.status}): ${errText}`);
-    }
+    await this.checkError(response, 'Anthropic');
 
     const reader = response.body!.getReader();
-    const decoder = new TextDecoder('utf-8');
-    let buffer = '';
-
-    const onAbort = () => {
-      reader.cancel(new DOMException('Aborted', 'AbortError')).catch(() => {});
-    };
-    if (signal) signal.addEventListener('abort', onAbort);
-
-    let idleTimeout: ReturnType<typeof setTimeout>;
-    let isIdleTimeout = false;
-    const resetIdleTimeout = () => {
-      clearTimeout(idleTimeout);
-      idleTimeout = setTimeout(() => {
-        isIdleTimeout = true;
-        reader.cancel(new Error('Stream Idle Timeout'));
-      }, 15000);
-    };
-
-    resetIdleTimeout();
-
     let inputTokens = 0;
     let outputTokens = 0;
     let cachedTokens = 0;
@@ -118,57 +91,40 @@ export class AnthropicAdapter extends BaseLLMAdapter {
     try {
       let eventType: string | null = null;
 
-      while (true) {
-        if (signal && signal.aborted) throw new DOMException('Aborted', 'AbortError');
-        const { done, value } = await reader.read();
+      for await (const line of this.readSSELines(reader, signal)) {
+        const trimmedLine = line.trim();
+        if (!trimmedLine) continue;
 
-        if (isIdleTimeout) {
-          throw new Error('Stream Idle Timeout: No response from API for 15 seconds.');
+        if (trimmedLine.startsWith('event: ')) {
+          eventType = trimmedLine.substring(7);
+          continue;
         }
 
-        resetIdleTimeout();
+        if (trimmedLine.startsWith('data: ')) {
+          const dataStr = trimmedLine.substring(6);
 
-        if (done) break;
+          try {
+            const data = JSON.parse(dataStr);
 
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split('\n');
-        buffer = lines.pop() || '';
-
-        for (const line of lines) {
-          const trimmedLine = line.trim();
-          if (!trimmedLine) continue;
-
-          if (trimmedLine.startsWith('event: ')) {
-            eventType = trimmedLine.substring(7);
-            continue;
-          }
-
-          if (trimmedLine.startsWith('data: ')) {
-            const dataStr = trimmedLine.substring(6);
-
-            try {
-              const data = JSON.parse(dataStr);
-
-              // ★ Anthropic のトークン消費量抽出
-              if (eventType === 'message_start' && data.message?.usage) {
-                const standardInput = data.message.usage.input_tokens || 0;
-                const cached = data.message.usage.cache_read_input_tokens || 0;
-                const cacheWrite = data.message.usage.cache_creation_input_tokens || 0;
-                inputTokens = standardInput;
-                cachedTokens = cached;
-                cacheWriteTokens = cacheWrite;
-              } else if (eventType === 'message_delta' && data.usage) {
-                outputTokens = data.usage.output_tokens || 0;
-              } else if (eventType === 'content_block_delta') {
-                if (data.delta && data.delta.type === 'text_delta') {
-                  onChunk(data.delta.text);
-                }
-              } else if (eventType === 'message_stop') {
-                break;
+            // ★ Anthropic のトークン消費量抽出
+            if (eventType === 'message_start' && data.message?.usage) {
+              const standardInput = data.message.usage.input_tokens || 0;
+              const cached = data.message.usage.cache_read_input_tokens || 0;
+              const cacheWrite = data.message.usage.cache_creation_input_tokens || 0;
+              inputTokens = standardInput;
+              cachedTokens = cached;
+              cacheWriteTokens = cacheWrite;
+            } else if (eventType === 'message_delta' && data.usage) {
+              outputTokens = data.usage.output_tokens || 0;
+            } else if (eventType === 'content_block_delta') {
+              if (data.delta && data.delta.type === 'text_delta') {
+                onChunk(data.delta.text);
               }
-            } catch (e) {
-              console.warn('[AnthropicAdapter] Stream Parse Warning:', e);
+            } else if (eventType === 'message_stop') {
+              break;
             }
+          } catch (e) {
+            console.warn('[AnthropicAdapter] Stream Parse Warning:', e);
           }
         }
       }
@@ -187,8 +143,7 @@ export class AnthropicAdapter extends BaseLLMAdapter {
         });
       }
     } finally {
-      clearTimeout(idleTimeout!);
-      if (signal) signal.removeEventListener('abort', onAbort);
+      reader.releaseLock();
     }
   }
 }
