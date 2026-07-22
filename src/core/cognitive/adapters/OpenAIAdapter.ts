@@ -39,16 +39,64 @@ export class OpenAIAdapter extends BaseLLMAdapter {
       headers['X-Title'] = 'Itera OS v2';
     }
 
+    const isOpenRouterOrCustom = this.baseUrl.includes('openrouter.ai') || !this.baseUrl.includes('api.openai.com');
+
+    const OPENAI_SUPPORTED_KEYS = [
+      'reasoning_effort',
+      'reasoning',
+      'verbosity',
+      'max_completion_tokens',
+      'max_tokens',
+      'temperature',
+      'seed',
+      'top_p',
+      'frequency_penalty',
+      'presence_penalty',
+      'response_format',
+      'stop',
+      'user',
+    ];
+
+    const RESERVED_INTERNAL_KEYS = ['model', 'generationConfig', 'providerOptions', 'network'];
+
     const payload: any = {
       model: this.modelName,
       messages: messages,
       stream: true,
       // ★ OpenAI最新仕様: ストリームの最後に usage を含めるオプション
       stream_options: { include_usage: true },
-      temperature: this.config.temperature || 1.0,
+      temperature: this.config.temperature ?? 1.0,
     };
+
     if (this.config.maxOutputTokens) {
       payload.max_tokens = this.config.maxOutputTokens;
+    }
+
+    if (isOpenRouterOrCustom) {
+      // OpenRouter / Custom: 予約キー以外を完全パススルー
+      for (const [key, val] of Object.entries(this.config)) {
+        if (!RESERVED_INTERNAL_KEYS.includes(key) && val !== null) {
+          payload[key] = val;
+        }
+      }
+    } else {
+      // 本家 OpenAI: サポートキーのみ抽出＆マージ
+      for (const key of OPENAI_SUPPORTED_KEYS) {
+        if (key in this.config && this.config[key] !== null) {
+          payload[key] = this.config[key];
+        }
+      }
+
+      // 思考モデル / reasoning 有効時は 400 エラー回避のため temperature を自動削除
+      const hasReasoning = Boolean(
+        this.config.reasoning_effort ||
+        this.config.reasoning ||
+        this.modelName.startsWith('o1') ||
+        this.modelName.startsWith('o3')
+      );
+      if (hasReasoning) {
+        delete payload.temperature;
+      }
     }
 
     const response = await fetch(url, {

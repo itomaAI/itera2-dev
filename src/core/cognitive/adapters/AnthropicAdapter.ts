@@ -31,14 +31,35 @@ export class AnthropicAdapter extends BaseLLMAdapter {
       targetUrl = `${proxyUrl}${encodeURIComponent(baseUrl)}`;
     }
 
-    const payload = {
+    const ANTHROPIC_SUPPORTED_KEYS = [
+      'thinking',
+      'output_config',
+      'max_tokens',
+      'temperature',
+      'top_k',
+      'top_p',
+      'stop_sequences',
+    ];
+
+    const payload: any = {
       model: this.modelName,
-      max_tokens: this.config.maxOutputTokens || 8192,
+      max_tokens: this.config.max_tokens ?? this.config.maxOutputTokens ?? 8192,
       system: system,
       messages: messages,
       stream: true,
-      temperature: this.config.temperature || 1.0,
+      temperature: this.config.temperature ?? 1.0,
     };
+
+    for (const key of ANTHROPIC_SUPPORTED_KEYS) {
+      if (key in this.config && this.config[key] !== null) {
+        payload[key] = this.config[key];
+      }
+    }
+
+    // 思考モード (thinking / output_config) 有効時は 400 エラー回避のため temperature を自動削除
+    if (payload.thinking || payload.output_config) {
+      delete payload.temperature;
+    }
 
     const response = await fetch(targetUrl, {
       method: 'POST',

@@ -5732,18 +5732,50 @@ Use this Codex as a guidepost, and build a better Itera OS together with the use
             maxMediaSizeMB: 100,
             supportedMimes: ['application/pdf', 'image/*', 'video/*', 'audio/*'],
           },
+          defaultConfig: {
+            generationConfig: {
+              thinking_level: null,
+              maxOutputTokens: null,
+              temperature: null,
+            },
+          },
           models: [
+            {
+              id: 'gemini-3.6-flash',
+              name: 'Gemini 3.6 Flash',
+              contextTokens: 1048576,
+              pricing: {
+                input: 1.5,
+                cached: 0.15,
+                output: 7.5,
+              },
+              capabilities: {
+                maxMediaSizeMB: 100,
+                supportedMimes: ['application/pdf', 'image/*', 'video/*', 'audio/*'],
+              },
+              defaultConfig: {
+                generationConfig: {
+                  thinking_level: 'medium',
+                },
+              },
+            },
             {
               id: 'gemini-3.5-flash',
               name: 'Gemini 3.5 Flash',
               contextTokens: 1048576,
               pricing: {
                 input: 1.5,
-                output: 9,
+                cached: 0.15,
+                output: 9.0,
               },
               capabilities: {
                 maxMediaSizeMB: 100,
                 supportedMimes: ['application/pdf', 'image/*', 'video/*', 'audio/*'],
+              },
+              defaultConfig: {
+                generationConfig: {
+                  thinking_level: 'medium',
+                },
               },
             },
             {
@@ -5754,19 +5786,26 @@ Use this Codex as a guidepost, and build a better Itera OS together with the use
                 tiers: [
                   {
                     maxTokens: 200000,
-                    input: 2,
-                    output: 12,
+                    input: 2.0,
+                    cached: 0.2,
+                    output: 12.0,
                   },
                   {
                     maxTokens: null,
-                    input: 4,
-                    output: 18,
+                    input: 4.0,
+                    cached: 0.4,
+                    output: 18.0,
                   },
                 ],
               },
               capabilities: {
                 maxMediaSizeMB: 100,
                 supportedMimes: ['application/pdf', 'image/*', 'video/*', 'audio/*'],
+              },
+              defaultConfig: {
+                generationConfig: {
+                  thinking_level: 'high',
+                },
               },
             },
             {
@@ -5775,7 +5814,13 @@ Use this Codex as a guidepost, and build a better Itera OS together with the use
               contextTokens: 1048576,
               pricing: {
                 input: 0.25,
+                cached: 0.025,
                 output: 1.5,
+              },
+              defaultConfig: {
+                generationConfig: {
+                  thinking_level: 'minimal',
+                },
               },
             },
             {
@@ -5784,7 +5829,13 @@ Use this Codex as a guidepost, and build a better Itera OS together with the use
               contextTokens: 1048576,
               pricing: {
                 input: 0.5,
-                output: 3,
+                cached: 0.05,
+                output: 3.0,
+              },
+              defaultConfig: {
+                generationConfig: {
+                  thinking_level: 'high',
+                },
               },
             },
           ],
@@ -5804,14 +5855,55 @@ Use this Codex as a guidepost, and build a better Itera OS together with the use
               'application/json',
             ],
           },
+          defaultConfig: {
+            reasoning_effort: null,
+            max_completion_tokens: null,
+            max_tokens: null,
+            temperature: null,
+          },
           models: [
+            {
+              id: 'gpt-5.6-sol',
+              name: 'GPT-5.6 Sol',
+              contextTokens: 1050000,
+              pricing: {
+                tiers: [
+                  { maxTokens: 271999, input: 5.0, cached: 0.5, cacheWrite: 6.25, output: 30.0 },
+                  { maxTokens: null, input: 10.0, cached: 1.0, cacheWrite: 12.5, output: 45.0 },
+                ],
+              },
+            },
+            {
+              id: 'gpt-5.6-terra',
+              name: 'GPT-5.6 Terra',
+              contextTokens: 1050000,
+              pricing: {
+                tiers: [
+                  { maxTokens: 271999, input: 2.5, cached: 0.25, cacheWrite: 3.125, output: 15.0 },
+                  { maxTokens: null, input: 5.0, cached: 0.5, cacheWrite: 6.25, output: 22.5 },
+                ],
+              },
+            },
+            {
+              id: 'gpt-5.6-luna',
+              name: 'GPT-5.6 Luna',
+              contextTokens: 1050000,
+              pricing: {
+                tiers: [
+                  { maxTokens: 271999, input: 1.0, cached: 0.1, cacheWrite: 1.25, output: 6.0 },
+                  { maxTokens: null, input: 2.0, cached: 0.2, cacheWrite: 2.5, output: 9.0 },
+                ],
+              },
+            },
             {
               id: 'gpt-5.5',
               name: 'GPT-5.5',
               contextTokens: 1050000,
               pricing: {
-                input: 5,
-                output: 30,
+                tiers: [
+                  { maxTokens: 271999, input: 5.0, cached: 0.5, output: 30.0 },
+                  { maxTokens: null, input: 10.0, cached: 1.0, output: 45.0 },
+                ],
               },
             },
             {
@@ -5819,8 +5911,10 @@ Use this Codex as a guidepost, and build a better Itera OS together with the use
               name: 'GPT-5.5 Pro',
               contextTokens: 1050000,
               pricing: {
-                input: 30,
-                output: 180,
+                tiers: [
+                  { maxTokens: 271999, input: 30.0, cached: null, output: 180.0 },
+                  { maxTokens: null, input: 60.0, cached: null, output: 270.0 },
+                ],
               },
             },
             {
@@ -5828,17 +5922,33 @@ Use this Codex as a guidepost, and build a better Itera OS together with the use
               name: 'GPT-5.4',
               contextTokens: 1050000,
               pricing: {
-                input: 2.5,
-                output: 15,
+                tiers: [
+                  { maxTokens: 271999, input: 2.5, cached: 0.25, output: 15.0 },
+                  { maxTokens: null, input: 5.0, cached: 0.5, output: 22.5 },
+                ],
               },
             },
             {
               id: 'gpt-5.4-mini',
               name: 'GPT-5.4 Mini',
               contextTokens: 400000,
+              pricing: { input: 0.75, cached: 0.075, output: 4.5 },
+            },
+            {
+              id: 'gpt-5.4-nano',
+              name: 'GPT-5.4 Nano',
+              contextTokens: 400000,
+              pricing: { input: 0.2, cached: 0.02, output: 1.25 },
+            },
+            {
+              id: 'gpt-5.4-pro',
+              name: 'GPT-5.4 Pro',
+              contextTokens: 1050000,
               pricing: {
-                input: 0.75,
-                output: 4.5,
+                tiers: [
+                  { maxTokens: 271999, input: 30.0, cached: null, output: 180.0 },
+                  { maxTokens: null, input: 60.0, cached: null, output: 270.0 },
+                ],
               },
             },
           ],
@@ -5852,42 +5962,36 @@ Use this Codex as a guidepost, and build a better Itera OS together with the use
             maxMediaSizeMB: 500,
             supportedMimes: ['image/*', 'application/pdf', 'text/plain'],
           },
+          defaultConfig: {
+            thinking: null,
+            output_config: null,
+            max_tokens: null,
+            temperature: null,
+          },
           models: [
             {
               id: 'claude-fable-5',
               name: 'Claude Fable 5',
               contextTokens: 1000000,
-              pricing: {
-                input: 10,
-                output: 50,
-              },
+              pricing: { input: 10.0, cached: 1.0, output: 50.0 },
             },
             {
               id: 'claude-opus-4-8',
               name: 'Claude Opus 4.8',
               contextTokens: 1000000,
-              pricing: {
-                input: 5,
-                output: 25,
-              },
+              pricing: { input: 5.0, cached: 0.5, output: 25.0 },
             },
             {
               id: 'claude-sonnet-5',
               name: 'Claude Sonnet 5',
               contextTokens: 1000000,
-              pricing: {
-                input: 3,
-                output: 15,
-              },
+              pricing: { input: 3.0, cached: 0.3, output: 15.0 },
             },
             {
               id: 'claude-haiku-4-5',
               name: 'Claude Haiku 4.5',
               contextTokens: 200000,
-              pricing: {
-                input: 1,
-                output: 5,
-              },
+              pricing: { input: 1.0, cached: 0.1, output: 5.0 },
             },
           ],
         },
@@ -5900,6 +6004,10 @@ Use this Codex as a guidepost, and build a better Itera OS together with the use
             maxMediaSizeMB: 20,
             supportedMimes: ['image/*', 'application/pdf', 'text/*', 'application/json'],
           },
+          defaultConfig: {
+            max_tokens: null,
+            temperature: null,
+          },
           models: [],
         },
         {
@@ -5911,6 +6019,10 @@ Use this Codex as a guidepost, and build a better Itera OS together with the use
           defaultCapabilities: {
             maxMediaSizeMB: 20,
             supportedMimes: ['image/*', 'application/pdf', 'text/*', 'application/json'],
+          },
+          defaultConfig: {
+            max_tokens: null,
+            temperature: null,
           },
           models: [],
         },

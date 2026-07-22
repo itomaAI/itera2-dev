@@ -9,7 +9,38 @@
         "maxMediaSizeMB": 100,
         "supportedMimes": ["application/pdf", "image/*", "video/*", "audio/*"]
       },
+      "defaultConfig": {
+        "generationConfig": {
+          "thinking_level": null,
+          "maxOutputTokens": null,
+          "temperature": null
+        }
+      },
       "models": [
+        {
+          "id": "gemini-3.6-flash",
+          "name": "Gemini 3.6 Flash",
+          "contextTokens": 1048576,
+          "pricing": {
+            "input": 1.5,
+            "cached": 0.15,
+            "output": 7.5
+          },
+          "capabilities": {
+            "maxMediaSizeMB": 100,
+            "supportedMimes": [
+              "application/pdf",
+              "image/*",
+              "video/*",
+              "audio/*"
+            ]
+          },
+          "defaultConfig": {
+            "generationConfig": {
+              "thinking_level": "medium"
+            }
+          }
+        },
         {
           "id": "gemini-3.5-flash",
           "name": "Gemini 3.5 Flash",
@@ -18,6 +49,11 @@
           "capabilities": {
             "maxMediaSizeMB": 100,
             "supportedMimes": ["application/pdf", "image/*", "video/*", "audio/*"]
+          },
+          "defaultConfig": {
+            "generationConfig": {
+              "thinking_level": "medium"
+            }
           }
         },
         {
@@ -33,19 +69,34 @@
           "capabilities": {
             "maxMediaSizeMB": 100,
             "supportedMimes": ["application/pdf", "image/*", "video/*", "audio/*"]
+          },
+          "defaultConfig": {
+            "generationConfig": {
+              "thinking_level": "high"
+            }
           }
         },
         {
           "id": "gemini-3.1-flash-lite",
           "name": "Gemini 3.1 Flash Lite",
           "contextTokens": 1048576,
-          "pricing": { "input": 0.25, "cached": 0.025, "output": 1.50 }
+          "pricing": { "input": 0.25, "cached": 0.025, "output": 1.50 },
+          "defaultConfig": {
+            "generationConfig": {
+              "thinking_level": "minimal"
+            }
+          }
         },
         {
           "id": "gemini-3-flash-preview",
           "name": "Gemini 3 Flash",
           "contextTokens": 1048576,
-          "pricing": { "input": 0.50, "cached": 0.05, "output": 3.00 }
+          "pricing": { "input": 0.50, "cached": 0.05, "output": 3.00 },
+          "defaultConfig": {
+            "generationConfig": {
+              "thinking_level": "high"
+            }
+          }
         }
       ]
     },
@@ -57,6 +108,12 @@
       "defaultCapabilities": {
         "maxMediaSizeMB": 50,
         "supportedMimes": ["image/*", "application/pdf", "application/vnd.openxmlformats-officedocument.*", "text/*", "application/json"]
+      },
+      "defaultConfig": {
+        "reasoning_effort": null,
+        "max_completion_tokens": null,
+        "max_tokens": null,
+        "temperature": null
       },
       "models": [
         {
@@ -159,6 +216,12 @@
         "maxMediaSizeMB": 500,
         "supportedMimes": ["image/*", "application/pdf", "text/plain"]
       },
+      "defaultConfig": {
+        "thinking": null,
+        "output_config": null,
+        "max_tokens": null,
+        "temperature": null
+      },
       "models": [
         {
           "id": "claude-fable-5",
@@ -195,6 +258,10 @@
         "maxMediaSizeMB": 20,
         "supportedMimes": ["image/*", "application/pdf", "text/*", "application/json"]
       },
+      "defaultConfig": {
+        "max_tokens": null,
+        "temperature": null
+      },
       "models": []
     },
     {
@@ -206,6 +273,10 @@
       "defaultCapabilities": {
         "maxMediaSizeMB": 20,
         "supportedMimes": ["image/*", "application/pdf", "text/*", "application/json"]
+      },
+      "defaultConfig": {
+        "max_tokens": null,
+        "temperature": null
       },
       "models": []
     }

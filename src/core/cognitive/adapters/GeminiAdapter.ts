@@ -26,10 +26,41 @@ export class GeminiAdapter extends BaseLLMAdapter {
     if (!this.apiKey) throw new Error('API Key is missing.');
 
     const url = `${this.baseUrl}/${this.modelName}:streamGenerateContent?key=${this.apiKey}`;
-    const generationConfig = {
-      temperature: this.config.temperature || 1.0,
-      maxOutputTokens: this.config.maxOutputTokens || 65536,
+
+    const GEMINI_GEN_CONFIG_KEYS = [
+      'thinking_level',
+      'maxOutputTokens',
+      'temperature',
+      'topP',
+      'topK',
+      'stopSequences',
+      'responseMimeType',
+      'responseSchema',
+      'candidateCount',
+      'thinkingConfig',
+    ];
+
+    const userGenConfig = (typeof this.config.generationConfig === 'object' && this.config.generationConfig !== null)
+      ? this.config.generationConfig
+      : {};
+
+    const generationConfig: Record<string, any> = {
+      temperature: userGenConfig.temperature ?? this.config.temperature ?? 1.0,
+      maxOutputTokens: userGenConfig.maxOutputTokens ?? this.config.maxOutputTokens ?? 65536,
     };
+
+    for (const key of GEMINI_GEN_CONFIG_KEYS) {
+      if (key in userGenConfig && userGenConfig[key] !== null) {
+        generationConfig[key] = userGenConfig[key];
+      } else if (key in this.config && this.config[key] !== null) {
+        generationConfig[key] = this.config[key];
+      }
+    }
+
+    if (generationConfig.thinking_level) {
+      delete generationConfig.thinkingConfig;
+      delete generationConfig.thinkingBudget;
+    }
 
     const payload = {
       contents: messages,
