@@ -3,7 +3,7 @@
  * Itera OS v2: Anthropic API Adapter
  */
 
-import { BaseLLMAdapter, type LlmConfig } from './BaseAdapter';
+import { BaseLLMAdapter, filterNestedObject, type LlmConfig } from './BaseAdapter';
 import type { SystemLogger } from '../../state/SystemLogger';
 
 export class AnthropicAdapter extends BaseLLMAdapter {
@@ -31,15 +31,22 @@ export class AnthropicAdapter extends BaseLLMAdapter {
       targetUrl = `${proxyUrl}${encodeURIComponent(baseUrl)}`;
     }
 
-    const ANTHROPIC_SUPPORTED_KEYS = [
-      'thinking',
-      'output_config',
-      'max_tokens',
-      'temperature',
-      'top_k',
-      'top_p',
-      'stop_sequences',
-    ];
+    const ANTHROPIC_ALLOWED_STRUCTURE = {
+      temperature: null,
+      max_tokens: null,
+      top_k: null,
+      top_p: null,
+      stop_sequences: null,
+      thinking: {
+        type: null,
+        budget_tokens: null,
+        display: null,
+      },
+      output_config: {
+        effort: null,
+        format: null,
+      },
+    };
 
     const payload: any = {
       model: this.modelName,
@@ -50,11 +57,8 @@ export class AnthropicAdapter extends BaseLLMAdapter {
       temperature: this.config.temperature ?? 1.0,
     };
 
-    for (const key of ANTHROPIC_SUPPORTED_KEYS) {
-      if (key in this.config && this.config[key] !== null) {
-        payload[key] = this.config[key];
-      }
-    }
+    const filteredConfig = filterNestedObject(this.config, ANTHROPIC_ALLOWED_STRUCTURE);
+    Object.assign(payload, filteredConfig);
 
     // 思考モード (thinking / output_config) 有効時は 400 エラー回避のためサンプリングパラメータを自動削除
     if (payload.thinking || payload.output_config) {

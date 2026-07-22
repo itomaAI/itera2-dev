@@ -5763,7 +5763,10 @@ Use this Codex as a guidepost, and build a better Itera OS together with the use
           },
           defaultConfig: {
             generationConfig: {
-              thinkingLevel: null,
+              thinkingConfig: {
+                thinkingLevel: null,
+                thinkingBudget: null,
+              },
               maxOutputTokens: null,
               temperature: null,
             },
@@ -5784,7 +5787,9 @@ Use this Codex as a guidepost, and build a better Itera OS together with the use
               },
               defaultConfig: {
                 generationConfig: {
-                  thinkingLevel: 'medium',
+                  thinkingConfig: {
+                    thinkingLevel: 'medium',
+                  },
                 },
               },
             },
@@ -5803,7 +5808,9 @@ Use this Codex as a guidepost, and build a better Itera OS together with the use
               },
               defaultConfig: {
                 generationConfig: {
-                  thinkingLevel: 'medium',
+                  thinkingConfig: {
+                    thinkingLevel: 'medium',
+                  },
                 },
               },
             },
@@ -5833,7 +5840,9 @@ Use this Codex as a guidepost, and build a better Itera OS together with the use
               },
               defaultConfig: {
                 generationConfig: {
-                  thinkingLevel: 'high',
+                  thinkingConfig: {
+                    thinkingLevel: 'high',
+                  },
                 },
               },
             },
@@ -5848,7 +5857,9 @@ Use this Codex as a guidepost, and build a better Itera OS together with the use
               },
               defaultConfig: {
                 generationConfig: {
-                  thinkingLevel: 'minimal',
+                  thinkingConfig: {
+                    thinkingLevel: 'minimal',
+                  },
                 },
               },
             },
@@ -5863,7 +5874,9 @@ Use this Codex as a guidepost, and build a better Itera OS together with the use
               },
               defaultConfig: {
                 generationConfig: {
-                  thinkingLevel: 'high',
+                  thinkingConfig: {
+                    thinkingLevel: 'high',
+                  },
                 },
               },
             },

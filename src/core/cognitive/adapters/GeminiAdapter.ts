@@ -3,7 +3,7 @@
  * Itera OS v2: Google Gemini API Adapter
  */
 
-import { BaseLLMAdapter, type LlmConfig } from './BaseAdapter';
+import { BaseLLMAdapter, filterNestedObject, type LlmConfig } from './BaseAdapter';
 import type { SystemLogger } from '../../state/SystemLogger';
 
 export class GeminiAdapter extends BaseLLMAdapter {
@@ -27,81 +27,73 @@ export class GeminiAdapter extends BaseLLMAdapter {
 
     const url = `${this.baseUrl}/${this.modelName}:streamGenerateContent?key=${this.apiKey}`;
 
-    const GEMINI_GEN_CONFIG_KEYS = [
-      'thinkingLevel',
-      'thinking_level',
-      'maxOutputTokens',
-      'max_output_tokens',
-      'temperature',
-      'topP',
-      'top_p',
-      'topK',
-      'top_k',
-      'stopSequences',
-      'stop_sequences',
-      'responseMimeType',
-      'response_mime_type',
-      'responseSchema',
-      'response_schema',
-      'candidateCount',
-      'candidate_count',
-      'thinkingConfig',
-    ];
-
-    const userGenConfig = (typeof this.config.generationConfig === 'object' && this.config.generationConfig !== null)
-      ? this.config.generationConfig
-      : {};
-
-    const generationConfig: Record<string, any> = {
-      temperature: userGenConfig.temperature ?? this.config.temperature ?? 1.0,
-      maxOutputTokens: userGenConfig.maxOutputTokens ?? userGenConfig.max_output_tokens ?? this.config.maxOutputTokens ?? this.config.max_output_tokens ?? 65536,
+    const GEMINI_ALLOWED_STRUCTURE = {
+      temperature: null,
+      maxOutputTokens: null,
+      topP: null,
+      topK: null,
+      stopSequences: null,
+      responseMimeType: null,
+      responseSchema: null,
+      candidateCount: null,
+      thinkingConfig: {
+        thinkingLevel: null,
+        thinkingBudget: null,
+        includeThoughts: null,
+      },
     };
 
-    for (const key of GEMINI_GEN_CONFIG_KEYS) {
-      if (key in userGenConfig && userGenConfig[key] !== null) {
-        generationConfig[key] = userGenConfig[key];
-      } else if (key in this.config && this.config[key] !== null) {
-        generationConfig[key] = this.config[key];
-      }
+    const userGenConfig =
+      typeof this.config.generationConfig === 'object' && this.config.generationConfig !== null
+        ? this.config.generationConfig
+        : {};
+
+    const combinedInput = {
+      ...this.config,
+      ...userGenConfig,
+    };
+
+    // Extract & normalize flat or shorthand thinking settings
+    const thinkingLevel =
+      combinedInput.thinkingLevel ??
+      combinedInput.thinking_level ??
+      userGenConfig.thinkingConfig?.thinkingLevel ??
+      userGenConfig.thinkingConfig?.thinking_level ??
+      this.config.thinkingConfig?.thinkingLevel ??
+      this.config.thinkingConfig?.thinking_level;
+
+    const thinkingBudget =
+      combinedInput.thinkingBudget ??
+      combinedInput.thinking_budget ??
+      userGenConfig.thinkingConfig?.thinkingBudget ??
+      userGenConfig.thinkingConfig?.thinking_budget ??
+      this.config.thinkingConfig?.thinkingBudget ??
+      this.config.thinkingConfig?.thinking_budget;
+
+    if (thinkingLevel || thinkingBudget !== undefined) {
+      const existingTc = combinedInput.thinkingConfig && typeof combinedInput.thinkingConfig === 'object'
+        ? combinedInput.thinkingConfig
+        : {};
+      combinedInput.thinkingConfig = { ...existingTc };
+      if (thinkingLevel) combinedInput.thinkingConfig.thinkingLevel = thinkingLevel;
+      if (thinkingBudget !== undefined) combinedInput.thinkingConfig.thinkingBudget = thinkingBudget;
     }
 
-    // Normalize snake_case keys to camelCase for Gemini REST API protobuf compatibility
-    if ('thinking_level' in generationConfig) {
-      generationConfig.thinkingLevel = generationConfig.thinking_level;
-      delete generationConfig.thinking_level;
-    }
-    if ('max_output_tokens' in generationConfig) {
-      generationConfig.maxOutputTokens = generationConfig.max_output_tokens;
-      delete generationConfig.max_output_tokens;
-    }
-    if ('stop_sequences' in generationConfig) {
-      generationConfig.stopSequences = generationConfig.stop_sequences;
-      delete generationConfig.stop_sequences;
-    }
-    if ('response_mime_type' in generationConfig) {
-      generationConfig.responseMimeType = generationConfig.response_mime_type;
-      delete generationConfig.response_mime_type;
-    }
-    if ('response_schema' in generationConfig) {
-      generationConfig.responseSchema = generationConfig.response_schema;
-      delete generationConfig.response_schema;
-    }
-    if ('candidate_count' in generationConfig) {
-      generationConfig.candidateCount = generationConfig.candidate_count;
-      delete generationConfig.candidate_count;
-    }
-    if ('top_p' in generationConfig) {
-      generationConfig.topP = generationConfig.top_p;
-      delete generationConfig.top_p;
-    }
-    if ('top_k' in generationConfig) {
-      generationConfig.topK = generationConfig.top_k;
-      delete generationConfig.top_k;
-    }
+    if ('max_output_tokens' in combinedInput) combinedInput.maxOutputTokens = combinedInput.max_output_tokens;
+    if ('stop_sequences' in combinedInput) combinedInput.stopSequences = combinedInput.stop_sequences;
+    if ('response_mime_type' in combinedInput) combinedInput.responseMimeType = combinedInput.response_mime_type;
+    if ('response_schema' in combinedInput) combinedInput.responseSchema = combinedInput.response_schema;
+    if ('candidate_count' in combinedInput) combinedInput.candidateCount = combinedInput.candidate_count;
+    if ('top_p' in combinedInput) combinedInput.topP = combinedInput.top_p;
+    if ('top_k' in combinedInput) combinedInput.topK = combinedInput.top_k;
 
-    if (generationConfig.thinkingLevel) {
-      delete generationConfig.thinkingConfig;
-      delete generationConfig.thinkingBudget;
+    const generationConfig = filterNestedObject(combinedInput, GEMINI_ALLOWED_STRUCTURE);
+
+    if (generationConfig.temperature === undefined) generationConfig.temperature = 1.0;
+    if (generationConfig.maxOutputTokens === undefined) generationConfig.maxOutputTokens = 65536;
+
+    if (generationConfig.thinkingConfig && generationConfig.thinkingConfig.thinkingLevel) {
+      delete generationConfig.thinkingConfig.thinkingBudget;
     }
 
     const payload = {

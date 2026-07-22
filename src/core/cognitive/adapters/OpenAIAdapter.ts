@@ -3,7 +3,7 @@
  * Itera OS v2: OpenAI / Local (Ollama, LM Studio) API Adapter
  */
 
-import { BaseLLMAdapter, type LlmConfig } from './BaseAdapter';
+import { BaseLLMAdapter, filterNestedObject, type LlmConfig } from './BaseAdapter';
 import type { SystemLogger } from '../../state/SystemLogger';
 
 export class OpenAIAdapter extends BaseLLMAdapter {
@@ -41,21 +41,25 @@ export class OpenAIAdapter extends BaseLLMAdapter {
 
     const isOpenRouterOrCustom = this.baseUrl.includes('openrouter.ai') || !this.baseUrl.includes('api.openai.com');
 
-    const OPENAI_SUPPORTED_KEYS = [
-      'reasoning_effort',
-      'reasoning',
-      'verbosity',
-      'max_completion_tokens',
-      'max_tokens',
-      'temperature',
-      'seed',
-      'top_p',
-      'frequency_penalty',
-      'presence_penalty',
-      'response_format',
-      'stop',
-      'user',
-    ];
+    const OPENAI_ALLOWED_STRUCTURE = {
+      temperature: null,
+      max_tokens: null,
+      max_completion_tokens: null,
+      reasoning_effort: null,
+      reasoning: {
+        effort: null,
+      },
+      text: {
+        verbosity: null,
+      },
+      response_format: null,
+      seed: null,
+      top_p: null,
+      frequency_penalty: null,
+      presence_penalty: null,
+      stop: null,
+      user: null,
+    };
 
     const RESERVED_INTERNAL_KEYS = ['model', 'generationConfig', 'providerOptions', 'network'];
 
@@ -80,17 +84,14 @@ export class OpenAIAdapter extends BaseLLMAdapter {
         }
       }
     } else {
-      // 本家 OpenAI: サポートキーのみ抽出＆マージ
-      for (const key of OPENAI_SUPPORTED_KEYS) {
-        if (key in this.config && this.config[key] !== null) {
-          payload[key] = this.config[key];
-        }
-      }
+      // 本家 OpenAI: 階層テンプレートによるネストフィルタリング＆マージ
+      const filteredConfig = filterNestedObject(this.config, OPENAI_ALLOWED_STRUCTURE);
+      Object.assign(payload, filteredConfig);
 
       // 思考モデル / reasoning 有効時は 400 エラー回避のためサンプリングパラメータを自動削除
       const hasReasoning = Boolean(
-        this.config.reasoning_effort ||
-        this.config.reasoning ||
+        payload.reasoning_effort ||
+        payload.reasoning ||
         this.modelName.startsWith('o1') ||
         this.modelName.startsWith('o3')
       );

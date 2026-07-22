@@ -11,7 +11,10 @@
       },
       "defaultConfig": {
         "generationConfig": {
-          "thinkingLevel": null,
+          "thinkingConfig": {
+            "thinkingLevel": null,
+            "thinkingBudget": null
+          },
           "maxOutputTokens": null,
           "temperature": null
         }
@@ -37,7 +40,9 @@
           },
           "defaultConfig": {
             "generationConfig": {
-              "thinkingLevel": "medium"
+              "thinkingConfig": {
+                "thinkingLevel": "medium"
+              }
             }
           }
         },
@@ -52,7 +57,9 @@
           },
           "defaultConfig": {
             "generationConfig": {
-              "thinkingLevel": "medium"
+              "thinkingConfig": {
+                "thinkingLevel": "medium"
+              }
             }
           }
         },
@@ -72,7 +79,9 @@
           },
           "defaultConfig": {
             "generationConfig": {
-              "thinkingLevel": "high"
+              "thinkingConfig": {
+                "thinkingLevel": "high"
+              }
             }
           }
         },
@@ -83,7 +92,9 @@
           "pricing": { "input": 0.25, "cached": 0.025, "output": 1.50 },
           "defaultConfig": {
             "generationConfig": {
-              "thinkingLevel": "minimal"
+              "thinkingConfig": {
+                "thinkingLevel": "minimal"
+              }
             }
           }
         },
@@ -94,7 +105,9 @@
           "pricing": { "input": 0.50, "cached": 0.05, "output": 3.00 },
           "defaultConfig": {
             "generationConfig": {
-              "thinkingLevel": "high"
+              "thinkingConfig": {
+                "thinkingLevel": "high"
+              }
             }
           }
         }
