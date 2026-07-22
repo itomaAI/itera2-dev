@@ -4952,7 +4952,7 @@ Use this Codex as a guidepost, and build a better Itera OS together with the use
 
         try {
           await App.Config.update('preferences', configs.preferences);
-          await App.Config.update('llm', configs.llm);
+          await App.FS.writeJson('system/config/llm.json', configs.llm, { overwrite: true, system: true });
           await App.Config.update('network', configs.network);
           await App.Config.update('appearance', configs.appearance);
 
