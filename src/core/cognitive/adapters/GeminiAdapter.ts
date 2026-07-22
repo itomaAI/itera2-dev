@@ -28,15 +28,23 @@ export class GeminiAdapter extends BaseLLMAdapter {
     const url = `${this.baseUrl}/${this.modelName}:streamGenerateContent?key=${this.apiKey}`;
 
     const GEMINI_GEN_CONFIG_KEYS = [
+      'thinkingLevel',
       'thinking_level',
       'maxOutputTokens',
+      'max_output_tokens',
       'temperature',
       'topP',
+      'top_p',
       'topK',
+      'top_k',
       'stopSequences',
+      'stop_sequences',
       'responseMimeType',
+      'response_mime_type',
       'responseSchema',
+      'response_schema',
       'candidateCount',
+      'candidate_count',
       'thinkingConfig',
     ];
 
@@ -46,7 +54,7 @@ export class GeminiAdapter extends BaseLLMAdapter {
 
     const generationConfig: Record<string, any> = {
       temperature: userGenConfig.temperature ?? this.config.temperature ?? 1.0,
-      maxOutputTokens: userGenConfig.maxOutputTokens ?? this.config.maxOutputTokens ?? 65536,
+      maxOutputTokens: userGenConfig.maxOutputTokens ?? userGenConfig.max_output_tokens ?? this.config.maxOutputTokens ?? this.config.max_output_tokens ?? 65536,
     };
 
     for (const key of GEMINI_GEN_CONFIG_KEYS) {
@@ -57,7 +65,41 @@ export class GeminiAdapter extends BaseLLMAdapter {
       }
     }
 
-    if (generationConfig.thinking_level) {
+    // Normalize snake_case keys to camelCase for Gemini REST API protobuf compatibility
+    if ('thinking_level' in generationConfig) {
+      generationConfig.thinkingLevel = generationConfig.thinking_level;
+      delete generationConfig.thinking_level;
+    }
+    if ('max_output_tokens' in generationConfig) {
+      generationConfig.maxOutputTokens = generationConfig.max_output_tokens;
+      delete generationConfig.max_output_tokens;
+    }
+    if ('stop_sequences' in generationConfig) {
+      generationConfig.stopSequences = generationConfig.stop_sequences;
+      delete generationConfig.stop_sequences;
+    }
+    if ('response_mime_type' in generationConfig) {
+      generationConfig.responseMimeType = generationConfig.response_mime_type;
+      delete generationConfig.response_mime_type;
+    }
+    if ('response_schema' in generationConfig) {
+      generationConfig.responseSchema = generationConfig.response_schema;
+      delete generationConfig.response_schema;
+    }
+    if ('candidate_count' in generationConfig) {
+      generationConfig.candidateCount = generationConfig.candidate_count;
+      delete generationConfig.candidate_count;
+    }
+    if ('top_p' in generationConfig) {
+      generationConfig.topP = generationConfig.top_p;
+      delete generationConfig.top_p;
+    }
+    if ('top_k' in generationConfig) {
+      generationConfig.topK = generationConfig.top_k;
+      delete generationConfig.top_k;
+    }
+
+    if (generationConfig.thinkingLevel) {
       delete generationConfig.thinkingConfig;
       delete generationConfig.thinkingBudget;
     }

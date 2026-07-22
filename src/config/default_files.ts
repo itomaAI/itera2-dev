@@ -5763,7 +5763,7 @@ Use this Codex as a guidepost, and build a better Itera OS together with the use
           },
           defaultConfig: {
             generationConfig: {
-              thinking_level: null,
+              thinkingLevel: null,
               maxOutputTokens: null,
               temperature: null,
             },
@@ -5784,7 +5784,7 @@ Use this Codex as a guidepost, and build a better Itera OS together with the use
               },
               defaultConfig: {
                 generationConfig: {
-                  thinking_level: 'medium',
+                  thinkingLevel: 'medium',
                 },
               },
             },
@@ -5803,7 +5803,7 @@ Use this Codex as a guidepost, and build a better Itera OS together with the use
               },
               defaultConfig: {
                 generationConfig: {
-                  thinking_level: 'medium',
+                  thinkingLevel: 'medium',
                 },
               },
             },
@@ -5833,7 +5833,7 @@ Use this Codex as a guidepost, and build a better Itera OS together with the use
               },
               defaultConfig: {
                 generationConfig: {
-                  thinking_level: 'high',
+                  thinkingLevel: 'high',
                 },
               },
             },
@@ -5848,7 +5848,7 @@ Use this Codex as a guidepost, and build a better Itera OS together with the use
               },
               defaultConfig: {
                 generationConfig: {
-                  thinking_level: 'minimal',
+                  thinkingLevel: 'minimal',
                 },
               },
             },
@@ -5863,7 +5863,7 @@ Use this Codex as a guidepost, and build a better Itera OS together with the use
               },
               defaultConfig: {
                 generationConfig: {
-                  thinking_level: 'high',
+                  thinkingLevel: 'high',
                 },
               },
             },
