@@ -73,7 +73,11 @@ export class ProviderManager {
     let matchedInfo: ProviderInfo | null = null;
 
     for (const [mountedPath, info] of this.mounts.entries()) {
-      if (normPath === mountedPath || normPath.startsWith(mountedPath + '/')) {
+      // ルートマウント('')の場合は常にマッチさせる
+      if (mountedPath === '' || normPath === mountedPath || normPath.startsWith(mountedPath + '/')) {
+        // 空文字の場合は length が 0 なので、他のより深いマウントポイントがあればそちらが優先される
+        if (mountedPath === '' && longestMatch !== '') continue;
+
         if (mountedPath.length >= longestMatch.length) {
           longestMatch = mountedPath;
           matchedInfo = info;
