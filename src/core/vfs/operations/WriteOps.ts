@@ -111,7 +111,11 @@ export class WriteFileOp extends BaseOperation<
         }
 
         const newSize = this.calculateSize(content);
-        const existingSize = existingId !== undefined && existingId !== null ? this.ctx.nodeStore.getNode(existingId)!.meta.size : 0;
+        let existingSize = 0;
+        if (existingId !== undefined && existingId !== null) {
+          const existingNode = this.ctx.nodeStore.getNode(existingId)!;
+          existingSize = existingNode.meta.syncState === 'stub' ? 0 : existingNode.meta.size || 0;
+        }
         const sizeDelta = newSize - existingSize;
 
         this.checkQuota(sizeDelta, !!opts.system);
@@ -186,7 +190,11 @@ export class AppendFileOp extends BaseOperation<{ path: string; content: string;
 
         const newContent = existingContent + (existingContent && !existingContent.endsWith('\n') ? '\n' : '') + content;
         const newSize = this.calculateSize(newContent);
-        const existingSize = existingId !== undefined && existingId !== null ? this.ctx.nodeStore.getNode(existingId)!.meta.size : 0;
+        let existingSize = 0;
+        if (existingId !== undefined && existingId !== null) {
+          const existingNode = this.ctx.nodeStore.getNode(existingId)!;
+          existingSize = existingNode.meta.syncState === 'stub' ? 0 : existingNode.meta.size || 0;
+        }
         const sizeDelta = newSize - existingSize;
 
         this.checkQuota(sizeDelta, !!opts.system);
@@ -270,8 +278,12 @@ export class CreateStubOp extends BaseOperation<
           };
         }
 
-        const existingSize = existingId !== undefined && existingId !== null ? this.ctx.nodeStore.getNode(existingId)!.meta.size : 0;
-        const newSize = meta.size || 0;
+        let existingSize = 0;
+        if (existingId !== undefined && existingId !== null) {
+          const existingNode = this.ctx.nodeStore.getNode(existingId)!;
+          existingSize = existingNode.meta.syncState === 'stub' ? 0 : existingNode.meta.size || 0;
+        }
+        const newSize = 0; // スタブは実体を持たないため容量は0
         const sizeDelta = newSize - existingSize;
 
         this.checkQuota(sizeDelta, false); // スタブはシステムファイルではない

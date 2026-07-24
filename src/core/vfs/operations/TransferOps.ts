@@ -189,7 +189,8 @@ export class CopyOp extends BaseOperation<{ srcPath: string; destPath: string; o
         const tx = this.createTransaction(principal);
 
         if (srcNode.kind === 'file') {
-          this.checkQuota(srcNode.meta.size, srcNode.flags.isSystem);
+          const sizeDelta = srcNode.meta.syncState === 'stub' ? 0 : srcNode.meta.size || 0;
+          this.checkQuota(sizeDelta, srcNode.flags.isSystem);
 
           if (!srcNode.contentRef) throw new Error('Source file has no content.');
           const blob = await this.ctx.contentStore.readBlob(srcNode.contentRef);
@@ -223,7 +224,9 @@ export class CopyOp extends BaseOperation<{ srcPath: string; destPath: string; o
               if (child.flags.isTrashed) continue;
               if (!this.ctx.auth.hasPermission(principal, child, 'read')) continue;
               if (child.kind === 'file') {
-                totalSizeDelta += child.meta.size || 0;
+                if (child.meta.syncState !== 'stub') {
+                  totalSizeDelta += child.meta.size || 0;
+                }
               } else {
                 calculateTotalSize(child.id);
               }

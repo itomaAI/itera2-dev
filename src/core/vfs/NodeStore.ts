@@ -114,7 +114,7 @@ export class NodeStore {
     this.totalSize = 0;
     for (const node of this.memoryMap.values()) {
       this._addToIndex(node);
-      if (node.kind === 'file') {
+      if (node.kind === 'file' && node.meta.syncState !== 'stub') {
         this.totalSize += node.meta.size || 0;
       }
     }
@@ -175,7 +175,7 @@ export class NodeStore {
         for (const id of deletes) {
           const existing = this.memoryMap.get(id);
           if (existing) {
-            if (existing.kind === 'file') {
+            if (existing.kind === 'file' && existing.meta.syncState !== 'stub') {
               this.totalSize -= existing.meta.size || 0;
             }
             this._removeFromIndex(existing);
@@ -186,13 +186,13 @@ export class NodeStore {
         for (const node of puts) {
           const existing = this.memoryMap.get(node.id);
           if (existing) {
-            if (existing.kind === 'file') {
+            if (existing.kind === 'file' && existing.meta.syncState !== 'stub') {
               this.totalSize -= existing.meta.size || 0;
             }
             this._removeFromIndex(existing);
           }
           
-          if (node.kind === 'file') {
+          if (node.kind === 'file' && node.meta.syncState !== 'stub') {
             this.totalSize += node.meta.size || 0;
           }
           

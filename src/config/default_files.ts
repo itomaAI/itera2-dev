@@ -1,6 +1,6 @@
 /**
  * AUTO-GENERATED FILE - DO NOT EDIT MANUALLY
- * Generated on: 2026-07-24T05:00:54.005Z
+ * Generated on: 2026-07-24T05:28:26.634Z
  */
 
 export const DEFAULT_FILES: Record<string, string> = {
@@ -7027,4 +7027,4 @@ Attributes:
 }, null, 2)
 };
 
-export const BUILD_TIME = 1784869254005;
+export const BUILD_TIME = 1784870906634;
