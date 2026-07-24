@@ -31,6 +31,7 @@ import { WriteFileOp, AppendFileOp, MkdirOp, CreateStubOp } from './operations/W
 import { DeleteFileOp, RenameOp, CopyOp } from './operations/TransferOps';
 import { SetAclOp, SetAclRecursiveOp } from './operations/AclOps';
 import type { ProviderManager } from './ProviderManager';
+import { VFS_HARD_LIMITS } from '../../config/constants';
 
 export class VfsService {
   private nodeStore: NodeStore;
@@ -292,15 +293,13 @@ export class VfsService {
     return JSON.parse(JSON.stringify(node.acl));
   }
 
-  getUsage(principal: Principal): { used: number; max: number; percent: number; isFull: boolean } {
-    let used = 0;
-    for (const node of this.nodeStore.getAllNodes()) {
-      if (node.kind === 'file' && node.meta.size && this.auth.hasPermission(principal, node, 'read')) {
-        used += node.meta.size;
-      }
-    }
-    const MAX_SIZE = 1024 * 1024 * 1024;
-    return { used, max: MAX_SIZE, percent: Math.min(100, (used / MAX_SIZE) * 100), isFull: used >= MAX_SIZE };
+  getUsage(): { used: number; max: number; percent: number; isFull: boolean } {
+    const used = this.nodeStore.getTotalSize();
+    const max = VFS_HARD_LIMITS.MAX_STORAGE_BYTES;
+    const percent = Math.min(100, (used / max) * 100);
+    const isFull = used >= max;
+    
+    return { used, max, percent, isFull };
   }
 
   async readFile(principal: Principal, path: string, opts: ReadOptions = {}): Promise<string> {

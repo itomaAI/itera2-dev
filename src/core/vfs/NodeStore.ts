@@ -14,6 +14,9 @@ export class NodeStore {
 
   // 親ノードID -> (子ノード名 -> 子ノードID) のインデックス
   private childrenIndex: Map<string | null, Map<string, string>> = new Map();
+  
+  // OS全体の合計ファイルサイズ (O(1)トラッキング用)
+  private totalSize: number = 0;
 
   constructor() {
     this.dbPromise = this._initDB();
@@ -108,10 +111,14 @@ export class NodeStore {
 
   public rebuildIndex(): void {
     this.childrenIndex.clear();
+    this.totalSize = 0;
     for (const node of this.memoryMap.values()) {
       this._addToIndex(node);
+      if (node.kind === 'file') {
+        this.totalSize += node.meta.size || 0;
+      }
     }
-    console.log(`[NodeStore] Rebuilt index for ${this.memoryMap.size} nodes.`);
+    console.log(`[NodeStore] Rebuilt index for ${this.memoryMap.size} nodes. Total size: ${(this.totalSize / 1024 / 1024).toFixed(2)} MB`);
   }
 
   public getChildId(parentId: string | null, name: string): string | undefined {
@@ -131,6 +138,10 @@ export class NodeStore {
   }
 
   // --- Core API ---
+
+  getTotalSize(): number {
+    return this.totalSize;
+  }
 
   getNode(id: string): VfsNode | undefined {
     return this.memoryMap.get(id);
@@ -164,6 +175,9 @@ export class NodeStore {
         for (const id of deletes) {
           const existing = this.memoryMap.get(id);
           if (existing) {
+            if (existing.kind === 'file') {
+              this.totalSize -= existing.meta.size || 0;
+            }
             this._removeFromIndex(existing);
             this.memoryMap.delete(id);
           }
@@ -172,8 +186,16 @@ export class NodeStore {
         for (const node of puts) {
           const existing = this.memoryMap.get(node.id);
           if (existing) {
+            if (existing.kind === 'file') {
+              this.totalSize -= existing.meta.size || 0;
+            }
             this._removeFromIndex(existing);
           }
+          
+          if (node.kind === 'file') {
+            this.totalSize += node.meta.size || 0;
+          }
+          
           this.memoryMap.set(node.id, node);
           this._addToIndex(node);
         }

@@ -110,14 +110,16 @@ export class WriteFileOp extends BaseOperation<
           };
         }
 
+        const newSize = this.calculateSize(content);
+        const existingSize = existingId !== undefined && existingId !== null ? this.ctx.nodeStore.getNode(existingId)!.meta.size : 0;
+        const sizeDelta = newSize - existingSize;
+
+        this.checkQuota(sizeDelta, !!opts.system);
+
         const contentRef = await this.ctx.contentStore.write(node.id, content);
-        let size = 0;
-        if (typeof content === 'string') size = new Blob([content]).size;
-        else if (content instanceof Uint8Array) size = content.byteLength;
-        else if (content instanceof Blob) size = content.size;
 
         node.contentRef = contentRef;
-        node.meta.size = size;
+        node.meta.size = newSize;
         node.meta.hash = await this.calculateHash(content);
 
         const tx = this.createTransaction(principal);
@@ -183,8 +185,14 @@ export class AppendFileOp extends BaseOperation<{ path: string; content: string;
         }
 
         const newContent = existingContent + (existingContent && !existingContent.endsWith('\n') ? '\n' : '') + content;
+        const newSize = this.calculateSize(newContent);
+        const existingSize = existingId !== undefined && existingId !== null ? this.ctx.nodeStore.getNode(existingId)!.meta.size : 0;
+        const sizeDelta = newSize - existingSize;
+
+        this.checkQuota(sizeDelta, !!opts.system);
+
         node.contentRef = await this.ctx.contentStore.write(node.id, newContent);
-        node.meta.size = new Blob([newContent]).size;
+        node.meta.size = newSize;
         node.meta.hash = await this.calculateHash(newContent);
 
         const tx = this.createTransaction(principal);
@@ -261,6 +269,12 @@ export class CreateStubOp extends BaseOperation<
             acl: this.ctx.auth.getDefaultAcl(principal, parentId),
           };
         }
+
+        const existingSize = existingId !== undefined && existingId !== null ? this.ctx.nodeStore.getNode(existingId)!.meta.size : 0;
+        const newSize = meta.size || 0;
+        const sizeDelta = newSize - existingSize;
+
+        this.checkQuota(sizeDelta, false); // スタブはシステムファイルではない
 
         const tx = this.createTransaction(principal);
         tx.put(node);

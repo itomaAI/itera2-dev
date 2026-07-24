@@ -233,7 +233,7 @@ export class SystemBootstrapper {
     // 初期化タスクの実行
     await themeService.applyAppearance(configManager.get('appearance') || { theme: 'system/themes/dark.json' });
     desktop.panels.chat.renderHistory(history.get());
-    desktop.updateStorageUI(vfs.getUsage({ type: 'user', id: 'local_user' }));
+    desktop.updateStorageUI(vfs.getUsage());
 
     await cognitiveManager.refreshEngineConfig();
     await maintenanceDaemon.start();

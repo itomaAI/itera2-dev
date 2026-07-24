@@ -14,6 +14,7 @@ import type { VfsService } from '../VfsService';
 import { VfsTransaction } from '../VfsTransaction';
 import type { ProviderManager } from '../ProviderManager';
 import { generateId } from '../../../utils/id';
+import { VFS_HARD_LIMITS } from '../../../config/constants';
 
 export interface VfsContext {
   nodeStore: NodeStore;
@@ -53,6 +54,34 @@ export abstract class BaseOperation<TArgs, TReturn> {
     const hashBuffer = await crypto.subtle.digest('SHA-256', data);
     const hashArray = Array.from(new Uint8Array(hashBuffer));
     return hashArray.map((b) => b.toString(16).padStart(2, '0')).join('');
+  }
+
+  protected checkQuota(sizeDelta: number, isSystem: boolean): void {
+    if (sizeDelta <= 0) return; // 削除や縮小の場合は無条件で許可
+
+    const currentSize = this.ctx.nodeStore.getTotalSize();
+    const newSize = currentSize + sizeDelta;
+    let limit = VFS_HARD_LIMITS.MAX_STORAGE_BYTES;
+
+    // ユーザー/Guest操作の場合はシステム予約領域を差し引いた値を上限とする
+    if (!isSystem) {
+      limit -= VFS_HARD_LIMITS.SYSTEM_RESERVE_BYTES;
+    }
+
+    if (newSize > limit) {
+      throw new Error(`VFS Quota Exceeded. Storage is full.`);
+    }
+  }
+
+  protected calculateSize(content: string | Uint8Array | Blob): number {
+    if (typeof content === 'string') {
+      return new Blob([content]).size;
+    } else if (content instanceof Uint8Array) {
+      return content.byteLength;
+    } else if (content instanceof Blob) {
+      return content.size;
+    }
+    return 0;
   }
 
   protected createTransaction(principal: Principal): VfsTransaction {

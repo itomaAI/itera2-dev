@@ -189,6 +189,8 @@ export class CopyOp extends BaseOperation<{ srcPath: string; destPath: string; o
         const tx = this.createTransaction(principal);
 
         if (srcNode.kind === 'file') {
+          this.checkQuota(srcNode.meta.size, srcNode.flags.isSystem);
+
           if (!srcNode.contentRef) throw new Error('Source file has no content.');
           const blob = await this.ctx.contentStore.readBlob(srcNode.contentRef);
 
@@ -213,6 +215,23 @@ export class CopyOp extends BaseOperation<{ srcPath: string; destPath: string; o
           return `Copied file: ${normSrc} -> ${normDest}`;
         } else {
           let count = 0;
+          let totalSizeDelta = 0;
+
+          const calculateTotalSize = (dirId: string) => {
+            const children = this.ctx.nodeStore.getChildren(dirId);
+            for (const child of children) {
+              if (child.flags.isTrashed) continue;
+              if (!this.ctx.auth.hasPermission(principal, child, 'read')) continue;
+              if (child.kind === 'file') {
+                totalSizeDelta += child.meta.size || 0;
+              } else {
+                calculateTotalSize(child.id);
+              }
+            }
+          };
+          calculateTotalSize(srcId);
+          this.checkQuota(totalSizeDelta, srcNode.flags.isSystem);
+
           const copyRecursive = async (sourceDirId: string, currentDestParentId: string | null) => {
             const children = this.ctx.nodeStore.getChildren(sourceDirId);
             for (const child of children) {

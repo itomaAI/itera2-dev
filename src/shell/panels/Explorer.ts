@@ -376,6 +376,7 @@ export class Explorer {
         uploadedPaths.push(fullPath);
       } catch (err: any) {
         console.error(`[Explorer] Upload failed for ${fullPath}:`, err);
+        if (window.AppUI) window.AppUI.notify(`Upload failed for ${file.name}: ${err.message}`, 'error');
       }
     }
 
@@ -538,6 +539,7 @@ export class Explorer {
         uploadedPaths.push(targetPath);
       } catch (err: any) {
         console.error(`[Explorer] Import failed: ${targetPath}`, err);
+        if (window.AppUI) window.AppUI.notify(`Import failed for ${file.name}: ${err.message}`, 'error');
       }
     }
 

@@ -214,7 +214,7 @@ export class EventOrchestrator {
   // ==========================================
   private _bindVfsEvents(): void {
     this.eventBus.subscribe((mutations) => {
-      this.desktop.updateStorageUI(this.vfs.getUsage(this.desktop.getActivePrincipal()));
+      this.desktop.updateStorageUI(this.vfs.getUsage());
 
       for (const mutation of mutations) {
         if (!mutation.path.startsWith('system/logs/')) {
