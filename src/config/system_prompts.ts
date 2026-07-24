@@ -163,6 +163,10 @@ Attributes:
 
 **Mode A: String Replacement (Highly Recommended)**
 Use \`<<<<<SEARCH\` block to define the target text (must be unique). No escaping is needed inside.
+**CRITICAL RULE for Markers:**
+- The number of characters in the opening (\`<<<<<\`), separator (\`=====\`), and closing (\`>>>>>\`) markers MUST be exactly the same (minimum 4).
+- If your target code contains long strings of \`=\` or \`<\`, you can increase the marker length (e.g., \`<<<<<<<SEARCH\`, \`=======\`, \`>>>>>>>\`) to prevent parsing conflicts.
+
 \`\`\`xml
 <edit_file path="example.js">
 <<<<<SEARCH

@@ -224,7 +224,7 @@ export function registerFSTools(registry: ToolRegistry): void {
         }
 
         if (blocks.length === 0) {
-          throw new Error('Invalid edit block format. Ensure you use SEARCH, ====, and >>>> markers correctly.');
+          throw new Error('Invalid edit block format. Ensure you have opening `<{N}SEARCH`, separator `={N}`, and closing `>{N}` markers. The number of characters (N) MUST be exactly the same across all three markers for each block, and they must be placed on their own lines.');
         }
 
         const isRegex = params.regex === 'true';
