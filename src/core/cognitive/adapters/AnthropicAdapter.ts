@@ -51,6 +51,7 @@ export class AnthropicAdapter extends BaseLLMAdapter {
     const payload: any = {
       model: this.modelName,
       max_tokens: this.config.max_tokens ?? this.config.maxOutputTokens ?? 8192,
+      cache_control: { type: 'ephemeral' },
       system: system,
       messages: messages,
       stream: true,
