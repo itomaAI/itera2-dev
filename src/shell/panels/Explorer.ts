@@ -358,36 +358,46 @@ export class Explorer {
     const files = input.files ? Array.from(input.files) : [];
     if (files.length === 0) return;
 
-    if (window.AppUI) window.AppUI.notify(`Uploading ${files.length} items...`, 'info');
+    const needsLoading = isFolder || files.length > 1;
+    if (needsLoading && window.AppUI) {
+      window.AppUI.showLoading(`Uploading ${files.length} items...`);
+    } else if (window.AppUI) {
+      window.AppUI.notify(`Uploading ${files.length} items...`, 'info');
+    }
 
-    const uploadedPaths: string[] = [];
-    const targetDir = this.currentUploadTarget ? `${this.currentUploadTarget}/` : '';
+    try {
+      const uploadedPaths: string[] = [];
+      const targetDir = this.currentUploadTarget ? `${this.currentUploadTarget}/` : '';
 
-    for (const file of files) {
-      let relPath = isFolder && file.webkitRelativePath ? file.webkitRelativePath : file.name;
-      const fullPath = (targetDir + relPath).replace(/^\/+/, '');
+      for (const file of files) {
+        let relPath = isFolder && file.webkitRelativePath ? file.webkitRelativePath : file.name;
+        const fullPath = (targetDir + relPath).replace(/^\/+/, '');
 
-      try {
-        await this.vfs.writeFile(this.getActivePrincipal(), fullPath, file, {
-          overwrite: true,
-        });
-        uploadedPaths.push(fullPath);
-      } catch (err: any) {
-        console.error(`[Explorer] Upload failed for ${fullPath}:`, err);
-        if (window.AppUI) window.AppUI.notify(`Upload failed for ${file.name}: ${err.message}`, 'error');
+        try {
+          await this.vfs.writeFile(this.getActivePrincipal(), fullPath, file, {
+            overwrite: true,
+          });
+          uploadedPaths.push(fullPath);
+        } catch (err: any) {
+          console.error(`[Explorer] Upload failed for ${fullPath}:`, err);
+          if (window.AppUI) window.AppUI.notify(`Upload failed for ${file.name}: ${err.message}`, 'error');
+        }
       }
-    }
 
-    if (uploadedPaths.length > 0) {
-      if (window.AppUI) window.AppUI.notify(`Upload complete: ${uploadedPaths.length} items`, 'success');
-      const summary = uploadedPaths.slice(0, 3).join(', ') + (uploadedPaths.length > 3 ? '...' : '');
-      this._emitHistory(
-        'file_created',
-        `User uploaded ${uploadedPaths.length} files to "${targetDir || 'root'}": ${summary}`,
-      );
+      if (uploadedPaths.length > 0) {
+        if (window.AppUI) window.AppUI.notify(`Upload complete: ${uploadedPaths.length} items`, 'success');
+        const summary = uploadedPaths.slice(0, 3).join(', ') + (uploadedPaths.length > 3 ? '...' : '');
+        this._emitHistory(
+          'file_created',
+          `User uploaded ${uploadedPaths.length} files to "${targetDir || 'root'}": ${summary}`,
+        );
+      }
+    } finally {
+      if (needsLoading && window.AppUI) {
+        window.AppUI.hideLoading();
+      }
+      input.value = '';
     }
-
-    input.value = '';
   }
 
   private _bindSidebarDnD(): void {
@@ -495,58 +505,69 @@ export class Explorer {
     const uploadedPaths: string[] = [];
     let applyToAllAction: string | null = null;
 
-    if (window.AppUI) window.AppUI.notify(`Starting upload: ${files.length} files from "${sourceName}"`, 'info');
-
-    for (const file of files) {
-      const relPath = ((file as any).fullPath || file.name).replace(/^\/+/, '');
-      if (relPath.startsWith('.git/') || relPath.includes('/.git/') || relPath.endsWith('.DS_Store')) continue;
-
-      let targetPath = relPath;
-      let action = 'replace';
-
-      if (this.vfs.exists(this.getActivePrincipal(), targetPath)) {
-        if (applyToAllAction) {
-          action = applyToAllAction;
-        } else {
-          const res = await window.AppUI?.showConflictDialog(targetPath.split('/').pop()!, false);
-          if (!res || res.action === 'cancel') {
-            break; // キャンセルされたら残りのアップロードもすべて中断
-          }
-          action = res.action as string;
-          if (res.checkboxChecked) applyToAllAction = action;
-        }
-      }
-
-      if (action === 'skip') continue;
-
-      if (action === 'keep_both') {
-        const dotIndex = targetPath.lastIndexOf('.');
-        const base = dotIndex !== -1 ? targetPath.substring(0, dotIndex) : targetPath;
-        const ext = dotIndex !== -1 ? targetPath.substring(dotIndex) : '';
-        let counter = 1;
-        while (this.vfs.exists(this.getActivePrincipal(), targetPath)) {
-          targetPath = `${base}_copy${counter}${ext}`;
-          counter++;
-        }
-      }
-
-      try {
-        await this.vfs.writeFile(this.getActivePrincipal(), targetPath, file, {
-          overwrite: true,
-        });
-        uploadedPaths.push(targetPath);
-      } catch (err: any) {
-        console.error(`[Explorer] Import failed: ${targetPath}`, err);
-        if (window.AppUI) window.AppUI.notify(`Import failed for ${file.name}: ${err.message}`, 'error');
-      }
+    const needsLoading = files.length > 1;
+    if (needsLoading && window.AppUI) {
+      window.AppUI.showLoading(`Uploading ${files.length} items...`);
+    } else if (window.AppUI) {
+      window.AppUI.notify(`Starting upload: ${files.length} files from "${sourceName}"`, 'info');
     }
 
-    if (uploadedPaths.length > 0) {
-      if (window.AppUI) window.AppUI.notify(`Upload complete: ${uploadedPaths.length} items uploaded.`, 'success');
-      const summary = uploadedPaths.slice(0, 3).join(', ') + (uploadedPaths.length > 3 ? '...' : '');
-      this._emitHistory('file_created', `User dropped files: ${summary}`);
-    } else {
-      if (window.AppUI) window.AppUI.notify('No files were uploaded.', 'info');
+    try {
+      for (const file of files) {
+        const relPath = ((file as any).fullPath || file.name).replace(/^\/+/, '');
+        if (relPath.startsWith('.git/') || relPath.includes('/.git/') || relPath.endsWith('.DS_Store')) continue;
+
+        let targetPath = relPath;
+        let action = 'replace';
+
+        if (this.vfs.exists(this.getActivePrincipal(), targetPath)) {
+          if (applyToAllAction) {
+            action = applyToAllAction;
+          } else {
+            const res = await window.AppUI?.showConflictDialog(targetPath.split('/').pop()!, false);
+            if (!res || res.action === 'cancel') {
+              break; // キャンセルされたら残りのアップロードもすべて中断
+            }
+            action = res.action as string;
+            if (res.checkboxChecked) applyToAllAction = action;
+          }
+        }
+
+        if (action === 'skip') continue;
+
+        if (action === 'keep_both') {
+          const dotIndex = targetPath.lastIndexOf('.');
+          const base = dotIndex !== -1 ? targetPath.substring(0, dotIndex) : targetPath;
+          const ext = dotIndex !== -1 ? targetPath.substring(dotIndex) : '';
+          let counter = 1;
+          while (this.vfs.exists(this.getActivePrincipal(), targetPath)) {
+            targetPath = `${base}_copy${counter}${ext}`;
+            counter++;
+          }
+        }
+
+        try {
+          await this.vfs.writeFile(this.getActivePrincipal(), targetPath, file, {
+            overwrite: true,
+          });
+          uploadedPaths.push(targetPath);
+        } catch (err: any) {
+          console.error(`[Explorer] Import failed: ${targetPath}`, err);
+          if (window.AppUI) window.AppUI.notify(`Import failed for ${file.name}: ${err.message}`, 'error');
+        }
+      }
+
+      if (uploadedPaths.length > 0) {
+        if (window.AppUI) window.AppUI.notify(`Upload complete: ${uploadedPaths.length} items uploaded.`, 'success');
+        const summary = uploadedPaths.slice(0, 3).join(', ') + (uploadedPaths.length > 3 ? '...' : '');
+        this._emitHistory('file_created', `User dropped files: ${summary}`);
+      } else {
+        if (window.AppUI) window.AppUI.notify('No files were uploaded.', 'info');
+      }
+    } finally {
+      if (needsLoading && window.AppUI) {
+        window.AppUI.hideLoading();
+      }
     }
   }
 
@@ -654,11 +675,22 @@ export class Explorer {
     });
 
     if (res && res.action) {
+      let isDir = false;
+      try {
+        const stat = this.vfs.stat(this.getActivePrincipal(), path);
+        isDir = stat.kind === 'directory';
+      } catch (e) {
+        // ignore
+      }
+
+      if (isDir && window.AppUI) window.AppUI.showLoading(`Deleting ${name}...`);
       try {
         await this.vfs.deleteFile(this.getActivePrincipal(), path);
         this._emitHistory('file_deleted', `User deleted: ${path}`);
       } catch (e: any) {
         if (window.AppUI) window.AppUI.notify(e.message, 'error');
+      } finally {
+        if (isDir && window.AppUI) window.AppUI.hideLoading();
       }
     }
   }
@@ -682,6 +714,14 @@ export class Explorer {
       return;
     }
 
+    let isSrcDir = false;
+    try {
+      const srcStat = this.vfs.stat(this.getActivePrincipal(), srcPath);
+      isSrcDir = srcStat.kind === 'directory';
+    } catch (e) {
+      // ignore
+    }
+
     if (this.vfs.exists(this.getActivePrincipal(), newPath)) {
       const stat = this.vfs.stat(this.getActivePrincipal(), newPath);
       const isDir = stat.kind === 'directory';
@@ -698,6 +738,8 @@ export class Explorer {
           newPath = `${base}_copy${counter}${ext}`;
           counter++;
         }
+
+        if (isSrcDir && window.AppUI) window.AppUI.showLoading(`${mode === 'move' ? 'Moving' : 'Copying'} directory...`);
         try {
           if (mode === 'move') await this.vfs.rename(this.getActivePrincipal(), srcPath, newPath);
           else await this.vfs.copyFile(this.getActivePrincipal(), srcPath, newPath);
@@ -707,6 +749,8 @@ export class Explorer {
           );
         } catch (e: any) {
           if (window.AppUI) window.AppUI.notify(e.message, 'error');
+        } finally {
+          if (isSrcDir && window.AppUI) window.AppUI.hideLoading();
         }
         return;
       }
@@ -717,6 +761,7 @@ export class Explorer {
       }
 
       if (res.action === 'replace') {
+        if (isSrcDir && window.AppUI) window.AppUI.showLoading(`${mode === 'move' ? 'Moving' : 'Copying'} directory...`);
         try {
           await this.vfs.deleteFile(this.getActivePrincipal(), newPath, { permanent: true });
           if (mode === 'move') await this.vfs.rename(this.getActivePrincipal(), srcPath, newPath);
@@ -727,11 +772,14 @@ export class Explorer {
           );
         } catch (e: any) {
           if (window.AppUI) window.AppUI.notify(`Replace failed: ${e.message}`, 'error');
+        } finally {
+          if (isSrcDir && window.AppUI) window.AppUI.hideLoading();
         }
         return;
       }
     }
 
+    if (isSrcDir && window.AppUI) window.AppUI.showLoading(`${mode === 'move' ? 'Moving' : 'Copying'} directory...`);
     try {
       if (mode === 'move') await this.vfs.rename(this.getActivePrincipal(), srcPath, newPath);
       else await this.vfs.copyFile(this.getActivePrincipal(), srcPath, newPath);
@@ -741,6 +789,8 @@ export class Explorer {
       );
     } catch (e: any) {
       if (window.AppUI) window.AppUI.notify(e.message, 'error');
+    } finally {
+      if (isSrcDir && window.AppUI) window.AppUI.hideLoading();
     }
   }
 
