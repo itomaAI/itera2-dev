@@ -170,12 +170,8 @@ export class Explorer {
     });
 
     this.treeView.on('delete', async (path: string) => {
-      try {
-        await this.vfs.deleteFile(this.getActivePrincipal(), path);
-        this._emitHistory('file_deleted', `User deleted: ${path}`);
-      } catch (e: any) {
-        if (window.AppUI) window.AppUI.notify(e.message, 'error');
-      }
+      const name = path.split('/').pop() || path;
+      await this._confirmDelete(path, name);
     });
 
     this.treeView.on('download', async (path: string) => {
