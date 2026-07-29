@@ -174,7 +174,9 @@ export class VfsService {
     const traverse = (parentId: string | null) => {
       const children = this.nodeStore.getChildren(parentId);
       for (const node of children) {
-        if (node.flags.isHidden) continue;
+        if (options.ignoreHidden && (node.flags.isHidden || node.name.startsWith('.'))) continue;
+        else if (!options.ignoreHidden && node.flags.isHidden) continue;
+
         if (!this.auth.hasPermission(principal, node, 'read')) continue;
         resultIds.push(node.id);
         if (node.kind === 'directory' && options.recursive) traverse(node.id);

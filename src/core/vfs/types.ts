@@ -154,6 +154,7 @@ export type SyncStateTree = Record<string, SyncStateItem>;
 export interface ListOptions {
   recursive?: boolean;
   detail?: boolean;
+  ignoreHidden?: boolean;
 }
 
 export interface ReadOptions {

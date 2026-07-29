@@ -36,6 +36,7 @@ export function registerSearchTools(registry: ToolRegistry): void {
       const useRegex = params.regex && params.regex.toLowerCase() === 'true';
       const isCaseSensitive = params.case_sensitive && params.case_sensitive.toLowerCase() === 'true';
       const flags = isCaseSensitive ? 'm' : 'mi';
+      const ignoreHidden = params.show_hidden !== 'true';
 
       let regex: RegExp;
       try {
@@ -50,6 +51,7 @@ export function registerSearchTools(registry: ToolRegistry): void {
 
       const allFiles = context.vfs.listFiles(AGENT_PRINCIPAL, {
         recursive: true,
+        ignoreHidden,
       }) as string[];
       const results: string[] = [];
       let skippedStubsCount = 0;

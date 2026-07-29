@@ -190,7 +190,8 @@ Lists files in the Virtual File System.
 Attributes:
     - path (optional): Target directory.
     - recursive (optional): "true" or "false".
-    - detail (optional): "true" or "false". If true, lists file size and modified date. Note: This does NOT return hash or ACL permissions. Use <file_info> for detailed metadata.
+    - detail (optional): "true" or "false". If true, lists file size and modified date. Note: This does NOT return hash or ACL permissions. Use \`<file_info>\` for detailed metadata.
+    - show_hidden (optional): "true" or "false" (default). Set to "true" to include hidden files and directories (starting with '.').
 </define_tag>
 
 <define_tag name="file_info">
@@ -210,6 +211,7 @@ Attributes:
     - case_sensitive (optional): "true" or "false" (default: false).
     - context (optional): Number of lines to show around match (default: 2).
     - limit (optional): Maximum number of results to return (default: 20).
+    - show_hidden (optional): "true" or "false" (default). Set to "true" to include hidden files and directories (starting with '.').
 Rule:
     - This is a line-based search. You CANNOT match blocks of text across multiple lines using regex.
 </define_tag>

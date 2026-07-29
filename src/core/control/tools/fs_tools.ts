@@ -322,11 +322,13 @@ export function registerFSTools(registry: ToolRegistry): void {
       const root = params.path || '';
       const recursive = params.recursive === 'true';
       const detail = params.detail === 'true';
+      const ignoreHidden = params.show_hidden !== 'true';
 
       const files = context.vfs.listFiles(AGENT_PRINCIPAL, {
         path: root,
         recursive,
         detail,
+        ignoreHidden,
       });
       const limit = 100;
       let displayFiles = files;
