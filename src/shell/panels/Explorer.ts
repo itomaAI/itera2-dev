@@ -119,61 +119,6 @@ export class Explorer {
     setTimeout(() => URL.revokeObjectURL(url), 100);
   }
 
-  private async _downloadDirectoryAsZip(dirPath: string) {
-    if (typeof JSZip === 'undefined') {
-      if (window.AppUI) window.AppUI.notify('System Error: JSZip library not loaded.', 'error');
-      return;
-    }
-    if (window.AppUI) window.AppUI.showLoading(`Compressing ${dirPath || 'root'}...`);
-
-    const zip = new JSZip();
-    const files = this.vfs.listFiles(this.getActivePrincipal(), {
-      path: dirPath,
-      recursive: true,
-      detail: true,
-    }) as VfsStat[];
-
-    if (files.length === 0) {
-      if (window.AppUI) window.AppUI.notify('Directory is empty.', 'warning');
-      if (window.AppUI) window.AppUI.hideLoading();
-      return;
-    }
-
-    const prefix = dirPath ? (dirPath.endsWith('/') ? dirPath : dirPath + '/') : '';
-    let errorCount = 0;
-
-    for (const stat of files) {
-      if (stat.kind === 'file') {
-        const zipPath = stat.path.substring(prefix.length);
-        if (!zipPath) continue;
-        try {
-          const blob = await this.vfs.readBlob(this.getActivePrincipal(), stat.path);
-          zip.file(zipPath, blob);
-        } catch (err: any) {
-          errorCount++;
-          const errorBlob = new Blob([`[Itera OS] Failed to read file content (may be an unresolved stub).\nError: ${err.message}`], { type: 'text/plain' });
-          zip.file(zipPath, errorBlob);
-        }
-      }
-    }
-
-    try {
-      const zipBlob = await zip.generateAsync({ type: 'blob' });
-      const dirName = dirPath ? dirPath.split('/').filter(Boolean).pop() : 'archive';
-      this._triggerBrowserDownload(zipBlob, `${dirName}.zip`);
-      this._emitHistory('project_exported', `User downloaded directory: ${dirPath}`);
-      
-      if (errorCount > 0) {
-        if (window.AppUI) window.AppUI.notify(`Download complete, but ${errorCount} files failed to read (unresolved stubs).`, 'warning');
-      }
-    } catch (e: any) {
-      console.error('Directory export failed:', e);
-      if (window.AppUI) window.AppUI.notify('Export Failed: ' + e.message, 'error');
-    } finally {
-      if (window.AppUI) window.AppUI.hideLoading();
-    }
-  }
-
   private _bindUploads(): void {
     if (this.els.BTN_NEW_FILE) {
       this.els.BTN_NEW_FILE.onclick = () => this._promptCreate('file');
@@ -305,7 +250,7 @@ export class Explorer {
         const resolvedApps = this.resolver.resolveAllAvailable(stat);
         if (resolvedApps.length > 0) {
           const defaultApp = resolvedApps[0];
-          const defaultLabel = defaultApp.appId === 'HostRunner' ? '▶ Run (Foreground App)' : `Open in ${defaultApp.appName}`;
+          const defaultLabel = defaultApp.appId === 'HostRunner' ? '🖥️ Run as App' : `Open in ${defaultApp.appName}`;
           actions.push({
             label: defaultLabel,
             action: () => {
@@ -316,7 +261,7 @@ export class Explorer {
           // `.html` or `.js` の場合、デーモンとして起動を追加
           if (path.endsWith('.html') || path.endsWith('.js')) {
             actions.push({
-              label: '⚙️ Run as Daemon (Background)',
+              label: '⚙️ Run as Daemon',
               action: () => {
                 if (this.events['spawn_daemon']) this.events['spawn_daemon'](path);
               }
@@ -324,7 +269,7 @@ export class Explorer {
           }
 
           resolvedApps.slice(1).forEach((app) => {
-            const fallbackLabel = app.appId === 'HostRunner' ? ' ↳ ▶ Run (Foreground App)' : ` ↳ ${app.appName}`;
+            const fallbackLabel = app.appId === 'HostRunner' ? ' ↳ 🖥️ Run as App' : ` ↳ ${app.appName}`;
             actions.push({
               label: fallbackLabel,
               action: () => {
@@ -360,7 +305,7 @@ export class Explorer {
       if (path !== '') {
         actions.push({
           label: 'Duplicate',
-          action: () => this._handleDuplicate(path),
+          action: () => this._handleDuplicateBatch([path]),
         });
         actions.push({
           label: 'Rename',
@@ -368,11 +313,11 @@ export class Explorer {
         });
         actions.push({
           label: 'Move',
-          action: () => this._promptMove(path),
+          action: () => this._promptMoveBatch([path]),
         });
         actions.push({
           label: 'Download',
-          action: () => this._handleDownload(path),
+          action: () => this._handleDownloadBatch([path]),
         });
         actions.push({
           label: 'Properties',
@@ -382,10 +327,7 @@ export class Explorer {
         });
         actions.push({
           label: 'Delete',
-          action: () => {
-            const name = path.split('/').pop() || path;
-            this._confirmDelete(path, name);
-          },
+          action: () => this._confirmDeleteBatch([path]),
           danger: true,
         });
       }
@@ -740,29 +682,6 @@ export class Explorer {
     }
   }
 
-  public async _promptMove(path: string) {
-    const res = await window.AppUI?.showMessageBox({
-      title: 'Move',
-      message: `Edit path to move the item:`,
-      type: 'question',
-      prompt: { defaultValue: path },
-      buttons: [
-        { label: 'Cancel', value: null, style: 'normal', isCancel: true },
-        { label: 'Move', value: 'move', style: 'primary', isDefault: true },
-      ],
-    });
-
-    if (!res || res.action === 'cancel' || res.action === null) return;
-    const newPath = res.value;
-    if (!newPath || newPath === path) return;
-
-    try {
-      await this._handleTransfer(path, newPath, 'move');
-    } catch (e: any) {
-      if (window.AppUI) window.AppUI.notify(e.message, 'error');
-    }
-  }
-
   private _normalizePaths(paths: string[]): string[] {
     if (!paths || paths.length === 0) return [];
     const sorted = [...paths].sort();
@@ -833,29 +752,26 @@ export class Explorer {
         if (stat.kind === 'file') {
           try {
             const blob = await this.vfs.readBlob(this.getActivePrincipal(), stat.path);
-            zip.file(stat.name, blob);
+            zip.file(stat.path, blob);
           } catch (err: any) {
             errorCount++;
-            zip.file(stat.name, new Blob([`Error: ${err.message}`], { type: 'text/plain' }));
+            zip.file(stat.path, new Blob([`Error: ${err.message}`], { type: 'text/plain' }));
           }
         } else {
-          // directory: フォルダ名を含めたパスでZIPに追加する
           const files = this.vfs.listFiles(this.getActivePrincipal(), {
             path: stat.path,
             recursive: true,
             detail: true,
           }) as VfsStat[];
-          const prefix = stat.path ? (stat.path.endsWith('/') ? stat.path : stat.path + '/') : '';
           
           for (const subStat of files) {
             if (subStat.kind === 'file') {
-              const zipPath = stat.name + '/' + subStat.path.substring(prefix.length);
               try {
                 const blob = await this.vfs.readBlob(this.getActivePrincipal(), subStat.path);
-                zip.file(zipPath, blob);
+                zip.file(subStat.path, blob);
               } catch (err: any) {
                 errorCount++;
-                zip.file(zipPath, new Blob([`Error: ${err.message}`], { type: 'text/plain' }));
+                zip.file(subStat.path, new Blob([`Error: ${err.message}`], { type: 'text/plain' }));
               }
             }
           }
@@ -863,7 +779,12 @@ export class Explorer {
       }
 
       const zipBlob = await zip.generateAsync({ type: 'blob' });
-      this._triggerBrowserDownload(zipBlob, `archive_${Date.now()}.zip`);
+      let dlName = `archive_${Date.now()}.zip`;
+      if (normalized.length === 1) {
+        const name = normalized[0].split('/').pop() || 'archive';
+        dlName = `${name}.zip`;
+      }
+      this._triggerBrowserDownload(zipBlob, dlName);
       this._emitHistory('project_exported', `User downloaded ${normalized.length} items.`);
 
       if (errorCount > 0 && window.AppUI) {
@@ -1006,11 +927,28 @@ export class Explorer {
   }
 
   public async _promptMoveBatch(paths: string[]) {
+    const normalized = this._normalizePaths(paths);
+    if (normalized.length === 0) return;
+
+    let defaultPath = '';
+    if (normalized.length > 0) {
+      const firstPath = normalized[0];
+      const lastSlashIdx = firstPath.lastIndexOf('/');
+      if (lastSlashIdx !== -1) {
+        defaultPath = firstPath.substring(0, lastSlashIdx);
+      }
+    }
+
+    const title = normalized.length === 1 ? 'Move Item' : 'Move Items';
+    const message = normalized.length === 1 
+      ? `Enter destination folder path for "${normalized[0].split('/').pop()}":`
+      : `Enter destination folder path for ${normalized.length} items:`;
+
     const res = await window.AppUI?.showMessageBox({
-      title: 'Move Items',
-      message: `Enter destination folder path for ${paths.length} items:`,
+      title: title,
+      message: message,
       type: 'question',
-      prompt: { defaultValue: '' },
+      prompt: { defaultValue: defaultPath },
       buttons: [
         { label: 'Cancel', value: null, style: 'normal', isCancel: true },
         { label: 'Move', value: 'move', style: 'primary', isDefault: true },
@@ -1024,169 +962,6 @@ export class Explorer {
       await this._handleTransferBatch(paths, destFolder, 'move');
     } catch (e: any) {
       if (window.AppUI) window.AppUI.notify(e.message, 'error');
-    }
-  }
-
-  private async _handleDuplicate(path: string) {
-    try {
-      const dotIndex = path.lastIndexOf('.');
-      const base = dotIndex !== -1 ? path.substring(0, dotIndex) : path;
-      const ext = dotIndex !== -1 ? path.substring(dotIndex) : '';
-      let newPath = `${base}_copy${ext}`;
-      let counter = 1;
-      while (this.vfs.exists(this.getActivePrincipal(), newPath)) {
-        newPath = `${base}_copy${counter}${ext}`;
-        counter++;
-      }
-      await this.vfs.copyFile(this.getActivePrincipal(), path, newPath);
-      this._emitHistory('file_created', `User duplicated file: ${path} -> ${newPath}`);
-    } catch (e: any) {
-      if (window.AppUI) window.AppUI.notify(e.message, 'error');
-    }
-  }
-
-  private async _handleDownload(path: string) {
-    try {
-      const stat = this.vfs.stat(this.getActivePrincipal(), path);
-      if (stat.kind === 'file') {
-        const blob = await this.vfs.readBlob(this.getActivePrincipal(), path);
-        this._triggerBrowserDownload(blob, stat.name);
-      } else {
-        await this._downloadDirectoryAsZip(path);
-      }
-    } catch (e: any) {
-      if (window.AppUI) window.AppUI.notify(`Download failed: ${e.message}`, 'error');
-    }
-  }
-
-  public async _confirmDelete(path: string, name: string) {
-    const res = await window.AppUI?.showMessageBox({
-      title: 'Delete Item',
-      message: `Are you sure you want to delete "${name}"?`,
-      type: 'warning',
-      buttons: [
-        { label: 'Cancel', value: false, style: 'normal', isCancel: true },
-        { label: 'Delete', value: true, style: 'danger', isDefault: true },
-      ],
-    });
-
-    if (res && res.action) {
-      let isDir = false;
-      try {
-        const stat = this.vfs.stat(this.getActivePrincipal(), path);
-        isDir = stat.kind === 'directory';
-      } catch (e) {
-        // ignore
-      }
-
-      if (isDir && window.AppUI) window.AppUI.showLoading(`Deleting ${name}...`);
-      try {
-        await this.vfs.deleteFile(this.getActivePrincipal(), path);
-        this._emitHistory('file_deleted', `User deleted: ${path}`);
-      } catch (e: any) {
-        if (window.AppUI) window.AppUI.notify(e.message, 'error');
-      } finally {
-        if (isDir && window.AppUI) window.AppUI.hideLoading();
-      }
-    }
-  }
-
-  private async _handleTransfer(srcPath: string, destPath: string, mode: 'move' | 'copy' = 'move') {
-    if (srcPath === destPath) return;
-
-    const fileName = srcPath.split('/').pop()!;
-    let newPath = destPath;
-    const destParentFolder = newPath.includes('/') ? newPath.substring(0, newPath.lastIndexOf('/')) : '';
-
-    if (destParentFolder && (destParentFolder === srcPath || destParentFolder.startsWith(srcPath + '/'))) {
-      if (window.AppUI) {
-        window.AppUI.showMessageBox({
-          title: `Invalid ${mode === 'move' ? 'Move' : 'Copy'}`,
-          message: `Cannot ${mode} a folder into its own subfolder.`,
-          type: 'error',
-          buttons: [{ label: 'OK', value: null, style: 'primary', isDefault: true }],
-        });
-      }
-      return;
-    }
-
-    let isSrcDir = false;
-    try {
-      const srcStat = this.vfs.stat(this.getActivePrincipal(), srcPath);
-      isSrcDir = srcStat.kind === 'directory';
-    } catch (e) {
-      // ignore
-    }
-
-    if (this.vfs.exists(this.getActivePrincipal(), newPath)) {
-      const stat = this.vfs.stat(this.getActivePrincipal(), newPath);
-      const isDir = stat.kind === 'directory';
-
-      const res = await window.AppUI?.showConflictDialog(fileName, isDir);
-      if (!res || res.action === 'cancel' || res.action === 'skip') return;
-
-      if (res.action === 'keep_both') {
-        const dotIndex = newPath.lastIndexOf('.');
-        const base = dotIndex !== -1 ? newPath.substring(0, dotIndex) : newPath;
-        const ext = dotIndex !== -1 ? newPath.substring(dotIndex) : '';
-        let counter = 1;
-        while (this.vfs.exists(this.getActivePrincipal(), newPath)) {
-          newPath = `${base}_copy${counter}${ext}`;
-          counter++;
-        }
-
-        if (isSrcDir && window.AppUI) window.AppUI.showLoading(`${mode === 'move' ? 'Moving' : 'Copying'} directory...`);
-        try {
-          if (mode === 'move') await this.vfs.rename(this.getActivePrincipal(), srcPath, newPath);
-          else await this.vfs.copyFile(this.getActivePrincipal(), srcPath, newPath);
-          this._emitHistory(
-            'file_' + (mode === 'move' ? 'moved' : 'copied'),
-            `User ${mode} file: ${srcPath} -> ${newPath}`,
-          );
-        } catch (e: any) {
-          if (window.AppUI) window.AppUI.notify(e.message, 'error');
-        } finally {
-          if (isSrcDir && window.AppUI) window.AppUI.hideLoading();
-        }
-        return;
-      }
-
-      if (res.action === 'merge') {
-        await this._mergeDirectory(srcPath, newPath, mode === 'copy');
-        return;
-      }
-
-      if (res.action === 'replace') {
-        if (isSrcDir && window.AppUI) window.AppUI.showLoading(`${mode === 'move' ? 'Moving' : 'Copying'} directory...`);
-        try {
-          await this.vfs.deleteFile(this.getActivePrincipal(), newPath, { permanent: true });
-          if (mode === 'move') await this.vfs.rename(this.getActivePrincipal(), srcPath, newPath);
-          else await this.vfs.copyFile(this.getActivePrincipal(), srcPath, newPath);
-          this._emitHistory(
-            'file_' + (mode === 'move' ? 'moved' : 'copied'),
-            `User ${mode} and replaced file: ${srcPath} -> ${newPath}`,
-          );
-        } catch (e: any) {
-          if (window.AppUI) window.AppUI.notify(`Replace failed: ${e.message}`, 'error');
-        } finally {
-          if (isSrcDir && window.AppUI) window.AppUI.hideLoading();
-        }
-        return;
-      }
-    }
-
-    if (isSrcDir && window.AppUI) window.AppUI.showLoading(`${mode === 'move' ? 'Moving' : 'Copying'} directory...`);
-    try {
-      if (mode === 'move') await this.vfs.rename(this.getActivePrincipal(), srcPath, newPath);
-      else await this.vfs.copyFile(this.getActivePrincipal(), srcPath, newPath);
-      this._emitHistory(
-        'file_' + (mode === 'move' ? 'moved' : 'copied'),
-        `User ${mode} file: ${srcPath} -> ${newPath}`,
-      );
-    } catch (e: any) {
-      if (window.AppUI) window.AppUI.notify(e.message, 'error');
-    } finally {
-      if (isSrcDir && window.AppUI) window.AppUI.hideLoading();
     }
   }
 
