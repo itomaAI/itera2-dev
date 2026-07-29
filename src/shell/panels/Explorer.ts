@@ -706,6 +706,28 @@ export class Explorer {
     return result;
   }
 
+  private _getCommonParentPath(paths: string[]): string {
+    if (paths.length === 0) return '';
+    if (paths.length === 1) return paths[0];
+
+    const splitPaths = paths.map(p => p.split('/'));
+    const minLen = Math.min(...splitPaths.map(arr => arr.length));
+    
+    let commonCount = 0;
+    for (let i = 0; i < minLen; i++) {
+      const segment = splitPaths[0][i];
+      const allMatch = splitPaths.every(arr => arr[i] === segment);
+      if (allMatch) {
+        commonCount++;
+      } else {
+        break;
+      }
+    }
+    
+    if (commonCount === 0) return '';
+    return splitPaths[0].slice(0, commonCount).join('/');
+  }
+
   private async _handleDuplicateBatch(paths: string[]) {
     const normalized = this._normalizePaths(paths);
     if (normalized.length === 0) return;
@@ -742,25 +764,60 @@ export class Explorer {
     const normalized = this._normalizePaths(paths);
     if (normalized.length === 0) return;
 
+    // 単一ファイルの早期リターン（ZIP圧縮・ローディングをバイパス）
+    if (normalized.length === 1) {
+      const p = normalized[0];
+      try {
+        const stat = this.vfs.stat(this.getActivePrincipal(), p);
+        if (stat.kind === 'file') {
+          const blob = await this.vfs.readBlob(this.getActivePrincipal(), p);
+          this._triggerBrowserDownload(blob, stat.name);
+          this._emitHistory('file_downloaded', `User downloaded file: ${p}`);
+          return;
+        }
+      } catch (e: any) {
+        if (window.AppUI) window.AppUI.notify(`Download failed: ${e.message}`, 'error');
+        return;
+      }
+    }
+
     if (typeof JSZip === 'undefined') {
       if (window.AppUI) window.AppUI.notify('System Error: JSZip library not loaded.', 'error');
       return;
     }
 
-    if (window.AppUI) window.AppUI.showLoading(`Compressing ${normalized.length} items...`);
+    if (window.AppUI) window.AppUI.showLoading(`Compressing ${normalized.length} item(s)...`);
     try {
       const zip = new JSZip();
       let errorCount = 0;
 
+      // 共通祖先の特定とプレフィックスの刈り込み
+      const commonPath = this._getCommonParentPath(normalized);
+      let prefixToTrim = '';
+      let zipName = `archive_${Date.now()}.zip`;
+
+      if (commonPath) {
+        const lastSlashIdx = commonPath.lastIndexOf('/');
+        if (lastSlashIdx !== -1) {
+          prefixToTrim = commonPath.substring(0, lastSlashIdx + 1);
+          zipName = `${commonPath.substring(lastSlashIdx + 1)}.zip`;
+        } else {
+          // ルート直下の場合
+          prefixToTrim = '';
+          zipName = `${commonPath}.zip`;
+        }
+      }
+
       for (const p of normalized) {
         const stat = this.vfs.stat(this.getActivePrincipal(), p);
         if (stat.kind === 'file') {
+          const zipPath = stat.path.substring(prefixToTrim.length);
           try {
             const blob = await this.vfs.readBlob(this.getActivePrincipal(), stat.path);
-            zip.file(stat.path, blob);
+            zip.file(zipPath, blob);
           } catch (err: any) {
             errorCount++;
-            zip.file(stat.path, new Blob([`Error: ${err.message}`], { type: 'text/plain' }));
+            zip.file(zipPath, new Blob([`[Itera OS] Error: ${err.message}`], { type: 'text/plain' }));
           }
         } else {
           const files = this.vfs.listFiles(this.getActivePrincipal(), {
@@ -771,12 +828,13 @@ export class Explorer {
           
           for (const subStat of files) {
             if (subStat.kind === 'file') {
+              const zipPath = subStat.path.substring(prefixToTrim.length);
               try {
                 const blob = await this.vfs.readBlob(this.getActivePrincipal(), subStat.path);
-                zip.file(subStat.path, blob);
+                zip.file(zipPath, blob);
               } catch (err: any) {
                 errorCount++;
-                zip.file(subStat.path, new Blob([`Error: ${err.message}`], { type: 'text/plain' }));
+                zip.file(zipPath, new Blob([`[Itera OS] Error: ${err.message}`], { type: 'text/plain' }));
               }
             }
           }
@@ -784,13 +842,8 @@ export class Explorer {
       }
 
       const zipBlob = await zip.generateAsync({ type: 'blob' });
-      let dlName = `archive_${Date.now()}.zip`;
-      if (normalized.length === 1) {
-        const name = normalized[0].split('/').pop() || 'archive';
-        dlName = `${name}.zip`;
-      }
-      this._triggerBrowserDownload(zipBlob, dlName);
-      this._emitHistory('project_exported', `User downloaded ${normalized.length} items.`);
+      this._triggerBrowserDownload(zipBlob, zipName);
+      this._emitHistory('project_exported', `User downloaded ${normalized.length} items as ${zipName}`);
 
       if (errorCount > 0 && window.AppUI) {
         window.AppUI.notify(`Download complete, but ${errorCount} files failed to read.`, 'warning');
