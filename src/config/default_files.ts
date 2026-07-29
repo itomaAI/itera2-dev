@@ -1,6 +1,6 @@
 /**
  * AUTO-GENERATED FILE - DO NOT EDIT MANUALLY
- * Generated on: 2026-07-29T12:36:48.488Z
+ * Generated on: 2026-07-29T13:01:31.253Z
  */
 
 export const DEFAULT_FILES: Record<string, string> = {
@@ -11,9 +11,9 @@ export const DEFAULT_FILES: Record<string, string> = {
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Calendar</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="../system/core/ui.js"></script>
-    <script src="../system/core/std.js"></script>
+    <script src="/system/core/tw.js"></script>
+    <script src="/system/core/ui.js"></script>
+    <script src="/system/core/std.js"></script>
     <style>
       .calendar-cell {
         min-height: 80px;
@@ -555,12 +555,12 @@ export const DEFAULT_FILES: Record<string, string> = {
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Dashboard</title>
     <!-- Tailwind CSS -->
-    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="/system/core/tw.js"></script>
 
     <!-- System Libraries -->
     <!-- パスは新しいディレクトリ構造（system/core/）に合わせています -->
-    <script src="../system/core/ui.js"></script>
-    <script src="../system/core/std.js"></script>
+    <script src="/system/core/ui.js"></script>
+    <script src="/system/core/std.js"></script>
   </head>
   <body class="bg-app text-text-main h-screen p-6 overflow-hidden flex flex-col select-none">
     <!-- Header / Greeting -->
@@ -1038,7 +1038,7 @@ export const DEFAULT_FILES: Record<string, string> = {
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Notes</title>
-    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="/system/core/tw.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <!-- MathJax -->
     <script>
@@ -1053,8 +1053,8 @@ export const DEFAULT_FILES: Record<string, string> = {
       };
     </script>
     <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
-    <script src="../system/core/ui.js"></script>
-    <script src="../system/core/std.js"></script>
+    <script src="/system/core/ui.js"></script>
+    <script src="/system/core/std.js"></script>
     <style>
       .prose h1,
       .prose h2,
@@ -1664,9 +1664,9 @@ export const DEFAULT_FILES: Record<string, string> = {
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Local Sync App</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="../system/core/ui.js"></script>
-    <script src="../system/core/std.js"></script>
+    <script src="/system/core/tw.js"></script>
+    <script src="/system/core/ui.js"></script>
+    <script src="/system/core/std.js"></script>
   </head>
   <body class="bg-app text-text-main h-screen flex flex-col p-6 overflow-hidden">
     <!-- Header -->
@@ -2028,9 +2028,9 @@ if __name__ == "__main__":
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Tasks</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="../system/core/ui.js"></script>
-    <script src="../system/core/std.js"></script>
+    <script src="/system/core/tw.js"></script>
+    <script src="/system/core/ui.js"></script>
+    <script src="/system/core/std.js"></script>
   </head>
   <body class="bg-app text-text-main h-screen flex flex-col p-6 overflow-hidden">
     <!-- Header -->
@@ -2684,8 +2684,8 @@ Please safely install this application into the user's environment by strictly f
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AI MindMap</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="../system/lib/ui.js"></script>
+    <script src="/system/core/tw.js"></script>
+    <script src="/system/lib/ui.js"></script>
     <style>
         .node {
             position: absolute;
@@ -2939,8 +2939,8 @@ Please execute the installation by strictly following these phases:
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Pomodoro Timer</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="../system/lib/ui.js"></script>
+    <script src="/system/core/tw.js"></script>
+    <script src="/system/lib/ui.js"></script>
 </head>
 <body class="bg-app text-text-main h-screen flex flex-col p-6">
 
@@ -3355,8 +3355,8 @@ Instead of hardcoding colors (e.g., \`#000000\`, \`bg-gray-900\`), we use **Sema
 All guest applications MUST include the UI Kit library in their \`<head>\` section.
 
 \`\`\`html
-<script src="https://cdn.tailwindcss.com"></script>
-<script src="../system/core/ui.js"></script>
+<script src="/system/core/tw.js"></script>
+<script src="/system/core/ui.js"></script>
 \`\`\`
 
 This library automatically injects:
@@ -3445,9 +3445,9 @@ Use the system libraries (\`ui.js\` and \`std.js\`) to inherit the OS theme and 
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="../system/core/ui.js"></script>
-    <script src="../system/core/std.js"></script>
+    <script src="/system/core/tw.js"></script>
+    <script src="/system/core/ui.js"></script>
+    <script src="/system/core/std.js"></script>
 </head>
 <body class="bg-app text-text-main h-screen p-6">
     <button onclick="AppUI.home()" class="text-primary font-bold">Go Home</button>
@@ -4105,7 +4105,7 @@ Use this Codex as a guidepost, and build a better Itera OS together with the use
   <head>
     <meta charset="UTF-8" />
     <title>API Usage & Billing Dashboard</title>
-    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="/system/core/tw.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="../core/ui.js"></script>
     <script src="../core/std.js"></script>
@@ -4595,7 +4595,7 @@ Use this Codex as a guidepost, and build a better Itera OS together with the use
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>All Apps</title>
-    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="/system/core/tw.js"></script>
     <script src="../core/ui.js"></script>
     <script src="../core/std.js"></script>
   </head>
@@ -4673,7 +4673,7 @@ Use this Codex as a guidepost, and build a better Itera OS together with the use
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Settings</title>
-    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="/system/core/tw.js"></script>
     <script src="../core/ui.js"></script>
     <script src="../core/std.js"></script>
     <style>
@@ -27599,4 +27599,4 @@ Attributes:
 }, null, 2)
 };
 
-export const BUILD_TIME = 1785328608489;
+export const BUILD_TIME = 1785330091253;

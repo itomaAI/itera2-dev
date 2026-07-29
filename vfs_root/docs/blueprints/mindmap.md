@@ -27,8 +27,8 @@ Please safely install this application into the user's environment by strictly f
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AI MindMap</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="../system/lib/ui.js"></script>
+    <script src="/system/core/tw.js"></script>
+    <script src="/system/lib/ui.js"></script>
     <style>
         .node {
             position: absolute;

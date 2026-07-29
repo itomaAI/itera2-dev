@@ -8,8 +8,8 @@ Instead of hardcoding colors (e.g., `#000000`, `bg-gray-900`), we use **Semantic
 All guest applications MUST include the UI Kit library in their `<head>` section.
 
 ```html
-<script src="https://cdn.tailwindcss.com"></script>
-<script src="../system/core/ui.js"></script>
+<script src="/system/core/tw.js"></script>
+<script src="/system/core/ui.js"></script>
 ```
 
 This library automatically injects:

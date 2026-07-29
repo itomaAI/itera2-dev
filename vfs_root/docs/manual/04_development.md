@@ -11,9 +11,9 @@ Use the system libraries (`ui.js` and `std.js`) to inherit the OS theme and stan
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="../system/core/ui.js"></script>
-    <script src="../system/core/std.js"></script>
+    <script src="/system/core/tw.js"></script>
+    <script src="/system/core/ui.js"></script>
+    <script src="/system/core/std.js"></script>
 </head>
 <body class="bg-app text-text-main h-screen p-6">
     <button onclick="AppUI.home()" class="text-primary font-bold">Go Home</button>
