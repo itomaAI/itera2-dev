@@ -274,8 +274,21 @@ export class EventOrchestrator {
       this.desktop.modals.properties.open(path, this.desktop.getActivePrincipal());
     });
 
-    explorer.on('add_to_context', (path: string) => {
-      this.desktop.panels.chat.addVfsReference(path);
+    explorer.on('add_to_context', (paths: string[]) => {
+      paths.forEach(p => this.desktop.panels.chat.addVfsReference(p));
+    });
+
+    explorer.on('spawn_daemon', async (path: string) => {
+      try {
+        await this.processManager.spawn({
+          path,
+          type: 'daemon',
+          show: false,
+        });
+        if (window.AppUI) window.AppUI.notify(`Spawned ${path} as daemon`, 'success');
+      } catch (e: any) {
+        if (window.AppUI) window.AppUI.notify(`Failed to spawn daemon: ${e.message}`, 'error');
+      }
     });
   }
 

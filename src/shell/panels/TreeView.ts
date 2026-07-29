@@ -11,7 +11,8 @@ export class TreeView {
   private events: Record<string, Function> = {};
 
   private expandedPaths: Set<string> = new Set();
-  private selectedPath: string | null = null;
+  private selectedPaths: Set<string> = new Set();
+  private lastClickedPath: string | null = null;
 
   constructor(containerEl: HTMLElement, contextMenuEl: HTMLElement | null) {
     this.container = containerEl;
@@ -94,8 +95,10 @@ export class TreeView {
         }
 
         // 内部状態のCascade Purge (巻き込み削除)
-        if (this.selectedPath === mutation.path || this.selectedPath?.startsWith(mutation.path + '/')) {
-          this.selectedPath = null;
+        for (const p of this.selectedPaths) {
+          if (p === mutation.path || p.startsWith(mutation.path + '/')) {
+            this.selectedPaths.delete(p);
+          }
         }
         for (const p of this.expandedPaths) {
           if (p === mutation.path || p.startsWith(mutation.path + '/')) {
@@ -190,9 +193,14 @@ export class TreeView {
         menuBtn.onclick = (e) => {
           e.stopPropagation();
           e.preventDefault();
+          if (!this.selectedPaths.has(path)) {
+            this.selectedPaths.clear();
+            this.selectedPaths.add(path);
+            this.lastClickedPath = path;
+            this._updateSelectionUI();
+          }
           const rect = menuBtn.getBoundingClientRect();
-          this.selectedPath = path;
-          this._showContextMenu(rect.left, rect.bottom, path, mutation.node!.kind);
+          this._showContextMenu(rect.left, rect.bottom);
         };
       }
     }
@@ -234,7 +242,7 @@ export class TreeView {
     li.dataset.name = name;
 
     const div = document.createElement('div');
-    const isSelected = this.selectedPath === path;
+    const isSelected = this.selectedPaths.has(path);
 
     div.className = `tree-content group hover:bg-hover cursor-pointer flex items-center py-0.5 px-2 border-l-2 border-transparent transition ${isSelected ? 'bg-hover border-primary' : ''}`;
     div.style.paddingLeft = `${indentLevel * 12 + 8}px`;
@@ -249,7 +257,7 @@ export class TreeView {
     div.title = `Size: ${sizeKB}\nUpdated: ${updated}`;
 
     div.draggable = true;
-    div.addEventListener('dragstart', (e) => this._handleDragStart(e, path, kind));
+    div.addEventListener('dragstart', (e) => this._handleDragStart(e, path));
 
     if (kind === 'directory') {
       div.addEventListener('dragover', (e) => this._handleDragOver(e, div));
@@ -274,16 +282,21 @@ export class TreeView {
     `;
 
     div.onclick = (e) => this._handleClick(e, path, kind);
-    div.oncontextmenu = (e) => this._handleContextMenu(e, path, kind);
+    div.oncontextmenu = (e) => this._handleContextMenu(e, path);
 
     const menuBtn = div.querySelector('.menu-btn') as HTMLButtonElement;
     if (menuBtn) {
       menuBtn.onclick = (e) => {
         e.stopPropagation();
         e.preventDefault();
+        if (!this.selectedPaths.has(path)) {
+          this.selectedPaths.clear();
+          this.selectedPaths.add(path);
+          this.lastClickedPath = path;
+          this._updateSelectionUI();
+        }
         const rect = menuBtn.getBoundingClientRect();
-        this.selectedPath = path;
-        this._showContextMenu(rect.left, rect.bottom, path, kind);
+        this._showContextMenu(rect.left, rect.bottom);
       };
     }
 
@@ -315,17 +328,57 @@ export class TreeView {
   // 4. Interaction Events (Click, Drag & Drop)
   // ==========================================
 
-  private _handleClick(e: MouseEvent, path: string, kind: 'file' | 'directory') {
-    e.stopPropagation();
-    this.selectedPath = path;
-
+  private _updateSelectionUI() {
     const allNodes = this.container.querySelectorAll('.tree-content');
     allNodes.forEach((el) => {
-      el.classList.remove('bg-hover', 'border-primary');
-      if ((el as HTMLElement).dataset.path === path) {
+      const p = (el as HTMLElement).dataset.path;
+      if (p && this.selectedPaths.has(p)) {
         el.classList.add('bg-hover', 'border-primary');
+      } else {
+        el.classList.remove('bg-hover', 'border-primary');
       }
     });
+  }
+
+  private _handleClick(e: MouseEvent, path: string, kind: 'file' | 'directory') {
+    e.stopPropagation();
+
+    if (e.ctrlKey || e.metaKey) {
+      if (this.selectedPaths.has(path)) {
+        this.selectedPaths.delete(path);
+      } else {
+        this.selectedPaths.add(path);
+      }
+      this.lastClickedPath = path;
+      this._updateSelectionUI();
+      return;
+    }
+
+    if (e.shiftKey && this.lastClickedPath) {
+      const allNodes = Array.from(this.container.querySelectorAll('.tree-content')) as HTMLElement[];
+      const paths = allNodes.map((el) => el.dataset.path).filter(Boolean) as string[];
+
+      const startIdx = paths.indexOf(this.lastClickedPath);
+      const endIdx = paths.indexOf(path);
+
+      if (startIdx !== -1 && endIdx !== -1) {
+        const min = Math.min(startIdx, endIdx);
+        const max = Math.max(startIdx, endIdx);
+
+        this.selectedPaths.clear();
+        for (let i = min; i <= max; i++) {
+          this.selectedPaths.add(paths[i]);
+        }
+        this._updateSelectionUI();
+        return;
+      }
+    }
+
+    // Normal click
+    this.selectedPaths.clear();
+    this.selectedPaths.add(path);
+    this.lastClickedPath = path;
+    this._updateSelectionUI();
 
     if (kind === 'directory') {
       const li = (e.currentTarget as HTMLElement).parentElement;
@@ -358,17 +411,27 @@ export class TreeView {
     }
   }
 
-  private _handleDragStart(e: DragEvent, path: string, kind: 'file' | 'directory') {
+  private _handleDragStart(e: DragEvent, path: string) {
     e.stopPropagation();
+
+    if (!this.selectedPaths.has(path)) {
+      this.selectedPaths.clear();
+      this.selectedPaths.add(path);
+      this.lastClickedPath = path;
+      this._updateSelectionUI();
+    }
+
+    const paths = Array.from(this.selectedPaths);
 
     // フォールバックと他アプリ向けに標準の dataTransfer もセットしておく
     if (e.dataTransfer) {
       e.dataTransfer.effectAllowed = 'move';
-      e.dataTransfer.setData('application/itera-file', JSON.stringify({ path, kind }));
+      e.dataTransfer.setData('application/itera-file-batch', JSON.stringify({ paths }));
     }
     // モバイルSafari等の制約回避のため、グローバル変数に状態を退避
-    (window as any).__iteraDragData = { path, kind };
+    (window as any).__iteraDragData = { paths };
 
+    // ドラッグ中の見た目（選択要素すべて半透明にすると重いのでターゲットのみ）
     (e.target as HTMLElement).style.opacity = '0.5';
   }
 
@@ -393,10 +456,10 @@ export class TreeView {
     element.classList.remove('bg-primary', 'text-text-inverted');
 
     const dragData = (window as any).__iteraDragData;
-    if (dragData) {
+    if (dragData && dragData.paths) {
       e.preventDefault();
       e.stopPropagation();
-      this._emitMove(dragData.path, targetFolderPath);
+      this._emitMove(dragData.paths, targetFolderPath);
       (window as any).__iteraDragData = null; // リセット
     }
   }
@@ -425,11 +488,11 @@ export class TreeView {
 
     this.container.addEventListener('drop', (e) => {
       const dragData = (window as any).__iteraDragData;
-      if (dragData) {
+      if (dragData && dragData.paths) {
         e.preventDefault();
         e.stopPropagation();
         this.container.classList.remove('bg-card', 'ring-2', 'ring-primary', 'ring-inset');
-        this._emitMove(dragData.path, '');
+        this._emitMove(dragData.paths, '');
         (window as any).__iteraDragData = null; // リセット
       }
     });
@@ -449,20 +512,9 @@ export class TreeView {
     });
   }
 
-  private _emitMove(srcPath: string, destFolder: string) {
-    if (srcPath === destFolder) return;
-
-    const fileName = srcPath.split('/').pop()!;
-    const newPath = destFolder ? `${destFolder}/${fileName}` : fileName;
-
-    if (srcPath === newPath) return;
-    if (destFolder.startsWith(srcPath + '/')) {
-      if (window.AppUI) window.AppUI.alert('Cannot move a folder into its own subfolder.');
-      return;
-    }
-
+  private _emitMove(srcPaths: string[], destFolder: string) {
     if (this.events['move']) {
-      this.events['move'](srcPath, newPath);
+      this.events['move'](srcPaths, destFolder);
     }
   }
 
@@ -481,7 +533,10 @@ export class TreeView {
       this.container.addEventListener('contextmenu', (e) => {
         if (e.target === this.container || (e.target as HTMLElement).classList.contains('tree-root')) {
           e.preventDefault();
-          this._showContextMenu(e.pageX, e.pageY, '', 'directory');
+          this.selectedPaths.clear();
+          this.lastClickedPath = null;
+          this._updateSelectionUI();
+          this._showContextMenu(e.pageX, e.pageY);
         }
       });
 
@@ -489,204 +544,31 @@ export class TreeView {
         const target = e.target as HTMLElement;
         // ツリーの項目以外がクリックされた場合は選択を解除する
         if (!target.closest('.tree-content')) {
-          this.selectedPath = null;
-          const allNodes = this.container.querySelectorAll('.tree-content');
-          allNodes.forEach((el) => {
-            el.classList.remove('bg-hover', 'border-primary');
-          });
+          this.selectedPaths.clear();
+          this.lastClickedPath = null;
+          this._updateSelectionUI();
         }
       });
     }
   }
 
-  private _handleContextMenu(e: MouseEvent, path: string, kind: 'file' | 'directory') {
+  private _handleContextMenu(e: MouseEvent, path: string) {
     e.preventDefault();
     e.stopPropagation();
-    this.selectedPath = path;
-    this._showContextMenu(e.pageX, e.pageY, path, kind);
+    
+    if (!this.selectedPaths.has(path)) {
+      this.selectedPaths.clear();
+      this.selectedPaths.add(path);
+      this.lastClickedPath = path;
+      this._updateSelectionUI();
+    }
+    
+    this._showContextMenu(e.pageX, e.pageY);
   }
 
-  private _showContextMenu(x: number, y: number, path: string, kind: 'file' | 'directory') {
-    if (!this.contextMenu) return;
-
-    this.contextMenu.innerHTML = '';
-    const actions: any[] = [];
-
-    if (kind === 'directory') {
-      actions.push({
-        label: 'New File',
-        action: () => this._promptCreate(path, 'file'),
-      });
-      actions.push({
-        label: 'New Folder',
-        action: () => this._promptCreate(path, 'folder'),
-      });
-      actions.push({ separator: true });
-      actions.push({
-        label: 'Upload File Here...',
-        action: () => {
-          if (this.events['upload_file_request']) this.events['upload_file_request'](path);
-        },
-      });
-      actions.push({
-        label: 'Upload Folder Here...',
-        action: () => {
-          if (this.events['upload_folder_request']) this.events['upload_folder_request'](path);
-        },
-      });
-      actions.push({ separator: true });
-    } else if (kind === 'file') {
-      // ファイルの関連付け (Open With...) を動的に取得
-      let resolvedApps: any[] = [];
-      if (this.events['resolve_apps']) {
-        resolvedApps = this.events['resolve_apps'](path) || [];
-      }
-
-      if (resolvedApps.length > 0) {
-        // 先頭はデフォルトアプリ
-        const defaultApp = resolvedApps[0];
-        const defaultLabel = defaultApp.appId === 'HostRunner' ? '▶ Run (Spawn)' : `Open in ${defaultApp.appName}`;
-
-        actions.push({
-          label: defaultLabel,
-          action: () => {
-            if (this.events['open_with']) this.events['open_with'](path, defaultApp.appId);
-          },
-        });
-
-        // 2番目以降はフォールバックとして字下げ表示
-        resolvedApps.slice(1).forEach((app) => {
-          const fallbackLabel = app.appId === 'HostRunner' ? ' ↳ ▶ Run (Spawn)' : ` ↳ ${app.appName}`;
-          actions.push({
-            label: fallbackLabel,
-            action: () => {
-              if (this.events['open_with']) this.events['open_with'](path, app.appId);
-            },
-          });
-        });
-        actions.push({ separator: true });
-      }
-    }
-
-    actions.push({
-      label: 'Add to Context',
-      action: () => {
-        if (this.events['add_to_context']) this.events['add_to_context'](path);
-      },
-    });
-    actions.push({
-      label: 'Copy Path',
-      action: () => {
-        navigator.clipboard
-          .writeText(path)
-          .then(() => {
-            if (window.AppUI) window.AppUI.notify('Path copied to clipboard', 'success');
-          })
-          .catch((err) => {
-            if (window.AppUI) window.AppUI.notify(`Failed to copy: ${err.message}`, 'error');
-          });
-      },
-    });
-    actions.push({ separator: true });
-
-    actions.push({
-      label: 'Duplicate',
-      action: () => {
-        if (this.events['duplicate']) this.events['duplicate'](path);
-      },
-    });
-    actions.push({
-      label: 'Rename',
-      action: () => {
-        if (this.events['rename_request']) this.events['rename_request'](path);
-      },
-    });
-    actions.push({
-      label: 'Move',
-      action: () => {
-        if (this.events['move_request']) this.events['move_request'](path);
-      },
-    });
-    actions.push({
-      label: 'Download',
-      action: () => {
-        if (this.events['download']) this.events['download'](path);
-      },
-    });
-    actions.push({
-      label: 'Properties',
-      action: () => {
-        if (this.events['properties_request']) this.events['properties_request'](path);
-      },
-    });
-    actions.push({
-      label: 'Delete',
-      action: () => {
-        if (this.events['delete']) this.events['delete'](path);
-      },
-      danger: true,
-    });
-
-    for (const item of actions) {
-      if (item.separator) {
-        const hr = document.createElement('hr');
-        hr.className = 'border-border-main my-1';
-        this.contextMenu.appendChild(hr);
-        continue;
-      }
-      const btn = document.createElement('div');
-      btn.className = `px-3 py-1 hover:bg-primary hover:text-white cursor-pointer text-xs ${item.danger ? 'text-error hover:text-text-main' : 'text-text-main'}`;
-      btn.textContent = item.label;
-      btn.onclick = () => {
-        this.contextMenu!.classList.add('hidden');
-        item.action();
-      };
-      this.contextMenu.appendChild(btn);
-    }
-
-    this.contextMenu.classList.remove('hidden');
-    const rect = this.contextMenu.getBoundingClientRect();
-    const winWidth = window.innerWidth;
-    const winHeight = window.innerHeight;
-
-    let posX = x;
-    let posY = y;
-
-    if (posX + rect.width > winWidth) posX = winWidth - rect.width - 5;
-    if (posY + rect.height > winHeight) posY = winHeight - rect.height - 5;
-    if (posX < 0) posX = 5;
-
-    this.contextMenu.style.left = `${posX}px`;
-    this.contextMenu.style.top = `${posY}px`;
-  }
-
-  private async _promptCreate(parentPath: string, type: 'file' | 'folder') {
-    const res = await window.AppUI?.showMessageBox({
-      title: `New ${type === 'folder' ? 'Folder' : 'File'}`,
-      message: `Enter name for the new ${type}:`,
-      type: 'question',
-      prompt: { defaultValue: type === 'folder' ? 'New Folder' : 'Untitled' },
-      buttons: [
-        { label: 'Cancel', value: null, style: 'normal' },
-        { label: 'Create', value: 'create', style: 'primary', isDefault: true },
-      ],
-    });
-
-    const name = res?.value;
-    if (!name || name === 'cancel') return;
-
-    let fullPath = parentPath ? `${parentPath}/${name}` : name;
-    fullPath = fullPath.replace(/^\/+/, '');
-
-    // NOTE: TreeView では vfs を持っていないため、存在確認は省略してそのまま作成イベントを発行する。
-    // （完全なコンフリクト解決自動連番は、Explorer 側で処理すべきだが、今は単純化のため呼び出しのみ）
-    if (type === 'folder' && this.events['create_folder']) {
-      this.events['create_folder'](fullPath);
-      if (parentPath) this.expandedPaths.add(parentPath);
-    }
-    if (type === 'file' && this.events['create_file']) {
-      this.events['create_file'](fullPath);
-      if (parentPath) this.expandedPaths.add(parentPath);
+  private _showContextMenu(x: number, y: number) {
+    if (this.events['context_menu_request']) {
+      this.events['context_menu_request'](Array.from(this.selectedPaths), x, y);
     }
   }
 }

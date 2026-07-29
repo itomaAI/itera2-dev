@@ -5,7 +5,7 @@
 
 import type { VfsService } from '../../core/vfs/VfsService';
 import type { VfsEventBus } from '../../core/vfs/VfsEventBus';
-import type { FileAssociationResolver, ResolvedApp } from '../../core/sys/FileAssociationResolver';
+import type { FileAssociationResolver } from '../../core/sys/FileAssociationResolver';
 import type { Principal, VfsStat } from '../../core/vfs/types';
 import { TreeView } from './TreeView';
 
@@ -93,132 +93,18 @@ export class Explorer {
       }
     });
 
-    // 2. 右クリックメニュー生成時のアプリ一覧要求
-    this.treeView.on('resolve_apps', (path: string): ResolvedApp[] => {
-      try {
-        const stat = this.vfs.stat(this.getActivePrincipal(), path);
-        return this.resolver.resolveAllAvailable(stat);
-      } catch (e) {
-        return [];
-      }
-    });
-
-    // 3. コンテキストメニューから特定のアプリを指定して開く要求
-    this.treeView.on('open_with', (path: string, appId: string) => {
-      try {
-        const stat = this.vfs.stat(this.getActivePrincipal(), path);
-        const apps = this.resolver.resolveAllAvailable(stat);
-        const targetApp = apps.find((a) => a.appId === appId);
-        if (targetApp && this.events['open_file']) {
-          this.events['open_file'](path, targetApp);
+    this.treeView.on('move', async (srcPaths: string[], destFolder: string) => {
+      if (srcPaths.length > 0) {
+        try {
+          await this._handleTransferBatch(srcPaths, destFolder, 'move');
+        } catch (e: any) {
+          if (window.AppUI) window.AppUI.notify(e.message, 'error');
         }
-      } catch (e: any) {
-        if (window.AppUI) window.AppUI.notify(`Cannot open file: ${e.message}`, 'error');
       }
     });
 
-    this.treeView.on('create_file', async (path: string) => {
-      try {
-        await this.vfs.writeFile(this.getActivePrincipal(), path, '');
-        this._emitHistory('file_created', `User created empty file: ${path}`);
-      } catch (e: any) {
-        if (window.AppUI) window.AppUI.notify(e.message, 'error');
-      }
-    });
-
-    this.treeView.on('create_folder', async (path: string) => {
-      try {
-        await this.vfs.mkdir(this.getActivePrincipal(), path);
-        this._emitHistory('folder_created', `User created folder: ${path}`);
-      } catch (e: any) {
-        if (window.AppUI) window.AppUI.notify(e.message, 'error');
-      }
-    });
-
-    this.treeView.on('duplicate', async (path: string) => {
-      try {
-        const dotIndex = path.lastIndexOf('.');
-        const base = dotIndex !== -1 ? path.substring(0, dotIndex) : path;
-        const ext = dotIndex !== -1 ? path.substring(dotIndex) : '';
-        let newPath = `${base}_copy${ext}`;
-        let counter = 1;
-        while (this.vfs.exists(this.getActivePrincipal(), newPath)) {
-          newPath = `${base}_copy${counter}${ext}`;
-          counter++;
-        }
-        await this.vfs.copyFile(this.getActivePrincipal(), path, newPath);
-        this._emitHistory('file_created', `User duplicated file: ${path} -> ${newPath}`);
-      } catch (e: any) {
-        if (window.AppUI) window.AppUI.notify(e.message, 'error');
-      }
-    });
-
-    this.treeView.on('rename_request', (path: string) => {
-      this._promptRename(path);
-    });
-
-    this.treeView.on('move_request', (path: string) => {
-      this._promptMove(path);
-    });
-
-    this.treeView.on('move', async (srcPath: string, destPath: string) => {
-      try {
-        await this._handleTransfer(srcPath, destPath, 'move');
-      } catch (e: any) {
-        if (window.AppUI) window.AppUI.notify(e.message, 'error');
-      }
-    });
-
-    this.treeView.on('delete', async (path: string) => {
-      const name = path.split('/').pop() || path;
-      await this._confirmDelete(path, name);
-    });
-
-    this.treeView.on('download', async (path: string) => {
-      try {
-        const stat = this.vfs.stat(this.getActivePrincipal(), path);
-        if (stat.kind === 'file') {
-          const blob = await this.vfs.readBlob(this.getActivePrincipal(), path);
-          this._triggerBrowserDownload(blob, stat.name);
-        } else {
-          await this._downloadDirectoryAsZip(path);
-        }
-      } catch (e: any) {
-        if (window.AppUI) window.AppUI.notify(`Download failed: ${e.message}`, 'error');
-      }
-    });
-
-    this.treeView.on('properties_request', (path: string) => {
-      if (this.events['properties_request']) this.events['properties_request'](path);
-    });
-
-    this.treeView.on('add_to_context', (path: string) => {
-      if (this.events['add_to_context']) this.events['add_to_context'](path);
-    });
-
-    this.treeView.on('upload_file_request', (path: string) => {
-      this.currentUploadTarget = path;
-      if (this.els.INPUT_FILE) this.els.INPUT_FILE.click();
-    });
-
-    // フォルダのアップロード時は、既存のinputではなく専用のinputを動的に作成して使い捨てる
-    this.treeView.on('upload_folder_request', (path: string) => {
-      this.currentUploadTarget = path;
-
-      const folderInput = document.createElement('input');
-      folderInput.type = 'file';
-      folderInput.multiple = true;
-      folderInput.setAttribute('webkitdirectory', '');
-      folderInput.setAttribute('directory', '');
-      folderInput.style.display = 'none';
-
-      folderInput.onchange = (e) => {
-        this._handleUploadAppend(e, true);
-        folderInput.remove();
-      };
-
-      document.body.appendChild(folderInput);
-      folderInput.click();
+    this.treeView.on('context_menu_request', (paths: string[], x: number, y: number) => {
+      this._buildContextMenu(paths, x, y);
     });
   }
 
@@ -290,10 +176,10 @@ export class Explorer {
 
   private _bindUploads(): void {
     if (this.els.BTN_NEW_FILE) {
-      this.els.BTN_NEW_FILE.onclick = () => this._promptCreateRoot('file');
+      this.els.BTN_NEW_FILE.onclick = () => this._promptCreate('file');
     }
     if (this.els.BTN_NEW_FOLDER) {
-      this.els.BTN_NEW_FOLDER.onclick = () => this._promptCreateRoot('folder');
+      this.els.BTN_NEW_FOLDER.onclick = () => this._promptCreate('folder');
     }
 
     if (this.els.BTN_UPLOAD_FILE && this.els.INPUT_FILE) {
@@ -311,7 +197,7 @@ export class Explorer {
     }
   }
 
-  private async _promptCreateRoot(type: 'file' | 'folder') {
+  private async _promptCreate(type: 'file' | 'folder', parentPath: string = '') {
     const res = await window.AppUI?.showMessageBox({
       title: `New ${type === 'folder' ? 'Folder' : 'File'}`,
       message: `Enter name for the new ${type}:`,
@@ -327,9 +213,9 @@ export class Explorer {
     const name = res.value;
     if (!name) return;
 
-    let fullPath = name.replace(/^\/+/, '');
+    let fullPath = parentPath ? `${parentPath}/${name}` : name;
+    fullPath = fullPath.replace(/^\/+/, '');
 
-    // 同名ファイル/フォルダが存在する場合は連番を振って衝突を回避
     if (this.vfs.exists(this.getActivePrincipal(), fullPath)) {
       const dotIndex = fullPath.lastIndexOf('.');
       const hasExtension = type === 'file' && dotIndex !== -1 && dotIndex > fullPath.lastIndexOf('/');
@@ -358,6 +244,213 @@ export class Explorer {
         if (window.AppUI) window.AppUI.notify(e.message, 'error');
       }
     }
+  }
+
+  private _buildContextMenu(paths: string[], x: number, y: number) {
+    const menuEl = this.els.CONTEXT_MENU;
+    if (!menuEl) return;
+
+    menuEl.innerHTML = '';
+    const actions: any[] = [];
+
+    if (paths.length === 1) {
+      const path = paths[0];
+      let stat: VfsStat | null = null;
+      try {
+        stat = path === '' ? null : this.vfs.stat(this.getActivePrincipal(), path);
+      } catch (e) {
+        // ignore
+      }
+
+      const isDir = stat ? stat.kind === 'directory' : path === '';
+
+      if (isDir) {
+        actions.push({
+          label: 'New File',
+          action: () => this._promptCreate('file', path),
+        });
+        actions.push({
+          label: 'New Folder',
+          action: () => this._promptCreate('folder', path),
+        });
+        actions.push({ separator: true });
+        actions.push({
+          label: 'Upload File Here...',
+          action: () => {
+            this.currentUploadTarget = path;
+            if (this.els.INPUT_FILE) this.els.INPUT_FILE.click();
+          },
+        });
+        actions.push({
+          label: 'Upload Folder Here...',
+          action: () => {
+            this.currentUploadTarget = path;
+            const folderInput = document.createElement('input');
+            folderInput.type = 'file';
+            folderInput.multiple = true;
+            folderInput.setAttribute('webkitdirectory', '');
+            folderInput.setAttribute('directory', '');
+            folderInput.style.display = 'none';
+            folderInput.onchange = (e) => {
+              this._handleUploadAppend(e, true);
+              folderInput.remove();
+            };
+            document.body.appendChild(folderInput);
+            folderInput.click();
+          },
+        });
+        actions.push({ separator: true });
+      } else if (stat) {
+        // file
+        const resolvedApps = this.resolver.resolveAllAvailable(stat);
+        if (resolvedApps.length > 0) {
+          const defaultApp = resolvedApps[0];
+          const defaultLabel = defaultApp.appId === 'HostRunner' ? '▶ Run (Foreground App)' : `Open in ${defaultApp.appName}`;
+          actions.push({
+            label: defaultLabel,
+            action: () => {
+              if (this.events['open_file']) this.events['open_file'](path, defaultApp);
+            }
+          });
+
+          // `.html` or `.js` の場合、デーモンとして起動を追加
+          if (path.endsWith('.html') || path.endsWith('.js')) {
+            actions.push({
+              label: '⚙️ Run as Daemon (Background)',
+              action: () => {
+                if (this.events['spawn_daemon']) this.events['spawn_daemon'](path);
+              }
+            });
+          }
+
+          resolvedApps.slice(1).forEach((app) => {
+            const fallbackLabel = app.appId === 'HostRunner' ? ' ↳ ▶ Run (Foreground App)' : ` ↳ ${app.appName}`;
+            actions.push({
+              label: fallbackLabel,
+              action: () => {
+                if (this.events['open_file']) this.events['open_file'](path, app);
+              }
+            });
+          });
+          actions.push({ separator: true });
+        }
+      }
+
+      actions.push({
+        label: 'Add to Context',
+        action: () => {
+          if (this.events['add_to_context']) this.events['add_to_context']([path]);
+        },
+      });
+      actions.push({
+        label: 'Copy Path',
+        action: () => {
+          navigator.clipboard
+            .writeText(path)
+            .then(() => {
+              if (window.AppUI) window.AppUI.notify('Path copied to clipboard', 'success');
+            })
+            .catch((err) => {
+              if (window.AppUI) window.AppUI.notify(`Failed to copy: ${err.message}`, 'error');
+            });
+        },
+      });
+      actions.push({ separator: true });
+
+      if (path !== '') {
+        actions.push({
+          label: 'Duplicate',
+          action: () => this._handleDuplicate(path),
+        });
+        actions.push({
+          label: 'Rename',
+          action: () => this._promptRename(path),
+        });
+        actions.push({
+          label: 'Move',
+          action: () => this._promptMove(path),
+        });
+        actions.push({
+          label: 'Download',
+          action: () => this._handleDownload(path),
+        });
+        actions.push({
+          label: 'Properties',
+          action: () => {
+            if (this.events['properties_request']) this.events['properties_request'](path);
+          },
+        });
+        actions.push({
+          label: 'Delete',
+          action: () => {
+            const name = path.split('/').pop() || path;
+            this._confirmDelete(path, name);
+          },
+          danger: true,
+        });
+      }
+    } else if (paths.length > 1) {
+      // 複数選択時のメニュー
+      actions.push({
+        label: 'Add to Context',
+        action: () => {
+          if (this.events['add_to_context']) this.events['add_to_context'](paths);
+        }
+      });
+      actions.push({ separator: true });
+      actions.push({
+        label: `Duplicate ${paths.length} items`,
+        action: () => this._handleDuplicateBatch(paths),
+      });
+      actions.push({
+        label: `Move ${paths.length} items`,
+        action: () => this._promptMoveBatch(paths),
+      });
+      actions.push({
+        label: `Download ${paths.length} items`,
+        action: () => this._handleDownloadBatch(paths),
+      });
+      actions.push({ separator: true });
+      actions.push({
+        label: `Delete ${paths.length} items`,
+        action: () => this._confirmDeleteBatch(paths),
+        danger: true,
+      });
+    }
+
+    if (actions.length === 0) return;
+
+    for (const item of actions) {
+      if (item.separator) {
+        const hr = document.createElement('hr');
+        hr.className = 'border-border-main my-1';
+        menuEl.appendChild(hr);
+        continue;
+      }
+      const btn = document.createElement('div');
+      btn.className = `px-3 py-1 hover:bg-primary hover:text-white cursor-pointer text-xs ${item.danger ? 'text-error hover:text-text-main' : 'text-text-main'}`;
+      btn.textContent = item.label;
+      btn.onclick = () => {
+        menuEl.classList.add('hidden');
+        item.action();
+      };
+      menuEl.appendChild(btn);
+    }
+
+    menuEl.classList.remove('hidden');
+    const rect = menuEl.getBoundingClientRect();
+    const winWidth = window.innerWidth;
+    const winHeight = window.innerHeight;
+
+    let posX = x;
+    let posY = y;
+
+    if (posX + rect.width > winWidth) posX = winWidth - rect.width - 5;
+    if (posY + rect.height > winHeight) posY = winHeight - rect.height - 5;
+    if (posX < 0) posX = 5;
+
+    menuEl.style.left = `${posX}px`;
+    menuEl.style.top = `${posY}px`;
   }
 
   private async _handleUploadAppend(e: Event, isFolder: boolean): Promise<void> {
@@ -667,6 +760,302 @@ export class Explorer {
       await this._handleTransfer(path, newPath, 'move');
     } catch (e: any) {
       if (window.AppUI) window.AppUI.notify(e.message, 'error');
+    }
+  }
+
+  private _normalizePaths(paths: string[]): string[] {
+    if (!paths || paths.length === 0) return [];
+    const sorted = [...paths].sort();
+    const result: string[] = [];
+    for (const p of sorted) {
+      if (result.length === 0) {
+        result.push(p);
+      } else {
+        const last = result[result.length - 1];
+        if (p === last || p.startsWith(last + '/')) {
+          continue; // 子孫なのでスキップ
+        } else {
+          result.push(p);
+        }
+      }
+    }
+    return result;
+  }
+
+  private async _handleDuplicateBatch(paths: string[]) {
+    const normalized = this._normalizePaths(paths);
+    if (normalized.length === 0) return;
+
+    if (window.AppUI) window.AppUI.showLoading(`Duplicating ${normalized.length} items...`);
+    let successCount = 0;
+    try {
+      for (const p of normalized) {
+        try {
+          const dotIndex = p.lastIndexOf('.');
+          const base = dotIndex !== -1 ? p.substring(0, dotIndex) : p;
+          const ext = dotIndex !== -1 ? p.substring(dotIndex) : '';
+          let newPath = `${base}_copy${ext}`;
+          let counter = 1;
+          while (this.vfs.exists(this.getActivePrincipal(), newPath)) {
+            newPath = `${base}_copy${counter}${ext}`;
+            counter++;
+          }
+          await this.vfs.copyFile(this.getActivePrincipal(), p, newPath);
+          successCount++;
+        } catch (e: any) {
+          console.error(`Failed to duplicate ${p}:`, e);
+        }
+      }
+      if (successCount > 0) {
+        this._emitHistory('file_created', `User duplicated ${successCount} items.`);
+      }
+    } finally {
+      if (window.AppUI) window.AppUI.hideLoading();
+    }
+  }
+
+  private async _handleDownloadBatch(paths: string[]) {
+    const normalized = this._normalizePaths(paths);
+    if (normalized.length === 0) return;
+
+    if (typeof JSZip === 'undefined') {
+      if (window.AppUI) window.AppUI.notify('System Error: JSZip library not loaded.', 'error');
+      return;
+    }
+
+    if (window.AppUI) window.AppUI.showLoading(`Compressing ${normalized.length} items...`);
+    try {
+      const zip = new JSZip();
+      let errorCount = 0;
+
+      for (const p of normalized) {
+        const stat = this.vfs.stat(this.getActivePrincipal(), p);
+        if (stat.kind === 'file') {
+          try {
+            const blob = await this.vfs.readBlob(this.getActivePrincipal(), stat.path);
+            zip.file(stat.name, blob);
+          } catch (err: any) {
+            errorCount++;
+            zip.file(stat.name, new Blob([`Error: ${err.message}`], { type: 'text/plain' }));
+          }
+        } else {
+          // directory: フォルダ名を含めたパスでZIPに追加する
+          const files = this.vfs.listFiles(this.getActivePrincipal(), {
+            path: stat.path,
+            recursive: true,
+            detail: true,
+          }) as VfsStat[];
+          const prefix = stat.path ? (stat.path.endsWith('/') ? stat.path : stat.path + '/') : '';
+          
+          for (const subStat of files) {
+            if (subStat.kind === 'file') {
+              const zipPath = stat.name + '/' + subStat.path.substring(prefix.length);
+              try {
+                const blob = await this.vfs.readBlob(this.getActivePrincipal(), subStat.path);
+                zip.file(zipPath, blob);
+              } catch (err: any) {
+                errorCount++;
+                zip.file(zipPath, new Blob([`Error: ${err.message}`], { type: 'text/plain' }));
+              }
+            }
+          }
+        }
+      }
+
+      const zipBlob = await zip.generateAsync({ type: 'blob' });
+      this._triggerBrowserDownload(zipBlob, `archive_${Date.now()}.zip`);
+      this._emitHistory('project_exported', `User downloaded ${normalized.length} items.`);
+
+      if (errorCount > 0 && window.AppUI) {
+        window.AppUI.notify(`Download complete, but ${errorCount} files failed to read.`, 'warning');
+      }
+    } catch (e: any) {
+      if (window.AppUI) window.AppUI.notify(`Download failed: ${e.message}`, 'error');
+    } finally {
+      if (window.AppUI) window.AppUI.hideLoading();
+    }
+  }
+
+  public async _confirmDeleteBatch(paths: string[]) {
+    const normalized = this._normalizePaths(paths);
+    if (normalized.length === 0) return;
+
+    const res = await window.AppUI?.showMessageBox({
+      title: 'Delete Items',
+      message: `Are you sure you want to delete ${normalized.length} item(s)?`,
+      type: 'warning',
+      buttons: [
+        { label: 'Cancel', value: false, style: 'normal', isCancel: true },
+        { label: 'Delete', value: true, style: 'danger', isDefault: true },
+      ],
+    });
+
+    if (res && res.action) {
+      if (window.AppUI) window.AppUI.showLoading(`Deleting ${normalized.length} items...`);
+      let deletedCount = 0;
+      try {
+        for (const p of normalized) {
+          try {
+            await this.vfs.deleteFile(this.getActivePrincipal(), p);
+            deletedCount++;
+          } catch (e: any) {
+            console.error(`Failed to delete ${p}:`, e);
+          }
+        }
+        if (deletedCount > 0) {
+          this._emitHistory('file_deleted', `User deleted ${deletedCount} items.`);
+        }
+      } finally {
+        if (window.AppUI) window.AppUI.hideLoading();
+      }
+    }
+  }
+
+  private async _handleTransferBatch(srcPaths: string[], destFolder: string, mode: 'move' | 'copy' = 'move') {
+    const normalized = this._normalizePaths(srcPaths);
+    if (normalized.length === 0) return;
+
+    if (window.AppUI) window.AppUI.showLoading(`${mode === 'move' ? 'Moving' : 'Copying'} ${normalized.length} items...`);
+    let applyToAllAction: string | null = null;
+    let successCount = 0;
+
+    try {
+      for (const srcPath of normalized) {
+        const fileName = srcPath.split('/').pop()!;
+        let newPath = destFolder ? `${destFolder}/${fileName}` : fileName;
+
+        if (srcPath === newPath) continue;
+
+        if (destFolder && (destFolder === srcPath || destFolder.startsWith(srcPath + '/'))) {
+          if (window.AppUI) window.AppUI.notify(`Skipped ${fileName}: Cannot move into itself.`, 'error');
+          continue;
+        }
+
+        let action = 'proceed';
+
+        if (this.vfs.exists(this.getActivePrincipal(), newPath)) {
+          if (applyToAllAction) {
+            action = applyToAllAction;
+          } else {
+            const stat = this.vfs.stat(this.getActivePrincipal(), newPath);
+            const isDir = stat.kind === 'directory';
+
+            const res = await window.AppUI?.showConflictDialog(fileName, isDir);
+            if (!res || res.action === 'cancel') {
+              break; 
+            }
+            action = res.action as string;
+            if (res.checkboxChecked) applyToAllAction = action;
+          }
+        }
+
+        if (action === 'skip') continue;
+
+        if (action === 'keep_both') {
+          const dotIndex = newPath.lastIndexOf('.');
+          const base = dotIndex !== -1 ? newPath.substring(0, dotIndex) : newPath;
+          const ext = dotIndex !== -1 ? newPath.substring(dotIndex) : '';
+          let counter = 1;
+          while (this.vfs.exists(this.getActivePrincipal(), newPath)) {
+            newPath = `${base}_copy${counter}${ext}`;
+            counter++;
+          }
+          try {
+            if (mode === 'move') await this.vfs.rename(this.getActivePrincipal(), srcPath, newPath);
+            else await this.vfs.copyFile(this.getActivePrincipal(), srcPath, newPath);
+            successCount++;
+          } catch (e: any) {
+            if (window.AppUI) window.AppUI.notify(e.message, 'error');
+          }
+          continue;
+        }
+
+        if (action === 'merge') {
+          await this._mergeDirectory(srcPath, newPath, mode === 'copy');
+          successCount++;
+          continue;
+        }
+
+        if (action === 'replace') {
+          try {
+            await this.vfs.deleteFile(this.getActivePrincipal(), newPath, { permanent: true });
+            if (mode === 'move') await this.vfs.rename(this.getActivePrincipal(), srcPath, newPath);
+            else await this.vfs.copyFile(this.getActivePrincipal(), srcPath, newPath);
+            successCount++;
+          } catch (e: any) {
+            if (window.AppUI) window.AppUI.notify(`Replace failed: ${e.message}`, 'error');
+          }
+          continue;
+        }
+
+        try {
+          if (mode === 'move') await this.vfs.rename(this.getActivePrincipal(), srcPath, newPath);
+          else await this.vfs.copyFile(this.getActivePrincipal(), srcPath, newPath);
+          successCount++;
+        } catch (e: any) {
+          if (window.AppUI) window.AppUI.notify(e.message, 'error');
+        }
+      }
+
+      if (successCount > 0) {
+        this._emitHistory(`file_${mode}d`, `User ${mode}d ${successCount} items to ${destFolder || 'root'}`);
+      }
+    } finally {
+      if (window.AppUI) window.AppUI.hideLoading();
+    }
+  }
+
+  public async _promptMoveBatch(paths: string[]) {
+    const res = await window.AppUI?.showMessageBox({
+      title: 'Move Items',
+      message: `Enter destination folder path for ${paths.length} items:`,
+      type: 'question',
+      prompt: { defaultValue: '' },
+      buttons: [
+        { label: 'Cancel', value: null, style: 'normal', isCancel: true },
+        { label: 'Move', value: 'move', style: 'primary', isDefault: true },
+      ],
+    });
+
+    if (!res || res.action === 'cancel' || res.action === null) return;
+    const destFolder = res.value || '';
+
+    try {
+      await this._handleTransferBatch(paths, destFolder, 'move');
+    } catch (e: any) {
+      if (window.AppUI) window.AppUI.notify(e.message, 'error');
+    }
+  }
+
+  private async _handleDuplicate(path: string) {
+    try {
+      const dotIndex = path.lastIndexOf('.');
+      const base = dotIndex !== -1 ? path.substring(0, dotIndex) : path;
+      const ext = dotIndex !== -1 ? path.substring(dotIndex) : '';
+      let newPath = `${base}_copy${ext}`;
+      let counter = 1;
+      while (this.vfs.exists(this.getActivePrincipal(), newPath)) {
+        newPath = `${base}_copy${counter}${ext}`;
+        counter++;
+      }
+      await this.vfs.copyFile(this.getActivePrincipal(), path, newPath);
+      this._emitHistory('file_created', `User duplicated file: ${path} -> ${newPath}`);
+    } catch (e: any) {
+      if (window.AppUI) window.AppUI.notify(e.message, 'error');
+    }
+  }
+
+  private async _handleDownload(path: string) {
+    try {
+      const stat = this.vfs.stat(this.getActivePrincipal(), path);
+      if (stat.kind === 'file') {
+        const blob = await this.vfs.readBlob(this.getActivePrincipal(), path);
+        this._triggerBrowserDownload(blob, stat.name);
+      } else {
+        await this._downloadDirectoryAsZip(path);
+      }
+    } catch (e: any) {
+      if (window.AppUI) window.AppUI.notify(`Download failed: ${e.message}`, 'error');
     }
   }
 
