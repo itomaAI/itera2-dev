@@ -534,7 +534,8 @@ export class TreeView {
         if (e.target === this.container || (e.target as HTMLElement).classList.contains('tree-root')) {
           e.preventDefault();
           this.selectedPaths.clear();
-          this.lastClickedPath = null;
+          this.selectedPaths.add('');
+          this.lastClickedPath = '';
           this._updateSelectionUI();
           this._showContextMenu(e.pageX, e.pageY);
         }

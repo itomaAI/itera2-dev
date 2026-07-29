@@ -360,6 +360,11 @@ export class Explorer {
       });
     }
 
+    // 末尾にある不要なセパレーターを削る
+    while (actions.length > 0 && actions[actions.length - 1].separator) {
+      actions.pop();
+    }
+
     if (actions.length === 0) return;
 
     for (const item of actions) {
@@ -861,7 +866,10 @@ export class Explorer {
             const stat = this.vfs.stat(this.getActivePrincipal(), newPath);
             const isDir = stat.kind === 'directory';
 
+            if (window.AppUI) window.AppUI.hideLoading();
             const res = await window.AppUI?.showConflictDialog(fileName, isDir);
+            if (window.AppUI) window.AppUI.showLoading(`${mode === 'move' ? 'Moving' : 'Copying'} ${normalized.length} items...`);
+            
             if (!res || res.action === 'cancel') {
               break; 
             }

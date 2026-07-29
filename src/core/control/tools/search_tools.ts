@@ -114,7 +114,28 @@ export function registerSearchTools(registry: ToolRegistry): void {
                 .map((l, idx) => {
                   const currentLineNum = startLine + idx + 1;
                   const marker = currentLineNum === j + 1 ? '>' : ' ';
-                  return `${marker} ${currentLineNum.toString().padStart(4, ' ')} | ${l}`;
+                  let lineText = l;
+                  
+                  // 行が長すぎる場合のTruncation処理
+                  const maxLineLength = 1000;
+                  if (lineText.length > maxLineLength) {
+                    if (currentLineNum === j + 1) {
+                      // マッチした行の場合は、マッチ箇所の前後を切り出す
+                      const match = regex.exec(lineText);
+                      if (match) {
+                        const start = Math.max(0, match.index - maxLineLength / 2);
+                        const end = Math.min(lineText.length, match.index + match[0].length + maxLineLength / 2);
+                        lineText = (start > 0 ? '...' : '') + lineText.substring(start, end) + (end < lineText.length ? '...' : '');
+                      } else {
+                        lineText = lineText.substring(0, maxLineLength) + '...';
+                      }
+                    } else {
+                      // マッチ行以外の周辺コンテキスト行の場合は先頭のみ
+                      lineText = lineText.substring(0, maxLineLength) + '...';
+                    }
+                  }
+
+                  return `${marker} ${currentLineNum.toString().padStart(4, ' ')} | ${lineText}`;
                 })
                 .join('\n');
 
