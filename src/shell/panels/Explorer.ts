@@ -182,10 +182,8 @@ export class Explorer {
       try {
         const stat = this.vfs.stat(this.getActivePrincipal(), path);
         if (stat.kind === 'file') {
-          if (window.AppUI) window.AppUI.showLoading(`Downloading ${stat.name}...`);
           const blob = await this.vfs.readBlob(this.getActivePrincipal(), path);
           this._triggerBrowserDownload(blob, stat.name);
-          if (window.AppUI) window.AppUI.hideLoading();
         } else {
           await this._downloadDirectoryAsZip(path);
         }

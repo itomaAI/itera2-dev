@@ -366,9 +366,8 @@ export class PropertiesModal {
     };
 
     try {
-      if (window.AppUI) window.AppUI.showLoading('Applying permissions...');
-
       if (isRecursive) {
+        if (window.AppUI) window.AppUI.showLoading('Applying permissions...');
         await this.vfs.setAclRecursive(this.activePrincipal, this.currentPath, newAcl);
       } else {
         await this.vfs.setAcl(this.activePrincipal, this.currentPath, newAcl);
@@ -379,7 +378,9 @@ export class PropertiesModal {
     } catch (e: any) {
       if (window.AppUI) window.AppUI.notify(`Failed to save: ${e.message}`, 'error');
     } finally {
-      if (window.AppUI) window.AppUI.hideLoading();
+      if (isRecursive && window.AppUI) {
+        window.AppUI.hideLoading();
+      }
     }
   }
 }
