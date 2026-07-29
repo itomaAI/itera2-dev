@@ -121,10 +121,18 @@ export class SystemModal {
         detail: true,
       }) as any[];
 
+      let errorCount = 0;
+
       for (const stat of files) {
         if (stat.kind === 'file' && !stat.path.startsWith('trash/')) {
-          const blob = await this.vfs.readBlob(SYSTEM_PRINCIPAL, stat.path);
-          zip.file(stat.path, blob);
+          try {
+            const blob = await this.vfs.readBlob(SYSTEM_PRINCIPAL, stat.path);
+            zip.file(stat.path, blob);
+          } catch (err: any) {
+            errorCount++;
+            const errorBlob = new Blob([`[Itera OS] Failed to read file content (may be an unresolved stub).\nError: ${err.message}`], { type: 'text/plain' });
+            zip.file(stat.path, errorBlob);
+          }
         }
       }
 
@@ -139,7 +147,11 @@ export class SystemModal {
       document.body.removeChild(a);
       setTimeout(() => URL.revokeObjectURL(url), 100);
 
-      if (window.AppUI) window.AppUI.notify('Backup Exported', 'success');
+      if (errorCount > 0) {
+        if (window.AppUI) window.AppUI.notify(`Backup Exported, but ${errorCount} files failed to read (unresolved stubs).`, 'warning');
+      } else {
+        if (window.AppUI) window.AppUI.notify('Backup Exported', 'success');
+      }
     } catch (e: any) {
       if (window.AppUI) window.AppUI.notify(`Export failed: ${e.message}`, 'error');
     } finally {

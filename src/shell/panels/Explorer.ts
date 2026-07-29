@@ -258,13 +258,20 @@ export class Explorer {
     }
 
     const prefix = dirPath ? (dirPath.endsWith('/') ? dirPath : dirPath + '/') : '';
+    let errorCount = 0;
 
     for (const stat of files) {
       if (stat.kind === 'file') {
         const zipPath = stat.path.substring(prefix.length);
         if (!zipPath) continue;
-        const blob = await this.vfs.readBlob(this.getActivePrincipal(), stat.path);
-        zip.file(zipPath, blob);
+        try {
+          const blob = await this.vfs.readBlob(this.getActivePrincipal(), stat.path);
+          zip.file(zipPath, blob);
+        } catch (err: any) {
+          errorCount++;
+          const errorBlob = new Blob([`[Itera OS] Failed to read file content (may be an unresolved stub).\nError: ${err.message}`], { type: 'text/plain' });
+          zip.file(zipPath, errorBlob);
+        }
       }
     }
 
@@ -273,6 +280,10 @@ export class Explorer {
       const dirName = dirPath ? dirPath.split('/').filter(Boolean).pop() : 'archive';
       this._triggerBrowserDownload(zipBlob, `${dirName}.zip`);
       this._emitHistory('project_exported', `User downloaded directory: ${dirPath}`);
+      
+      if (errorCount > 0) {
+        if (window.AppUI) window.AppUI.notify(`Download complete, but ${errorCount} files failed to read (unresolved stubs).`, 'warning');
+      }
     } catch (e: any) {
       console.error('Directory export failed:', e);
       if (window.AppUI) window.AppUI.notify('Export Failed: ' + e.message, 'error');
