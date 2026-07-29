@@ -250,9 +250,6 @@ export class ChatPanel {
         this.els.AI_TYPING.innerHTML = `<span class="animate-pulse">●</span> Processing...`;
       }
     }
-    if (this.els.INPUT && !processing) {
-      this.els.INPUT.focus();
-    }
   }
 
   // ==========================================
