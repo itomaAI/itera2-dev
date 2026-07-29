@@ -275,7 +275,7 @@ export class EventOrchestrator {
     });
 
     explorer.on('add_to_context', (paths: string[]) => {
-      paths.forEach(p => this.desktop.panels.chat.addVfsReference(p));
+      paths.forEach((p) => this.desktop.panels.chat.addVfsReference(p));
     });
 
     explorer.on('spawn_daemon', async (path: string) => {

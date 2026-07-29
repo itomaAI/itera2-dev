@@ -298,7 +298,7 @@ export class VfsService {
     const max = VFS_HARD_LIMITS.MAX_STORAGE_BYTES;
     const percent = Math.min(100, (used / max) * 100);
     const isFull = used >= max;
-    
+
     return { used, max, percent, isFull };
   }
 

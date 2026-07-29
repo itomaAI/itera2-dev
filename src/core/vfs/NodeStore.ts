@@ -14,7 +14,7 @@ export class NodeStore {
 
   // 親ノードID -> (子ノード名 -> 子ノードID) のインデックス
   private childrenIndex: Map<string | null, Map<string, string>> = new Map();
-  
+
   // OS全体の合計ファイルサイズ (O(1)トラッキング用)
   private totalSize: number = 0;
 
@@ -118,7 +118,9 @@ export class NodeStore {
         this.totalSize += node.meta.size || 0;
       }
     }
-    console.log(`[NodeStore] Rebuilt index for ${this.memoryMap.size} nodes. Total size: ${(this.totalSize / 1024 / 1024).toFixed(2)} MB`);
+    console.log(
+      `[NodeStore] Rebuilt index for ${this.memoryMap.size} nodes. Total size: ${(this.totalSize / 1024 / 1024).toFixed(2)} MB`,
+    );
   }
 
   public getChildId(parentId: string | null, name: string): string | undefined {
@@ -191,11 +193,11 @@ export class NodeStore {
             }
             this._removeFromIndex(existing);
           }
-          
+
           if (node.kind === 'file' && node.meta.syncState !== 'stub') {
             this.totalSize += node.meta.size || 0;
           }
-          
+
           this.memoryMap.set(node.id, node);
           this._addToIndex(node);
         }

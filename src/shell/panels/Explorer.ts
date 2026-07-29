@@ -255,7 +255,7 @@ export class Explorer {
             label: defaultLabel,
             action: () => {
               if (this.events['open_file']) this.events['open_file'](path, defaultApp);
-            }
+            },
           });
 
           // `.html` or `.js` の場合、デーモンとして起動を追加
@@ -264,7 +264,7 @@ export class Explorer {
               label: '⚙️ Run as Daemon',
               action: () => {
                 if (this.events['spawn_daemon']) this.events['spawn_daemon'](path);
-              }
+              },
             });
           }
 
@@ -274,7 +274,7 @@ export class Explorer {
               label: fallbackLabel,
               action: () => {
                 if (this.events['open_file']) this.events['open_file'](path, app);
-              }
+              },
             });
           });
           actions.push({ separator: true });
@@ -337,7 +337,7 @@ export class Explorer {
         label: 'Add to Context',
         action: () => {
           if (this.events['add_to_context']) this.events['add_to_context'](paths);
-        }
+        },
       });
       actions.push({ separator: true });
       actions.push({
@@ -710,20 +710,20 @@ export class Explorer {
     if (paths.length === 0) return '';
     if (paths.length === 1) return paths[0];
 
-    const splitPaths = paths.map(p => p.split('/'));
-    const minLen = Math.min(...splitPaths.map(arr => arr.length));
-    
+    const splitPaths = paths.map((p) => p.split('/'));
+    const minLen = Math.min(...splitPaths.map((arr) => arr.length));
+
     let commonCount = 0;
     for (let i = 0; i < minLen; i++) {
       const segment = splitPaths[0][i];
-      const allMatch = splitPaths.every(arr => arr[i] === segment);
+      const allMatch = splitPaths.every((arr) => arr[i] === segment);
       if (allMatch) {
         commonCount++;
       } else {
         break;
       }
     }
-    
+
     if (commonCount === 0) return '';
     return splitPaths[0].slice(0, commonCount).join('/');
   }
@@ -825,7 +825,7 @@ export class Explorer {
             recursive: true,
             detail: true,
           }) as VfsStat[];
-          
+
           for (const subStat of files) {
             if (subStat.kind === 'file') {
               const zipPath = subStat.path.substring(prefixToTrim.length);
@@ -894,7 +894,8 @@ export class Explorer {
     const normalized = this._normalizePaths(srcPaths);
     if (normalized.length === 0) return;
 
-    if (window.AppUI) window.AppUI.showLoading(`${mode === 'move' ? 'Moving' : 'Copying'} ${normalized.length} items...`);
+    if (window.AppUI)
+      window.AppUI.showLoading(`${mode === 'move' ? 'Moving' : 'Copying'} ${normalized.length} items...`);
     let applyToAllAction: string | null = null;
     let successCount = 0;
 
@@ -921,10 +922,11 @@ export class Explorer {
 
             if (window.AppUI) window.AppUI.hideLoading();
             const res = await window.AppUI?.showConflictDialog(fileName, isDir);
-            if (window.AppUI) window.AppUI.showLoading(`${mode === 'move' ? 'Moving' : 'Copying'} ${normalized.length} items...`);
-            
+            if (window.AppUI)
+              window.AppUI.showLoading(`${mode === 'move' ? 'Moving' : 'Copying'} ${normalized.length} items...`);
+
             if (!res || res.action === 'cancel') {
-              break; 
+              break;
             }
             action = res.action as string;
             if (res.checkboxChecked) applyToAllAction = action;
@@ -1001,9 +1003,10 @@ export class Explorer {
     }
 
     const title = normalized.length === 1 ? 'Move Item' : 'Move Items';
-    const message = normalized.length === 1 
-      ? `Enter destination folder path for "${normalized[0].split('/').pop()}":`
-      : `Enter destination folder path for ${normalized.length} items:`;
+    const message =
+      normalized.length === 1
+        ? `Enter destination folder path for "${normalized[0].split('/').pop()}":`
+        : `Enter destination folder path for ${normalized.length} items:`;
 
     const res = await window.AppUI?.showMessageBox({
       title: title,

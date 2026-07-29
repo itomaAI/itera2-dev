@@ -115,7 +115,7 @@ export function registerSearchTools(registry: ToolRegistry): void {
                   const currentLineNum = startLine + idx + 1;
                   const marker = currentLineNum === j + 1 ? '>' : ' ';
                   let lineText = l;
-                  
+
                   // 行が長すぎる場合のTruncation処理
                   const maxLineLength = 1000;
                   if (lineText.length > maxLineLength) {
@@ -125,7 +125,10 @@ export function registerSearchTools(registry: ToolRegistry): void {
                       if (match) {
                         const start = Math.max(0, match.index - maxLineLength / 2);
                         const end = Math.min(lineText.length, match.index + match[0].length + maxLineLength / 2);
-                        lineText = (start > 0 ? '...' : '') + lineText.substring(start, end) + (end < lineText.length ? '...' : '');
+                        lineText =
+                          (start > 0 ? '...' : '') +
+                          lineText.substring(start, end) +
+                          (end < lineText.length ? '...' : '');
                       } else {
                         lineText = lineText.substring(0, maxLineLength) + '...';
                       }

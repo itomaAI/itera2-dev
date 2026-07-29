@@ -556,14 +556,14 @@ export class TreeView {
   private _handleContextMenu(e: MouseEvent, path: string) {
     e.preventDefault();
     e.stopPropagation();
-    
+
     if (!this.selectedPaths.has(path)) {
       this.selectedPaths.clear();
       this.selectedPaths.add(path);
       this.lastClickedPath = path;
       this._updateSelectionUI();
     }
-    
+
     this._showContextMenu(e.pageX, e.pageY);
   }
 

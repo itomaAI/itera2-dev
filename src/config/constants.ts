@@ -8,7 +8,7 @@
 export const VFS_HARD_LIMITS = {
   /** Maximum total size for VFS (1GB) */
   MAX_STORAGE_BYTES: 1024 * 1024 * 1024,
-  
+
   /** Reserved space to guarantee system processes and logs can run (50MB) */
   SYSTEM_RESERVE_BYTES: 50 * 1024 * 1024,
 };
