@@ -16,6 +16,7 @@ export interface OsConfig {
   };
   appearance: {
     theme: string;
+    locale?: string;
     typography?: { uiFont: string; monoFont: string; fontSize: string };
     layout?: { animations: boolean };
   };
@@ -33,6 +34,7 @@ const DEFAULT_CONFIG: OsConfig = {
   },
   appearance: {
     theme: 'system/themes/light.json',
+    locale: 'en',
     typography: { uiFont: 'Inter', monoFont: 'monospace', fontSize: 'medium' },
     layout: { animations: true },
   },

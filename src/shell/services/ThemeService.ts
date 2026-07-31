@@ -39,7 +39,10 @@ export class ThemeService {
     try {
       const root = document.documentElement;
 
-      // 1. Typography & Layout
+      // 1. Typography, Layout, and Locale
+      const locale = appearance.locale || 'en';
+      document.documentElement.lang = locale;
+
       const uiFont = appearance.typography?.uiFont || 'Inter';
       const monoFont = appearance.typography?.monoFont || 'monospace';
       root.style.setProperty('--font-sans', uiFont);

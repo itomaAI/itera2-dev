@@ -1,6 +1,6 @@
 /**
  * AUTO-GENERATED FILE - DO NOT EDIT MANUALLY
- * Generated on: 2026-07-29T13:01:31.253Z
+ * Generated on: 2026-07-31T01:49:46.591Z
  */
 
 export const DEFAULT_FILES: Record<string, string> = {
@@ -4107,8 +4107,8 @@ Use this Codex as a guidepost, and build a better Itera OS together with the use
     <title>API Usage & Billing Dashboard</title>
     <script src="/system/core/tw.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script src="../core/ui.js"></script>
-    <script src="../core/std.js"></script>
+    <script src="/system/core/ui.js"></script>
+    <script src="/system/core/std.js"></script>
     <style>
       /* Chart.js の文字色などをテーマに合わせるために必要 */
       canvas {
@@ -4596,8 +4596,8 @@ Use this Codex as a guidepost, and build a better Itera OS together with the use
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>All Apps</title>
     <script src="/system/core/tw.js"></script>
-    <script src="../core/ui.js"></script>
-    <script src="../core/std.js"></script>
+    <script src="/system/core/ui.js"></script>
+    <script src="/system/core/std.js"></script>
   </head>
   <body class="bg-app text-text-main min-h-screen p-8">
     <!-- Header -->
@@ -4674,8 +4674,8 @@ Use this Codex as a guidepost, and build a better Itera OS together with the use
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Settings</title>
     <script src="/system/core/tw.js"></script>
-    <script src="../core/ui.js"></script>
-    <script src="../core/std.js"></script>
+    <script src="/system/core/ui.js"></script>
+    <script src="/system/core/std.js"></script>
     <style>
       .no-scrollbar::-webkit-scrollbar {
         display: none;
@@ -4761,12 +4761,16 @@ Use this Codex as a guidepost, and build a better Itera OS together with the use
             </div>
             <div class="md:col-span-2">
               <label class="block text-xs font-bold text-text-muted uppercase mb-1.5">Language</label>
-              <select
+              <input
+                type="text"
+                list="pref-language-list"
                 id="config-language"
                 data-category="preferences"
                 data-key="language"
-                class="w-full md:w-1/2 bg-card border border-border-main rounded-lg px-3 py-2 text-sm text-text-main focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/30 transition cursor-pointer"
-              >
+                class="w-full md:w-1/2 bg-card border border-border-main rounded-lg px-3 py-2 text-sm text-text-main focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/30 transition shadow-inner"
+                placeholder="English"
+              />
+              <datalist id="pref-language-list">
                 <option value="English">English</option>
                 <option value="Japanese">Japanese (日本語)</option>
                 <option value="Spanish">Spanish (Español)</option>
@@ -4779,7 +4783,7 @@ Use this Codex as a guidepost, and build a better Itera OS together with the use
                 <option value="Russian">Russian (Русский)</option>
                 <option value="Arabic">Arabic (العربية)</option>
                 <option value="Hindi">Hindi (हिन्दी)</option>
-              </select>
+              </datalist>
             </div>
           </div>
         </section>
@@ -4964,8 +4968,30 @@ Use this Codex as a guidepost, and build a better Itera OS together with the use
           </div>
 
           <div class="border-t border-border-main/50 pt-6">
-            <h3 class="text-xs font-bold text-text-main uppercase tracking-wider mb-4">Typography & Layout</h3>
+            <h3 class="text-xs font-bold text-text-main uppercase tracking-wider mb-4">Typography, Locale & Layout</h3>
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div>
+                <label class="block text-xs font-bold text-text-muted uppercase mb-1.5">UI Locale (HTML Lang)</label>
+                <input
+                  type="text"
+                  list="locale-list"
+                  id="config-app-locale"
+                  data-category="appearance"
+                  data-key="locale"
+                  class="w-full bg-card border border-border-main rounded-lg px-3 py-2 text-sm text-text-main focus:outline-none focus:border-primary transition"
+                  placeholder="en"
+                />
+                <datalist id="locale-list">
+                  <option value="en">English</option>
+                  <option value="ja">Japanese (日本語)</option>
+                  <option value="zh-Hans">Chinese Simplified (简体中文)</option>
+                  <option value="zh-Hant">Chinese Traditional (繁體中文)</option>
+                  <option value="ko">Korean (한국어)</option>
+                  <option value="es">Spanish (Español)</option>
+                  <option value="fr">French (Français)</option>
+                  <option value="de">German (Deutsch)</option>
+                </datalist>
+              </div>
               <div>
                 <label class="block text-xs font-bold text-text-muted uppercase mb-1.5">UI Font</label>
                 <select
@@ -5091,6 +5117,7 @@ Use this Codex as a guidepost, and build a better Itera OS together with the use
           DOM('config-network-proxyUrl').value = configs.network.proxyUrl || '';
           DOM('config-network-allowCredentialsWithProxy').checked = !!configs.network.allowCredentialsWithProxy;
 
+          DOM('config-app-locale').value = configs.appearance.locale || 'en';
           DOM('config-app-uifont').value = configs.appearance.typography?.uiFont || 'Inter';
           DOM('config-app-monofont').value = configs.appearance.typography?.monoFont || 'monospace';
           DOM('config-app-fontsize').value = configs.appearance.typography?.fontSize || 'medium';
@@ -5163,6 +5190,7 @@ Use this Codex as a guidepost, and build a better Itera OS together with the use
         'config-language',
         'config-network-proxyUrl',
         'config-network-allowCredentialsWithProxy',
+        'config-app-locale',
         'config-app-uifont',
         'config-app-monofont',
         'config-app-fontsize',
@@ -5569,7 +5597,8 @@ Use this Codex as a guidepost, and build a better Itera OS together with the use
   },
   "layout": {
     "animations": true
-  }
+  },
+  "locale": "en"
 }, null, 2),
 
   "system/config/llm.json": JSON.stringify({
@@ -27599,4 +27628,4 @@ Attributes:
 }, null, 2)
 };
 
-export const BUILD_TIME = 1785330091253;
+export const BUILD_TIME = 1785462586592;

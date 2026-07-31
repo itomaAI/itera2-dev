@@ -7,5 +7,6 @@
   },
   "layout": {
     "animations": true
-  }
+  },
+  "locale": "en"
 }
