@@ -214,8 +214,8 @@ Attributes:
     - show_hidden (optional): "true" or "false" (default). Set to "true" to include hidden files and directories (starting with '.').
 Rule:
     - This is a line-based search. You CANNOT match blocks of text across multiple lines using regex.
+    - By default, \`system/logs/\` and \`system/temp/\` are excluded from the search to avoid noise. To search them, explicitly specify \`path="system/logs"\` or \`path="system/temp"\`.
 </define_tag>
-
 <define_tag name="delete_file">
 Permanently deletes a file.
 Attributes:

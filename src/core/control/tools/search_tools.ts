@@ -62,6 +62,10 @@ export function registerSearchTools(registry: ToolRegistry): void {
       for (const filePath of allFiles) {
         if (rootPath && !filePath.startsWith(rootPath)) continue;
 
+        // 明示的に指定されていない限り、ログと一時ファイルを検索対象から外す
+        if (!rootPath.startsWith('system/logs') && filePath.startsWith('system/logs/')) continue;
+        if (!rootPath.startsWith('system/temp') && filePath.startsWith('system/temp/')) continue;
+
         if (extensions.length > 0) {
           const ext = '.' + filePath.split('.').pop()?.toLowerCase();
           if (!extensions.some((e: string) => ext.endsWith(e))) continue;
@@ -119,7 +123,7 @@ export function registerSearchTools(registry: ToolRegistry): void {
                   let lineText = l;
 
                   // 行が長すぎる場合のTruncation処理
-                  const maxLineLength = 1000;
+                  const maxLineLength = 250;
                   if (lineText.length > maxLineLength) {
                     if (currentLineNum === j + 1) {
                       // マッチした行の場合は、マッチ箇所の前後を切り出す
