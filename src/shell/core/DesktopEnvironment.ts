@@ -12,6 +12,7 @@ import type { FileAssociationResolver } from '../../core/sys/FileAssociationReso
 import type { ProcessManager } from '../windowing/ProcessManager';
 import type { UriRouter } from './UriRouter';
 import type { CognitiveManager } from '../services/CognitiveManager';
+import type { ConfigManager } from '../../core/sys/ConfigManager';
 
 // Panels
 import { SYSTEM_PRINCIPAL, USER_PRINCIPAL, type Principal } from '../../core/vfs/types';
@@ -65,6 +66,7 @@ export class DesktopEnvironment {
     processManager: ProcessManager,
     uriRouter: UriRouter,
     cognitiveManager: CognitiveManager,
+    configManager: ConfigManager,
   ) {
     const lpmlRenderer = new LpmlRenderer();
 
@@ -83,8 +85,8 @@ export class DesktopEnvironment {
 
     // ApiSettingsModal は duck typing で CognitiveManager を渡す (getMergedProviders を持つため)
     this._apiSettingsModal = new ApiSettingsModal(cognitiveManager);
-    this._taskSwitcherModal = new TaskSwitcherModal(processManager, appRegistry);
-    this._processMonitorModal = new ProcessMonitorModal(processManager, appRegistry);
+    this._taskSwitcherModal = new TaskSwitcherModal(processManager, appRegistry, configManager);
+    this._processMonitorModal = new ProcessMonitorModal(processManager, appRegistry, configManager);
     this._propertiesModal = new PropertiesModal(vfs);
     this._filePickerModal = new FilePickerModal(vfs, () => this.getActivePrincipal());
     this.commandPalette = new CommandPaletteModal(vfs, appRegistry, uriRouter, () => this.getActivePrincipal());

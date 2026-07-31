@@ -402,6 +402,13 @@ export class HostApiRouter {
       if (window.AppUI) window.AppUI.hideLoading();
       return true;
     });
+    t.registerHandler('host:go_home', async () => {
+      if (!d.processManager) return false;
+      const homePath = d.configManager.get('appearance')?.layout?.homePath || 'apps/home.html';
+      await d.processManager.spawn({ path: homePath, show: true });
+      if (d.shell) d.shell._closeMobileDrawers();
+      return true;
+    });
 
     // ==========================================
     // 5. Network (net)

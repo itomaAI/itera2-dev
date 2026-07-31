@@ -18,7 +18,7 @@ export interface OsConfig {
     theme: string;
     locale?: string;
     typography?: { uiFont: string; monoFont: string; fontSize: string };
-    layout?: { animations: boolean };
+    layout?: { animations: boolean; homePath?: string };
   };
   llm: { model: string; [key: string]: any };
   network: { proxyUrl: string; allowCredentialsWithProxy: boolean };
@@ -36,7 +36,7 @@ const DEFAULT_CONFIG: OsConfig = {
     theme: 'system/themes/light.json',
     locale: 'en',
     typography: { uiFont: 'Inter', monoFont: 'monospace', fontSize: 'medium' },
-    layout: { animations: true },
+    layout: { animations: true, homePath: 'apps/home.html' },
   },
   llm: { model: 'gemini-3.6-flash' },
   network: {

@@ -13,6 +13,7 @@ import type { SessionManager } from '../services/SessionManager';
 import type { CognitiveManager } from '../services/CognitiveManager';
 import type { FileAssociationResolver, ResolvedApp } from '../../core/sys/FileAssociationResolver';
 import type { VfsEventBus } from '../../core/vfs/VfsEventBus';
+import type { ConfigManager } from '../../core/sys/ConfigManager';
 
 export class EventOrchestrator {
   private desktop: DesktopEnvironment;
@@ -25,6 +26,7 @@ export class EventOrchestrator {
   private cognitiveManager: CognitiveManager;
   private resolver: FileAssociationResolver;
   private eventBus: VfsEventBus;
+  private configManager: ConfigManager;
 
   constructor(
     desktop: DesktopEnvironment,
@@ -37,6 +39,7 @@ export class EventOrchestrator {
     cognitiveManager: CognitiveManager,
     resolver: FileAssociationResolver,
     eventBus: VfsEventBus,
+    configManager: ConfigManager,
   ) {
     this.desktop = desktop;
     this.vfs = vfs;
@@ -48,6 +51,7 @@ export class EventOrchestrator {
     this.cognitiveManager = cognitiveManager;
     this.resolver = resolver;
     this.eventBus = eventBus;
+    this.configManager = configManager;
   }
 
   /**
@@ -111,7 +115,8 @@ export class EventOrchestrator {
   private _bindUriRouting(): void {
     // metaos://open/... (データファイルを関連付けアプリで開く)
     this.uriRouter.register('open', async (path: string, queryArgs: Record<string, string>, searchAndHash: string) => {
-      let targetPath = path || 'apps/home.html';
+      const homePath = this.configManager.get('appearance')?.layout?.homePath || 'apps/home.html';
+      let targetPath = path || homePath;
       try {
         const stat = this.vfs.stat(this.desktop.getActivePrincipal(), targetPath);
         const resolvedApp = this.resolver.resolveDefault(stat);
@@ -152,7 +157,8 @@ export class EventOrchestrator {
 
     // metaos://run/... (関連付けを無視して実行ファイルとして起動)
     this.uriRouter.register('run', async (path: string, queryArgs: Record<string, string>, searchAndHash: string) => {
-      let executablePath = path || 'apps/home.html';
+      const homePath = this.configManager.get('appearance')?.layout?.homePath || 'apps/home.html';
+      let executablePath = path || homePath;
       try {
         const args = { ...queryArgs };
         const fullUri = `metaos://run/${executablePath}${searchAndHash}`;
@@ -415,7 +421,8 @@ export class EventOrchestrator {
 
   private _restoreAddressBar(): void {
     const fgApp = Array.from(this.processManager.processes.values()).find((p) => p.state === 'foreground');
-    const uri = fgApp ? fgApp.currentUri : 'metaos://run/apps/home.html';
+    const homePath = this.configManager.get('appearance')?.layout?.homePath || 'apps/home.html';
+    const uri = fgApp ? fgApp.currentUri : `metaos://run/${homePath}`;
     this.desktop.updateAddressBar(uri);
   }
 

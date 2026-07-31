@@ -7,18 +7,21 @@
 
 import type { ProcessManager } from '../windowing/ProcessManager';
 import type { AppRegistry } from '../../core/sys/AppRegistry';
+import type { ConfigManager } from '../../core/sys/ConfigManager';
 
 export class ProcessMonitorModal {
   private processManager: ProcessManager;
   private appRegistry: AppRegistry;
+  private configManager: ConfigManager;
   private overlay: HTMLElement | null = null;
   private listContainer: HTMLElement | null = null;
   private pollTimer: ReturnType<typeof setInterval> | null = null;
   private isOpen: boolean = false;
 
-  constructor(processManager: ProcessManager, appRegistry: AppRegistry) {
+  constructor(processManager: ProcessManager, appRegistry: AppRegistry, configManager: ConfigManager) {
     this.processManager = processManager;
     this.appRegistry = appRegistry;
+    this.configManager = configManager;
   }
 
   /**
@@ -147,11 +150,12 @@ export class ProcessMonitorModal {
         }
       } else {
         const basePath = proc.path.split(/[?#]/)[0];
+        const homePath = this.configManager.get('appearance')?.layout?.homePath || 'apps/home.html';
         const appInfo = this.appRegistry.getAllApps().find((a) => a.path === basePath);
         if (appInfo) {
           displayName = appInfo.name;
           icon = appInfo.icon || icon;
-        } else if (basePath === 'apps/home.html') {
+        } else if (basePath === homePath) {
           displayName = 'Dashboard';
           icon = '🏠';
         }

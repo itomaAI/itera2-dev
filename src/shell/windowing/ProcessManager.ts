@@ -5,6 +5,7 @@
 
 import type { VfsService } from '../../core/vfs/VfsService';
 import type { AppRegistry } from '../../core/sys/AppRegistry';
+import type { ConfigManager } from '../../core/sys/ConfigManager';
 import { USER_PRINCIPAL } from '../../core/vfs/types';
 import { GuestCompiler } from './GuestCompiler';
 import { resolveRelativePath } from '../../utils/path';
@@ -35,14 +36,16 @@ export class ProcessManager {
   private vfs: VfsService;
   private compiler: GuestCompiler;
   private appRegistry: AppRegistry;
+  private configManager: ConfigManager;
   public processes: Map<string, Process> = new Map();
   private MAX_APPS = 5;
   private events: Record<string, Function[]> = {};
   private els: Record<string, HTMLElement | null> = {};
 
-  constructor(vfs: VfsService, appRegistry: AppRegistry) {
+  constructor(vfs: VfsService, appRegistry: AppRegistry, configManager: ConfigManager) {
     this.vfs = vfs;
     this.appRegistry = appRegistry;
+    this.configManager = configManager;
     this.compiler = new GuestCompiler();
     this._initElements();
     this._bindEvents();
@@ -79,13 +82,15 @@ export class ProcessManager {
             currentUri: targetProc.currentUri,
           });
         } else {
-          this.spawn({ path: 'apps/home.html', show: true, forceReload: true });
+          const homePath = this.configManager.get('appearance')?.layout?.homePath || 'apps/home.html';
+          this.spawn({ path: homePath, show: true, forceReload: true });
         }
       };
     }
     if (this.els.BTN_HOME) {
       this.els.BTN_HOME.onclick = () => {
-        this.spawn({ path: 'apps/home.html', show: true });
+        const homePath = this.configManager.get('appearance')?.layout?.homePath || 'apps/home.html';
+        this.spawn({ path: homePath, show: true });
       };
     }
   }
@@ -108,9 +113,12 @@ export class ProcessManager {
       } else if (foundSvc) {
         if (!pid) pid = foundSvc.id;
         if (!type) type = 'daemon';
-      } else if (basePath === 'apps/home.html') {
-        if (!pid) pid = 'home';
-        if (!type) type = 'app';
+      } else {
+        const homePath = this.configManager.get('appearance')?.layout?.homePath || 'apps/home.html';
+        if (basePath === homePath) {
+          if (!pid) pid = 'home';
+          if (!type) type = 'app';
+        }
       }
     }
 
@@ -306,7 +314,8 @@ export class ProcessManager {
         this._focusApp(apps[0].pid);
         this._updateAddressBar(apps[0].currentUri);
       } else {
-        this.spawn({ path: 'apps/home.html', show: true });
+        const homePath = this.configManager.get('appearance')?.layout?.homePath || 'apps/home.html';
+        this.spawn({ path: homePath, show: true });
       }
     }
 

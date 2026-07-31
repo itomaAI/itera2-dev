@@ -1,6 +1,6 @@
 /**
  * AUTO-GENERATED FILE - DO NOT EDIT MANUALLY
- * Generated on: 2026-07-31T01:49:46.591Z
+ * Generated on: 2026-07-31T03:14:43.741Z
  */
 
 export const DEFAULT_FILES: Record<string, string> = {
@@ -4968,7 +4968,7 @@ Use this Codex as a guidepost, and build a better Itera OS together with the use
           </div>
 
           <div class="border-t border-border-main/50 pt-6">
-            <h3 class="text-xs font-bold text-text-main uppercase tracking-wider mb-4">Typography, Locale & Layout</h3>
+            <h3 class="text-xs font-bold text-text-main uppercase tracking-wider mb-4">Behavior & Localization</h3>
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
                 <label class="block text-xs font-bold text-text-muted uppercase mb-1.5">UI Locale (HTML Lang)</label>
@@ -4992,6 +4992,57 @@ Use this Codex as a guidepost, and build a better Itera OS together with the use
                   <option value="de">German (Deutsch)</option>
                 </datalist>
               </div>
+              <div class="flex items-center gap-3 md:pt-6">
+                <input
+                  type="checkbox"
+                  id="config-app-animations"
+                  data-category="appearance"
+                  data-key="layout.animations"
+                  class="w-4 h-4 rounded border-border-main text-primary focus:ring-primary cursor-pointer"
+                />
+                <div>
+                  <label for="config-app-animations" class="block text-xs font-bold text-text-main cursor-pointer"
+                    >Enable Animations</label
+                  >
+                  <p class="text-[10px] text-text-muted mt-0.5">Uncheck to reduce motion</p>
+                </div>
+              </div>
+              <div class="md:col-span-2">
+                <label class="block text-xs font-bold text-text-muted uppercase mb-1.5">Startup / Home App</label>
+                <div class="flex gap-2">
+                  <input
+                    type="text"
+                    list="homepath-list"
+                    id="config-app-homepath"
+                    data-category="appearance"
+                    data-key="layout.homePath"
+                    class="flex-1 bg-card border border-border-main rounded-lg px-3 py-2 text-sm text-text-main focus:outline-none focus:border-primary transition font-mono shadow-inner"
+                    placeholder="apps/home.html"
+                  />
+                  <button
+                    onclick="pickHomeApp()"
+                    class="px-4 py-2 bg-card hover:bg-hover border border-border-main rounded-lg text-text-muted hover:text-text-main transition shadow-sm flex items-center justify-center"
+                    title="Select File"
+                  >
+                    📂
+                  </button>
+                </div>
+                <datalist id="homepath-list">
+                  <option value="apps/home.html">Dashboard</option>
+                  <option value="system/apps/launcher.html">Library (App Launcher)</option>
+                  <option value="apps/tasks.html">Tasks</option>
+                  <option value="apps/notes.html">Notes</option>
+                </datalist>
+                <p class="text-[10px] text-text-muted mt-1.5 opacity-80">
+                  The path to the app that loads when starting the OS or pressing Home.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div class="border-t border-border-main/50 pt-6 mt-6">
+            <h3 class="text-xs font-bold text-text-main uppercase tracking-wider mb-4">Typography</h3>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
                 <label class="block text-xs font-bold text-text-muted uppercase mb-1.5">UI Font</label>
                 <select
@@ -5034,21 +5085,6 @@ Use this Codex as a guidepost, and build a better Itera OS together with the use
                   <option value="large">Large</option>
                   <option value="x-large">Extra Large</option>
                 </select>
-              </div>
-              <div class="flex items-center gap-3 pt-6">
-                <input
-                  type="checkbox"
-                  id="config-app-animations"
-                  data-category="appearance"
-                  data-key="layout.animations"
-                  class="w-4 h-4 rounded border-border-main text-primary focus:ring-primary cursor-pointer"
-                />
-                <div>
-                  <label for="config-app-animations" class="block text-xs font-bold text-text-main cursor-pointer"
-                    >Enable Animations</label
-                  >
-                  <p class="text-[10px] text-text-muted mt-0.5">Uncheck to reduce motion</p>
-                </div>
               </div>
             </div>
           </div>
@@ -5118,6 +5154,7 @@ Use this Codex as a guidepost, and build a better Itera OS together with the use
           DOM('config-network-allowCredentialsWithProxy').checked = !!configs.network.allowCredentialsWithProxy;
 
           DOM('config-app-locale').value = configs.appearance.locale || 'en';
+          DOM('config-app-homepath').value = configs.appearance.layout?.homePath || 'apps/home.html';
           DOM('config-app-uifont').value = configs.appearance.typography?.uiFont || 'Inter';
           DOM('config-app-monofont').value = configs.appearance.typography?.monoFont || 'monospace';
           DOM('config-app-fontsize').value = configs.appearance.typography?.fontSize || 'medium';
@@ -5191,6 +5228,7 @@ Use this Codex as a guidepost, and build a better Itera OS together with the use
         'config-network-proxyUrl',
         'config-network-allowCredentialsWithProxy',
         'config-app-locale',
+        'config-app-homepath',
         'config-app-uifont',
         'config-app-monofont',
         'config-app-fontsize',
@@ -5548,9 +5586,36 @@ Use this Codex as a guidepost, and build a better Itera OS together with the use
         }
       }
 
+      window.pickHomeApp = async function () {
+        if (window.MetaOS && MetaOS.host.showOpenDialog) {
+          const result = await MetaOS.host.showOpenDialog({
+            title: 'Select Startup App',
+            filters: ['.html'],
+          });
+          if (result) {
+            const input = DOM('config-app-homepath');
+            input.value = result;
+            input.dispatchEvent(new Event('input')); // trigger save
+          }
+        }
+      };
+
       window.toggleService = async function (index, isEnabled) {
         if (servicesData[index]) {
-          servicesData[index].autoStart = isEnabled;
+          const svc = servicesData[index];
+          svc.autoStart = isEnabled;
+
+          // Start or Stop the daemon immediately
+          if (window.MetaOS) {
+            if (isEnabled) {
+              await MetaOS.system.spawn(svc.path, { pid: svc.id, type: 'daemon' });
+              AppUI.notify(\`Started: \${svc.name || svc.id}\`, 'success');
+            } else {
+              await MetaOS.system.kill(svc.id);
+              AppUI.notify(\`Stopped: \${svc.name || svc.id}\`, 'info');
+            }
+          }
+
           clearTimeout(window._saveTimerSvc);
           window._saveTimerSvc = setTimeout(async () => {
             const status = DOM('save-status');
@@ -5571,7 +5636,7 @@ Use this Codex as a guidepost, and build a better Itera OS together with the use
                 status.classList.remove('text-success');
               }, 2000);
 
-              const svcName = servicesData[index].name || servicesData[index].id;
+              const svcName = svc.name || svc.id;
               const stateStr = isEnabled ? 'enabled' : 'disabled';
               App.AI.logEvent(\`User \${stateStr} auto-start for service "\${svcName}".\`, 'config_changed');
             } catch (e) {
@@ -5596,7 +5661,8 @@ Use this Codex as a guidepost, and build a better Itera OS together with the use
     "fontSize": "medium"
   },
   "layout": {
-    "animations": true
+    "animations": true,
+    "homePath": "apps/home.html"
   },
   "locale": "en"
 }, null, 2),
@@ -26400,7 +26466,7 @@ Check your Browserslist config to be sure that your targets are set up correctly
       else window.location.href = path;
     },
     home: () => {
-      if (global.MetaOS) global.MetaOS.system.spawn('apps/home.html', { show: true });
+      if (global.MetaOS) global.MetaOS.host.goHome();
     },
     notify: (message, type = 'info', duration) => {
       if (global.MetaOS) {
@@ -27628,4 +27694,4 @@ Attributes:
 }, null, 2)
 };
 
-export const BUILD_TIME = 1785462586592;
+export const BUILD_TIME = 1785467683741;

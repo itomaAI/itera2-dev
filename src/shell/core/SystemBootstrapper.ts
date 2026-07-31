@@ -102,7 +102,7 @@ export class SystemBootstrapper {
     registerUITools(toolRegistry);
 
     const translator = new Translator();
-    const processManager = new ProcessManager(vfs, appRegistry);
+    const processManager = new ProcessManager(vfs, appRegistry, configManager);
     const uriRouter = new UriRouter('open');
 
     // ==========================================
@@ -126,6 +126,7 @@ export class SystemBootstrapper {
       processManager,
       uriRouter,
       cognitiveManager,
+      configManager,
     );
 
     // ==========================================
@@ -182,6 +183,7 @@ export class SystemBootstrapper {
       cognitiveManager,
       resolver,
       eventBus,
+      configManager,
     );
 
     // VfsEventRecorder の初期化と起動
@@ -239,7 +241,8 @@ export class SystemBootstrapper {
     await maintenanceDaemon.start();
 
     // ダッシュボードの起動
-    await processManager.spawn({ path: 'apps/home.html', show: true });
+    const homePath = configManager.get('appearance')?.layout?.homePath || 'apps/home.html';
+    await processManager.spawn({ path: homePath, show: true });
 
     logger.log('system', {
       action: 'boot',

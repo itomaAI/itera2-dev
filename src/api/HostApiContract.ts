@@ -47,6 +47,10 @@ export interface HostApiContract {
     request: Record<string, never>;
     response: Record<string, string> | null;
   };
+  'host:go_home': {
+    request: Record<string, never>;
+    response: boolean;
+  };
   'tools:register': {
     request: DynamicToolRegistration;
     response: boolean;

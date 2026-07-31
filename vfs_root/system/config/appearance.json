@@ -6,7 +6,8 @@
     "fontSize": "medium"
   },
   "layout": {
-    "animations": true
+    "animations": true,
+    "homePath": "apps/home.html"
   },
   "locale": "en"
 }

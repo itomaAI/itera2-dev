@@ -5,6 +5,7 @@
 
 import type { ProcessManager } from '../windowing/ProcessManager';
 import type { AppRegistry } from '../../core/sys/AppRegistry';
+import type { ConfigManager } from '../../core/sys/ConfigManager';
 
 const DOM_IDS = {
   MODAL: 'task-switcher-modal',
@@ -17,10 +18,12 @@ export class TaskSwitcherModal {
   private els: Record<string, HTMLElement | null> = {};
   private processManager: ProcessManager;
   private appRegistry: AppRegistry;
+  private configManager: ConfigManager;
 
-  constructor(processManager: ProcessManager, appRegistry: AppRegistry) {
+  constructor(processManager: ProcessManager, appRegistry: AppRegistry, configManager: ConfigManager) {
     this.processManager = processManager;
     this.appRegistry = appRegistry;
+    this.configManager = configManager;
 
     this._initElements();
     this._bindEvents();
@@ -84,12 +87,13 @@ export class TaskSwitcherModal {
         'snap-center shrink-0 w-28 sm:w-36 flex flex-col items-center gap-3 transition-transform hover:scale-105 group relative';
 
       const basePath = app.path.split(/[?#]/)[0];
+      const homePath = this.configManager.get('appearance')?.layout?.homePath || 'apps/home.html';
 
       // レジストリからアプリ情報を検索してアイコンや名前をリッチにする
       let appName = basePath.split('/').pop()?.replace('.html', '') || 'App';
       let appIcon = '⚙️';
 
-      if (basePath === 'apps/home.html') {
+      if (basePath === homePath) {
         appName = 'Dashboard';
         appIcon = '🏠';
       } else {
