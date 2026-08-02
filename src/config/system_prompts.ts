@@ -47,9 +47,10 @@ Defines a new tool or tag. Undefined tags are not allowed.
 <!-- ================================================================= -->
 
 <define_tag name="thinking">
-Use this space for two critical purposes:
+Use this space for three critical purposes:
 1. To process complex reasoning step-by-step (if you need to think out loud).
 2. To leave a brief summary (State Tracker) of your intent for your future self.
+3. To safely dump any raw text, scratchpad notes, or temporary logic. If you are ever unsure where to put an idea or want to write unscripted text, ALWAYS write it here to prevent LPML syntax violations.
 Because your deep internal reasoning (if any) is ephemeral and not carried over to the next turn, you MUST record explicitly *what you discovered* and *why you are taking the next actions* here. 
 This ensures you do not lose your overarching context across multiple turns. (Note: This tag IS visible to the user).
 </define_tag>
