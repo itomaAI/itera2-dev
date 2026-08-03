@@ -34,10 +34,11 @@ export class VfsLockManager {
     });
 
     // 自分のロックを登録
-    this.locks.set(
-      normPath,
-      waitPromise.then(() => nextLock),
-    );
+    // NOTE: Map に格納する Promise の参照(chained)を保持し、finally 内ではその参照と比較する。
+    // nextLock 自体と比較すると、Map に格納されているのは waitPromise.then(() => nextLock) という
+    // 別の Promise インスタンスであるため、常に不一致となりエントリが永久に削除されない。
+    const chained = waitPromise.then(() => nextLock);
+    this.locks.set(normPath, chained);
 
     try {
       await waitPromise;
@@ -45,7 +46,7 @@ export class VfsLockManager {
     } finally {
       releaseLock();
       // もし自分がキューの最後尾だった場合のみMapから消す
-      if (this.locks.get(normPath) === nextLock) {
+      if (this.locks.get(normPath) === chained) {
         this.locks.delete(normPath);
       }
     }
