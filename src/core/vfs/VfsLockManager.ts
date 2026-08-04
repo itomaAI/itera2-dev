@@ -34,10 +34,12 @@ export class VfsLockManager {
     });
 
     // 自分のロックを登録
-    this.locks.set(
-      normPath,
-      waitPromise.then(() => nextLock),
-    );
+    // チェーンした Promise の参照を保持しておき、finally ブロックで
+    // 同じ参照と比較することで「自分がキューの最後尾か」を判定する。
+    // (以前は nextLock 自体と比較していたため常に不一致となり、
+    //  Map からエントリが一度も削除されないリソースリークが発生していた)
+    const chained = waitPromise.then(() => nextLock);
+    this.locks.set(normPath, chained);
 
     try {
       await waitPromise;
@@ -45,7 +47,7 @@ export class VfsLockManager {
     } finally {
       releaseLock();
       // もし自分がキューの最後尾だった場合のみMapから消す
-      if (this.locks.get(normPath) === nextLock) {
+      if (this.locks.get(normPath) === chained) {
         this.locks.delete(normPath);
       }
     }
