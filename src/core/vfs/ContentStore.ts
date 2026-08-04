@@ -14,6 +14,18 @@ export class ContentStore {
     if (typeof navigator !== 'undefined' && navigator.storage && navigator.storage.getDirectory) {
       this.useOpfs = true;
       this.rootHandlePromise = navigator.storage.getDirectory();
+
+      if (navigator.storage.persist) {
+        navigator.storage.persist().then((isPersisted) => {
+          if (isPersisted) {
+            console.log('[ContentStore] Storage persistence granted.');
+          } else {
+            console.warn('[ContentStore] Storage persistence was not granted by the browser.');
+          }
+        }).catch((e) => {
+          console.warn('[ContentStore] Failed to request storage persistence:', e);
+        });
+      }
     } else {
       console.warn(
         '[ContentStore] OPFS is not supported in this environment. Falling back to volatile in-memory storage.',
