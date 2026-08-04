@@ -1,0 +1,29 @@
+name: CI
+
+on:
+  push:
+    branches: ['main']
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: 'npm'
+      - run: npm ci
+      - name: Generate VFS defaults
+        run: |
+          node scripts/build_defaults.js
+          npx prettier --write src/config/default_files.ts
+      - name: Verify default_files.ts is up to date
+        run: git diff -I "Generated on:" -I "BUILD_TIME" --exit-code -- src/config/default_files.ts
+      - name: Type check
+        run: npx tsc --noEmit
+      - name: Format check
+        run: npx prettier --check "src/**/*.{ts,tsx}" "vfs_root/**/*.{html,js,ts,tsx}" "*.{js,ts,html}"
+      - name: Test
+        run: npm test
