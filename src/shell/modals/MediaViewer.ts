@@ -58,12 +58,15 @@ export class MediaViewer {
     // 動的に生成したiframe等の要素をクリーンアップ
     this.els.OVERLAY.querySelectorAll('.dynamic-content').forEach((el) => el.remove());
 
+    // OPFSから読み出したBlobのMIMEタイプが欠落している場合があるため、推測したMIMEタイプで再ラップする
+    const typedBlob = blob.type === mime ? blob : new Blob([blob], { type: mime });
+
     if (mime === 'application/pdf') {
-      this._renderPdf(blob);
+      this._renderPdf(typedBlob);
     } else if (mime.startsWith('image/')) {
-      this._renderImage(blob);
+      this._renderImage(typedBlob);
     } else {
-      this._renderFallback(path, blob, mime);
+      this._renderFallback(path, typedBlob, mime);
     }
 
     this.els.OVERLAY.classList.remove('hidden');
