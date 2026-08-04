@@ -18,7 +18,7 @@ jobs:
       - name: Generate VFS defaults
         run: node scripts/build_defaults.js
       - name: Verify default_files.ts is up to date
-        run: git diff --exit-code -- src/config/default_files.ts
+        run: git diff -I "Generated on:" -I "BUILD_TIME" --exit-code -- src/config/default_files.ts
       - name: Type check
         run: npx tsc --noEmit
       - name: Format check
