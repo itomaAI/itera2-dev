@@ -59,11 +59,24 @@ export class VfsLockManager {
   async acquireMultiple<T>(paths: string[], task: () => Promise<T>): Promise<T> {
     const uniquePaths = Array.from(new Set(paths.map((p) => this._normalize(p)))).sort();
 
+    // 祖先が同じリストに含まれるパスを除外する。
+    // acquire() は階層ロックのため、祖先を取得すれば子孫も保護される。
+    // これを行わないと「自分が保持しているロックを自分で待つ」自己デッドロックになる。
+    // (例: ['data', 'data/backup'] を入れ子で acquire すると、内側の
+    //  acquire('data/backup') が祖先 'data' のロック解放を待つが、
+    //  そのロックは外側の acquire('data') 自身が保持しているため永久に進まない)
+    // NOTE: `_normalize('')`（VFSルート）はこのフィルタでは他のどのパスも
+    // 吸収しない（''.startsWith(other + '/') は常に false のため）。
+    // これは既存の挙動であり、このタスクでは変更しない。
+    const rootPaths = uniquePaths.filter(
+      (p) => !uniquePaths.some((other) => other !== p && p.startsWith(other + '/')),
+    );
+
     const acquireRecursive = async (index: number): Promise<T> => {
-      if (index >= uniquePaths.length) {
+      if (index >= rootPaths.length) {
         return await task();
       }
-      return this.acquire(uniquePaths[index], () => acquireRecursive(index + 1));
+      return this.acquire(rootPaths[index], () => acquireRecursive(index + 1));
     };
 
     return acquireRecursive(0);
