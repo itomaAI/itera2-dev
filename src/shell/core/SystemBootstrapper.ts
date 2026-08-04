@@ -54,8 +54,17 @@ export class SystemBootstrapper {
     console.log('[Itera] Booting OS v2...');
 
     // ==========================================
-    // 0. UI Dialog Service Initialization
+    // 0. Storage Persistence & UI Initialization
     // ==========================================
+    try {
+      if (navigator.storage && navigator.storage.persist) {
+        const isPersisted = await navigator.storage.persist();
+        console.log(`[SystemBootstrapper] Storage persistence: ${isPersisted ? 'Granted' : 'Denied'}`);
+      }
+    } catch (e) {
+      console.warn('[SystemBootstrapper] Failed to request storage persistence:', e);
+    }
+
     const dialogService = new DialogService();
     window.AppUI = dialogService;
 
