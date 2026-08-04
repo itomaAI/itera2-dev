@@ -68,9 +68,7 @@ export class VfsLockManager {
     // NOTE: `_normalize('')`（VFSルート）はこのフィルタでは他のどのパスも
     // 吸収しない（''.startsWith(other + '/') は常に false のため）。
     // これは既存の挙動であり、このタスクでは変更しない。
-    const rootPaths = uniquePaths.filter(
-      (p) => !uniquePaths.some((other) => other !== p && p.startsWith(other + '/')),
-    );
+    const rootPaths = uniquePaths.filter((p) => !uniquePaths.some((other) => other !== p && p.startsWith(other + '/')));
 
     const acquireRecursive = async (index: number): Promise<T> => {
       if (index >= rootPaths.length) {
