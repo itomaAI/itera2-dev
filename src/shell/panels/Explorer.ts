@@ -917,6 +917,7 @@ export class Explorer {
       window.AppUI.showLoading(`${mode === 'move' ? 'Moving' : 'Copying'} ${normalized.length} items...`);
     let applyToAllAction: string | null = null;
     let successCount = 0;
+    const processedItems: VfsEventItem[] = [];
 
     try {
       for (const srcPath of normalized) {

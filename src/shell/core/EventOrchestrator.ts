@@ -411,10 +411,9 @@ export class EventOrchestrator {
           action: 'edit',
           items: [{ srcPath: path }],
         });
-        const turn = this.history.append('system', {
-          event: { type: 'file_edited', content: msg },
-        }, {
-          visible: true,
+        const lpml = `<event type="file_edited">\n${msg}\n</event>`;
+        const turn = this.history.append('system', lpml, {
+          type: 'event_log',
           trigger_llm: false,
         });
         this.desktop.panels.chat.appendTurn(turn);
