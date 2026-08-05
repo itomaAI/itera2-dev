@@ -21,7 +21,7 @@ export class VfsEventFormatter {
     const { actor, action, items, targetDir } = ctx;
     if (!items || items.length === 0) return '';
 
-    const itemSummary = this._formatItemSummary(items);
+    const itemSummary = this._formatItemSummary(items, !!targetDir);
     const destStr = targetDir ? ` to "${targetDir}"` : '';
 
     switch (action) {
@@ -42,14 +42,18 @@ export class VfsEventFormatter {
     }
   }
 
-  private static _formatItemSummary(items: VfsEventItem[]): string {
+  private static _formatItemSummary(items: VfsEventItem[], hasTargetDir: boolean): string {
     if (items.length === 1) {
       const item = items[0];
       const name = item.name || item.srcPath.split('/').pop() || item.srcPath;
-      if (item.destPath) {
-        return `"${name}" (${item.srcPath} -> ${item.destPath})`;
+
+      if (hasTargetDir) {
+        return `"${name}"`;
       }
-      return `"${name}" (${item.srcPath})`;
+      if (item.destPath && item.srcPath !== item.destPath) {
+        return `"${item.srcPath}" -> "${item.destPath}"`;
+      }
+      return `"${item.srcPath}"`;
     }
 
     const names = items.map((i) => `"${i.name || i.srcPath.split('/').pop() || i.srcPath}"`);
