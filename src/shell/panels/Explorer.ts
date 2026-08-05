@@ -7,6 +7,7 @@ import type { VfsService } from '../../core/vfs/VfsService';
 import type { VfsEventBus } from '../../core/vfs/VfsEventBus';
 import type { FileAssociationResolver } from '../../core/sys/FileAssociationResolver';
 import type { Principal, VfsStat } from '../../core/vfs/types';
+import { VfsEventFormatter, type VfsEventItem } from '../../core/vfs/VfsEventFormatter';
 import { TreeView } from './TreeView';
 
 declare const JSZip: any;
@@ -433,11 +434,14 @@ export class Explorer {
 
       if (uploadedPaths.length > 0) {
         if (window.AppUI) window.AppUI.notify(`Upload complete: ${uploadedPaths.length} items`, 'success');
-        const summary = uploadedPaths.slice(0, 3).join(', ') + (uploadedPaths.length > 3 ? '...' : '');
-        this._emitHistory(
-          'file_created',
-          `User uploaded ${uploadedPaths.length} files to "${targetDir || 'root'}": ${summary}`,
-        );
+        const items: VfsEventItem[] = uploadedPaths.map((p) => ({ srcPath: p }));
+        const msg = VfsEventFormatter.format({
+          actor: 'User',
+          action: 'upload',
+          items,
+          targetDir: targetDir,
+        });
+        this._emitHistory('file_created', msg);
       }
     } finally {
       if (needsLoading && window.AppUI) {
@@ -606,8 +610,13 @@ export class Explorer {
 
       if (uploadedPaths.length > 0) {
         if (window.AppUI) window.AppUI.notify(`Upload complete: ${uploadedPaths.length} items uploaded.`, 'success');
-        const summary = uploadedPaths.slice(0, 3).join(', ') + (uploadedPaths.length > 3 ? '...' : '');
-        this._emitHistory('file_created', `User dropped files: ${summary}`);
+        const items: VfsEventItem[] = uploadedPaths.map((p) => ({ srcPath: p }));
+        const msg = VfsEventFormatter.format({
+          actor: 'User',
+          action: 'upload',
+          items,
+        });
+        this._emitHistory('file_created', msg);
       } else {
         if (window.AppUI) window.AppUI.notify('No files were uploaded.', 'info');
       }
@@ -681,7 +690,12 @@ export class Explorer {
 
     try {
       await this.vfs.rename(this.getActivePrincipal(), path, newPath);
-      this._emitHistory('file_moved', `User renamed: ${path} -> ${newPath}`);
+      const msg = VfsEventFormatter.format({
+        actor: 'User',
+        action: 'move',
+        items: [{ srcPath: path, destPath: newPath }],
+      });
+      this._emitHistory('file_moved', msg);
     } catch (e: any) {
       if (window.AppUI) window.AppUI.notify(e.message, 'error');
     }
@@ -871,18 +885,23 @@ export class Explorer {
 
     if (res && res.action) {
       if (window.AppUI) window.AppUI.showLoading(`Deleting ${normalized.length} items...`);
-      let deletedCount = 0;
+      const deletedItems: VfsEventItem[] = [];
       try {
         for (const p of normalized) {
           try {
             await this.vfs.deleteFile(this.getActivePrincipal(), p);
-            deletedCount++;
+            deletedItems.push({ srcPath: p });
           } catch (e: any) {
             console.error(`Failed to delete ${p}:`, e);
           }
         }
-        if (deletedCount > 0) {
-          this._emitHistory('file_deleted', `User deleted ${deletedCount} items.`);
+        if (deletedItems.length > 0) {
+          const msg = VfsEventFormatter.format({
+            actor: 'User',
+            action: 'delete',
+            items: deletedItems,
+          });
+          this._emitHistory('file_deleted', msg);
         }
       } finally {
         if (window.AppUI) window.AppUI.hideLoading();
@@ -947,6 +966,7 @@ export class Explorer {
           try {
             if (mode === 'move') await this.vfs.rename(this.getActivePrincipal(), srcPath, newPath);
             else await this.vfs.copyFile(this.getActivePrincipal(), srcPath, newPath);
+            processedItems.push({ srcPath, destPath: newPath });
             successCount++;
           } catch (e: any) {
             if (window.AppUI) window.AppUI.notify(e.message, 'error');
@@ -956,6 +976,7 @@ export class Explorer {
 
         if (action === 'merge') {
           await this._mergeDirectory(srcPath, newPath, mode === 'copy');
+          processedItems.push({ srcPath, destPath: newPath });
           successCount++;
           continue;
         }
@@ -965,6 +986,7 @@ export class Explorer {
             await this.vfs.deleteFile(this.getActivePrincipal(), newPath, { permanent: true });
             if (mode === 'move') await this.vfs.rename(this.getActivePrincipal(), srcPath, newPath);
             else await this.vfs.copyFile(this.getActivePrincipal(), srcPath, newPath);
+            processedItems.push({ srcPath, destPath: newPath });
             successCount++;
           } catch (e: any) {
             if (window.AppUI) window.AppUI.notify(`Replace failed: ${e.message}`, 'error');
@@ -975,14 +997,21 @@ export class Explorer {
         try {
           if (mode === 'move') await this.vfs.rename(this.getActivePrincipal(), srcPath, newPath);
           else await this.vfs.copyFile(this.getActivePrincipal(), srcPath, newPath);
+          processedItems.push({ srcPath, destPath: newPath });
           successCount++;
         } catch (e: any) {
           if (window.AppUI) window.AppUI.notify(e.message, 'error');
         }
       }
 
-      if (successCount > 0) {
-        this._emitHistory(`file_${mode}d`, `User ${mode}d ${successCount} items to ${destFolder || 'root'}`);
+      if (processedItems.length > 0) {
+        const msg = VfsEventFormatter.format({
+          actor: 'User',
+          action: mode,
+          items: processedItems,
+          targetDir: destFolder,
+        });
+        this._emitHistory(`file_${mode}d`, msg);
       }
     } finally {
       if (window.AppUI) window.AppUI.hideLoading();

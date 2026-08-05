@@ -14,6 +14,7 @@ import type { CognitiveManager } from '../services/CognitiveManager';
 import type { FileAssociationResolver, ResolvedApp } from '../../core/sys/FileAssociationResolver';
 import type { VfsEventBus } from '../../core/vfs/VfsEventBus';
 import type { ConfigManager } from '../../core/sys/ConfigManager';
+import { VfsEventFormatter } from '../../core/vfs/VfsEventFormatter';
 
 export class EventOrchestrator {
   private desktop: DesktopEnvironment;
@@ -405,7 +406,18 @@ export class EventOrchestrator {
         await this.vfs.writeFile(this.desktop.getActivePrincipal(), path, content, {
           overwrite: true,
         });
-        // 明示的なUIセーブなので通知はデスクトップ側でよしなに行われる
+        const msg = VfsEventFormatter.format({
+          actor: 'User',
+          action: 'edit',
+          items: [{ srcPath: path }],
+        });
+        const turn = this.history.append('system', {
+          event: { type: 'file_edited', content: msg },
+        }, {
+          visible: true,
+          trigger_llm: false,
+        });
+        this.desktop.panels.chat.appendTurn(turn);
       } catch (e: any) {
         if (window.AppUI) window.AppUI.notify(`Save failed: ${e.message}`, 'error');
       }

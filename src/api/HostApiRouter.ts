@@ -10,6 +10,7 @@ import type { Role, Turn, TurnContent, TurnMeta } from '../core/state/HistoryMan
 import type { DynamicToolRegistration, ProcessInfo } from './HostApiContract';
 import type { SpawnOptions } from '../shell/windowing/ProcessManager';
 import { USER_PRINCIPAL } from '../core/vfs/types';
+import { VfsEventFormatter } from '../core/vfs/VfsEventFormatter';
 import { base64ToBlob, blobToDataUrl, dataUrlToBlob } from '../utils/binary';
 
 // 依存モジュールのダックタイピング・インターフェース (未実装モジュール用)
@@ -134,35 +135,60 @@ export class HostApiRouter {
       const principal = getPrincipal(sourcePid);
       const finalContent = prepareWriteContent(content, opts?.encoding);
       const res = await d.vfs.writeFile(principal, path, finalContent, opts);
-      this._checkAndEmitEvent(opts, 'file_edited', `App [${sourcePid}] edited file: ${path}`);
+      const msg = VfsEventFormatter.format({
+        actor: `App [${sourcePid}]`,
+        action: 'edit',
+        items: [{ srcPath: path }],
+      });
+      this._checkAndEmitEvent(opts, 'file_edited', msg);
       return res;
     });
 
     t.registerHandler('fs:append', async ({ path, content, opts }, sourcePid) => {
       const principal = getPrincipal(sourcePid);
       const res = await d.vfs.appendFile(principal, path, content, opts);
-      this._checkAndEmitEvent(opts, 'file_edited', `App [${sourcePid}] appended to file: ${path}`);
+      const msg = VfsEventFormatter.format({
+        actor: `App [${sourcePid}]`,
+        action: 'edit',
+        items: [{ srcPath: path }],
+      });
+      this._checkAndEmitEvent(opts, 'file_edited', msg);
       return res;
     });
 
     t.registerHandler('fs:delete', async ({ path, opts }, sourcePid) => {
       const principal = getPrincipal(sourcePid);
       const res = await d.vfs.deleteFile(principal, path, opts);
-      this._checkAndEmitEvent(opts, 'file_deleted', `App [${sourcePid}] deleted file: ${path}`);
+      const msg = VfsEventFormatter.format({
+        actor: `App [${sourcePid}]`,
+        action: 'delete',
+        items: [{ srcPath: path }],
+      });
+      this._checkAndEmitEvent(opts, 'file_deleted', msg);
       return res;
     });
 
     t.registerHandler('fs:rename', async ({ oldPath, newPath, opts }, sourcePid) => {
       const principal = getPrincipal(sourcePid);
       const res = await d.vfs.rename(principal, oldPath, newPath, opts);
-      this._checkAndEmitEvent(opts, 'file_moved', `App [${sourcePid}] renamed file: ${oldPath} -> ${newPath}`);
+      const msg = VfsEventFormatter.format({
+        actor: `App [${sourcePid}]`,
+        action: 'move',
+        items: [{ srcPath: oldPath, destPath: newPath }],
+      });
+      this._checkAndEmitEvent(opts, 'file_moved', msg);
       return res;
     });
 
     t.registerHandler('fs:copy', async ({ srcPath, destPath, opts }, sourcePid) => {
       const principal = getPrincipal(sourcePid);
       const res = await d.vfs.copyFile(principal, srcPath, destPath, opts);
-      this._checkAndEmitEvent(opts, 'file_copied', `App [${sourcePid}] copied file: ${srcPath} -> ${destPath}`);
+      const msg = VfsEventFormatter.format({
+        actor: `App [${sourcePid}]`,
+        action: 'copy',
+        items: [{ srcPath, destPath }],
+      });
+      this._checkAndEmitEvent(opts, 'file_copied', msg);
       return res;
     });
 
