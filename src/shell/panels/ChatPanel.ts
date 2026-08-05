@@ -299,9 +299,8 @@ export class ChatPanel {
   }
 
   finalizeStreaming() {
-    if (this.currentStreamEl) {
-      const header = this.currentStreamEl.parentElement!.querySelector('div:first-child');
-      if (header) header.textContent = 'MODEL';
+    if (this.currentStreamEl && this.currentStreamEl.parentElement) {
+      this.currentStreamEl.parentElement.remove();
     }
     this.currentStreamEl = null;
     this.currentStreamContent = '';

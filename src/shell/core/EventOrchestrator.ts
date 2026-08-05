@@ -373,10 +373,9 @@ export class EventOrchestrator {
     });
 
     this.engine.on('turn_end', (data: any) => {
-      if (data.role === 'model') {
-        chat.finalizeStreaming();
-      } else {
-        const turn = data.turn || this.history.getLast();
+      chat.finalizeStreaming();
+      const turn = data.turn || this.history.getLast();
+      if (turn) {
         chat.appendTurn(turn);
       }
       if (!this.engine.isRunning) chat.setProcessing(false);
