@@ -25,7 +25,7 @@ export class GeminiAdapter extends BaseLLMAdapter {
   async generateStream(messages: any, onChunk: (text: string) => void, signal?: AbortSignal): Promise<void> {
     if (!this.apiKey) throw new Error('API Key is missing.');
 
-    const url = `${this.baseUrl}/${this.modelName}:streamGenerateContent?key=${this.apiKey}`;
+    const url = `${this.baseUrl}/${this.modelName}:streamGenerateContent?alt=sse&key=${this.apiKey}`;
 
     const GEMINI_ALLOWED_STRUCTURE = {
       temperature: null,
@@ -77,61 +77,32 @@ export class GeminiAdapter extends BaseLLMAdapter {
     await this.checkError(response, 'Gemini');
 
     const reader = response.body!.getReader();
-    const decoder = new TextDecoder('utf-8');
-    let buffer = '';
     let finalUsageMetadata: any = null;
 
     try {
-      for await (const chunk of this.monitorStream(reader, signal)) {
-        buffer += decoder.decode(chunk, { stream: true });
+      for await (const line of this.readSSELines(reader, signal)) {
+        const trimmedLine = line.trim();
+        if (!trimmedLine || !trimmedLine.startsWith('data: ')) continue;
 
-        while (true) {
-          const textKeyIdx = buffer.indexOf('"text"');
-          if (textKeyIdx === -1) break;
+        const dataStr = trimmedLine.substring(6);
 
-          let startQuote = -1;
-          for (let i = textKeyIdx + 6; i < buffer.length; i++) {
-            if (buffer[i] === '"') {
-              startQuote = i;
-              break;
-            }
-          }
-          if (startQuote === -1) break;
+        try {
+          const data = JSON.parse(dataStr);
 
-          let endQuote = -1;
-          let escaped = false;
-          for (let i = startQuote + 1; i < buffer.length; i++) {
-            const char = buffer[i];
-            if (escaped) {
-              escaped = false;
-              continue;
-            }
-            if (char === '\\') {
-              escaped = true;
-              continue;
-            }
-            if (char === '"') {
-              endQuote = i;
-              break;
+          const parts = data.candidates?.[0]?.content?.parts;
+          if (Array.isArray(parts)) {
+            for (const part of parts) {
+              if (part.text) {
+                onChunk(part.text);
+              }
             }
           }
 
-          if (endQuote === -1) break;
-
-          const rawText = buffer.substring(startQuote + 1, endQuote);
-          try {
-            const text = JSON.parse(`"${rawText}"`);
-            if (text) onChunk(text);
-          } catch (e) {}
-
-          buffer = buffer.substring(endQuote + 1);
-        }
-
-        const usageMatch = buffer.match(/"usageMetadata"\s*:\s*(\{(?:[^{}]|(?:\{[^{}]*\}))*\})/);
-        if (usageMatch) {
-          try {
-            finalUsageMetadata = JSON.parse(usageMatch[1]);
-          } catch (e) {}
+          if (data.usageMetadata) {
+            finalUsageMetadata = data.usageMetadata;
+          }
+        } catch (e) {
+          console.warn('[GeminiAdapter] Stream JSON parse warning:', e);
         }
       }
 
