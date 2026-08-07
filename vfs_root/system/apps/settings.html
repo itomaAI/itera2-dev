@@ -417,6 +417,32 @@
                   <option value="x-large">Extra Large</option>
                 </select>
               </div>
+              <div>
+                <label class="block text-xs font-bold text-text-muted uppercase mb-1.5">System Output Font</label>
+                <select
+                  id="config-app-systemfont"
+                  data-category="appearance"
+                  data-key="typography.systemFont"
+                  class="w-full bg-card border border-border-main rounded-lg px-3 py-2 text-sm text-text-main focus:outline-none focus:border-primary transition cursor-pointer"
+                >
+                  <option value="mono">Monospace (Default)</option>
+                  <option value="sans">UI Sans-Serif</option>
+                </select>
+              </div>
+              <div>
+                <label class="block text-xs font-bold text-text-muted uppercase mb-1.5">System Output Font Size</label>
+                <select
+                  id="config-app-systemfontsize"
+                  data-category="appearance"
+                  data-key="typography.systemFontSize"
+                  class="w-full bg-card border border-border-main rounded-lg px-3 py-2 text-sm text-text-main focus:outline-none focus:border-primary transition cursor-pointer"
+                >
+                  <option value="xs">Extra Small (12px / Default)</option>
+                  <option value="sm">Small (14px)</option>
+                  <option value="base">Medium (16px)</option>
+                  <option value="lg">Large (18px)</option>
+                </select>
+              </div>
             </div>
           </div>
         </section>
@@ -489,6 +515,8 @@
           DOM('config-app-uifont').value = configs.appearance.typography?.uiFont || 'Inter';
           DOM('config-app-monofont').value = configs.appearance.typography?.monoFont || 'monospace';
           DOM('config-app-fontsize').value = configs.appearance.typography?.fontSize || 'medium';
+          DOM('config-app-systemfont').value = configs.appearance.typography?.systemFont || 'mono';
+          DOM('config-app-systemfontsize').value = configs.appearance.typography?.systemFontSize || 'xs';
           DOM('config-app-animations').checked = configs.appearance.layout?.animations !== false;
 
           await loadLlmProfiles(configs.llm.model || 'gemini-3.6-flash');

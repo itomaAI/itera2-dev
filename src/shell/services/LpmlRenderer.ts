@@ -151,13 +151,12 @@ export class LpmlRenderer {
 
     // コンテンツがないタグ（自己完結タグ）の表示
     if (!displayContent) {
-      return `<div class="text-xs font-mono py-1 px-2 rounded border ${colorClass} mb-2 inline-block opacity-80 text-text-main tex2jax_ignore" title="&lt;${tagName} /&gt;">${title}</div>`;
+      return `<div class="text-xs font-mono py-1 px-2 rounded border ${colorClass} mb-2 inline-block opacity-80 text-text-main" title="&lt;${tagName} /&gt;">${title}</div>`;
     }
 
     // コンテンツがあるタグ
-    // tex2jax_ignore: MathJaxのスキャン対象から除外し、数式を整形せず生テキストのまま表示する
     return `
-      <details ${openAttr} class="mb-2 rounded border ${colorClass} overflow-hidden group tex2jax_ignore">
+      <details ${openAttr} class="mb-2 rounded border ${colorClass} overflow-hidden group">
         <summary class="cursor-pointer py-1.5 px-2 text-xs font-mono font-bold text-text-main bg-overlay/5 hover:bg-overlay/10 select-none flex items-center gap-2 list-none [&::-webkit-details-marker]:hidden">
           <span class="group-open:rotate-90 transition-transform text-[10px]">▶</span> ${title}
         </summary>

@@ -366,7 +366,7 @@ export class ChatPanel {
     } else if (role === 'model') {
       div.className = `${baseClass} bg-card text-text-main border-border-main mr-4`;
     } else {
-      div.className = `${baseClass} bg-panel text-text-muted text-xs mx-8 font-mono border-border-main`;
+      div.className = `${baseClass} bg-panel text-text-muted chat-system-message mx-8 border-border-main`;
     }
 
     const header = document.createElement('div');
