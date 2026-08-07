@@ -256,20 +256,26 @@ export class ChatPanel {
   // Streaming
   // ==========================================
 
-  startStreaming() {
+  startStreaming(turnId?: string) {
     if (this.currentStreamEl && this.currentStreamEl.parentElement) {
-      this.currentStreamEl.parentElement.remove();
+      const parent = this.currentStreamEl.parentElement;
+      if (!parent.id || !parent.id.startsWith('turn-')) {
+        parent.remove();
+      }
     }
     this.currentStreamContent = '';
     this.currentStreamEl = null;
 
-    this._createStreamElement();
+    this._createStreamElement(turnId);
     this._scrollToBottom(true);
   }
 
-  private _createStreamElement() {
+  private _createStreamElement(turnId?: string) {
     if (!this.els.HISTORY) return;
     const div = document.createElement('div');
+    if (turnId) {
+      div.id = `turn-${turnId}`;
+    }
     div.className =
       'relative group p-3 rounded-lg text-sm mb-2 border border-border-main bg-card text-text-main mr-4 transition';
     div.innerHTML = `
@@ -300,7 +306,10 @@ export class ChatPanel {
 
   finalizeStreaming() {
     if (this.currentStreamEl && this.currentStreamEl.parentElement) {
-      this.currentStreamEl.parentElement.remove();
+      const parent = this.currentStreamEl.parentElement;
+      if (!parent.id || !parent.id.startsWith('turn-')) {
+        parent.remove();
+      }
     }
     this.currentStreamEl = null;
     this.currentStreamContent = '';

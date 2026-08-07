@@ -364,7 +364,7 @@ export class EventOrchestrator {
     this.engine.on('turn_start', (data: any) => {
       if (data.role === 'model') {
         chat.setProcessing(true);
-        chat.startStreaming();
+        chat.startStreaming(data.turnId);
       }
     });
 
@@ -373,7 +373,10 @@ export class EventOrchestrator {
     });
 
     this.engine.on('turn_end', (data: any) => {
-      chat.finalizeStreaming();
+      const role = data.role || (data.turn && data.turn.role);
+      if (role === 'model') {
+        chat.finalizeStreaming();
+      }
       const turn = data.turn || this.history.getLast();
       if (turn) {
         chat.appendTurn(turn);
