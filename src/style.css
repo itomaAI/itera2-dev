@@ -51,9 +51,16 @@ html[data-animations="false"] *, html[data-animations="false"] *::before, html[d
 .hljs-comment, .hljs-quote { color: rgb(var(--c-text-muted)); font-style: italic; }
 .hljs-number, .hljs-literal { color: rgb(var(--c-accent-warning)); }
 
+.chat-system-message {
+    font-family: var(--font-system-output, var(--font-mono));
+    font-size: var(--size-system-output, 0.75rem);
+}
+
 :root {
     --font-sans: 'Inter';
     --font-mono: monospace;
+    --font-system-output: var(--font-mono);
+    --size-system-output: 0.75rem;
 
     --c-bg-app: 17 24 39;
     --c-bg-panel: 31 41 55;

@@ -48,6 +48,13 @@ export class ThemeService {
       root.style.setProperty('--font-sans', uiFont);
       root.style.setProperty('--font-mono', monoFont);
 
+      const systemFont = appearance.typography?.systemFont || 'mono';
+      const fontMap: Record<string, string> = {
+        sans: 'var(--font-sans)',
+        mono: 'var(--font-mono)',
+      };
+      root.style.setProperty('--font-system-output', fontMap[systemFont] || systemFont);
+
       const sizeMap: Record<string, string> = {
         small: '14px',
         medium: '16px',
@@ -56,6 +63,15 @@ export class ThemeService {
       };
       const sizeStr = sizeMap[appearance.typography?.fontSize || 'medium'] || '16px';
       root.style.fontSize = sizeStr;
+
+      const systemFontSize = appearance.typography?.systemFontSize || 'xs';
+      const systemSizeMap: Record<string, string> = {
+        xs: '0.75rem',
+        sm: '0.875rem',
+        base: '1rem',
+        lg: '1.125rem',
+      };
+      root.style.setProperty('--size-system-output', systemSizeMap[systemFontSize] || '0.75rem');
 
       if (appearance.layout?.animations === false) {
         root.setAttribute('data-animations', 'false');
