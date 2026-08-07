@@ -101,9 +101,10 @@ export class EditorModal {
       return;
     }
 
+    const baseUrl = (import.meta.env.BASE_URL || './').replace(/\/$/, '');
     (window as any).require.config({
       paths: {
-        vs: 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.45.0/min/vs',
+        vs: `${baseUrl}/vendor/monaco/vs`,
       },
     });
 

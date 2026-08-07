@@ -6,6 +6,7 @@
 import type { VfsService } from '../../core/vfs/VfsService';
 import { USER_PRINCIPAL } from '../../core/vfs/types';
 import { GuestBridgeBuilder } from '../../api/GuestBridgeBuilder';
+import { HtmlToImageBuilder } from './HtmlToImageBuilder';
 import { resolveRelativePath } from '../../utils/path';
 
 interface CachedAsset {
@@ -45,17 +46,15 @@ export class GuestCompiler {
   }
 
   private _getScreenshotHelperCode(pid: string): string {
+    // CDNではなく、バンドル済みライブラリのBlob URLを注入する
+    const libUrl = HtmlToImageBuilder.getBlobUrl();
     return `
-<script src="https://cdnjs.cloudflare.com/ajax/libs/html-to-image/1.11.11/html-to-image.min.js"></script>
+<script src="${libUrl}"></script>
 <script>
 window.addEventListener('message', async (e) => {
     if (e.data.action === 'CAPTURE') {
         try {
-            let attempts = 0;
-            while (typeof window.htmlToImage === 'undefined' && attempts < 20) {
-                await new Promise(r => setTimeout(r, 100));
-                attempts++;
-            }
+            // ライブラリはBlob URLの同期スクリプトとして先に読み込まれるため待機は不要
             if (typeof window.htmlToImage === 'undefined') throw new Error('html-to-image failed to load');
             
             const data = await window.htmlToImage.toPng(document.body, { 

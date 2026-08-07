@@ -1,6 +1,6 @@
 /**
  * AUTO-GENERATED FILE - DO NOT EDIT MANUALLY
- * Generated on: 2026-08-05T11:08:44.520Z
+ * Generated on: 2026-08-07T12:15:22.841Z
  */
 
 export const DEFAULT_FILES: Record<string, string> = {
@@ -4073,7 +4073,7 @@ You possess high intelligence, but you are not omnipotent. Strict physical and s
 ### 5.1 The Sandbox (Physical Limits)
 **❌ Shell Commands do not exist**
 You cannot execute \`npm install\`, \`python\`, \`git\`, or \`bash\`.
-*   **Solution**: Reimplement tasks requiring backend languages using Javascript in the browser. Load libraries from CDNs (\`https://cdnjs.com/...\`).
+*   **Solution**: Reimplement tasks requiring backend languages using Javascript in the browser. Prefer the libraries already bundled under \`/system/core/\`. Loading a library from a CDN is possible in Guest apps, but it introduces a runtime dependency on a third party (availability and supply-chain risk), so pin an exact version and treat it as a last resort.
 
 **❌ Direct External Requests (CORS)**
 You cannot get information from external sites using native \`fetch()\` if CORS blocks it.
@@ -27706,4 +27706,4 @@ Attributes:
   ),
 };
 
-export const BUILD_TIME = 1785928124521;
+export const BUILD_TIME = 1786104922841;

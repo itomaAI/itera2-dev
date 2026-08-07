@@ -4,14 +4,21 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "predev": "node scripts/build_defaults.js",
+    "predev": "node scripts/copy_vendor.js && node scripts/build_defaults.js",
     "dev": "vite",
-    "prebuild": "node scripts/build_defaults.js",
+    "prebuild": "node scripts/copy_vendor.js && node scripts/build_defaults.js",
     "build": "tsc && vite build",
     "preview": "vite preview",
     "format": "prettier --write \"src/**/*.{ts,tsx}\" \"vfs_root/**/*.{html,js,ts,tsx}\" \"*.{js,ts,html}\"",
     "test": "vitest run",
     "test:watch": "vitest"
+  },
+  "dependencies": {
+    "highlight.js": "^11.11.1",
+    "html-to-image": "^1.11.13",
+    "jszip": "^3.10.1",
+    "mathjax": "^3.2.2",
+    "monaco-editor": "0.45.0"
   },
   "devDependencies": {
     "autoprefixer": "^10.5.2",
