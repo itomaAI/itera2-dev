@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
     <title>Itera OS v2</title>
     <link rel="icon" type="image/svg+xml" href="/assets/icon.svg" />
-    <!-- MathJax & Highlight.js CDN, JSZip -->
+    <!-- MathJax のみ CDN 読み込み（highlight.js / JSZip は npm 依存としてバンドル済み） -->
     <script>
       window.MathJax = {
         tex: {
@@ -18,8 +18,6 @@
       };
     </script>
     <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.45.0/min/vs/loader.min.js"></script>
 
     <link rel="stylesheet" href="/src/style.css" />

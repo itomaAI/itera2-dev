@@ -6,6 +6,8 @@
     "types": ["vite/client"],
     "allowArbitraryExtensions": true,
     "skipLibCheck": true,
+    // jszip の型定義が `export = JSZip` (CommonJS形式) のため、default import には必須
+    "esModuleInterop": true,
     "strict": true,
 
     /* Bundler mode */

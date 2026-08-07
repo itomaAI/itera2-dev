@@ -9,8 +9,7 @@ import type { FileAssociationResolver } from '../../core/sys/FileAssociationReso
 import type { Principal, VfsStat } from '../../core/vfs/types';
 import { VfsEventFormatter, type VfsEventItem } from '../../core/vfs/VfsEventFormatter';
 import { TreeView } from './TreeView';
-
-declare const JSZip: any;
+import JSZip from 'jszip';
 
 declare global {
   interface Window {
@@ -793,11 +792,6 @@ export class Explorer {
         if (window.AppUI) window.AppUI.notify(`Download failed: ${e.message}`, 'error');
         return;
       }
-    }
-
-    if (typeof JSZip === 'undefined') {
-      if (window.AppUI) window.AppUI.notify('System Error: JSZip library not loaded.', 'error');
-      return;
     }
 
     if (window.AppUI) window.AppUI.showLoading(`Compressing ${normalized.length} item(s)...`);

@@ -8,8 +8,7 @@ import type { NodeStore } from '../../core/vfs/NodeStore';
 import type { ContentStore } from '../../core/vfs/ContentStore';
 import { VfsFsck } from '../../core/vfs/VfsFsck';
 import { SYSTEM_PRINCIPAL } from '../../core/vfs/types';
-
-declare const JSZip: any;
+import JSZip from 'jszip';
 
 const DOM_IDS = {
   MODAL: 'system-modal',
@@ -106,11 +105,6 @@ export class SystemModal {
 
   // --- ZIP Export ---
   private async _handleExport() {
-    if (typeof JSZip === 'undefined') {
-      if (window.AppUI) window.AppUI.notify('JSZip library not loaded.', 'error');
-      return;
-    }
-
     if (window.AppUI) window.AppUI.showLoading('Creating Backup...');
 
     try {
@@ -168,11 +162,6 @@ export class SystemModal {
     const input = e.target as HTMLInputElement;
     const file = input.files?.[0];
     if (!file) return;
-
-    if (typeof JSZip === 'undefined') {
-      if (window.AppUI) window.AppUI.notify('JSZip library not loaded.', 'error');
-      return;
-    }
 
     const res = await window.AppUI?.showMessageBox({
       title: 'Restore Backup',

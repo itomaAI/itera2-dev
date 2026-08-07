@@ -9,6 +9,7 @@ import type { Principal } from '../../core/vfs/types';
 import { USER_PRINCIPAL } from '../../core/vfs/types';
 import type { LpmlRenderer } from '../services/LpmlRenderer';
 import { renderMarkdownTables } from '../../utils/markdownTable';
+import hljs from 'highlight.js/lib/common';
 
 const DOM_IDS = {
   HISTORY: 'chat-history',
@@ -415,15 +416,13 @@ export class ChatPanel {
       this.els.HISTORY!.appendChild(div);
     }
 
-    // 外部ライブラリ（MathJax, Highlight.js）の適用
+    // 外部ライブラリの適用（MathJaxはCDN、Highlight.jsはバンドル済み）
     if ((window as any).MathJax) {
       (window as any).MathJax.typesetPromise([body]).catch((e: any) => console.warn('MathJax Error:', e));
     }
-    if ((window as any).hljs) {
-      body.querySelectorAll('pre code').forEach((block) => {
-        (window as any).hljs.highlightElement(block);
-      });
-    }
+    body.querySelectorAll('pre code').forEach((block) => {
+      hljs.highlightElement(block as HTMLElement);
+    });
   }
 
   private _renderArrayContent(container: HTMLElement, contentArray: any[], role: string) {
