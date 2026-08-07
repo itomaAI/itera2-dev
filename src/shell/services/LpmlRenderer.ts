@@ -3,8 +3,6 @@
  * Itera OS v2: LPML (LLM-Prompting Markup Language) Renderer
  */
 
-import { renderMarkdownTables } from '../../utils/markdownTable';
-
 export class LpmlRenderer {
   constructor() {}
 
@@ -140,22 +138,11 @@ export class LpmlRenderer {
 
     const openAttr = isOpen ? 'open' : '';
 
-    // フェンス付きコードブロック（```...```）内の "|" がテーブルとして誤検出されないよう、
-    // 一時的にプレースホルダーへ退避してから復元する。
-    // NOTE: コードブロック自体の <pre><code> 整形は本タグ（生ストリーム表示）では未実装のまま
-    // （別課題として扱う）。ここではテーブル誤爆の防止のみを行う。
-    const codeFences: string[] = [];
-    let displayContent = content.trim().replace(/```[\s\S]*?```/g, (m) => {
-      const placeholder = `__CODEFENCE_${codeFences.length}__`;
-      codeFences.push(m);
-      return placeholder;
-    });
-
-    displayContent = renderMarkdownTables(displayContent);
-
-    codeFences.forEach((original, idx) => {
-      displayContent = displayContent.replace(`__CODEFENCE_${idx}__`, original);
-    });
+    // NOTE: このタグボックス（LLMの生ストリーム表示）は意図的に「未加工のテキスト」を
+    // 見せる場所として扱う。Markdownテーブル変換やMathJaxによる数式整形は行わない
+    // （ユーザー指示により2026-08-07に撤回。system側の再表示 _formatSystemMessage の
+    // テーブル変換は維持する）。
+    let displayContent = content.trim();
 
     // 属性がある場合は薄く表示
     if (attributes.trim()) {
@@ -164,12 +151,13 @@ export class LpmlRenderer {
 
     // コンテンツがないタグ（自己完結タグ）の表示
     if (!displayContent) {
-      return `<div class="text-xs font-mono py-1 px-2 rounded border ${colorClass} mb-2 inline-block opacity-80 text-text-main" title="&lt;${tagName} /&gt;">${title}</div>`;
+      return `<div class="text-xs font-mono py-1 px-2 rounded border ${colorClass} mb-2 inline-block opacity-80 text-text-main tex2jax_ignore" title="&lt;${tagName} /&gt;">${title}</div>`;
     }
 
     // コンテンツがあるタグ
+    // tex2jax_ignore: MathJaxのスキャン対象から除外し、数式を整形せず生テキストのまま表示する
     return `
-      <details ${openAttr} class="mb-2 rounded border ${colorClass} overflow-hidden group">
+      <details ${openAttr} class="mb-2 rounded border ${colorClass} overflow-hidden group tex2jax_ignore">
         <summary class="cursor-pointer py-1.5 px-2 text-xs font-mono font-bold text-text-main bg-overlay/5 hover:bg-overlay/10 select-none flex items-center gap-2 list-none [&::-webkit-details-marker]:hidden">
           <span class="group-open:rotate-90 transition-transform text-[10px]">▶</span> ${title}
         </summary>
