@@ -3,6 +3,8 @@
  * Itera OS v2: LPML (LLM-Prompting Markup Language) Renderer
  */
 
+import { renderMarkdownTables } from '../../utils/markdownTable';
+
 export class LpmlRenderer {
   constructor() {}
 
@@ -137,7 +139,23 @@ export class LpmlRenderer {
     }
 
     const openAttr = isOpen ? 'open' : '';
-    let displayContent = content.trim();
+
+    // フェンス付きコードブロック（```...```）内の "|" がテーブルとして誤検出されないよう、
+    // 一時的にプレースホルダーへ退避してから復元する。
+    // NOTE: コードブロック自体の <pre><code> 整形は本タグ（生ストリーム表示）では未実装のまま
+    // （別課題として扱う）。ここではテーブル誤爆の防止のみを行う。
+    const codeFences: string[] = [];
+    let displayContent = content.trim().replace(/```[\s\S]*?```/g, (m) => {
+      const placeholder = `__CODEFENCE_${codeFences.length}__`;
+      codeFences.push(m);
+      return placeholder;
+    });
+
+    displayContent = renderMarkdownTables(displayContent);
+
+    codeFences.forEach((original, idx) => {
+      displayContent = displayContent.replace(`__CODEFENCE_${idx}__`, original);
+    });
 
     // 属性がある場合は薄く表示
     if (attributes.trim()) {

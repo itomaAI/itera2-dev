@@ -8,6 +8,7 @@ import type { Turn } from '../../core/state/HistoryManager';
 import type { Principal } from '../../core/vfs/types';
 import { USER_PRINCIPAL } from '../../core/vfs/types';
 import type { LpmlRenderer } from '../services/LpmlRenderer';
+import { renderMarkdownTables } from '../../utils/markdownTable';
 
 const DOM_IDS = {
   HISTORY: 'chat-history',
@@ -511,13 +512,26 @@ export class ChatPanel {
 
     let safeText = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
+    // フェンス付きコードブロックは、テーブル検出（"|"を含む行の走査）が誤爆しないよう
+    // 一時的にプレースホルダーへ退避してから復元する（Translator._parseToTreeの
+    // __PROTECTED_...__ パターンと同じ考え方）。
+    const codeBlocks: string[] = [];
     safeText = safeText.replace(/```(?:([a-zA-Z0-9_]+)\n)?([\s\S]*?)```/g, (_match, lang, code) => {
       const langClass = lang ? `language-${lang}` : 'language-plaintext';
-      return `<pre class="bg-card border border-border-main p-2 rounded mt-1 mb-1 overflow-x-auto text-text-main font-mono text-[10px] leading-relaxed font-normal"><code class="${langClass}">${code}</code></pre>`;
+      const html = `<pre class="bg-card border border-border-main p-2 rounded mt-1 mb-1 overflow-x-auto text-text-main font-mono text-[10px] leading-relaxed font-normal"><code class="${langClass}">${code}</code></pre>`;
+      const placeholder = `__CODEBLOCK_${codeBlocks.length}__`;
+      codeBlocks.push(html);
+      return placeholder;
     });
+
+    safeText = renderMarkdownTables(safeText);
 
     safeText = safeText.replace(/`([^`]+)`/g, (_match, code) => {
       return `<code class="bg-app text-primary px-1 rounded font-mono text-[11px] font-normal">${code}</code>`;
+    });
+
+    codeBlocks.forEach((html, idx) => {
+      safeText = safeText.replace(`__CODEBLOCK_${idx}__`, html);
     });
 
     return safeText;
