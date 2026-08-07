@@ -591,10 +591,15 @@
         'config-app-uifont',
         'config-app-monofont',
         'config-app-fontsize',
+        'config-app-systemfont',
+        'config-app-systemfontsize',
         'config-app-animations',
       ].forEach((id) => {
         const el = DOM(id);
-        if (el) el.addEventListener('input', handleInput);
+        if (el) {
+          el.addEventListener('input', handleInput);
+          el.addEventListener('change', handleInput);
+        }
       });
 
       // --- LLM Profile UI ---
