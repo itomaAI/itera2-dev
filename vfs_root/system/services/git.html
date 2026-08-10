@@ -10,7 +10,7 @@
       import http from 'https://esm.sh/isomorphic-git@1.24.5/http/web';
 
       // ==========================================
-      // 1. FS Adapter for isomorphic-git
+      // 1. Robust FS Adapter for isomorphic-git
       // ==========================================
       const IgitFs = {
         promises: {
@@ -18,19 +18,29 @@
             const encoding = (opts && typeof opts === 'object' ? opts.encoding : opts) || 'binary';
             const isText = encoding === 'utf8' || encoding === 'utf-8';
             try {
-              const data = await MetaOS.fs.read(filepath, { encoding: isText ? undefined : 'binary' });
-              return isText ? data : new Uint8Array(data);
+              if (isText) {
+                const data = await MetaOS.fs.read(filepath);
+                return typeof data === 'string' ? data : new TextDecoder().decode(data);
+              }
+              const data = await MetaOS.fs.read(filepath, { encoding: 'binary' });
+              if (data instanceof Uint8Array) return data;
+              if (data instanceof ArrayBuffer) return new Uint8Array(data);
+              return new Uint8Array(data);
             } catch (e) {
-              const err = new Error(e.message);
+              const err = new Error(e.message || 'File not found');
               err.code = 'ENOENT';
               throw err;
             }
           },
-          async writeFile(filepath, data, opts) {
+          async writeFile(filepath, data) {
             try {
-              await MetaOS.fs.write(filepath, data, { overwrite: true, silent: true });
+              let content = data;
+              if (data instanceof Uint8Array) {
+                content = new Uint8Array(data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength));
+              }
+              await MetaOS.fs.write(filepath, content, { overwrite: true, silent: true });
             } catch (e) {
-              const err = new Error(e.message);
+              const err = new Error(e.message || 'Write failed');
               err.code = 'ENOENT';
               throw err;
             }
@@ -39,7 +49,7 @@
             try {
               await MetaOS.fs.delete(filepath, { permanent: true });
             } catch (e) {
-              const err = new Error(e.message);
+              const err = new Error(e.message || 'Delete failed');
               err.code = 'ENOENT';
               throw err;
             }
@@ -52,24 +62,34 @@
                 err.code = 'ENOTDIR';
                 throw err;
               }
-              const stats = await MetaOS.fs.list(filepath, { detail: true });
-              return stats.map((s) => s.name);
+              const list = await MetaOS.fs.list(filepath, { detail: true });
+              if (!Array.isArray(list)) return [];
+              return list
+                .map((s) => {
+                  if (!s) return null;
+                  if (typeof s === 'string') return s.split('/').pop();
+                  if (s.name) return s.name;
+                  if (s.path) return s.path.split('/').pop();
+                  return null;
+                })
+                .filter(Boolean);
             } catch (e) {
-              const err = new Error(e.message);
-              err.code = e.code === 'ENOTDIR' ? 'ENOTDIR' : 'ENOENT';
+              if (e.code === 'ENOTDIR') throw e;
+              const err = new Error(e.message || 'ENOENT');
+              err.code = 'ENOENT';
               throw err;
             }
           },
           async mkdir(filepath) {
             try {
               await MetaOS.fs.mkdir(filepath);
-            } catch (e) {} // 既存なら無視
+            } catch (e) {}
           },
           async rmdir(filepath) {
             try {
               await MetaOS.fs.delete(filepath, { permanent: true });
             } catch (e) {
-              const err = new Error(e.message);
+              const err = new Error(e.message || 'Delete failed');
               err.code = 'ENOENT';
               throw err;
             }
@@ -78,19 +98,21 @@
             try {
               const st = await MetaOS.fs.stat(filepath);
               const isDir = st.kind === 'directory';
+              const mtime = Number(st.updatedAt);
+              const ctime = Number(st.createdAt);
               return {
                 type: isDir ? 'dir' : 'file',
                 mode: isDir ? 0o040000 : 0o100644,
-                size: st.size || 0,
+                size: Number(st.size) || 0,
                 ino: 0,
-                mtimeMs: st.updatedAt,
-                ctimeMs: st.createdAt,
+                mtimeMs: isNaN(mtime) ? Date.now() : mtime,
+                ctimeMs: isNaN(ctime) ? Date.now() : ctime,
                 isDirectory: () => isDir,
                 isFile: () => !isDir,
                 isSymbolicLink: () => false,
               };
             } catch (e) {
-              const err = new Error(e.message);
+              const err = new Error(e.message || 'ENOENT');
               err.code = 'ENOENT';
               throw err;
             }
@@ -99,10 +121,14 @@
             return this.stat(filepath);
           },
           async readlink() {
-            throw new Error('Symlinks not supported');
+            const err = new Error('Symlinks not supported');
+            err.code = 'ENOSYS';
+            throw err;
           },
           async symlink() {
-            throw new Error('Symlinks not supported');
+            const err = new Error('Symlinks not supported');
+            err.code = 'ENOSYS';
+            throw err;
           },
         },
       };
@@ -113,22 +139,21 @@
       async function initDaemon() {
         if (!window.MetaOS) return setTimeout(initDaemon, 100);
 
-        // ★ 同時実行を防ぐための非同期キュー
-        let gitQueue = Promise.resolve();
+        let gitLock = Promise.resolve();
 
         const definition = `<define_tag name="git">
 Executes a Git command.
 Attributes:
-- command (required): init | clone | status | add | commit | push | pull | log | checkout | branch
+- command (required): init | clone | status | add | commit | push | pull | fetch | log | checkout | branch | merge | tag
 - dir (required): Target directory path in VFS (e.g., 'projects/my_app').
-- url: Repository URL (for clone/pull/push).
+- url: Repository URL (for clone/pull/push/fetch).
 - filepath: File to add or checkout. Use '.' for all files.
 - message: Commit message.
 - author_name: Name for commit.
 - author_email: Email for commit.
-- token: Personal Access Token (PAT) for remote auth.
-- ref: Branch name.
-- depth: Clone depth (default 1 to save memory).
+- token: Personal Access Token (PAT). 省略時は VFS の認証情報を自動参照する。
+- ref: Branch or tag name.
+- depth: Clone/fetch depth (default 1 to save memory).
 - corsProxy: CORS proxy URL (default: 'https://cors.isomorphic-git.org').
 </define_tag>`;
 
@@ -137,12 +162,25 @@ Attributes:
           description: 'Git version control operations',
           definition,
           handler: (p) => {
-            // ★ キューの最後尾に自身の処理を連結する (必ず順番に実行される)
             return new Promise((resolve) => {
-              gitQueue = gitQueue
+              gitLock = gitLock
                 .then(async () => {
                   const dir = p.dir || '';
                   const corsProxy = p.corsProxy || 'https://cors.isomorphic-git.org';
+
+                  // Credential resolution fallback
+                  if (!p.token) {
+                    for (const credPath of ['system/config/credentials.json', 'memory/credentials.json']) {
+                      try {
+                        const cred = JSON.parse(await MetaOS.fs.read(credPath));
+                        if (cred && cred.github && cred.github.pat) {
+                          p.token = cred.github.pat;
+                          break;
+                        }
+                      } catch (e) {}
+                    }
+                  }
+
                   const onAuth = () => ({ username: p.token });
 
                   let log = '';
@@ -161,11 +199,12 @@ Attributes:
                           dir,
                           url: p.url,
                           corsProxy,
-                          depth: p.depth ? parseInt(p.depth) : 1, // Default Shallow Clone
+                          ref: p.ref || undefined,
+                          depth: p.depth ? parseInt(p.depth) : 1,
                           singleBranch: true,
                           onAuth: p.token ? onAuth : undefined,
                         });
-                        log = `Cloned ${p.url} into ${dir}`;
+                        log = `Cloned ${p.url} into ${dir}` + (p.ref ? ` (ref: ${p.ref})` : ' (default branch)');
                         break;
 
                       case 'status':
@@ -235,6 +274,19 @@ Attributes:
                         log = `Pulled successfully`;
                         break;
 
+                      case 'fetch':
+                        await git.fetch({
+                          fs: IgitFs,
+                          http,
+                          dir,
+                          corsProxy,
+                          ref: p.ref || undefined,
+                          depth: p.depth ? parseInt(p.depth) : 1,
+                          onAuth: p.token ? onAuth : undefined,
+                        });
+                        log = `Fetched successfully`;
+                        break;
+
                       case 'log':
                         const commits = await git.log({ fs: IgitFs, dir, depth: p.depth ? parseInt(p.depth) : 5 });
                         log = commits
@@ -248,8 +300,29 @@ Attributes:
                         break;
 
                       case 'checkout':
-                        await git.checkout({ fs: IgitFs, dir, ref: p.ref });
-                        log = `Checked out ${p.ref}`;
+                        if (p.filepath) {
+                          await git.checkout({ fs: IgitFs, dir, filepath: p.filepath });
+                          log = `Checked out file ${p.filepath}`;
+                        } else {
+                          await git.checkout({ fs: IgitFs, dir, ref: p.ref });
+                          log = `Checked out branch/ref ${p.ref}`;
+                        }
+                        break;
+
+                      case 'merge':
+                        const mergeRes = await git.merge({
+                          fs: IgitFs,
+                          dir,
+                          author: { name: p.author_name || 'Itera AI', email: p.author_email || 'ai@itera.os' },
+                          ours: 'HEAD',
+                          theirs: p.ref,
+                        });
+                        log = `Merged ${p.ref} into HEAD (OID: ${mergeRes.oid ? mergeRes.oid.substring(0, 7) : 'clean'})`;
+                        break;
+
+                      case 'tag':
+                        await git.tag({ fs: IgitFs, dir, ref: p.ref });
+                        log = `Tagged ${p.ref}`;
                         break;
 
                       default:
@@ -261,7 +334,6 @@ Attributes:
                   }
                 })
                 .catch((e) => {
-                  // キュー自体がコケて停止しないように保護
                   resolve({ error: true, log: `Queue Error: ${e.message}`, ui: `❌ Git Error` });
                 });
             });
