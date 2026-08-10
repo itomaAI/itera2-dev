@@ -108,19 +108,22 @@
           return idx > 0 ? fullPath.substring(0, idx) : '';
         }
 
-        // Best-effort recursive directory creation. Swallows "already exists" (and any other)
-        // errors per-segment so it never aborts the caller's reconciliation loop.
-        async function ensureDirRecursive(dirPath) {
+        // Best-effort recursive directory creation with knownDirs memoization.
+        // Skipping mkdir calls for directories already known to exist eliminates
+        // tens of thousands of redundant IPC round-trips over large trees.
+        async function ensureDirRecursive(dirPath, knownDirs) {
           if (!dirPath) return;
           const segments = dirPath.split('/').filter(Boolean);
           let cur = '';
           for (const seg of segments) {
             cur = cur ? `${cur}/${seg}` : seg;
+            if (knownDirs && knownDirs.has(cur)) continue;
             try {
               await MetaOS.fs.mkdir(cur);
             } catch (e) {
-              // Expected when the directory already exists; ignore.
+              // Ignore "already exists"
             }
+            if (knownDirs) knownDirs.add(cur);
           }
         }
 
@@ -154,10 +157,18 @@
             return;
           }
 
-          const ignorePatterns = await getIgnorePatterns();
+          const rawIgnorePatterns = await getIgnorePatterns();
+          const compiledIgnore = compileIgnorePatterns(rawIgnorePatterns);
           const localState = await MetaOS.fs.getSyncState(mountPath);
           const anchor = await getAnchor();
           const newAnchor = { ...anchor };
+
+          const knownDirs = new Set([mountPath]);
+          for (const [p, info] of Object.entries(localState)) {
+            if (info && info.kind === 'directory') {
+              knownDirs.add(p);
+            }
+          }
 
           const allRelPathsSet = new Set([
             ...Object.keys(remoteMeta),
@@ -174,9 +185,15 @@
             return a < b ? -1 : a > b ? 1 : 0;
           });
 
+          let processedCount = 0;
           for (const relPath of sortedRelPaths) {
             if (!relPath || relPath.startsWith('.')) continue;
-            if (isIgnored(relPath, ignorePatterns)) continue;
+            if (isIgnoredCompiled(relPath, compiledIgnore)) continue;
+
+            processedCount++;
+            if (processedCount % 50 === 0) {
+              await new Promise((resolve) => setTimeout(resolve, 0));
+            }
 
             try {
               const fullPath = `${mountPath}/${relPath}`;
@@ -218,10 +235,10 @@
               // 3. New on Remote (Pull Create)
               if (r && !l && !a) {
                 if (r.kind === 'directory') {
-                  await ensureDirRecursive(fullPath);
+                  await ensureDirRecursive(fullPath, knownDirs);
                   newAnchor[relPath] = { kind: 'directory', size: 0, updatedAt: r.updatedAt, hash: null };
                 } else {
-                  await ensureDirRecursive(parentPath(fullPath));
+                  await ensureDirRecursive(parentPath(fullPath), knownDirs);
                   await MetaOS.fs.createStub(fullPath, {
                     size: r.size,
                     updatedAt: r.updatedAt,
@@ -268,9 +285,9 @@
               // 6. Modified Remotely (Pull Update)
               if (l && r && isSameHash(l, a) && !isSameHash(r, a)) {
                 if (r.kind === 'directory') {
-                  await ensureDirRecursive(fullPath);
+                  await ensureDirRecursive(fullPath, knownDirs);
                 } else {
-                  await ensureDirRecursive(parentPath(fullPath));
+                  await ensureDirRecursive(parentPath(fullPath), knownDirs);
                   await MetaOS.fs.createStub(fullPath, {
                     size: r.size,
                     updatedAt: r.updatedAt,
