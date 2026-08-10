@@ -40,6 +40,90 @@
           await MetaOS.fs.write(ANCHOR_PATH, JSON.stringify(a, null, 2), { overwrite: true, silent: true });
         }
 
+        // ---- Ignore Pattern Support ----
+        // Patterns follow a minimal glob syntax (mirrors Python fnmatch semantics used server-side):
+        //  - '*' matches any sequence of characters (including '/').
+        //  - '?' matches a single character.
+        //  - A pattern containing '/' is matched against the FULL relative path.
+        //  - A pattern with no '/' is matched against ANY path segment (basename-style match).
+        //  - A trailing '/' marks a directory-style pattern (slash is stripped before matching).
+        async function getIgnorePatterns() {
+          try {
+            const confData = await MetaOS.fs.read('system/config/local_sync.json');
+            const conf = JSON.parse(confData);
+            return Array.isArray(conf.ignorePatterns) ? conf.ignorePatterns : [];
+          } catch (e) {
+            return [];
+          }
+        }
+
+        function globToRegex(glob) {
+          let re = '';
+          for (let i = 0; i < glob.length; i++) {
+            const c = glob[i];
+            if (c === '*') re += '.*';
+            else if (c === '?') re += '.';
+            else if ('.+^$()[]{}|\\'.includes(c)) re += '\\' + c;
+            else re += c;
+          }
+          return new RegExp('^' + re + '$');
+        }
+
+        function isIgnored(relPath, patterns) {
+          if (!patterns || patterns.length === 0) return false;
+          const parts = relPath.split('/');
+          for (let raw of patterns) {
+            let pat = (raw || '').trim();
+            if (!pat || pat.startsWith('#')) continue;
+            if (pat.endsWith('/')) pat = pat.slice(0, -1);
+            if (!pat) continue;
+            try {
+              if (pat.includes('/')) {
+                if (globToRegex(pat).test(relPath)) return true;
+              } else {
+                const re = globToRegex(pat);
+                if (parts.some((seg) => re.test(seg))) return true;
+              }
+            } catch (e) {}
+          }
+          return false;
+        }
+
+        async function pushIgnoreConfigToServer() {
+          try {
+            const patterns = await getIgnorePatterns();
+            await fetch(`${serverUrl}/api/config`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ ignorePatterns: patterns }),
+            });
+          } catch (e) {
+            // Server may be offline at daemon boot time; sync_app.html also
+            // pushes this config directly when the user saves settings.
+          }
+        }
+
+        function parentPath(fullPath) {
+          const idx = fullPath.lastIndexOf('/');
+          return idx > 0 ? fullPath.substring(0, idx) : '';
+        }
+
+        // Best-effort recursive directory creation. Swallows "already exists" (and any other)
+        // errors per-segment so it never aborts the caller's reconciliation loop.
+        async function ensureDirRecursive(dirPath) {
+          if (!dirPath) return;
+          const segments = dirPath.split('/').filter(Boolean);
+          let cur = '';
+          for (const seg of segments) {
+            cur = cur ? `${cur}/${seg}` : seg;
+            try {
+              await MetaOS.fs.mkdir(cur);
+            } catch (e) {
+              // Expected when the directory already exists; ignore.
+            }
+          }
+        }
+
         function triggerSync() {
           clearTimeout(syncTimer);
           syncTimer = setTimeout(async () => {
@@ -70,69 +154,87 @@
             return;
           }
 
+          const ignorePatterns = await getIgnorePatterns();
           const localState = await MetaOS.fs.getSyncState(mountPath);
           const anchor = await getAnchor();
           const newAnchor = { ...anchor };
 
-          const allRelPaths = new Set([
+          const allRelPathsSet = new Set([
             ...Object.keys(remoteMeta),
             ...Object.keys(localState).map((p) => p.substring(mountPath.length + 1)),
             ...Object.keys(anchor),
           ]);
 
-          for (const relPath of allRelPaths) {
+          // Process shallower paths first so that parent directories are always
+          // created/stubbed before their children are attempted.
+          const sortedRelPaths = Array.from(allRelPathsSet).sort((a, b) => {
+            const da = a.split('/').length;
+            const db = b.split('/').length;
+            if (da !== db) return da - db;
+            return a < b ? -1 : a > b ? 1 : 0;
+          });
+
+          for (const relPath of sortedRelPaths) {
             if (!relPath || relPath.startsWith('.')) continue;
-            const fullPath = `${mountPath}/${relPath}`;
-            const r = remoteMeta[relPath];
-            const l = localState[fullPath];
-            const a = anchor[relPath];
+            if (isIgnored(relPath, ignorePatterns)) continue;
 
-            const isSameHash = (x, y) => (x?.hash || null) === (y?.hash || null);
+            try {
+              const fullPath = `${mountPath}/${relPath}`;
+              const r = remoteMeta[relPath];
+              const l = localState[fullPath];
+              const a = anchor[relPath];
 
-            if (!l && !r) continue;
+              const isSameHash = (x, y) => (x?.hash || null) === (y?.hash || null);
 
-            // 1. Tombstone on Remote
-            if (r && r.isDeleted) {
-              if (l) {
-                try {
-                  await MetaOS.fs.delete(fullPath, { permanent: true });
-                } catch (e) {}
-              }
-              delete newAnchor[relPath];
-              continue;
-            }
+              if (!l && !r) continue;
 
-            // 2. Deleted Locally (Push Delete)
-            if (!l && r && a && isSameHash(r, a)) {
-              try {
-                const delRes = await fetch(`${serverUrl}/api/file/${relPath}`, {
-                  method: 'DELETE',
-                  headers: a.hash ? { 'X-Expected-Hash': a.hash } : {},
-                });
-                if (delRes.ok) {
-                  delete newAnchor[relPath];
+              // 1. Tombstone on Remote
+              if (r && r.isDeleted) {
+                if (l) {
+                  try {
+                    await MetaOS.fs.delete(fullPath, { permanent: true });
+                  } catch (e) {}
                 }
-              } catch (e) {
-                console.error('[SyncDaemon] Delete push failed:', relPath, e);
+                delete newAnchor[relPath];
+                continue;
               }
-              continue;
-            }
 
-            // 3. New on Remote (Pull Create)
-            if (r && !l && !a) {
-              await MetaOS.fs.createStub(fullPath, {
-                size: r.size,
-                updatedAt: r.updatedAt,
-                hash: r.hash,
-              });
-              newAnchor[relPath] = { kind: r.kind, size: r.size, updatedAt: r.updatedAt, hash: r.hash };
-              continue;
-            }
-
-            // 4. New Locally (Push Create)
-            if (l && !r && !a) {
-              if (l.kind !== 'directory') {
+              // 2. Deleted Locally (Push Delete)
+              if (!l && r && a && isSameHash(r, a)) {
                 try {
+                  const delRes = await fetch(`${serverUrl}/api/file/${relPath}`, {
+                    method: 'DELETE',
+                    headers: a.hash ? { 'X-Expected-Hash': a.hash } : {},
+                  });
+                  if (delRes.ok) {
+                    delete newAnchor[relPath];
+                  }
+                } catch (e) {
+                  console.error('[SyncDaemon] Delete push failed:', relPath, e);
+                }
+                continue;
+              }
+
+              // 3. New on Remote (Pull Create)
+              if (r && !l && !a) {
+                if (r.kind === 'directory') {
+                  await ensureDirRecursive(fullPath);
+                  newAnchor[relPath] = { kind: 'directory', size: 0, updatedAt: r.updatedAt, hash: null };
+                } else {
+                  await ensureDirRecursive(parentPath(fullPath));
+                  await MetaOS.fs.createStub(fullPath, {
+                    size: r.size,
+                    updatedAt: r.updatedAt,
+                    hash: r.hash,
+                  });
+                  newAnchor[relPath] = { kind: r.kind, size: r.size, updatedAt: r.updatedAt, hash: r.hash };
+                }
+                continue;
+              }
+
+              // 4. New Locally (Push Create)
+              if (l && !r && !a) {
+                if (l.kind !== 'directory') {
                   const u8 = await MetaOS.fs.read(fullPath, { encoding: 'binary' });
                   const res = await fetch(`${serverUrl}/api/file/${relPath}`, {
                     method: 'PUT',
@@ -142,17 +244,13 @@
                     const data = await res.json();
                     newAnchor[relPath] = { kind: l.kind, size: l.size, updatedAt: data.updatedAt, hash: data.hash };
                   }
-                } catch (e) {
-                  console.error('[SyncDaemon] New file push failed:', relPath, e);
                 }
+                continue;
               }
-              continue;
-            }
 
-            // 5. Modified Locally (Push Update)
-            if (l && r && !isSameHash(l, a) && isSameHash(r, a)) {
-              if (l.kind !== 'directory') {
-                try {
+              // 5. Modified Locally (Push Update)
+              if (l && r && !isSameHash(l, a) && isSameHash(r, a)) {
+                if (l.kind !== 'directory') {
                   const u8 = await MetaOS.fs.read(fullPath, { encoding: 'binary' });
                   const res = await fetch(`${serverUrl}/api/file/${relPath}`, {
                     method: 'PUT',
@@ -163,27 +261,35 @@
                     const data = await res.json();
                     newAnchor[relPath] = { kind: l.kind, size: l.size, updatedAt: data.updatedAt, hash: data.hash };
                   }
-                } catch (e) {
-                  console.error('[SyncDaemon] Push update failed:', relPath, e);
                 }
+                continue;
               }
-              continue;
-            }
 
-            // 6. Modified Remotely (Pull Update)
-            if (l && r && isSameHash(l, a) && !isSameHash(r, a)) {
-              await MetaOS.fs.createStub(fullPath, {
-                size: r.size,
-                updatedAt: r.updatedAt,
-                hash: r.hash,
-              });
-              newAnchor[relPath] = { kind: r.kind, size: r.size, updatedAt: r.updatedAt, hash: r.hash };
-              continue;
-            }
+              // 6. Modified Remotely (Pull Update)
+              if (l && r && isSameHash(l, a) && !isSameHash(r, a)) {
+                if (r.kind === 'directory') {
+                  await ensureDirRecursive(fullPath);
+                } else {
+                  await ensureDirRecursive(parentPath(fullPath));
+                  await MetaOS.fs.createStub(fullPath, {
+                    size: r.size,
+                    updatedAt: r.updatedAt,
+                    hash: r.hash,
+                  });
+                }
+                newAnchor[relPath] = { kind: r.kind, size: r.size, updatedAt: r.updatedAt, hash: r.hash };
+                continue;
+              }
 
-            // 7. In Sync
-            if (l && r && isSameHash(l, r)) {
-              newAnchor[relPath] = { kind: l.kind, size: l.size, updatedAt: r.updatedAt, hash: r.hash };
+              // 7. In Sync
+              if (l && r && isSameHash(l, r)) {
+                newAnchor[relPath] = { kind: l.kind, size: l.size, updatedAt: r.updatedAt, hash: r.hash };
+              }
+            } catch (e) {
+              // Isolate per-item failures so a single problematic file/directory
+              // never aborts the entire reconciliation pass.
+              console.error('[SyncDaemon] Item reconciliation failed:', relPath, e);
+              continue;
             }
           }
 
@@ -268,6 +374,9 @@ Content:
           console.warn('[SyncDaemon] Could not register dynamic tools:', e.message);
         }
 
+        // Push ignore-pattern configuration to the host server (best-effort).
+        pushIgnoreConfigToServer();
+
         // Initial Reconciliation
         triggerSync();
 
@@ -279,7 +388,7 @@ Content:
           ws.onmessage = async (e) => {
             try {
               const data = JSON.parse(e.data);
-              if (data.type === 'create' || data.type === 'update' || data.type === 'delete') {
+              if (data.type === 'create' || data.type === 'update' || data.type === 'delete' || data.type === 'sync') {
                 triggerSync();
               }
             } catch (err) {}
