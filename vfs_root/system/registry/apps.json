@@ -45,7 +45,7 @@
     "id": "local_sync",
     "name": "Local Sync",
     "icon": "🔄",
-    "path": "apps/sync_app.html",
+    "path": "system/apps/sync_app.html",
     "description": "Sync VFS with local machine"
   }
 ]

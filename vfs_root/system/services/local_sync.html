@@ -2,32 +2,195 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <title>Local Sync Daemon</title>
+    <title>Local Sync & Bridge Daemon v2</title>
   </head>
   <body>
     <script>
       async function initSyncDaemon() {
         if (!window.MetaOS) return setTimeout(initSyncDaemon, 100);
 
-        let config = { mountPath: 'data/local_sync', serverUrl: 'http://127.0.0.1:8000' };
+        let config = { mountPath: 'data/local_sync', serverUrl: 'http://127.0.0.1:8000', allowBash: true };
         try {
           const confData = await MetaOS.fs.read('system/config/local_sync.json');
           config = { ...config, ...JSON.parse(confData) };
         } catch (e) {}
 
         const { mountPath, serverUrl } = config;
+        const ANCHOR_PATH = 'system/temp/local_sync_anchor.json';
         let ws = null;
+        let isSyncing = false;
+        let syncTimer = null;
 
-        // 指定されたディレクトリが存在しなければ作成する
         if (!(await MetaOS.fs.exists(mountPath))) {
           try {
             await MetaOS.fs.mkdir(mountPath);
-          } catch (err) {
-            // 親ディレクトリがない場合などのエラーハンドリング
+          } catch (e) {}
+        }
+
+        async function getAnchor() {
+          try {
+            const str = await MetaOS.fs.read(ANCHOR_PATH);
+            return JSON.parse(str);
+          } catch {
+            return {};
           }
         }
 
-        // 1. Sync Providerの登録（マウント、オンデマンドフェッチ、ローカル変更の監視を統合）
+        async function saveAnchor(a) {
+          await MetaOS.fs.write(ANCHOR_PATH, JSON.stringify(a, null, 2), { overwrite: true, silent: true });
+        }
+
+        function triggerSync() {
+          clearTimeout(syncTimer);
+          syncTimer = setTimeout(async () => {
+            if (isSyncing) {
+              triggerSync();
+              return;
+            }
+            isSyncing = true;
+            try {
+              await executeReconciliation();
+            } catch (e) {
+              console.error('[SyncDaemon] Reconciliation error:', e);
+            } finally {
+              isSyncing = false;
+            }
+          }, 1000);
+        }
+
+        // Refined 3-Way Merge State-Based Reconciliation
+        async function executeReconciliation() {
+          let remoteMeta = {};
+          try {
+            const res = await fetch(`${serverUrl}/api/meta`);
+            if (!res.ok) return;
+            remoteMeta = await res.json();
+          } catch (e) {
+            console.warn('[SyncDaemon] Cannot fetch server metadata:', e.message);
+            return;
+          }
+
+          const localState = await MetaOS.fs.getSyncState(mountPath);
+          const anchor = await getAnchor();
+          const newAnchor = { ...anchor };
+
+          const allRelPaths = new Set([
+            ...Object.keys(remoteMeta),
+            ...Object.keys(localState).map((p) => p.substring(mountPath.length + 1)),
+            ...Object.keys(anchor),
+          ]);
+
+          for (const relPath of allRelPaths) {
+            if (!relPath || relPath.startsWith('.')) continue;
+            const fullPath = `${mountPath}/${relPath}`;
+            const r = remoteMeta[relPath];
+            const l = localState[fullPath];
+            const a = anchor[relPath];
+
+            const isSameHash = (x, y) => (x?.hash || null) === (y?.hash || null);
+
+            if (!l && !r) continue;
+
+            // 1. Tombstone on Remote
+            if (r && r.isDeleted) {
+              if (l) {
+                try {
+                  await MetaOS.fs.delete(fullPath, { permanent: true });
+                } catch (e) {}
+              }
+              delete newAnchor[relPath];
+              continue;
+            }
+
+            // 2. Deleted Locally (Push Delete)
+            if (!l && r && a && isSameHash(r, a)) {
+              try {
+                const delRes = await fetch(`${serverUrl}/api/file/${relPath}`, {
+                  method: 'DELETE',
+                  headers: a.hash ? { 'X-Expected-Hash': a.hash } : {},
+                });
+                if (delRes.ok) {
+                  delete newAnchor[relPath];
+                }
+              } catch (e) {
+                console.error('[SyncDaemon] Delete push failed:', relPath, e);
+              }
+              continue;
+            }
+
+            // 3. New on Remote (Pull Create)
+            if (r && !l && !a) {
+              await MetaOS.fs.createStub(fullPath, {
+                size: r.size,
+                updatedAt: r.updatedAt,
+                hash: r.hash,
+              });
+              newAnchor[relPath] = { kind: r.kind, size: r.size, updatedAt: r.updatedAt, hash: r.hash };
+              continue;
+            }
+
+            // 4. New Locally (Push Create)
+            if (l && !r && !a) {
+              if (l.kind !== 'directory') {
+                try {
+                  const u8 = await MetaOS.fs.read(fullPath, { encoding: 'binary' });
+                  const res = await fetch(`${serverUrl}/api/file/${relPath}`, {
+                    method: 'PUT',
+                    body: u8,
+                  });
+                  if (res.ok) {
+                    const data = await res.json();
+                    newAnchor[relPath] = { kind: l.kind, size: l.size, updatedAt: data.updatedAt, hash: data.hash };
+                  }
+                } catch (e) {
+                  console.error('[SyncDaemon] New file push failed:', relPath, e);
+                }
+              }
+              continue;
+            }
+
+            // 5. Modified Locally (Push Update)
+            if (l && r && !isSameHash(l, a) && isSameHash(r, a)) {
+              if (l.kind !== 'directory') {
+                try {
+                  const u8 = await MetaOS.fs.read(fullPath, { encoding: 'binary' });
+                  const res = await fetch(`${serverUrl}/api/file/${relPath}`, {
+                    method: 'PUT',
+                    headers: a?.hash ? { 'X-Expected-Hash': a.hash } : {},
+                    body: u8,
+                  });
+                  if (res.ok) {
+                    const data = await res.json();
+                    newAnchor[relPath] = { kind: l.kind, size: l.size, updatedAt: data.updatedAt, hash: data.hash };
+                  }
+                } catch (e) {
+                  console.error('[SyncDaemon] Push update failed:', relPath, e);
+                }
+              }
+              continue;
+            }
+
+            // 6. Modified Remotely (Pull Update)
+            if (l && r && isSameHash(l, a) && !isSameHash(r, a)) {
+              await MetaOS.fs.createStub(fullPath, {
+                size: r.size,
+                updatedAt: r.updatedAt,
+                hash: r.hash,
+              });
+              newAnchor[relPath] = { kind: r.kind, size: r.size, updatedAt: r.updatedAt, hash: r.hash };
+              continue;
+            }
+
+            // 7. In Sync
+            if (l && r && isSameHash(l, r)) {
+              newAnchor[relPath] = { kind: l.kind, size: l.size, updatedAt: r.updatedAt, hash: r.hash };
+            }
+          }
+
+          await saveAnchor(newAnchor);
+        }
+
+        // Register Sync Provider
         try {
           await MetaOS.fs.registerSyncProvider(mountPath, {
             onFetchContent: async (reqPath) => {
@@ -36,12 +199,7 @@
                 const res = await fetch(`${serverUrl}/api/file/${relPath}`);
                 if (!res.ok) return false;
                 const arrayBuffer = await res.arrayBuffer();
-
-                // 実体を VFS に書き込む (OSレベルでエコーキャンセルされるため source フラグは不要)
-                await MetaOS.fs.write(reqPath, new Uint8Array(arrayBuffer), {
-                  overwrite: true,
-                  silent: true,
-                });
+                await MetaOS.fs.write(reqPath, new Uint8Array(arrayBuffer), { overwrite: true, silent: true });
                 return true;
               } catch (e) {
                 console.error('[SyncDaemon] Fetch failed:', e);
@@ -49,91 +207,77 @@
               }
             },
             onMutate: async (mutations) => {
-              // OSから渡されるローカルの変更（自身が起こした変更は除外済み）
-              for (const m of mutations) {
-                const getRelPath = (p) => p.substring(mountPath.length + 1);
-
-                if (m.type === 'ATTACH' || m.type === 'MUTATE') {
-                  // ディレクトリの場合はスキップ
-                  if (m.node && m.node.kind === 'directory') continue;
-
-                  try {
-                    const relPath = getRelPath(m.path);
-                    const u8 = await MetaOS.fs.read(m.path, { encoding: 'binary' });
-                    await fetch(`${serverUrl}/api/file/${relPath}`, { method: 'PUT', body: u8 });
-                  } catch (e) {
-                    console.error('[SyncDaemon] Upload failed:', e);
-                  }
-                } else if (m.type === 'DETACH') {
-                  try {
-                    const relPath = getRelPath(m.path);
-                    await fetch(`${serverUrl}/api/file/${relPath}`, { method: 'DELETE' });
-                  } catch (e) {
-                    console.error('[SyncDaemon] Delete failed:', e);
-                  }
-                }
-              }
+              triggerSync();
             },
           });
-          MetaOS.ai.log(`Local Sync Daemon successfully mounted at /${mountPath}`, 'system');
+          MetaOS.ai.log(`Local Sync Daemon v2 mounted at /${mountPath}`, 'system');
         } catch (e) {
           console.error('[SyncDaemon] Provider registration failed:', e);
           return;
         }
 
-        // 2. 初期同期 (サーバーのメタデータを取得して VFS にスタブを作成)
+        // Register Dynamic LPML Tools (<bash_exec>)
         try {
-          const res = await fetch(`${serverUrl}/api/meta`);
-          const remoteMeta = await res.json();
-          const localState = await MetaOS.fs.getSyncState(mountPath);
+          const statusRes = await fetch(`${serverUrl}/api/status`);
+          if (statusRes.ok) {
+            const statusData = await statusRes.json();
+            if (statusData.allowBash) {
+              MetaOS.tools.register({
+                name: 'bash_exec',
+                description: 'Executes a bash command on the local machine running the Python sync server.',
+                definition: `<define_tag name="bash_exec">
+Executes a bash command on the local machine running the Python sync server.
+Attributes:
+  - cwd (optional): Working directory relative to sync folder (default: '.').
+  - timeout (optional): Maximum execution time in seconds (default: 30, max: 300).
+Content:
+  The bash command string to execute.
+</define_tag>`,
+                handler: async (params) => {
+                  const cmd = (params.content || '').trim();
+                  const cwd = params.cwd || '.';
+                  const timeout = parseInt(params.timeout) || 30;
 
-          for (const [relPath, meta] of Object.entries(remoteMeta)) {
-            const fullPath = `${mountPath}/${relPath}`;
-            const local = localState[fullPath];
-
-            if (!local || local.hash !== meta.hash) {
-              await MetaOS.fs.createStub(fullPath, {
-                size: meta.size,
-                updatedAt: meta.updatedAt,
-                hash: meta.hash,
+                  try {
+                    const res = await fetch(`${serverUrl}/api/exec`, {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ command: cmd, cwd: cwd, timeout: timeout }),
+                    });
+                    if (!res.ok) {
+                      const errData = await res.json().catch(() => ({}));
+                      return `[Error ${res.status}]: ${errData.detail || 'Execution failed'}`;
+                    }
+                    const data = await res.json();
+                    return `[Exit Code: ${data.exitCode}] (Duration: ${data.durationMs}ms)\n--- STDOUT ---\n${data.stdout}\n--- STDERR ---\n${data.stderr}`;
+                  } catch (e) {
+                    return `Error executing bash command via Local Sync Server: ${e.message}`;
+                  }
+                },
               });
+
+              MetaOS.ai.log(`<bash_exec> tool successfully registered via Local Sync Server`, 'tool_available');
             }
           }
         } catch (e) {
-          console.error('[SyncDaemon] Initial sync failed:', e);
+          console.warn('[SyncDaemon] Could not register dynamic tools:', e.message);
         }
 
-        // 3. リアルタイム監視 (WebSocket: サーバー -> Itera OS)
+        // Initial Reconciliation
+        triggerSync();
+
+        // WebSocket Listener
         const connectWs = () => {
           const wsUrl = serverUrl.replace(/^http/, 'ws') + '/ws';
           ws = new WebSocket(wsUrl);
 
           ws.onmessage = async (e) => {
-            const data = JSON.parse(e.data);
-            const fullPath = `${mountPath}/${data.path}`;
-
-            if (data.type === 'create' || data.type === 'update') {
-              try {
-                // 外部エコーの防止: サーバーから通知されたファイルとローカルのファイルのハッシュを比較
-                // 自分がアップロードした結果の通知であれば、ハッシュが一致するため実体をスタブで破壊しない
-                const stat = await MetaOS.fs.stat(fullPath);
-                if (stat && stat.hash === data.meta.hash) {
-                  return; // すでに最新の状態（実体あり）なのでスキップ
-                }
-              } catch (err) {
-                // localにファイルが存在しない（エラーになる）場合はスタブを作ってよい
+            try {
+              const data = JSON.parse(e.data);
+              if (data.type === 'create' || data.type === 'update' || data.type === 'delete') {
+                triggerSync();
               }
-
-              await MetaOS.fs.createStub(fullPath, {
-                size: data.meta.size,
-                updatedAt: data.meta.updatedAt,
-                hash: data.meta.hash,
-              });
-            } else if (data.type === 'delete') {
-              try {
-                await MetaOS.fs.delete(fullPath, { permanent: true });
-              } catch (err) {}
-            }
+            } catch (err) {}
           };
           ws.onclose = () => setTimeout(connectWs, 5000);
         };

@@ -701,7 +701,7 @@ if __name__ == "__main__":
 
         const ps = await MetaOS.system.ps();
         const daemon = ps.find(
-          (p) => p.pid === PID || p.path === 'services/local_sync.html' || p.path === 'system/services/local_sync.html',
+          (p) => p.pid === PID || p.path === 'system/services/local_sync.html' || p.path === 'services/local_sync.html',
         );
         DOM('toggle-daemon').checked = !!daemon;
 
@@ -722,7 +722,7 @@ if __name__ == "__main__":
       async function toggleDaemon(enabled) {
         await saveSettings();
         if (enabled) {
-          await MetaOS.system.spawn('services/local_sync.html', { pid: PID, type: 'daemon', force: true });
+          await MetaOS.system.spawn('system/services/local_sync.html', { pid: PID, type: 'daemon', force: true });
           MetaOS.host.notify('Daemon started', 'Local Sync');
         } else {
           await MetaOS.system.kill(PID);
