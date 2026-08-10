@@ -22,14 +22,18 @@
         let syncTimer = null;
 
         if (!(await MetaOS.fs.exists(mountPath))) {
-          try { await MetaOS.fs.mkdir(mountPath); } catch (e) {}
+          try {
+            await MetaOS.fs.mkdir(mountPath);
+          } catch (e) {}
         }
 
         async function getAnchor() {
           try {
             const str = await MetaOS.fs.read(ANCHOR_PATH);
             return JSON.parse(str);
-          } catch { return {}; }
+          } catch {
+            return {};
+          }
         }
 
         async function saveAnchor(a) {
@@ -72,8 +76,8 @@
 
           const allRelPaths = new Set([
             ...Object.keys(remoteMeta),
-            ...Object.keys(localState).map(p => p.substring(mountPath.length + 1)),
-            ...Object.keys(anchor)
+            ...Object.keys(localState).map((p) => p.substring(mountPath.length + 1)),
+            ...Object.keys(anchor),
           ]);
 
           for (const relPath of allRelPaths) {
@@ -90,7 +94,9 @@
             // 1. Tombstone on Remote
             if (r && r.isDeleted) {
               if (l) {
-                try { await MetaOS.fs.delete(fullPath, { permanent: true }); } catch (e) {}
+                try {
+                  await MetaOS.fs.delete(fullPath, { permanent: true });
+                } catch (e) {}
               }
               delete newAnchor[relPath];
               continue;
@@ -101,7 +107,7 @@
               try {
                 const delRes = await fetch(`${serverUrl}/api/file/${relPath}`, {
                   method: 'DELETE',
-                  headers: a.hash ? { 'X-Expected-Hash': a.hash } : {}
+                  headers: a.hash ? { 'X-Expected-Hash': a.hash } : {},
                 });
                 if (delRes.ok) {
                   delete newAnchor[relPath];
@@ -117,7 +123,7 @@
               await MetaOS.fs.createStub(fullPath, {
                 size: r.size,
                 updatedAt: r.updatedAt,
-                hash: r.hash
+                hash: r.hash,
               });
               newAnchor[relPath] = { kind: r.kind, size: r.size, updatedAt: r.updatedAt, hash: r.hash };
               continue;
@@ -130,7 +136,7 @@
                   const u8 = await MetaOS.fs.read(fullPath, { encoding: 'binary' });
                   const res = await fetch(`${serverUrl}/api/file/${relPath}`, {
                     method: 'PUT',
-                    body: u8
+                    body: u8,
                   });
                   if (res.ok) {
                     const data = await res.json();
@@ -151,7 +157,7 @@
                   const res = await fetch(`${serverUrl}/api/file/${relPath}`, {
                     method: 'PUT',
                     headers: a?.hash ? { 'X-Expected-Hash': a.hash } : {},
-                    body: u8
+                    body: u8,
                   });
                   if (res.ok) {
                     const data = await res.json();
@@ -169,7 +175,7 @@
               await MetaOS.fs.createStub(fullPath, {
                 size: r.size,
                 updatedAt: r.updatedAt,
-                hash: r.hash
+                hash: r.hash,
               });
               newAnchor[relPath] = { kind: r.kind, size: r.size, updatedAt: r.updatedAt, hash: r.hash };
               continue;
@@ -202,7 +208,7 @@
             },
             onMutate: async (mutations) => {
               triggerSync();
-            }
+            },
           });
           MetaOS.ai.log(`Local Sync Daemon v2 mounted at /${mountPath}`, 'system');
         } catch (e) {
@@ -236,7 +242,7 @@ Content:
                     const res = await fetch(`${serverUrl}/api/exec`, {
                       method: 'POST',
                       headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({ command: cmd, cwd: cwd, timeout: timeout })
+                      body: JSON.stringify({ command: cmd, cwd: cwd, timeout: timeout }),
                     });
                     if (!res.ok) {
                       const errData = await res.json().catch(() => ({}));
@@ -247,7 +253,7 @@ Content:
                   } catch (e) {
                     return `Error executing bash command via Local Sync Server: ${e.message}`;
                   }
-                }
+                },
               });
 
               MetaOS.ai.log(`<bash_exec> tool successfully registered via Local Sync Server`, 'tool_available');

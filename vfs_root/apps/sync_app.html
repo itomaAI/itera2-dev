@@ -17,7 +17,12 @@
           class="p-2 -ml-2 rounded-full hover:bg-hover text-text-muted hover:text-text-main transition"
         >
           <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M10 19l-7-7m0 0l7-7m-7 7h18"
+            ></path>
           </svg>
         </button>
         <div>
@@ -26,7 +31,10 @@
         </div>
       </div>
       <div class="flex items-center gap-3">
-        <div id="status-badge" class="px-3 py-1 bg-card border border-border-main rounded-lg text-xs font-bold text-text-muted flex items-center gap-2">
+        <div
+          id="status-badge"
+          class="px-3 py-1 bg-card border border-border-main rounded-lg text-xs font-bold text-text-muted flex items-center gap-2"
+        >
           <span id="status-indicator" class="w-2 h-2 rounded-full bg-text-muted"></span>
           <span id="status-text">Disconnected</span>
         </div>
@@ -35,9 +43,27 @@
 
     <!-- Navigation Tabs -->
     <div class="flex border-b border-border-main mb-4 shrink-0">
-      <button id="tab-btn-settings" onclick="switchTab('settings')" class="px-4 py-2 text-sm font-bold border-b-2 border-primary text-primary transition">⚙️ Settings & Status</button>
-      <button id="tab-btn-terminal" onclick="switchTab('terminal')" class="px-4 py-2 text-sm font-bold border-b-2 border-transparent text-text-muted hover:text-text-main transition">💻 Bash Exec Console</button>
-      <button id="tab-btn-script" onclick="switchTab('script')" class="px-4 py-2 text-sm font-bold border-b-2 border-transparent text-text-muted hover:text-text-main transition">🐍 Python Server Script</button>
+      <button
+        id="tab-btn-settings"
+        onclick="switchTab('settings')"
+        class="px-4 py-2 text-sm font-bold border-b-2 border-primary text-primary transition"
+      >
+        ⚙️ Settings & Status
+      </button>
+      <button
+        id="tab-btn-terminal"
+        onclick="switchTab('terminal')"
+        class="px-4 py-2 text-sm font-bold border-b-2 border-transparent text-text-muted hover:text-text-main transition"
+      >
+        💻 Bash Exec Console
+      </button>
+      <button
+        id="tab-btn-script"
+        onclick="switchTab('script')"
+        class="px-4 py-2 text-sm font-bold border-b-2 border-transparent text-text-muted hover:text-text-main transition"
+      >
+        🐍 Python Server Script
+      </button>
     </div>
 
     <main class="flex-1 overflow-y-auto pb-10">
@@ -50,12 +76,22 @@
           <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
             <div>
               <label class="block text-xs font-bold text-text-muted uppercase mb-1">VFS Mount Path</label>
-              <input type="text" id="cfg-mount" class="w-full bg-card border border-border-main rounded-lg p-2 text-sm font-mono text-text-main focus:border-primary focus:outline-none transition" placeholder="data/local_sync" />
+              <input
+                type="text"
+                id="cfg-mount"
+                class="w-full bg-card border border-border-main rounded-lg p-2 text-sm font-mono text-text-main focus:border-primary focus:outline-none transition"
+                placeholder="data/local_sync"
+              />
               <p class="text-[10px] text-text-muted mt-1">Directory in VFS to be synchronized with local host.</p>
             </div>
             <div>
               <label class="block text-xs font-bold text-text-muted uppercase mb-1">Server URL</label>
-              <input type="text" id="cfg-url" class="w-full bg-card border border-border-main rounded-lg p-2 text-sm font-mono text-text-main focus:border-primary focus:outline-none transition" placeholder="http://127.0.0.1:8000" />
+              <input
+                type="text"
+                id="cfg-url"
+                class="w-full bg-card border border-border-main rounded-lg p-2 text-sm font-mono text-text-main focus:border-primary focus:outline-none transition"
+                placeholder="http://127.0.0.1:8000"
+              />
               <p class="text-[10px] text-text-muted mt-1">Address of your local Python server.</p>
             </div>
           </div>
@@ -68,25 +104,41 @@
               </div>
               <label class="relative inline-flex items-center cursor-pointer">
                 <input type="checkbox" id="toggle-daemon" class="sr-only peer" onchange="toggleDaemon(this.checked)" />
-                <div class="w-11 h-6 bg-card peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-text-muted peer-checked:after:bg-white after:border-border-main after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-success border border-border-main shadow-inner transition-colors"></div>
+                <div
+                  class="w-11 h-6 bg-card peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-text-muted peer-checked:after:bg-white after:border-border-main after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-success border border-border-main shadow-inner transition-colors"
+                ></div>
               </label>
             </div>
 
             <div class="flex items-center justify-between border-t border-border-main/50 pt-4">
               <div>
                 <h3 class="font-bold text-text-main text-sm">Allow Host Bash Command Execution</h3>
-                <p class="text-xs text-text-muted">Allows AI agent to run local bash commands via &lt;bash_exec&gt; tool tag.</p>
+                <p class="text-xs text-text-muted">
+                  Allows AI agent to run local bash commands via &lt;bash_exec&gt; tool tag.
+                </p>
               </div>
               <label class="relative inline-flex items-center cursor-pointer">
                 <input type="checkbox" id="toggle-bash" class="sr-only peer" onchange="saveSettings()" />
-                <div class="w-11 h-6 bg-card peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-text-muted peer-checked:after:bg-white after:border-border-main after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary border border-border-main shadow-inner transition-colors"></div>
+                <div
+                  class="w-11 h-6 bg-card peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-text-muted peer-checked:after:bg-white after:border-border-main after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary border border-border-main shadow-inner transition-colors"
+                ></div>
               </label>
             </div>
           </div>
 
           <div class="mt-6 flex justify-end gap-2">
-            <button onclick="testConnection()" class="px-4 py-2 bg-card hover:bg-hover border border-border-main text-xs font-bold rounded-lg transition">Test Connection</button>
-            <button onclick="saveSettings()" class="px-4 py-2 bg-primary hover:bg-primary/90 text-white text-xs font-bold rounded-lg shadow transition">Save Settings</button>
+            <button
+              onclick="testConnection()"
+              class="px-4 py-2 bg-card hover:bg-hover border border-border-main text-xs font-bold rounded-lg transition"
+            >
+              Test Connection
+            </button>
+            <button
+              onclick="saveSettings()"
+              class="px-4 py-2 bg-primary hover:bg-primary/90 text-white text-xs font-bold rounded-lg shadow transition"
+            >
+              Save Settings
+            </button>
           </div>
         </section>
 
@@ -95,7 +147,10 @@
           <h2 class="text-sm font-bold text-text-main uppercase tracking-wider mb-4 flex items-center gap-2">
             <span>📊</span> Server Status & Metadata
           </h2>
-          <div id="server-info" class="text-xs font-mono bg-card p-4 rounded-lg border border-border-main space-y-2 text-text-muted">
+          <div
+            id="server-info"
+            class="text-xs font-mono bg-card p-4 rounded-lg border border-border-main space-y-2 text-text-muted"
+          >
             <p>Server Status: <span class="text-text-main font-bold">Checking...</span></p>
           </div>
         </section>
@@ -108,15 +163,34 @@
             <h2 class="text-sm font-bold text-text-main uppercase tracking-wider flex items-center gap-2">
               <span>💻</span> Host Shell Execution Test
             </h2>
-            <button onclick="clearConsole()" class="px-3 py-1 bg-card hover:bg-hover border border-border-main text-xs font-bold rounded-lg transition">Clear Console</button>
+            <button
+              onclick="clearConsole()"
+              class="px-3 py-1 bg-card hover:bg-hover border border-border-main text-xs font-bold rounded-lg transition"
+            >
+              Clear Console
+            </button>
           </div>
 
           <div class="flex gap-2 mb-4 shrink-0">
-            <input type="text" id="cmd-input" class="flex-1 bg-card border border-border-main rounded-lg px-3 py-2 text-sm font-mono text-text-main focus:border-primary focus:outline-none" placeholder="Enter bash command (e.g., ls -la, git status)..." onkeydown="if(event.key==='Enter') runCommand()" />
-            <button onclick="runCommand()" class="px-4 py-2 bg-primary text-white text-xs font-bold rounded-lg hover:bg-primary/90 transition">Run</button>
+            <input
+              type="text"
+              id="cmd-input"
+              class="flex-1 bg-card border border-border-main rounded-lg px-3 py-2 text-sm font-mono text-text-main focus:border-primary focus:outline-none"
+              placeholder="Enter bash command (e.g., ls -la, git status)..."
+              onkeydown="if (event.key === 'Enter') runCommand();"
+            />
+            <button
+              onclick="runCommand()"
+              class="px-4 py-2 bg-primary text-white text-xs font-bold rounded-lg hover:bg-primary/90 transition"
+            >
+              Run
+            </button>
           </div>
 
-          <div id="console-output" class="flex-1 bg-black/90 text-green-400 p-4 rounded-lg font-mono text-xs overflow-y-auto space-y-2 whitespace-pre-wrap border border-border-main">
+          <div
+            id="console-output"
+            class="flex-1 bg-black/90 text-green-400 p-4 rounded-lg font-mono text-xs overflow-y-auto space-y-2 whitespace-pre-wrap border border-border-main"
+          >
             <div class="text-gray-500">// Terminal output will appear here...</div>
           </div>
         </section>
@@ -131,16 +205,28 @@
                 <span>🐍</span> Python Server Script (v2 with SQLite & Bash Exec)
               </h2>
               <p class="text-xs text-text-muted mt-1">
-                Save as <code class="text-primary font-mono bg-primary/10 px-1 rounded">itera_sync_server.py</code> and run with:
-                <code class="text-text-main font-mono bg-card px-1 rounded">python itera_sync_server.py --dir ./workspace --port 8000</code>
+                Save as <code class="text-primary font-mono bg-primary/10 px-1 rounded">itera_sync_server.py</code> and
+                run with:
+                <code class="text-text-main font-mono bg-card px-1 rounded"
+                  >python itera_sync_server.py --dir ./workspace --port 8000</code
+                >
               </p>
             </div>
-            <button onclick="copyScript()" id="btn-copy" class="px-4 py-2 bg-primary hover:bg-primary/90 text-white text-xs font-bold rounded-lg shadow transition">
+            <button
+              onclick="copyScript()"
+              id="btn-copy"
+              class="px-4 py-2 bg-primary hover:bg-primary/90 text-white text-xs font-bold rounded-lg shadow transition"
+            >
               Copy Script
             </button>
           </div>
           <div class="flex-1 bg-app border border-border-main rounded-lg overflow-hidden">
-            <textarea id="script-content" readonly spellcheck="false" class="w-full h-full bg-transparent text-xs font-mono text-text-main p-4 focus:outline-none resize-none whitespace-pre"></textarea>
+            <textarea
+              id="script-content"
+              readonly
+              spellcheck="false"
+              class="w-full h-full bg-transparent text-xs font-mono text-text-main p-4 focus:outline-none resize-none whitespace-pre"
+            ></textarea>
           </div>
         </section>
       </div>
@@ -150,24 +236,39 @@
       const DOM = (id) => document.getElementById(id);
       const PID = 'local_sync_daemon';
 
-      const pythonScript = `import os
-import time
-import sqlite3
-import hashlib
+      const pythonScript = `import argparse
 import asyncio
-import argparse
+import hashlib
+import os
+import sqlite3
 import subprocess
+import time
 from pathlib import Path
-from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect, Request, Header
+
+from fastapi import (
+    FastAPI,
+    Header,
+    HTTPException,
+    Request,
+    WebSocket,
+    WebSocketDisconnect,
+)
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, Response
-from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
+from watchdog.observers import Observer
 
 parser = argparse.ArgumentParser(description="Itera OS Local Sync & Bridge Server v2")
-parser.add_argument("--dir", type=str, default="./workspace", help="Directory to sync with Itera OS")
+parser.add_argument(
+    "--dir", type=str, default="./workspace", help="Directory to sync with Itera OS"
+)
 parser.add_argument("--port", type=int, default=8000, help="Port to run the server on")
-parser.add_argument("--allow-bash", action="store_true", default=True, help="Allow bash execution via API")
+parser.add_argument(
+    "--allow-bash",
+    action="store_true",
+    default=True,
+    help="Allow bash execution via API",
+)
 args = parser.parse_args()
 
 BASE_DIR = Path(args.dir).resolve()
@@ -186,10 +287,12 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
 def init_db():
     conn = sqlite3.connect(DB_PATH)
     cur = conn.cursor()
-    cur.execute('''
+    cur.execute(
+        """
         CREATE TABLE IF NOT EXISTS nodes (
             path TEXT PRIMARY KEY,
             kind TEXT NOT NULL,
@@ -199,8 +302,10 @@ def init_db():
             isDeleted INTEGER DEFAULT 0,
             deletedAt INTEGER
         )
-    ''')
-    cur.execute('''
+    """
+    )
+    cur.execute(
+        """
         CREATE TABLE IF NOT EXISTS command_logs (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             command TEXT NOT NULL,
@@ -211,16 +316,20 @@ def init_db():
             executedAt INTEGER NOT NULL,
             durationMs INTEGER NOT NULL
         )
-    ''')
+    """
+    )
     conn.commit()
     conn.close()
 
+
 init_db()
+
 
 def get_db():
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     return conn
+
 
 def get_safe_path(requested_path: str) -> Path:
     clean_path = requested_path.lstrip("/")
@@ -229,15 +338,19 @@ def get_safe_path(requested_path: str) -> Path:
         raise HTTPException(status_code=403, detail="Access Denied: Path Traversal")
     return target_path
 
+
 def calc_hash(file_path: Path) -> str:
-    if not file_path.is_file(): return ""
+    if not file_path.is_file():
+        return ""
     sha256 = hashlib.sha256()
     try:
         with open(file_path, "rb") as f:
             for chunk in iter(lambda: f.read(65536), b""):
                 sha256.update(chunk)
         return sha256.hexdigest()
-    except Exception: return ""
+    except Exception:
+        return ""
+
 
 def rescan_and_sync():
     conn = get_db()
@@ -248,36 +361,48 @@ def rescan_and_sync():
     for root, dirs, files in os.walk(BASE_DIR):
         dirs[:] = [d for d in dirs if not d.startswith(".") and d != "__pycache__"]
         for file in files:
-            if file.startswith("."): continue
+            if file.startswith("."):
+                continue
             full_path = Path(root) / file
             rel_path = full_path.relative_to(BASE_DIR).as_posix()
             seen_paths.add(rel_path)
             stat = full_path.stat()
             mtime = int(stat.st_mtime * 1000)
 
-            cur.execute("SELECT updatedAt, hash, isDeleted FROM nodes WHERE path = ?", (rel_path,))
+            cur.execute(
+                "SELECT updatedAt, hash, isDeleted FROM nodes WHERE path = ?",
+                (rel_path,),
+            )
             row = cur.fetchone()
 
             if not row or row["isDeleted"] == 1 or row["updatedAt"] != mtime:
                 h = calc_hash(full_path)
-                cur.execute('''
+                cur.execute(
+                    """
                     INSERT INTO nodes (path, kind, size, updatedAt, hash, isDeleted, deletedAt)
                     VALUES (?, 'file', ?, ?, ?, 0, NULL)
                     ON CONFLICT(path) DO UPDATE SET
                         kind='file', size=excluded.size, updatedAt=excluded.updatedAt,
                         hash=excluded.hash, isDeleted=0, deletedAt=NULL
-                ''', (rel_path, stat.st_size, mtime, h))
+                """,
+                    (rel_path, stat.st_size, mtime, h),
+                )
 
     cur.execute("SELECT path FROM nodes WHERE isDeleted = 0")
     for row in cur.fetchall():
         p = row["path"]
         if p not in seen_paths:
-            cur.execute("UPDATE nodes SET isDeleted = 1, deletedAt = ? WHERE path = ?", (now_ms, p))
+            cur.execute(
+                "UPDATE nodes SET isDeleted = 1, deletedAt = ? WHERE path = ?",
+                (now_ms, p),
+            )
 
     conn.commit()
     conn.close()
 
+
 rescan_and_sync()
+
 
 class ConnectionManager:
     def __init__(self):
@@ -295,9 +420,12 @@ class ConnectionManager:
         for connection in list(self.active_connections):
             try:
                 await connection.send_json(message)
-            except Exception: pass
+            except Exception:
+                pass
+
 
 manager = ConnectionManager()
+
 
 @app.get("/api/status")
 def get_status():
@@ -311,8 +439,9 @@ def get_status():
         "version": "2.0.0",
         "syncDir": str(BASE_DIR),
         "allowBash": args.allow_bash,
-        "activeNodes": count
+        "activeNodes": count,
     }
+
 
 @app.get("/api/meta")
 def get_metadata():
@@ -330,9 +459,10 @@ def get_metadata():
             "size": r["size"],
             "updatedAt": r["updatedAt"],
             "hash": r["hash"],
-            "isDeleted": bool(r["isDeleted"])
+            "isDeleted": bool(r["isDeleted"]),
         }
     return result
+
 
 @app.get("/api/file/{path:path}")
 def download_file(path: str):
@@ -341,13 +471,19 @@ def download_file(path: str):
         raise HTTPException(status_code=404, detail="File not found")
     return FileResponse(target)
 
+
 @app.put("/api/file/{path:path}")
-async def upload_file(path: str, request: Request, x_expected_hash: str | None = Header(None)):
+async def upload_file(
+    path: str, request: Request, x_expected_hash: str | None = Header(None)
+):
     target = get_safe_path(path)
     if target.is_file() and x_expected_hash:
         current_hash = calc_hash(target)
         if current_hash and current_hash != x_expected_hash:
-            raise HTTPException(status_code=409, detail=f"Conflict: Expected hash {x_expected_hash}, got {current_hash}")
+            raise HTTPException(
+                status_code=409,
+                detail=f"Conflict: Expected hash {x_expected_hash}, got {current_hash}",
+            )
 
     target.parent.mkdir(parents=True, exist_ok=True)
     body = await request.body()
@@ -359,17 +495,21 @@ async def upload_file(path: str, request: Request, x_expected_hash: str | None =
 
     conn = get_db()
     cur = conn.cursor()
-    cur.execute('''
+    cur.execute(
+        """
         INSERT INTO nodes (path, kind, size, updatedAt, hash, isDeleted, deletedAt)
         VALUES (?, 'file', ?, ?, ?, 0, NULL)
         ON CONFLICT(path) DO UPDATE SET
             kind='file', size=excluded.size, updatedAt=excluded.updatedAt,
             hash=excluded.hash, isDeleted=0, deletedAt=NULL
-    ''', (path, len(body), mtime, new_hash))
+    """,
+        (path, len(body), mtime, new_hash),
+    )
     conn.commit()
     conn.close()
 
     return {"status": "ok", "hash": new_hash, "updatedAt": mtime}
+
 
 @app.delete("/api/file/{path:path}")
 def delete_file(path: str, x_expected_hash: str | None = Header(None)):
@@ -380,16 +520,21 @@ def delete_file(path: str, x_expected_hash: str | None = Header(None)):
         if x_expected_hash:
             current_hash = calc_hash(target)
             if current_hash and current_hash != x_expected_hash:
-                raise HTTPException(status_code=409, detail="Conflict: File changed before delete")
+                raise HTTPException(
+                    status_code=409, detail="Conflict: File changed before delete"
+                )
         target.unlink()
 
     conn = get_db()
     cur = conn.cursor()
-    cur.execute("UPDATE nodes SET isDeleted = 1, deletedAt = ? WHERE path = ?", (now_ms, path))
+    cur.execute(
+        "UPDATE nodes SET isDeleted = 1, deletedAt = ? WHERE path = ?", (now_ms, path)
+    )
     conn.commit()
     conn.close()
 
     return {"status": "ok"}
+
 
 @app.post("/api/exec")
 async def execute_bash(request: Request):
@@ -414,15 +559,19 @@ async def execute_bash(request: Request):
             command,
             cwd=str(work_dir),
             stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE
+            stderr=asyncio.subprocess.PIPE,
         )
-        stdout_bytes, stderr_bytes = await asyncio.wait_for(proc.communicate(), timeout=timeout_sec)
+        stdout_bytes, stderr_bytes = await asyncio.wait_for(
+            proc.communicate(), timeout=timeout_sec
+        )
         exit_code = proc.returncode
         stdout = stdout_bytes.decode("utf-8", errors="replace")
         stderr = stderr_bytes.decode("utf-8", errors="replace")
     except asyncio.TimeoutError:
-        try: proc.kill()
-        except Exception: pass
+        try:
+            proc.kill()
+        except Exception:
+            pass
         exit_code = -1
         stdout = ""
         stderr = f"Command timed out after {timeout_sec} seconds"
@@ -431,10 +580,21 @@ async def execute_bash(request: Request):
 
     conn = get_db()
     cur = conn.cursor()
-    cur.execute('''
+    cur.execute(
+        """
         INSERT INTO command_logs (command, cwd, exitCode, stdout, stderr, executedAt, durationMs)
         VALUES (?, ?, ?, ?, ?, ?, ?)
-    ''', (command, cwd_rel, exit_code, stdout, stderr, int(start_time * 1000), duration_ms))
+    """,
+        (
+            command,
+            cwd_rel,
+            exit_code,
+            stdout,
+            stderr,
+            int(start_time * 1000),
+            duration_ms,
+        ),
+    )
     conn.commit()
     conn.close()
 
@@ -445,11 +605,12 @@ async def execute_bash(request: Request):
         "exitCode": exit_code,
         "stdout": stdout,
         "stderr": stderr,
-        "durationMs": duration_ms
+        "durationMs": duration_ms,
     }
     await manager.broadcast(exec_event)
 
     return exec_event
+
 
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
@@ -460,24 +621,35 @@ async def websocket_endpoint(websocket: WebSocket):
     except WebSocketDisconnect:
         manager.disconnect(websocket)
 
+
 class LocalFileEventHandler(FileSystemEventHandler):
     def _notify(self, event_type: str, src_path: str):
         full_path = Path(src_path)
-        if ".itera_sync" in full_path.parts or full_path.name.startswith("."): return
-        try: rel_path = full_path.relative_to(BASE_DIR).as_posix()
-        except ValueError: return
+        if ".itera_sync" in full_path.parts or full_path.name.startswith("."):
+            return
+        try:
+            rel_path = full_path.relative_to(BASE_DIR).as_posix()
+        except ValueError:
+            return
 
         rescan_and_sync()
-        payload = { "type": event_type, "path": rel_path }
+        payload = {"type": event_type, "path": rel_path}
         asyncio.run_coroutine_threadsafe(manager.broadcast(payload), loop)
 
-    def on_created(self, event): self._notify("create", event.src_path)
+    def on_created(self, event):
+        self._notify("create", event.src_path)
+
     def on_modified(self, event):
-        if not event.is_directory: self._notify("update", event.src_path)
-    def on_deleted(self, event): self._notify("delete", event.src_path)
+        if not event.is_directory:
+            self._notify("update", event.src_path)
+
+    def on_deleted(self, event):
+        self._notify("delete", event.src_path)
+
 
 observer = None
 loop = None
+
 
 @app.on_event("startup")
 def startup_event():
@@ -489,14 +661,17 @@ def startup_event():
     observer.schedule(event_handler, str(BASE_DIR), recursive=True)
     observer.start()
 
+
 @app.on_event("shutdown")
 def shutdown_event():
     if observer:
         observer.stop()
         observer.join()
 
+
 if __name__ == "__main__":
     import uvicorn
+
     uvicorn.run("itera_sync_server:app", host="127.0.0.1", port=args.port, reload=True)
 `.trim();
 
@@ -507,7 +682,8 @@ if __name__ == "__main__":
           if (t === tab) {
             btn.className = 'px-4 py-2 text-sm font-bold border-b-2 border-primary text-primary transition';
           } else {
-            btn.className = 'px-4 py-2 text-sm font-bold border-b-2 border-transparent text-text-muted hover:text-text-main transition';
+            btn.className =
+              'px-4 py-2 text-sm font-bold border-b-2 border-transparent text-text-muted hover:text-text-main transition';
           }
         });
       }
@@ -524,7 +700,9 @@ if __name__ == "__main__":
         DOM('toggle-bash').checked = config.allowBash !== false;
 
         const ps = await MetaOS.system.ps();
-        const daemon = ps.find((p) => p.pid === PID || p.path === 'services/local_sync.html' || p.path === 'system/services/local_sync.html');
+        const daemon = ps.find(
+          (p) => p.pid === PID || p.path === 'services/local_sync.html' || p.path === 'system/services/local_sync.html',
+        );
         DOM('toggle-daemon').checked = !!daemon;
 
         testConnection();
@@ -534,7 +712,7 @@ if __name__ == "__main__":
         const config = {
           mountPath: DOM('cfg-mount').value.trim() || 'data/local_sync',
           serverUrl: DOM('cfg-url').value.trim() || 'http://127.0.0.1:8000',
-          allowBash: DOM('toggle-bash').checked
+          allowBash: DOM('toggle-bash').checked,
         };
         await MetaOS.fs.write('system/config/local_sync.json', JSON.stringify(config, null, 2), { overwrite: true });
         MetaOS.host.notify('Settings saved successfully.', 'Local Sync');
@@ -587,7 +765,7 @@ if __name__ == "__main__":
           const res = await fetch(`${url}/api/exec`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ command: cmd, timeout: 30 })
+            body: JSON.stringify({ command: cmd, timeout: 30 }),
           });
           const data = await res.json();
           output.innerHTML += `<div class="text-gray-400">[Exit: ${data.exitCode}] (${data.durationMs}ms)</div>`;
