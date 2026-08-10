@@ -222,17 +222,19 @@
           if (statusRes.ok) {
             const statusData = await statusRes.json();
             if (statusData.allowBash) {
-              MetaOS.tools.register({
-                name: 'bash_exec',
-                description: 'Executes a bash command on the local machine running the Python sync server.',
-                definition: `<define_tag name="bash_exec">
+              const definition = `<define_tag name="bash_exec">
 Executes a bash command on the local machine running the Python sync server.
 Attributes:
   - cwd (optional): Working directory relative to sync folder (default: '.').
   - timeout (optional): Maximum execution time in seconds (default: 30, max: 300).
 Content:
   The bash command string to execute.
-</define_tag>`,
+</define_tag>`;
+
+              MetaOS.tools.register({
+                name: 'bash_exec',
+                description: 'Executes a bash command on the local machine running the Python sync server.',
+                definition,
                 handler: async (params) => {
                   const cmd = (params.content || '').trim();
                   const cwd = params.cwd || '.';
@@ -256,7 +258,10 @@ Content:
                 },
               });
 
-              MetaOS.ai.log(`<bash_exec> tool successfully registered via Local Sync Server`, 'tool_available');
+              MetaOS.ai.log(
+                definition + '\n\n[System] <bash_exec> tool successfully registered via Local Sync Server',
+                'tool_available',
+              );
             }
           }
         } catch (e) {
