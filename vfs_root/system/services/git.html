@@ -169,8 +169,15 @@ Attributes:
                   const corsProxy = p.corsProxy || 'https://cors.isomorphic-git.org';
 
                   // Credential resolution fallback
+                  // 参照順は「新location優先 → 旧location後方互換」。
+                  // 認証情報は system/credentials/ に一元化する（クラウド同期の除外を
+                  // 1ディレクトリで表現するため）。旧パスは未移行の環境向けに残す。
                   if (!p.token) {
-                    for (const credPath of ['system/config/credentials.json', 'memory/credentials.json']) {
+                    for (const credPath of [
+                      'system/credentials/github.json',
+                      'system/config/credentials.json',
+                      'memory/credentials.json',
+                    ]) {
                       try {
                         const cred = JSON.parse(await MetaOS.fs.read(credPath));
                         if (cred && cred.github && cred.github.pat) {
