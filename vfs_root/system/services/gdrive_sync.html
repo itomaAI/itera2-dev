@@ -144,9 +144,7 @@
       async function resolveForeignMounts() {
         const mounts = await MetaOS.fs.listMounts();
         const self = (mountPath || '').replace(/^\/+|\/+$/g, '');
-        return mounts
-          .map((m) => (m.mountPath || '').replace(/^\/+|\/+$/g, ''))
-          .filter((p) => p !== '' && p !== self);
+        return mounts.map((m) => (m.mountPath || '').replace(/^\/+|\/+$/g, '')).filter((p) => p !== '' && p !== self);
       }
 
       // ==========================================
@@ -223,9 +221,7 @@
         }
         if (res.status < 200 || res.status >= 300) {
           const detail =
-            typeof res.data === 'string'
-              ? res.data.slice(0, 200)
-              : JSON.stringify(res.data || {}).slice(0, 200);
+            typeof res.data === 'string' ? res.data.slice(0, 200) : JSON.stringify(res.data || {}).slice(0, 200);
           throw new Error(`Drive API ${res.status}: ${detail}`);
         }
         return res.data;
@@ -250,9 +246,7 @@
           let pageToken = null;
           do {
             const q = encodeURIComponent(`'${id}' in parents and trashed=false`);
-            const fields = encodeURIComponent(
-              'nextPageToken,files(id,name,mimeType,md5Checksum,size,modifiedTime)',
-            );
+            const fields = encodeURIComponent('nextPageToken,files(id,name,mimeType,md5Checksum,size,modifiedTime)');
             let url = `${DRIVE_API}/files?q=${q}&fields=${fields}&pageSize=1000`;
             if (pageToken) url += `&pageToken=${encodeURIComponent(pageToken)}`;
 
@@ -373,14 +367,11 @@
         body.set(bytes, head.length);
         body.set(tail, head.length + bytes.length);
 
-        return await driveFetch(
-          `${DRIVE_UPLOAD}/files?uploadType=multipart&fields=id,md5Checksum,size,modifiedTime`,
-          {
-            method: 'POST',
-            headers: { 'Content-Type': `multipart/related; boundary=${boundary}` },
-            body,
-          },
-        );
+        return await driveFetch(`${DRIVE_UPLOAD}/files?uploadType=multipart&fields=id,md5Checksum,size,modifiedTime`, {
+          method: 'POST',
+          headers: { 'Content-Type': `multipart/related; boundary=${boundary}` },
+          body,
+        });
       }
 
       async function uploadUpdate(fileId, bytes) {
@@ -663,10 +654,7 @@
         }
 
         // 空文字はルートマウントを意味する。未指定（undefined）とは区別する。
-        mountPath =
-          typeof config.mountPath === 'string'
-            ? config.mountPath.replace(/^\/+|\/+$/g, '')
-            : 'drive';
+        mountPath = typeof config.mountPath === 'string' ? config.mountPath.replace(/^\/+|\/+$/g, '') : 'drive';
 
         if (mountPath && !(await MetaOS.fs.exists(mountPath))) {
           try {

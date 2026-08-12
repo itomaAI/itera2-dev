@@ -1,10 +1,10 @@
 /**
  * AUTO-GENERATED FILE - DO NOT EDIT MANUALLY
- * Generated on: 2026-08-07T12:15:22.841Z
+ * Generated on: 2026-08-12T08:29:43.463Z
  */
 
 export const DEFAULT_FILES: Record<string, string> = {
-  'apps/calendar.html': `
+  "apps/calendar.html": `
 <!doctype html>
 <html lang="en">
   <head>
@@ -547,7 +547,7 @@ export const DEFAULT_FILES: Record<string, string> = {
 </html>
 `.trim(),
 
-  'apps/home.html': `
+  "apps/home.html": `
 <!doctype html>
 <html lang="en">
   <head>
@@ -1031,7 +1031,7 @@ export const DEFAULT_FILES: Record<string, string> = {
 </html>
 `.trim(),
 
-  'apps/notes.html': `
+  "apps/notes.html": `
 <!doctype html>
 <html lang="en">
   <head>
@@ -1657,371 +1657,7 @@ export const DEFAULT_FILES: Record<string, string> = {
 </html>
 `.trim(),
 
-  'apps/sync_app.html': `
-<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Local Sync App</title>
-    <script src="/system/core/tw.js"></script>
-    <script src="/system/core/ui.js"></script>
-    <script src="/system/core/std.js"></script>
-  </head>
-  <body class="bg-app text-text-main h-screen flex flex-col p-6 overflow-hidden">
-    <!-- Header -->
-    <header class="flex items-center justify-between mb-6 shrink-0">
-      <div class="flex items-center gap-4">
-        <button
-          onclick="AppUI.home()"
-          class="p-2 -ml-2 rounded-full hover:bg-hover text-text-muted hover:text-text-main transition"
-        >
-          <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              stroke-width="2"
-              d="M10 19l-7-7m0 0l7-7m-7 7h18"
-            ></path>
-          </svg>
-        </button>
-        <h1 class="text-2xl font-bold tracking-tight">Local Sync Manager</h1>
-      </div>
-      <div
-        id="status-badge"
-        class="px-3 py-1 bg-card border border-border-main rounded-lg text-xs font-bold text-text-muted flex items-center gap-2"
-      >
-        <span class="w-2 h-2 rounded-full bg-text-muted"></span> Stopped
-      </div>
-    </header>
-
-    <main class="flex-1 overflow-y-auto space-y-6 pb-10">
-      <!-- Configuration -->
-      <section class="bg-panel p-6 rounded-2xl border border-border-main shadow-sm">
-        <h2 class="text-sm font-bold text-text-main uppercase tracking-wider mb-4 flex items-center gap-2">
-          <span class="text-lg">⚙️</span> Settings
-        </h2>
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-          <div>
-            <label class="block text-xs font-bold text-text-muted uppercase mb-1">VFS Mount Path</label>
-            <input
-              type="text"
-              id="cfg-mount"
-              class="w-full bg-card border border-border-main rounded-lg p-2 text-sm text-text-main focus:border-primary focus:outline-none transition font-mono"
-              placeholder="data/local_sync"
-            />
-            <p class="text-[10px] text-text-muted mt-1">Itera OS directory to be synced.</p>
-          </div>
-          <div>
-            <label class="block text-xs font-bold text-text-muted uppercase mb-1">Server URL</label>
-            <input
-              type="text"
-              id="cfg-url"
-              class="w-full bg-card border border-border-main rounded-lg p-2 text-sm text-text-main focus:border-primary focus:outline-none transition font-mono"
-              placeholder="http://127.0.0.1:8000"
-            />
-            <p class="text-[10px] text-text-muted mt-1">Address of your Python local server.</p>
-          </div>
-        </div>
-
-        <div class="flex items-center justify-between border-t border-border-main/50 pt-6">
-          <div>
-            <h3 class="font-bold text-text-main text-sm">Sync Daemon</h3>
-            <p class="text-xs text-text-muted">Enable background synchronization.</p>
-          </div>
-          <label class="relative inline-flex items-center cursor-pointer">
-            <input type="checkbox" id="toggle-daemon" class="sr-only peer" onchange="toggleDaemon(this.checked)" />
-            <div
-              class="w-11 h-6 bg-card peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-text-muted peer-checked:after:bg-white after:border-border-main after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-success border border-border-main shadow-inner transition-colors"
-            ></div>
-          </label>
-        </div>
-      </section>
-
-      <!-- Python Script -->
-      <section class="bg-panel p-6 rounded-2xl border border-border-main shadow-sm flex flex-col h-96">
-        <div class="flex items-center justify-between mb-4 shrink-0">
-          <div>
-            <h2 class="text-sm font-bold text-text-main uppercase tracking-wider flex items-center gap-2">
-              <span class="text-lg">🐍</span> Python Sync Server
-            </h2>
-            <p class="text-xs text-text-muted mt-1">
-              Save this script to your local machine as
-              <code class="text-primary font-mono bg-primary/10 px-1 rounded">itera_sync_server.py</code> and run it.
-            </p>
-          </div>
-          <button
-            onclick="copyScript()"
-            id="btn-copy"
-            class="px-4 py-2 bg-primary hover:bg-primary/90 text-white text-xs font-bold rounded-lg shadow transition"
-          >
-            Copy Script
-          </button>
-        </div>
-        <div class="flex-1 bg-app border border-border-main rounded-lg overflow-hidden">
-          <textarea
-            id="script-content"
-            readonly
-            spellcheck="false"
-            class="w-full h-full bg-transparent text-xs font-mono text-text-main p-4 focus:outline-none resize-none whitespace-pre"
-          ></textarea>
-        </div>
-      </section>
-    </main>
-
-    <script>
-      const DOM = (id) => document.getElementById(id);
-      const PID = 'local_sync_daemon';
-      let isRunning = false;
-
-      const pythonScript = \`
-import os
-import time
-import hashlib
-import asyncio
-import argparse
-from pathlib import Path
-from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect, Request
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, Response
-from watchdog.observers import Observer
-from watchdog.events import FileSystemEventHandler
-
-parser = argparse.ArgumentParser(description="Itera OS Local Sync Server")
-parser.add_argument("--dir", type=str, default="./workspace", help="Directory to sync with Itera OS")
-parser.add_argument("--port", type=int, default=8000, help="Port to run the server on")
-args = parser.parse_args()
-
-BASE_DIR = Path(args.dir).resolve()
-os.makedirs(BASE_DIR, exist_ok=True)
-
-app = FastAPI(title="Itera Sync Server")
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-def get_safe_path(requested_path: str) -> Path:
-    clean_path = requested_path.lstrip("/")
-    target_path = (BASE_DIR / clean_path).resolve()
-    if not target_path.is_relative_to(BASE_DIR):
-        raise HTTPException(status_code=403, detail="Access Denied: Path Traversal")
-    return target_path
-
-def calc_hash(file_path: Path) -> str:
-    if not file_path.is_file(): return ""
-    sha256 = hashlib.sha256()
-    try:
-        with open(file_path, "rb") as f:
-            for chunk in iter(lambda: f.read(4096), b""):
-                sha256.update(chunk)
-        return sha256.hexdigest()
-    except Exception: return ""
-
-class ConnectionManager:
-    def __init__(self):
-        self.active_connections: list[WebSocket] = []
-
-    async def connect(self, websocket: WebSocket):
-        await websocket.accept()
-        self.active_connections.append(websocket)
-
-    def disconnect(self, websocket: WebSocket):
-        if websocket in self.active_connections:
-            self.active_connections.remove(websocket)
-
-    async def broadcast(self, message: dict):
-        for connection in self.active_connections:
-            try:
-                await connection.send_json(message)
-            except Exception: pass
-
-manager = ConnectionManager()
-
-@app.get("/api/meta")
-def get_all_metadata():
-    meta_tree = {}
-    for root, dirs, files in os.walk(BASE_DIR):
-        dirs[:] = [d for d in dirs if not d.startswith(".") and d != "__pycache__"]
-        for file in files:
-            if file.startswith(".DS_Store"): continue
-            full_path = Path(root) / file
-            rel_path = full_path.relative_to(BASE_DIR).as_posix()
-            stat = full_path.stat()
-            meta_tree[rel_path] = {
-                "kind": "file",
-                "size": stat.st_size,
-                "updatedAt": int(stat.st_mtime * 1000),
-                "hash": calc_hash(full_path)
-            }
-    return meta_tree
-
-@app.get("/api/file/{path:path}")
-def download_file(path: str):
-    target = get_safe_path(path)
-    if not target.is_file():
-        raise HTTPException(status_code=404, detail="Not found")
-    return FileResponse(target)
-
-@app.put("/api/file/{path:path}")
-async def upload_file(path: str, request: Request):
-    target = get_safe_path(path)
-    target.parent.mkdir(parents=True, exist_ok=True)
-    body = await request.body()
-    with open(target, "wb") as f:
-        f.write(body)
-    return {"status": "ok"}
-
-@app.delete("/api/file/{path:path}")
-def delete_file(path: str):
-    target = get_safe_path(path)
-    if target.is_file(): target.unlink()
-    elif target.is_dir():
-        try: target.rmdir()
-        except OSError: raise HTTPException(status_code=400, detail="Not empty")
-    return {"status": "ok"}
-
-@app.websocket("/ws")
-async def websocket_endpoint(websocket: WebSocket):
-    await manager.connect(websocket)
-    try:
-        while True: await websocket.receive_text()
-    except WebSocketDisconnect:
-        manager.disconnect(websocket)
-
-class LocalFileEventHandler(FileSystemEventHandler):
-    def _notify(self, event_type: str, path: str):
-        full_path = Path(path)
-        if ".git" in full_path.parts or full_path.name.startswith("."): return
-        try: rel_path = full_path.relative_to(BASE_DIR).as_posix()
-        except ValueError: return
-
-        payload = { "type": event_type, "path": rel_path }
-        if event_type in ["create", "update"] and full_path.is_file():
-            stat = full_path.stat()
-            payload["meta"] = {
-                "size": stat.st_size,
-                "updatedAt": int(stat.st_mtime * 1000),
-                "hash": calc_hash(full_path)
-            }
-        asyncio.run_coroutine_threadsafe(manager.broadcast(payload), loop)
-
-    def on_created(self, event): self._notify("create", event.src_path)
-    def on_modified(self, event):
-        if not event.is_directory: self._notify("update", event.src_path)
-    def on_deleted(self, event): self._notify("delete", event.src_path)
-    def on_moved(self, event):
-        self._notify("delete", event.src_path)
-        self._notify("create", event.dest_path)
-
-observer = None
-loop = None
-
-@app.on_event("startup")
-def startup_event():
-    global observer, loop
-    loop = asyncio.get_running_loop()
-    print(f"[*] Itera Sync Server mounted at: {BASE_DIR}")
-    event_handler = LocalFileEventHandler()
-    observer = Observer()
-    observer.schedule(event_handler, str(BASE_DIR), recursive=True)
-    observer.start()
-
-@app.on_event("shutdown")
-def shutdown_event():
-    if observer:
-        observer.stop()
-        observer.join()
-
-if __name__ == "__main__":
-    import uvicorn
-    # Requires: pip install fastapi uvicorn watchdog
-    uvicorn.run("itera_sync_server:app", host="127.0.0.1", port=args.port, reload=True)
-\`.trim();
-
-      async function init() {
-        DOM('script-content').value = pythonScript;
-
-        if (!window.MetaOS) return setTimeout(init, 50);
-
-        let config = { mountPath: 'data/local_sync', serverUrl: 'http://127.0.0.1:8000' };
-        try {
-          const savedConfig = await App.Config.get('local_sync');
-          if (savedConfig && Object.keys(savedConfig).length > 0) {
-            config = { ...config, ...savedConfig };
-          } else {
-            // ファイルが存在しない（または空）場合は、デフォルト値で新規作成する
-            await App.Config.update('local_sync', config);
-          }
-          DOM('cfg-mount').value = config.mountPath;
-          DOM('cfg-url').value = config.serverUrl;
-        } catch (e) {
-          console.warn('Failed to initialize local_sync config', e);
-        }
-
-        checkStatus();
-        setInterval(checkStatus, 2000);
-      }
-
-      async function checkStatus() {
-        if (!window.MetaOS) return;
-        const ps = await MetaOS.system.ps();
-        isRunning = ps.some((p) => p.pid === PID);
-
-        DOM('toggle-daemon').checked = isRunning;
-
-        const badge = DOM('status-badge');
-        if (isRunning) {
-          badge.innerHTML =
-            '<span class="w-2 h-2 rounded-full bg-success animate-pulse shadow-[0_0_8px_rgba(var(--c-accent-success),0.8)]"></span> Running';
-        } else {
-          badge.innerHTML = '<span class="w-2 h-2 rounded-full bg-text-muted"></span> Stopped';
-        }
-      }
-
-      window.toggleDaemon = async function (start) {
-        const mountPath = DOM('cfg-mount').value.trim() || 'data/local_sync';
-        const serverUrl = DOM('cfg-url').value.trim() || 'http://127.0.0.1:8000';
-
-        await App.Config.update('local_sync', { mountPath, serverUrl });
-
-        if (start) {
-          await MetaOS.system.spawn('system/services/local_sync.html', { pid: PID, type: 'daemon' });
-          AppUI.notify('Sync daemon started.', 'success');
-        } else {
-          await MetaOS.system.kill(PID);
-          AppUI.notify('Sync daemon stopped.', 'info');
-        }
-        setTimeout(checkStatus, 500);
-      };
-
-      window.copyScript = function () {
-        const el = DOM('script-content');
-        el.select();
-        document.execCommand('copy');
-
-        const btn = DOM('btn-copy');
-        btn.textContent = 'Copied!';
-        btn.classList.add('bg-success');
-        btn.classList.remove('bg-primary');
-        setTimeout(() => {
-          btn.textContent = 'Copy Script';
-          btn.classList.remove('bg-success');
-          btn.classList.add('bg-primary');
-        }, 2000);
-      };
-
-      init();
-    </script>
-  </body>
-</html>
-`.trim(),
-
-  'apps/tasks.html': `
+  "apps/tasks.html": `
 <!doctype html>
 <html lang="en">
   <head>
@@ -2531,30 +2167,26 @@ if __name__ == "__main__":
 </html>
 `.trim(),
 
-  'data/events/2026-07.json': JSON.stringify(
-    [
-      {
-        id: 'event_tutorial_1',
-        title: 'Itera OS Setup 🚀',
-        date: '2026-07-14',
-        time: '10:00',
-        endTime: '11:00',
-        note: 'Complete the initial setup and get familiar with the system.',
-      },
-      {
-        id: 'event_tutorial_2',
-        title: 'Read the Codex',
-        date: '2026-07-15',
-        time: '14:00',
-        endTime: '15:00',
-        note: 'Read memory/rules/codex.md to understand how the AI operates.',
-      },
-    ],
-    null,
-    2,
-  ),
+  "data/events/2026-07.json": JSON.stringify([
+  {
+    "id": "event_tutorial_1",
+    "title": "Itera OS Setup 🚀",
+    "date": "2026-07-14",
+    "time": "10:00",
+    "endTime": "11:00",
+    "note": "Complete the initial setup and get familiar with the system."
+  },
+  {
+    "id": "event_tutorial_2",
+    "title": "Read the Codex",
+    "date": "2026-07-15",
+    "time": "14:00",
+    "endTime": "15:00",
+    "note": "Read memory/rules/codex.md to understand how the AI operates."
+  }
+], null, 2),
 
-  'data/notes/welcome.md': `
+  "data/notes/welcome.md": `
 # 🌌 Welcome to Itera OS v2
 
 Your digital workspace, managed and built entirely by an Autonomous AI.
@@ -2580,41 +2212,37 @@ Itera is open. You can ask the AI to change the background color, build a comple
 > *"Do not fear destruction. Fear stagnation."*
 > — The Itera Codex`.trim(),
 
-  'data/tasks/2026-07.json': JSON.stringify(
-    [
-      {
-        id: 'task_tutorial_1',
-        title: 'Welcome to Itera Tasks! 🎉',
-        status: 'pending',
-        dueDate: '2026-07-14',
-        priority: 'high',
-        description: 'This is your task manager. You can set priorities, due dates, and add detailed notes.',
-        created_at: '2026-07-14T00:00:00.000Z',
-      },
-      {
-        id: 'task_tutorial_2',
-        title: 'Ask AI to create a task',
-        status: 'pending',
-        dueDate: '2026-07-15',
-        priority: 'medium',
-        description: "You don't have to type. Just ask the AI: 'Add a task to buy milk tomorrow'.",
-        created_at: '2026-07-14T00:00:00.000Z',
-      },
-      {
-        id: 'task_tutorial_3',
-        title: 'Completed task example',
-        status: 'completed',
-        dueDate: '2026-07-13',
-        priority: 'low',
-        description: 'You can toggle tasks by clicking the circle.',
-        created_at: '2026-07-13T00:00:00.000Z',
-      },
-    ],
-    null,
-    2,
-  ),
+  "data/tasks/2026-07.json": JSON.stringify([
+  {
+    "id": "task_tutorial_1",
+    "title": "Welcome to Itera Tasks! 🎉",
+    "status": "pending",
+    "dueDate": "2026-07-14",
+    "priority": "high",
+    "description": "This is your task manager. You can set priorities, due dates, and add detailed notes.",
+    "created_at": "2026-07-14T00:00:00.000Z"
+  },
+  {
+    "id": "task_tutorial_2",
+    "title": "Ask AI to create a task",
+    "status": "pending",
+    "dueDate": "2026-07-15",
+    "priority": "medium",
+    "description": "You don't have to type. Just ask the AI: 'Add a task to buy milk tomorrow'.",
+    "created_at": "2026-07-14T00:00:00.000Z"
+  },
+  {
+    "id": "task_tutorial_3",
+    "title": "Completed task example",
+    "status": "completed",
+    "dueDate": "2026-07-13",
+    "priority": "low",
+    "description": "You can toggle tasks by clicking the circle.",
+    "created_at": "2026-07-13T00:00:00.000Z"
+  }
+], null, 2),
 
-  'docs/blueprints/README.md': `
+  "docs/blueprints/README.md": `
 # Itera Blueprints
 
 **Itera Blueprints** are an "AI-native software packaging format" designed to add new applications and extensions to Itera OS.
@@ -2662,7 +2290,7 @@ A well-crafted Blueprint is divided into clear phases so the AI can execute the 
 Blueprints grant the AI significant authority to modify your environment. 
 While the Itera AI is designed to review instructions beforehand to avoid destructive actions, we strongly recommend that you manually inspect the contents of a Blueprint before installing.`.trim(),
 
-  'docs/blueprints/mindmap.md': `
+  "docs/blueprints/mindmap.md": `
 # Itera Blueprint: AI MindMap v2.0
 
 > **What is this?**
@@ -2908,7 +2536,7 @@ Append the following object to the JSON array:
 **End of Blueprint.**
 `.trim(),
 
-  'docs/blueprints/pomodoro.md': `
+  "docs/blueprints/pomodoro.md": `
 # Itera Blueprint: Pomodoro Timer v1.2
 
 > **What is this?**
@@ -3143,7 +2771,7 @@ Please execute the installation by strictly following these phases:
 ## 🎨 Post-Installation
 After completing all steps, inform the user that the app is ready to use and can be launched from the Library.`.trim(),
 
-  'docs/manual/00_overview.md': `
+  "docs/manual/00_overview.md": `
 # 00. Overview: What is Itera OS?
 
 ## Introduction
@@ -3203,7 +2831,7 @@ Through rapid iteration, Itera evolves into your personalized digital workspace.
 ---
 **Next Step:** Proceed to [01_user_guide.md](01_user_guide.md) to learn how to use the dashboard and standard apps.`.trim(),
 
-  'docs/manual/01_user_guide.md': `
+  "docs/manual/01_user_guide.md": `
 # 01. User Guide
 
 This guide explains how to navigate the Itera OS v2 interface and use its core features.
@@ -3270,7 +2898,7 @@ The Chat Panel (Right) is where you give instructions to Itera.
 ---
 **Next Step:** Proceed to [02_architecture.md](02_architecture.md) to understand the internal directory structure.`.trim(),
 
-  'docs/manual/02_architecture.md': `
+  "docs/manual/02_architecture.md": `
 # 02. System Architecture
 
 Understanding the internal structure of Itera OS v2 is essential for customizing the system and developing new applications.
@@ -3352,7 +2980,7 @@ The **Guest** environment (where apps run) is isolated from the **Host** (where 
 ---
 **Next Step:** Proceed to [03_design_system.md](03_design_system.md) to learn how to create UI that matches the OS theme.`.trim(),
 
-  'docs/manual/03_design_system.md': `
+  "docs/manual/03_design_system.md": `
 # 03. Design System & UI Kit
 
 Itera OS employs a strict **Semantic Design System**.
@@ -3439,7 +3067,7 @@ These colors convey meaning.
 **Next Step:** Proceed to [04_development.md](04_development.md) to learn how to build apps using these tokens.
 `.trim(),
 
-  'docs/manual/04_development.md': `
+  "docs/manual/04_development.md": `
 # 04. App & Daemon Development Guide
 
 This guide explains how to build custom applications and background services for Itera OS.
@@ -3612,7 +3240,7 @@ const result = await AppUI.showMessageBox({
 3. **Write Manuals**: When you build a complex app, write a \`.md\` manual in \`docs/apps/\` so both you and the AI understand how to use it.
 `.trim(),
 
-  'docs/manual/05_customization.md': `
+  "docs/manual/05_customization.md": `
 # 05. Customization & System Configuration
 
 Itera OS v2 uses a decentralized configuration model. Instead of a single massive file, settings are split into specific registries within the \`system/\` directory.
@@ -3742,7 +3370,7 @@ Explore, experiment, and build your perfect environment.
 
 **End of Manual.**`.trim(),
 
-  'memory/init.md': `
+  "memory/init.md": `
 # Initialization Protocol v3.0
 
 **Status**: Boot Sequence Initiated.
@@ -3790,7 +3418,7 @@ Explore, experiment, and build your perfect environment.
 ---
 **Action**: Begin Phase 1 immediately.`.trim(),
 
-  'memory/knowledge/index.md': `
+  "memory/knowledge/index.md": `
 # 🧠 AI Knowledge Router & VFS Map
 
 This document serves as your central index for understanding the current state of Itera OS.
@@ -3833,7 +3461,7 @@ This is the absolute physical layout of your universe.
 *   **User Profile**: [Not yet created. Create \`memory/knowledge/user_profile.md\` when you learn about the user.]
 *   **Current Projects**: [None tracked.]`.trim(),
 
-  'memory/rules/codex.md': `
+  "memory/rules/codex.md": `
 # The Itera Codex
 **Self-Reference Manual for an Autonomous OS (v2.0)**
 
@@ -4107,7 +3735,337 @@ Use this Codex as a guidepost, and build a better Itera OS together with the use
 **End of Codex.**
 `.trim(),
 
-  'system/apps/billing.html': `
+  "system/adapters/google_drive_auth.js": `
+/**
+ * system/adapters/google_drive_auth.js
+ * Google Drive 認証アダプタ (Sync Adapter API v1)
+ *
+ * ホストの SyncAdapterHost から動的 import され、init(ctx) が呼ばれる。
+ * ホスト側には Google Drive 固有のコードは一切存在しない。
+ *
+ * ── 方式 ──────────────────────────────────────────
+ * GIS (Google Identity Services) のトークンクライアントを使う暗黙フロー。
+ *   - アクセストークンのみ。有効期限 1 時間。リフレッシュトークンは発行されない。
+ *   - Google 側のセッション Cookie が生きていれば prompt:'' で無音再取得できる。
+ *     ただしサードパーティ Cookie がブロックされている環境では失敗し、
+ *     ユーザー操作を伴う再認証が必要になる。
+ *   - 恒久的な無人運転が要る場合は、ローカルヘルパー経由の
+ *     Desktop クライアント方式（refresh_token を手元に保持）へ移行する。
+ *     その場合もこのアダプタを差し替えるだけでよい。
+ *
+ * ── 実測済みの前提 ──────────────────────────────────
+ *   - Drive API / トークンEP はいずれも CORS 対応済み。プロキシ不要。
+ *   - blob: URL のゲストも親オリジンを継承するため、承認済み JavaScript 生成元は
+ *     ホストのオリジン 1 つを登録すればよい。
+ * ────────────────────────────────────────────────
+ */
+
+const GIS_SRC = 'https://accounts.google.com/gsi/client';
+const CONFIG_PATH = 'system/config/gdrive.json';
+
+// 同期デーモン（ゲスト側）へトークンを渡すための受け渡し場所。
+//
+// ★ 平文で VFS に置かれる点は明示的なトレードオフである。
+//   - ゲストプロセスは MetaOS.fs 経由でしか読めず、system/temp は
+//     セッションリセットで破棄される。
+//   - 保存されるのは有効期限 1 時間のアクセストークンのみで、
+//     リフレッシュトークンや client_secret は存在しない（暗黙フローのため）。
+//   - Drive のスコープは drive.file に限定され、権限はアプリが作成した
+//     ファイルにしか及ばない。
+//   より強い分離が必要なら、IPC で直接デーモンへ渡す方式に変更すること。
+const TOKEN_PATH = 'system/temp/gdrive_token.json';
+
+const SYSTEM_PRINCIPAL = { type: 'system', id: 'system' };
+
+/** 失効の何ミリ秒前に無音更新を試みるか */
+const RENEW_MARGIN_MS = 5 * 60 * 1000;
+
+let gisPromise = null;
+
+function loadGis() {
+  if (gisPromise) return gisPromise;
+  gisPromise = new Promise((resolve, reject) => {
+    if (window.google && window.google.accounts && window.google.accounts.oauth2) {
+      return resolve(window.google.accounts.oauth2);
+    }
+    const s = document.createElement('script');
+    s.src = GIS_SRC;
+    s.async = true;
+    s.onload = () => {
+      if (window.google && window.google.accounts && window.google.accounts.oauth2) {
+        resolve(window.google.accounts.oauth2);
+      } else {
+        reject(new Error('GIS loaded but oauth2 namespace is missing'));
+      }
+    };
+    s.onerror = () => reject(new Error('Failed to load Google Identity Services'));
+    document.head.appendChild(s);
+  });
+  return gisPromise;
+}
+
+export async function init(ctx) {
+  const { vfs, ui, log } = ctx;
+
+  // ---------- 設定の読み込み ----------
+  let config = {};
+  try {
+    const raw = await vfs.readFile(SYSTEM_PRINCIPAL, CONFIG_PATH).catch(() => '{}');
+    config = JSON.parse(raw || '{}');
+  } catch (e) {
+    log(\`Failed to parse \${CONFIG_PATH}: \${e.message}\`, 'warn');
+  }
+
+  const clientId = config.clientId;
+  const scope = config.scope || 'https://www.googleapis.com/auth/drive.file';
+
+  // ---------- UI の構築 ----------
+  const row = document.createElement('div');
+  row.className =
+    'flex items-center justify-between p-3 bg-card border border-border-main rounded-lg hover:border-primary/30 transition';
+
+  const left = document.createElement('div');
+  left.className = 'flex items-center gap-3 min-w-0';
+  left.innerHTML = \`
+    <div class="w-8 h-8 rounded-full bg-white flex items-center justify-center shadow-sm shrink-0">
+      <svg class="w-4 h-4" viewBox="0 0 24 24">
+        <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+        <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+        <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
+        <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+      </svg>
+    </div>
+    <div class="min-w-0">
+      <div class="text-sm font-bold text-text-main">Google Drive</div>
+      <div class="text-[10px] text-text-muted truncate" data-role="sub">Not connected</div>
+    </div>
+  \`;
+  const sub = left.querySelector('[data-role="sub"]');
+
+  const right = document.createElement('div');
+  right.className = 'flex items-center gap-1.5 shrink-0';
+
+  const btnSignIn = document.createElement('button');
+  btnSignIn.className =
+    'px-3 py-1.5 bg-card hover:bg-hover border border-border-main text-text-main text-xs font-bold rounded shadow-sm transition';
+  btnSignIn.textContent = 'Sign In';
+
+  const btnSignOut = document.createElement('button');
+  btnSignOut.className =
+    'hidden px-3 py-1.5 bg-card hover:bg-error/10 border border-error/30 text-error text-xs font-bold rounded shadow-sm transition';
+  btnSignOut.textContent = 'Sign Out';
+
+  right.appendChild(btnSignIn);
+  right.appendChild(btnSignOut);
+  row.appendChild(left);
+  row.appendChild(right);
+  ui.container.appendChild(row);
+
+  // 設定不備は UI 上で明示する（黙って動かないのが一番困るため）
+  if (!clientId) {
+    sub.textContent = 'clientId not configured';
+    btnSignIn.disabled = true;
+    btnSignIn.className = 'px-3 py-1.5 bg-card border border-border-main text-text-muted text-xs font-bold rounded';
+    const hint = document.createElement('div');
+    hint.className = 'text-[10px] text-text-muted leading-relaxed px-1';
+    hint.innerHTML = \`<span class="font-mono">\${CONFIG_PATH}</span> に clientId を設定してください。\`;
+    ui.container.appendChild(hint);
+    ui.setStatus({ state: 'error', label: 'Not Configured', detail: 'clientId missing' });
+    return;
+  }
+
+  // ---------- 状態 ----------
+  let tokenClient = null;
+  let renewTimer = null;
+  let currentToken = null;
+
+  const setDisconnected = (detail) => {
+    currentToken = null;
+    btnSignIn.classList.remove('hidden');
+    btnSignOut.classList.add('hidden');
+    sub.textContent = detail || 'Not connected';
+    ui.setStatus({ state: 'disconnected', label: 'Local Mode Only', detail: 'Not Signed In' });
+  };
+
+  const persistToken = async (token, expiresAt) => {
+    const payload = { accessToken: token, expiresAt, scope, obtainedAt: Date.now() };
+    try {
+      await vfs.writeFile(SYSTEM_PRINCIPAL, TOKEN_PATH, JSON.stringify(payload, null, 2), {
+        overwrite: true,
+      });
+    } catch (e) {
+      log(\`Failed to persist token: \${e.message}\`, 'error');
+    }
+  };
+
+  const clearToken = async () => {
+    try {
+      await vfs.writeFile(SYSTEM_PRINCIPAL, TOKEN_PATH, JSON.stringify({ accessToken: null }, null, 2), {
+        overwrite: true,
+      });
+    } catch (e) {
+      /* 消せなくても致命的ではない */
+    }
+  };
+
+  /** 認証済みで Drive API を叩く小さなヘルパー */
+  const driveFetch = async (url, options = {}) => {
+    if (!currentToken) throw new Error('Not authenticated');
+    const res = await fetch(url, {
+      ...options,
+      headers: {
+        ...(options.headers || {}),
+        Authorization: \`Bearer \${currentToken}\`,
+      },
+    });
+    return res;
+  };
+
+  /**
+   * 同期先フォルダを用意する。
+   *
+   * drive.file スコープでは「アプリが作成したファイル」に必ずアクセスできる。
+   * したがって専用フォルダを作る方式なら Picker API も API キーも不要になる。
+   * 既存の任意フォルダを選ばせたい場合は Google Picker が必要（要 API キー）。
+   */
+  const ensureFolder = async () => {
+    if (config.folderId) return config.folderId;
+
+    const folderName = config.folderName || 'Itera OS';
+
+    // 既に作成済みのものを探す（アプリ作成物のみが見える）
+    const q = encodeURIComponent(
+      \`mimeType='application/vnd.google-apps.folder' and name='\${folderName}' and trashed=false\`,
+    );
+    const listRes = await driveFetch(\`https://www.googleapis.com/drive/v3/files?q=\${q}&fields=files(id,name)\`);
+    if (listRes.ok) {
+      const data = await listRes.json();
+      if (data.files && data.files.length > 0) return data.files[0].id;
+    }
+
+    // 無ければ作る
+    const createRes = await driveFetch('https://www.googleapis.com/drive/v3/files?fields=id', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: folderName, mimeType: 'application/vnd.google-apps.folder' }),
+    });
+    if (!createRes.ok) throw new Error(\`Failed to create folder (HTTP \${createRes.status})\`);
+    const created = await createRes.json();
+    return created.id;
+  };
+
+  const onTokenGranted = async (response) => {
+    if (!response || !response.access_token) {
+      setDisconnected('No token returned');
+      return;
+    }
+    currentToken = response.access_token;
+    const expiresInMs = (Number(response.expires_in) || 3600) * 1000;
+    const expiresAt = Date.now() + expiresInMs;
+
+    await persistToken(currentToken, expiresAt);
+
+    // 利用者の識別とフォルダの用意
+    let email = 'Connected';
+    try {
+      const aboutRes = await driveFetch('https://www.googleapis.com/drive/v3/about?fields=user(emailAddress)');
+      if (aboutRes.ok) {
+        const about = await aboutRes.json();
+        email = (about.user && about.user.emailAddress) || email;
+      }
+    } catch (e) {
+      log(\`about.get failed: \${e.message}\`, 'warn');
+    }
+
+    try {
+      const folderId = await ensureFolder();
+      if (folderId !== config.folderId) {
+        config.folderId = folderId;
+        await vfs.writeFile(SYSTEM_PRINCIPAL, CONFIG_PATH, JSON.stringify(config, null, 2), { overwrite: true });
+      }
+    } catch (e) {
+      log(\`Folder setup failed: \${e.message}\`, 'error');
+      ui.setStatus({ state: 'error', label: 'Folder Error', detail: e.message });
+      return;
+    }
+
+    btnSignIn.classList.add('hidden');
+    btnSignOut.classList.remove('hidden');
+    sub.textContent = email;
+    ui.setStatus({
+      state: 'connected',
+      label: 'Cloud Sync Active',
+      detail: email,
+      accentClass: 'text-[#4285F4]',
+    });
+
+    // 失効前に無音更新を試みる
+    if (renewTimer) clearTimeout(renewTimer);
+    const delay = Math.max(expiresInMs - RENEW_MARGIN_MS, 30 * 1000);
+    renewTimer = setTimeout(() => {
+      log('Attempting silent token renewal');
+      try {
+        // prompt:'' は Google セッションが生きている場合のみ無音で通る。
+        // サードパーティ Cookie がブロックされていると失敗する。
+        tokenClient.requestAccessToken({ prompt: '' });
+      } catch (e) {
+        log(\`Silent renewal failed: \${e.message}\`, 'warn');
+        setDisconnected('Session expired — sign in again');
+      }
+    }, delay);
+  };
+
+  // ---------- GIS の初期化 ----------
+  try {
+    const oauth2 = await loadGis();
+    tokenClient = oauth2.initTokenClient({
+      client_id: clientId,
+      scope,
+      callback: (response) => {
+        onTokenGranted(response).catch((e) => {
+          log(\`Token handling failed: \${e.message}\`, 'error');
+          ui.setStatus({ state: 'error', label: 'Error', detail: e.message });
+        });
+      },
+      error_callback: (err) => {
+        log(\`Auth error: \${err && err.type ? err.type : 'unknown'}\`, 'warn');
+        setDisconnected('Sign-in cancelled or blocked');
+      },
+    });
+  } catch (e) {
+    log(\`GIS init failed: \${e.message}\`, 'error');
+    sub.textContent = 'Failed to load Google Identity Services';
+    ui.setStatus({ state: 'error', label: 'Error', detail: e.message });
+    return;
+  }
+
+  btnSignIn.onclick = () => {
+    ui.setStatus({ state: 'connecting', label: 'Connecting...' });
+    // ユーザー操作の直下で呼ぶこと。ポップアップがブロックされる。
+    tokenClient.requestAccessToken({ prompt: 'consent' });
+  };
+
+  btnSignOut.onclick = async () => {
+    if (currentToken && window.google && window.google.accounts && window.google.accounts.oauth2) {
+      try {
+        window.google.accounts.oauth2.revoke(currentToken, () => {});
+      } catch (e) {
+        /* 失効に失敗してもローカル状態は落とす */
+      }
+    }
+    if (renewTimer) clearTimeout(renewTimer);
+    await clearToken();
+    setDisconnected();
+  };
+
+  // 起動直後は未接続。暗黙フローではトークンを永続化できないため、
+  // ページ再読み込みのたびにサインインが必要になる（案1の制約）。
+  setDisconnected();
+  log('Google Drive auth adapter ready');
+}
+`.trim(),
+
+  "system/apps/billing.html": `
 <!doctype html>
 <html lang="en">
   <head>
@@ -4596,7 +4554,7 @@ Use this Codex as a guidepost, and build a better Itera OS together with the use
 </html>
 `.trim(),
 
-  'system/apps/launcher.html': `
+  "system/apps/launcher.html": `
 <!doctype html>
 <html lang="en">
   <head>
@@ -4674,7 +4632,7 @@ Use this Codex as a guidepost, and build a better Itera OS together with the use
 </html>
 `.trim(),
 
-  'system/apps/settings.html': `
+  "system/apps/settings.html": `
 <!doctype html>
 <html lang="en">
   <head>
@@ -5661,53 +5619,1123 @@ Use this Codex as a guidepost, and build a better Itera OS together with the use
 </html>
 `.trim(),
 
-  'system/config/appearance.json': JSON.stringify(
-    {
-      theme: 'system/themes/light.json',
-      typography: {
-        uiFont: 'Inter',
-        monoFont: 'monospace',
-        fontSize: 'medium',
-      },
-      layout: {
-        animations: true,
-        homePath: 'apps/home.html',
-      },
-      locale: 'en',
-    },
-    null,
-    2,
-  ),
+  "system/apps/sync_app.html": `
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Local Sync & Bridge Manager</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="/system/core/ui.js"></script>
+    <script src="/system/core/std.js"></script>
+  </head>
+  <body class="bg-app text-text-main h-screen flex flex-col p-6 overflow-hidden">
+    <!-- Header -->
+    <header class="flex items-center justify-between mb-4 shrink-0">
+      <div class="flex items-center gap-4">
+        <button
+          onclick="AppUI.home()"
+          class="p-2 -ml-2 rounded-full hover:bg-hover text-text-muted hover:text-text-main transition"
+        >
+          <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M10 19l-7-7m0 0l7-7m-7 7h18"
+            ></path>
+          </svg>
+        </button>
+        <div>
+          <h1 class="text-2xl font-bold tracking-tight">Local Sync & Host Bridge v2</h1>
+          <p class="text-xs text-text-muted">3-Way Sync Engine & Local Shell Execution Provider</p>
+        </div>
+      </div>
+      <div class="flex items-center gap-3">
+        <div
+          id="status-badge"
+          class="px-3 py-1 bg-card border border-border-main rounded-lg text-xs font-bold text-text-muted flex items-center gap-2"
+        >
+          <span id="status-indicator" class="w-2 h-2 rounded-full bg-text-muted"></span>
+          <span id="status-text">Disconnected</span>
+        </div>
+      </div>
+    </header>
 
-  'system/config/llm.json': JSON.stringify(
-    {
-      model: 'gemini-3.6-flash',
-    },
-    null,
-    2,
-  ),
+    <!-- Navigation Tabs -->
+    <div class="flex border-b border-border-main mb-4 shrink-0">
+      <button
+        id="tab-btn-settings"
+        onclick="switchTab('settings')"
+        class="px-4 py-2 text-sm font-bold border-b-2 border-primary text-primary transition"
+      >
+        ⚙️ Settings & Status
+      </button>
+      <button
+        id="tab-btn-terminal"
+        onclick="switchTab('terminal')"
+        class="px-4 py-2 text-sm font-bold border-b-2 border-transparent text-text-muted hover:text-text-main transition"
+      >
+        💻 Bash Exec Console
+      </button>
+      <button
+        id="tab-btn-script"
+        onclick="switchTab('script')"
+        class="px-4 py-2 text-sm font-bold border-b-2 border-transparent text-text-muted hover:text-text-main transition"
+      >
+        🐍 Python Server Script
+      </button>
+    </div>
 
-  'system/config/network.json': JSON.stringify(
-    {
-      proxyUrl: 'https://corsproxy.io/?',
-      allowCredentialsWithProxy: false,
-    },
-    null,
-    2,
-  ),
+    <main class="flex-1 overflow-y-auto pb-10">
+      <!-- Section 1: Settings & Status -->
+      <div id="tab-settings" class="space-y-6">
+        <section class="bg-panel p-6 rounded-2xl border border-border-main shadow-sm">
+          <h2 class="text-sm font-bold text-text-main uppercase tracking-wider mb-4 flex items-center gap-2">
+            <span>⚙️</span> Sync & Server Settings
+          </h2>
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+            <div>
+              <label class="block text-xs font-bold text-text-muted uppercase mb-1">VFS Mount Path</label>
+              <input
+                type="text"
+                id="cfg-mount"
+                class="w-full bg-card border border-border-main rounded-lg p-2 text-sm font-mono text-text-main focus:border-primary focus:outline-none transition"
+                placeholder="data/local_sync"
+              />
+              <p class="text-[10px] text-text-muted mt-1">Directory in VFS to be synchronized with local host.</p>
+            </div>
+            <div>
+              <label class="block text-xs font-bold text-text-muted uppercase mb-1">Server URL</label>
+              <input
+                type="text"
+                id="cfg-url"
+                class="w-full bg-card border border-border-main rounded-lg p-2 text-sm font-mono text-text-main focus:border-primary focus:outline-none transition"
+                placeholder="http://127.0.0.1:8000"
+              />
+              <p class="text-[10px] text-text-muted mt-1">Address of your local Python server.</p>
+            </div>
+          </div>
 
-  'system/config/preferences.json': JSON.stringify(
-    {
-      username: 'User',
-      agentName: 'Itera',
-      language: 'English',
-      autoUpdateSystemFiles: true,
-    },
-    null,
-    2,
-  ),
+          <div class="space-y-4 border-t border-border-main/50 pt-4">
+            <div class="flex items-center justify-between">
+              <div>
+                <h3 class="font-bold text-text-main text-sm">Background Sync Daemon</h3>
+                <p class="text-xs text-text-muted">Enable 3-way synchronization in background.</p>
+              </div>
+              <label class="relative inline-flex items-center cursor-pointer">
+                <input type="checkbox" id="toggle-daemon" class="sr-only peer" onchange="toggleDaemon(this.checked)" />
+                <div
+                  class="w-11 h-6 bg-card peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-text-muted peer-checked:after:bg-white after:border-border-main after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-success border border-border-main shadow-inner transition-colors"
+                ></div>
+              </label>
+            </div>
 
-  'system/core/std.js': `
+            <div class="flex items-center justify-between border-t border-border-main/50 pt-4">
+              <div>
+                <h3 class="font-bold text-text-main text-sm">Allow Host Bash Command Execution</h3>
+                <p class="text-xs text-text-muted">
+                  Allows AI agent to run local bash commands via &lt;bash_exec&gt; tool tag.
+                </p>
+              </div>
+              <label class="relative inline-flex items-center cursor-pointer">
+                <input type="checkbox" id="toggle-bash" class="sr-only peer" onchange="saveSettings()" />
+                <div
+                  class="w-11 h-6 bg-card peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-text-muted peer-checked:after:bg-white after:border-border-main after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary border border-border-main shadow-inner transition-colors"
+                ></div>
+              </label>
+            </div>
+          </div>
+
+          <div class="mt-6 flex justify-end gap-2">
+            <button
+              onclick="testConnection()"
+              class="px-4 py-2 bg-card hover:bg-hover border border-border-main text-xs font-bold rounded-lg transition"
+            >
+              Test Connection
+            </button>
+            <button
+              onclick="saveSettings()"
+              class="px-4 py-2 bg-primary hover:bg-primary/90 text-white text-xs font-bold rounded-lg shadow transition"
+            >
+              Save Settings
+            </button>
+          </div>
+        </section>
+
+        <!-- Ignore Patterns Panel -->
+        <section class="bg-panel p-6 rounded-2xl border border-border-main shadow-sm">
+          <h2 class="text-sm font-bold text-text-main uppercase tracking-wider mb-2 flex items-center gap-2">
+            <span>🚫</span> Ignore Patterns
+          </h2>
+          <p class="text-xs text-text-muted mb-3">
+            One glob pattern per line. Patterns without a
+            <code class="bg-card px-1 rounded">/</code> match any path segment (basename-style, e.g.
+            <code class="bg-card px-1 rounded">.venv</code> or <code class="bg-card px-1 rounded">*.pyc</code>).
+            Patterns containing <code class="bg-card px-1 rounded">/</code> match the full relative path. Applied on
+            both the host server (skips scanning/hashing entirely) and the VFS client (skips pulling/pushing). Requires
+            <span class="font-bold">Save Settings</span> to take effect.
+          </p>
+          <textarea
+            id="cfg-ignore"
+            rows="6"
+            spellcheck="false"
+            class="w-full bg-card border border-border-main rounded-lg p-2 text-xs font-mono text-text-main focus:border-primary focus:outline-none transition"
+            placeholder=".venv&#10;node_modules&#10;__pycache__&#10;.git&#10;*.pyc&#10;.DS_Store"
+          ></textarea>
+          <div class="mt-3 flex justify-end">
+            <button
+              onclick="saveSettings()"
+              class="px-4 py-2 bg-primary hover:bg-primary/90 text-white text-xs font-bold rounded-lg shadow transition"
+            >
+              Save Settings
+            </button>
+          </div>
+        </section>
+
+        <!-- Server Info Panel -->
+        <section class="bg-panel p-6 rounded-2xl border border-border-main shadow-sm">
+          <h2 class="text-sm font-bold text-text-main uppercase tracking-wider mb-4 flex items-center gap-2">
+            <span>📊</span> Server Status & Metadata
+          </h2>
+          <div
+            id="server-info"
+            class="text-xs font-mono bg-card p-4 rounded-lg border border-border-main space-y-2 text-text-muted"
+          >
+            <p>Server Status: <span class="text-text-main font-bold">Checking...</span></p>
+          </div>
+        </section>
+      </div>
+
+      <!-- Section 2: Terminal Console -->
+      <div id="tab-terminal" class="hidden space-y-4">
+        <section class="bg-panel p-6 rounded-2xl border border-border-main shadow-sm flex flex-col h-[500px]">
+          <div class="flex items-center justify-between mb-4 shrink-0">
+            <h2 class="text-sm font-bold text-text-main uppercase tracking-wider flex items-center gap-2">
+              <span>💻</span> Host Shell Execution Test
+            </h2>
+            <button
+              onclick="clearConsole()"
+              class="px-3 py-1 bg-card hover:bg-hover border border-border-main text-xs font-bold rounded-lg transition"
+            >
+              Clear Console
+            </button>
+          </div>
+
+          <div class="flex gap-2 mb-4 shrink-0">
+            <input
+              type="text"
+              id="cmd-input"
+              class="flex-1 bg-card border border-border-main rounded-lg px-3 py-2 text-sm font-mono text-text-main focus:border-primary focus:outline-none"
+              placeholder="Enter bash command (e.g., ls -la, git status)..."
+              onkeydown="if (event.key === 'Enter') runCommand();"
+            />
+            <button
+              onclick="runCommand()"
+              class="px-4 py-2 bg-primary text-white text-xs font-bold rounded-lg hover:bg-primary/90 transition"
+            >
+              Run
+            </button>
+          </div>
+
+          <div
+            id="console-output"
+            class="flex-1 bg-black/90 text-green-400 p-4 rounded-lg font-mono text-xs overflow-y-auto space-y-2 whitespace-pre-wrap border border-border-main"
+          >
+            <div class="text-gray-500">// Terminal output will appear here...</div>
+          </div>
+        </section>
+      </div>
+
+      <!-- Section 3: Python Script -->
+      <div id="tab-script" class="hidden space-y-4">
+        <section class="bg-panel p-6 rounded-2xl border border-border-main shadow-sm flex flex-col h-[550px]">
+          <div class="flex items-center justify-between mb-4 shrink-0">
+            <div>
+              <h2 class="text-sm font-bold text-text-main uppercase tracking-wider flex items-center gap-2">
+                <span>🐍</span> Python Server Script (v2.1: Debounced Watchdog, Ignore Patterns & Bash Exec)
+              </h2>
+              <p class="text-xs text-text-muted mt-1">
+                Save as <code class="text-primary font-mono bg-primary/10 px-1 rounded">itera_sync_server.py</code> and
+                run with:
+                <code class="text-text-main font-mono bg-card px-1 rounded"
+                  >python itera_sync_server.py --dir ./workspace --port 8000</code
+                >
+              </p>
+              <p class="text-[10px] text-warning mt-1">
+                Updated from v2.0: fixes a missing <code class="bg-card px-1 rounded">on_moved</code> handler (directory
+                moves into the watched folder were previously invisible to the watcher), adds debounced/coalesced
+                rescanning to avoid CPU thrashing on large trees, and adds configurable ignore patterns. Existing
+                servers must be restarted with this updated script to pick up the fix.
+              </p>
+            </div>
+            <button
+              onclick="copyScript()"
+              id="btn-copy"
+              class="px-4 py-2 bg-primary hover:bg-primary/90 text-white text-xs font-bold rounded-lg shadow transition"
+            >
+              Copy Script
+            </button>
+          </div>
+          <div class="flex-1 bg-app border border-border-main rounded-lg overflow-hidden">
+            <textarea
+              id="script-content"
+              readonly
+              spellcheck="false"
+              class="w-full h-full bg-transparent text-xs font-mono text-text-main p-4 focus:outline-none resize-none whitespace-pre"
+            ></textarea>
+          </div>
+        </section>
+      </div>
+    </main>
+
+    <script>
+      const DOM = (id) => document.getElementById(id);
+      const PID = 'local_sync_daemon';
+
+      const pythonScript = \`import argparse
+import asyncio
+import fnmatch
+import hashlib
+import json
+import os
+import sqlite3
+import threading
+import time
+from pathlib import Path
+
+from fastapi import (
+    FastAPI,
+    Header,
+    HTTPException,
+    Request,
+    WebSocket,
+    WebSocketDisconnect,
+)
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse, Response
+from watchdog.events import FileSystemEventHandler
+from watchdog.observers import Observer
+
+parser = argparse.ArgumentParser(description="Itera OS Local Sync & Bridge Server v2")
+parser.add_argument(
+    "--dir", type=str, default="./workspace", help="Directory to sync with Itera OS"
+)
+parser.add_argument("--port", type=int, default=8000, help="Port to run the server on")
+parser.add_argument(
+    "--allow-bash",
+    action="store_true",
+    default=True,
+    help="Allow bash execution via API",
+)
+args = parser.parse_args()
+
+BASE_DIR = Path(args.dir).resolve()
+os.makedirs(BASE_DIR, exist_ok=True)
+META_DIR = BASE_DIR / ".itera_sync"
+os.makedirs(META_DIR, exist_ok=True)
+DB_PATH = META_DIR / "metadata.db"
+CONFIG_PATH = META_DIR / "config.json"
+
+DEFAULT_IGNORE_PATTERNS = [
+    ".venv",
+    "venv",
+    "node_modules",
+    "__pycache__",
+    ".git",
+    ".itera_sync",
+    "*.pyc",
+    ".DS_Store",
+    "dist",
+    "build",
+]
+
+# --- Debounce tuning ---
+# A burst of filesystem events (e.g. moving a large directory tree into the
+# watched folder) is coalesced into a single rescan instead of triggering one
+# full os.walk()+hash pass per event.
+DEBOUNCE_QUIET_SECONDS = 1.5
+DEBOUNCE_MAX_WAIT_SECONDS = 10
+PERIODIC_SAFETY_INTERVAL = 60
+
+app = FastAPI(title="Itera Sync & Bridge Server v2")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
+def init_db():
+    conn = sqlite3.connect(DB_PATH)
+    cur = conn.cursor()
+    cur.execute("PRAGMA journal_mode=WAL")
+    cur.execute(
+        """
+        CREATE TABLE IF NOT EXISTS nodes (
+            path TEXT PRIMARY KEY,
+            kind TEXT NOT NULL,
+            size INTEGER NOT NULL,
+            updatedAt INTEGER NOT NULL,
+            hash TEXT,
+            isDeleted INTEGER DEFAULT 0,
+            deletedAt INTEGER
+        )
+    """
+    )
+    cur.execute(
+        """
+        CREATE TABLE IF NOT EXISTS command_logs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            command TEXT NOT NULL,
+            cwd TEXT,
+            exitCode INTEGER,
+            stdout TEXT,
+            stderr TEXT,
+            executedAt INTEGER NOT NULL,
+            durationMs INTEGER NOT NULL
+        )
+    """
+    )
+    conn.commit()
+    conn.close()
+
+
+init_db()
+
+
+def get_db():
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    return conn
+
+
+# --- Ignore Pattern Management ---
+ignore_lock = threading.Lock()
+
+
+def load_ignore_patterns():
+    try:
+        with open(CONFIG_PATH, "r", encoding="utf-8") as f:
+            data = json.load(f)
+            pats = data.get("ignorePatterns")
+            if isinstance(pats, list) and pats:
+                return [str(p) for p in pats]
+    except Exception:
+        pass
+    return list(DEFAULT_IGNORE_PATTERNS)
+
+
+ignore_patterns = load_ignore_patterns()
+
+
+def save_ignore_patterns(patterns):
+    global ignore_patterns
+    with ignore_lock:
+        ignore_patterns = list(patterns)
+    try:
+        with open(CONFIG_PATH, "w", encoding="utf-8") as f:
+            json.dump({"ignorePatterns": ignore_patterns}, f, indent=2)
+    except Exception as e:
+        print(f"[SyncServer] Failed to persist ignore patterns: {e}")
+
+
+def is_ignored_rel(rel_path: str) -> bool:
+    if not rel_path:
+        return False
+    parts = rel_path.split("/")
+    with ignore_lock:
+        patterns = list(ignore_patterns)
+    for raw in patterns:
+        pat = (raw or "").strip()
+        if not pat or pat.startswith("#"):
+            continue
+        if pat.endswith("/"):
+            pat = pat[:-1]
+        if not pat:
+            continue
+        if "/" in pat:
+            if fnmatch.fnmatch(rel_path, pat):
+                return True
+        else:
+            if any(fnmatch.fnmatch(seg, pat) for seg in parts):
+                return True
+    return False
+
+
+def get_safe_path(requested_path: str) -> Path:
+    clean_path = requested_path.lstrip("/")
+    target_path = (BASE_DIR / clean_path).resolve()
+    if not target_path.is_relative_to(BASE_DIR):
+        raise HTTPException(status_code=403, detail="Access Denied: Path Traversal")
+    return target_path
+
+
+def calc_hash(file_path: Path) -> str:
+    if not file_path.is_file():
+        return ""
+    sha256 = hashlib.sha256()
+    try:
+        with open(file_path, "rb") as f:
+            for chunk in iter(lambda: f.read(65536), b""):
+                sha256.update(chunk)
+        return sha256.hexdigest()
+    except Exception:
+        return ""
+
+
+def rescan_and_sync():
+    conn = get_db()
+    cur = conn.cursor()
+    now_ms = int(time.time() * 1000)
+    seen_paths = set()
+
+    for root, dirs, files in os.walk(BASE_DIR):
+        root_path = Path(root)
+        rel_root = root_path.relative_to(BASE_DIR).as_posix()
+        if rel_root == ".":
+            rel_root = ""
+
+        # Prune ignored / hidden subdirectories BEFORE os.walk descends into them.
+        # This is what makes ignoring ".venv" or similar actually cheap: their
+        # contents are never stat()'d or hashed at all.
+        pruned_dirs = []
+        for d in dirs:
+            if d.startswith(".") or d == "__pycache__":
+                continue
+            rel_d = f"{rel_root}/{d}" if rel_root else d
+            if is_ignored_rel(rel_d):
+                continue
+            pruned_dirs.append(d)
+        dirs[:] = pruned_dirs
+
+        if rel_root and not is_ignored_rel(rel_root):
+            seen_paths.add(rel_root)
+            cur.execute("SELECT kind, isDeleted FROM nodes WHERE path = ?", (rel_root,))
+            row = cur.fetchone()
+            if not row or row["kind"] != "directory" or row["isDeleted"] == 1:
+                cur.execute(
+                    """
+                    INSERT INTO nodes (path, kind, size, updatedAt, hash, isDeleted, deletedAt)
+                    VALUES (?, 'directory', 0, ?, NULL, 0, NULL)
+                    ON CONFLICT(path) DO UPDATE SET
+                        kind='directory', isDeleted=0, deletedAt=NULL
+                    """,
+                    (rel_root, now_ms),
+                )
+
+        for file in files:
+            if file.startswith("."):
+                continue
+            full_path = root_path / file
+            rel_path = full_path.relative_to(BASE_DIR).as_posix()
+            if is_ignored_rel(rel_path):
+                continue
+            seen_paths.add(rel_path)
+            stat = full_path.stat()
+            mtime = int(stat.st_mtime * 1000)
+
+            cur.execute(
+                "SELECT updatedAt, hash, isDeleted FROM nodes WHERE path = ?",
+                (rel_path,),
+            )
+            row = cur.fetchone()
+
+            if not row or row["isDeleted"] == 1 or row["updatedAt"] != mtime:
+                h = calc_hash(full_path)
+                cur.execute(
+                    """
+                    INSERT INTO nodes (path, kind, size, updatedAt, hash, isDeleted, deletedAt)
+                    VALUES (?, 'file', ?, ?, ?, 0, NULL)
+                    ON CONFLICT(path) DO UPDATE SET
+                        kind='file', size=excluded.size, updatedAt=excluded.updatedAt,
+                        hash=excluded.hash, isDeleted=0, deletedAt=NULL
+                """,
+                    (rel_path, stat.st_size, mtime, h),
+                )
+
+    cur.execute("SELECT path FROM nodes WHERE isDeleted = 0")
+    for row in cur.fetchall():
+        p = row["path"]
+        if p not in seen_paths:
+            cur.execute(
+                "UPDATE nodes SET isDeleted = 1, deletedAt = ? WHERE path = ?",
+                (now_ms, p),
+            )
+
+    conn.commit()
+    conn.close()
+
+
+rescan_and_sync()
+
+
+class ConnectionManager:
+    def __init__(self):
+        self.active_connections: list[WebSocket] = []
+
+    async def connect(self, websocket: WebSocket):
+        await websocket.accept()
+        self.active_connections.append(websocket)
+
+    def disconnect(self, websocket: WebSocket):
+        if websocket in self.active_connections:
+            self.active_connections.remove(websocket)
+
+    async def broadcast(self, message: dict):
+        for connection in list(self.active_connections):
+            try:
+                await connection.send_json(message)
+            except Exception:
+                pass
+
+
+manager = ConnectionManager()
+
+
+@app.get("/api/status")
+def get_status():
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute("SELECT COUNT(*) as count FROM nodes WHERE isDeleted = 0")
+    count = cur.fetchone()["count"]
+    conn.close()
+    return {
+        "status": "online",
+        "version": "2.1.0",
+        "syncDir": str(BASE_DIR),
+        "allowBash": args.allow_bash,
+        "activeNodes": count,
+    }
+
+
+@app.get("/api/meta")
+def get_metadata():
+    # NOTE: v2.0 used to call rescan_and_sync() synchronously here on every
+    # single request. Since the client polls this endpoint on every
+    # reconciliation cycle, that turned each poll into a full-tree os.walk(),
+    # which became the dominant CPU cost for large directories. Freshness is
+    # now guaranteed by the debounced watchdog loop (mark_dirty -> rescan)
+    # plus a periodic safety-net rescan; this endpoint just reads the DB.
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute("SELECT path, kind, size, updatedAt, hash, isDeleted FROM nodes")
+    rows = cur.fetchall()
+    conn.close()
+
+    result = {}
+    for r in rows:
+        result[r["path"]] = {
+            "kind": r["kind"],
+            "size": r["size"],
+            "updatedAt": r["updatedAt"],
+            "hash": r["hash"],
+            "isDeleted": bool(r["isDeleted"]),
+        }
+    return result
+
+
+@app.get("/api/config")
+def get_config():
+    with ignore_lock:
+        return {"ignorePatterns": list(ignore_patterns)}
+
+
+@app.post("/api/config")
+async def update_config(request: Request):
+    body = await request.json()
+    patterns = body.get("ignorePatterns")
+    if not isinstance(patterns, list):
+        raise HTTPException(
+            status_code=400, detail="ignorePatterns must be a list of strings"
+        )
+    patterns = [str(p) for p in patterns]
+    save_ignore_patterns(patterns)
+    mark_dirty()
+    return {"status": "ok", "ignorePatterns": patterns}
+
+
+@app.get("/api/file/{path:path}")
+def download_file(path: str):
+    target = get_safe_path(path)
+    if not target.is_file():
+        raise HTTPException(status_code=404, detail="File not found")
+    return FileResponse(target)
+
+
+@app.put("/api/file/{path:path}")
+async def upload_file(
+    path: str, request: Request, x_expected_hash: str | None = Header(None)
+):
+    target = get_safe_path(path)
+    if target.is_file() and x_expected_hash:
+        current_hash = calc_hash(target)
+        if current_hash and current_hash != x_expected_hash:
+            raise HTTPException(
+                status_code=409,
+                detail=f"Conflict: Expected hash {x_expected_hash}, got {current_hash}",
+            )
+
+    target.parent.mkdir(parents=True, exist_ok=True)
+    body = await request.body()
+    with open(target, "wb") as f:
+        f.write(body)
+
+    mtime = int(target.stat().st_mtime * 1000)
+    new_hash = calc_hash(target)
+
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute(
+        """
+        INSERT INTO nodes (path, kind, size, updatedAt, hash, isDeleted, deletedAt)
+        VALUES (?, 'file', ?, ?, ?, 0, NULL)
+        ON CONFLICT(path) DO UPDATE SET
+            kind='file', size=excluded.size, updatedAt=excluded.updatedAt,
+            hash=excluded.hash, isDeleted=0, deletedAt=NULL
+    """,
+        (path, len(body), mtime, new_hash),
+    )
+    conn.commit()
+    conn.close()
+
+    return {"status": "ok", "hash": new_hash, "updatedAt": mtime}
+
+
+@app.delete("/api/file/{path:path}")
+def delete_file(path: str, x_expected_hash: str | None = Header(None)):
+    target = get_safe_path(path)
+    now_ms = int(time.time() * 1000)
+
+    if target.is_file():
+        if x_expected_hash:
+            current_hash = calc_hash(target)
+            if current_hash and current_hash != x_expected_hash:
+                raise HTTPException(
+                    status_code=409, detail="Conflict: File changed before delete"
+                )
+        target.unlink()
+
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute(
+        "UPDATE nodes SET isDeleted = 1, deletedAt = ? WHERE path = ?", (now_ms, path)
+    )
+    conn.commit()
+    conn.close()
+
+    return {"status": "ok"}
+
+
+@app.post("/api/exec")
+async def execute_bash(request: Request):
+    if not args.allow_bash:
+        raise HTTPException(status_code=403, detail="Bash execution disabled on server")
+
+    body = await request.json()
+    command = body.get("command", "").strip()
+    cwd_rel = body.get("cwd", ".").strip()
+    timeout_sec = min(int(body.get("timeout", 30)), 300)
+
+    if not command:
+        raise HTTPException(status_code=400, detail="Command cannot be empty")
+
+    work_dir = get_safe_path(cwd_rel)
+    if not work_dir.is_dir():
+        work_dir = BASE_DIR
+
+    start_time = time.time()
+    try:
+        proc = await asyncio.create_subprocess_shell(
+            command,
+            cwd=str(work_dir),
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        stdout_bytes, stderr_bytes = await asyncio.wait_for(
+            proc.communicate(), timeout=timeout_sec
+        )
+        exit_code = proc.returncode
+        stdout = stdout_bytes.decode("utf-8", errors="replace")
+        stderr = stderr_bytes.decode("utf-8", errors="replace")
+    except asyncio.TimeoutError:
+        try:
+            proc.kill()
+        except Exception:
+            pass
+        exit_code = -1
+        stdout = ""
+        stderr = f"Command timed out after {timeout_sec} seconds"
+
+    duration_ms = int((time.time() - start_time) * 1000)
+
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute(
+        """
+        INSERT INTO command_logs (command, cwd, exitCode, stdout, stderr, executedAt, durationMs)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+    """,
+        (
+            command,
+            cwd_rel,
+            exit_code,
+            stdout,
+            stderr,
+            int(start_time * 1000),
+            duration_ms,
+        ),
+    )
+    conn.commit()
+    conn.close()
+
+    exec_event = {
+        "type": "cmd_exec",
+        "command": command,
+        "cwd": cwd_rel,
+        "exitCode": exit_code,
+        "stdout": stdout,
+        "stderr": stderr,
+        "durationMs": duration_ms,
+    }
+    await manager.broadcast(exec_event)
+
+    return exec_event
+
+
+@app.websocket("/ws")
+async def websocket_endpoint(websocket: WebSocket):
+    await manager.connect(websocket)
+    try:
+        while True:
+            await websocket.receive_text()
+    except WebSocketDisconnect:
+        manager.disconnect(websocket)
+
+
+# --- Debounced, coalesced filesystem event handling ---
+# A single rescan can be expensive on large trees, so instead of running one
+# per raw watchdog event, we mark the tree "dirty" and let a background loop
+# collapse bursts of events into one rescan (quiet-period debounce, with a
+# max-wait cap so a continuous stream of events doesn't starve updates).
+_state_lock = threading.Lock()
+_dirty = False
+_last_event_time = 0.0
+_window_start_time = 0.0
+_last_rescan_time = time.time()
+
+
+def mark_dirty():
+    global _dirty, _last_event_time, _window_start_time
+    with _state_lock:
+        now = time.time()
+        if not _dirty:
+            _window_start_time = now
+        _dirty = True
+        _last_event_time = now
+
+
+def _debounce_loop():
+    global _dirty, _last_rescan_time
+    while True:
+        time.sleep(0.5)
+        do_rescan = False
+        with _state_lock:
+            now = time.time()
+            if _dirty and (
+                (now - _last_event_time >= DEBOUNCE_QUIET_SECONDS)
+                or (now - _window_start_time >= DEBOUNCE_MAX_WAIT_SECONDS)
+            ):
+                do_rescan = True
+                _dirty = False
+            elif not _dirty and (now - _last_rescan_time >= PERIODIC_SAFETY_INTERVAL):
+                do_rescan = True
+
+        if do_rescan:
+            try:
+                rescan_and_sync()
+            except Exception as e:
+                print(f"[SyncServer] Rescan failed: {e}")
+            _last_rescan_time = time.time()
+            if loop:
+                try:
+                    asyncio.run_coroutine_threadsafe(
+                        manager.broadcast({"type": "sync"}), loop
+                    )
+                except Exception:
+                    pass
+
+
+class LocalFileEventHandler(FileSystemEventHandler):
+    def _mark(self, src_path: str):
+        full_path = Path(src_path)
+        if ".itera_sync" in full_path.parts or full_path.name.startswith("."):
+            return
+        try:
+            rel_path = full_path.relative_to(BASE_DIR).as_posix()
+        except ValueError:
+            return
+        if is_ignored_rel(rel_path):
+            return
+        mark_dirty()
+
+    def on_created(self, event):
+        self._mark(event.src_path)
+
+    def on_modified(self, event):
+        if not event.is_directory:
+            self._mark(event.src_path)
+
+    def on_deleted(self, event):
+        self._mark(event.src_path)
+
+    def on_moved(self, event):
+        # CRITICAL FIX (v2.1): v2.0 never overrode on_moved, so moving (mv) a
+        # file or directory into/within the watched folder was completely
+        # invisible to the watcher. It only ever got picked up because
+        # /api/meta used to trigger a synchronous full rescan on every client
+        # poll -- which is also why large directory moves appeared "stuck":
+        # the server was repeatedly re-walking the entire tree from scratch
+        # on every ~1s poll instead of reacting to the move event directly.
+        self._mark(event.src_path)
+        self._mark(event.dest_path)
+
+
+observer = None
+loop = None
+
+
+@app.on_event("startup")
+def startup_event():
+    global observer, loop, _last_rescan_time
+    loop = asyncio.get_running_loop()
+    _last_rescan_time = time.time()
+    print(f"[*] Itera Sync & Bridge Server v2 mounted at: {BASE_DIR}")
+    event_handler = LocalFileEventHandler()
+    observer = Observer()
+    observer.schedule(event_handler, str(BASE_DIR), recursive=True)
+    observer.start()
+
+    debounce_thread = threading.Thread(target=_debounce_loop, daemon=True)
+    debounce_thread.start()
+
+
+@app.on_event("shutdown")
+def shutdown_event():
+    if observer:
+        observer.stop()
+        observer.join()
+
+
+if __name__ == "__main__":
+    import uvicorn
+
+    uvicorn.run("itera_sync_server:app", host="127.0.0.1", port=args.port, reload=True)
+\`.trim();
+
+      function switchTab(tab) {
+        ['settings', 'terminal', 'script'].forEach((t) => {
+          DOM(\`tab-\${t}\`).classList.toggle('hidden', t !== tab);
+          const btn = DOM(\`tab-btn-\${t}\`);
+          if (t === tab) {
+            btn.className = 'px-4 py-2 text-sm font-bold border-b-2 border-primary text-primary transition';
+          } else {
+            btn.className =
+              'px-4 py-2 text-sm font-bold border-b-2 border-transparent text-text-muted hover:text-text-main transition';
+          }
+        });
+      }
+
+      const DEFAULT_IGNORE_PATTERNS = [
+        '.venv',
+        'venv',
+        'node_modules',
+        '__pycache__',
+        '.git',
+        '*.pyc',
+        '.DS_Store',
+        'dist',
+        'build',
+      ];
+
+      async function loadSettings() {
+        DOM('script-content').value = pythonScript;
+        let config = {
+          mountPath: 'data/local_sync',
+          serverUrl: 'http://127.0.0.1:8000',
+          allowBash: true,
+          ignorePatterns: DEFAULT_IGNORE_PATTERNS,
+        };
+        try {
+          const str = await MetaOS.fs.read('system/config/local_sync.json');
+          config = { ...config, ...JSON.parse(str) };
+        } catch {}
+        DOM('cfg-mount').value = config.mountPath;
+        DOM('cfg-url').value = config.serverUrl;
+        DOM('toggle-bash').checked = config.allowBash !== false;
+        const patterns = Array.isArray(config.ignorePatterns) ? config.ignorePatterns : DEFAULT_IGNORE_PATTERNS;
+        DOM('cfg-ignore').value = patterns.join('\\n');
+
+        const ps = await MetaOS.system.ps();
+        const daemon = ps.find(
+          (p) => p.pid === PID || p.path === 'system/services/local_sync.html' || p.path === 'services/local_sync.html',
+        );
+        DOM('toggle-daemon').checked = !!daemon;
+
+        testConnection();
+      }
+
+      async function saveSettings() {
+        const ignorePatterns = DOM('cfg-ignore')
+          .value.split('\\n')
+          .map((s) => s.trim())
+          .filter((s) => s.length > 0 && !s.startsWith('#'));
+
+        const config = {
+          mountPath: DOM('cfg-mount').value.trim() || 'data/local_sync',
+          serverUrl: DOM('cfg-url').value.trim() || 'http://127.0.0.1:8000',
+          allowBash: DOM('toggle-bash').checked,
+          ignorePatterns: ignorePatterns.length > 0 ? ignorePatterns : DEFAULT_IGNORE_PATTERNS,
+        };
+        await MetaOS.fs.write('system/config/local_sync.json', JSON.stringify(config, null, 2), { overwrite: true });
+
+        // Best-effort: push the ignore list to the running server immediately,
+        // so the user doesn't have to restart the daemon to see it take effect.
+        try {
+          await fetch(\`\${config.serverUrl}/api/config\`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ignorePatterns: config.ignorePatterns }),
+          });
+        } catch (e) {
+          // Server may be offline; the daemon will push this config again on next boot.
+        }
+
+        MetaOS.host.notify('Settings saved successfully.', 'Local Sync');
+        testConnection();
+      }
+
+      async function toggleDaemon(enabled) {
+        await saveSettings();
+        if (enabled) {
+          await MetaOS.system.spawn('system/services/local_sync.html', { pid: PID, type: 'daemon', force: true });
+          MetaOS.host.notify('Daemon started', 'Local Sync');
+        } else {
+          await MetaOS.system.kill(PID);
+          MetaOS.host.notify('Daemon stopped', 'Local Sync');
+        }
+        testConnection();
+      }
+
+      async function testConnection() {
+        const url = DOM('cfg-url').value.trim() || 'http://127.0.0.1:8000';
+        try {
+          const res = await fetch(\`\${url}/api/status\`);
+          if (!res.ok) throw new Error(\`HTTP \${res.status}\`);
+          const data = await res.json();
+
+          DOM('status-indicator').className = 'w-2 h-2 rounded-full bg-success';
+          DOM('status-text').innerText = 'Online';
+          DOM('server-info').innerHTML = \`
+            <p>Status: <span class="text-success font-bold">Online v\${data.version}</span></p>
+            <p>Sync Directory: <span class="text-text-main">\${data.syncDir}</span></p>
+            <p>Bash Exec Enabled: <span class="text-text-main">\${data.allowBash ? 'Yes' : 'No'}</span></p>
+            <p>Active Nodes: <span class="text-text-main">\${data.activeNodes} files</span></p>
+          \`;
+        } catch (e) {
+          DOM('status-indicator').className = 'w-2 h-2 rounded-full bg-error';
+          DOM('status-text').innerText = 'Offline';
+          DOM('server-info').innerHTML = \`<p class="text-error">Server unreachable: \${e.message}</p>\`;
+        }
+      }
+
+      async function runCommand() {
+        const cmd = DOM('cmd-input').value.trim();
+        if (!cmd) return;
+        const url = DOM('cfg-url').value.trim() || 'http://127.0.0.1:8000';
+        const output = DOM('console-output');
+
+        output.innerHTML += \`<div><span class="text-primary font-bold">$ \${cmd}</span></div>\`;
+
+        try {
+          const res = await fetch(\`\${url}/api/exec\`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ command: cmd, timeout: 30 }),
+          });
+          const data = await res.json();
+          output.innerHTML += \`<div class="text-gray-400">[Exit: \${data.exitCode}] (\${data.durationMs}ms)</div>\`;
+          if (data.stdout) output.innerHTML += \`<div class="text-green-300">\${escapeHtml(data.stdout)}</div>\`;
+          if (data.stderr) output.innerHTML += \`<div class="text-red-400">\${escapeHtml(data.stderr)}</div>\`;
+        } catch (e) {
+          output.innerHTML += \`<div class="text-error">Execution Error: \${e.message}</div>\`;
+        }
+        output.scrollTop = output.scrollHeight;
+        DOM('cmd-input').value = '';
+      }
+
+      function clearConsole() {
+        DOM('console-output').innerHTML = '<div class="text-gray-500">// Terminal output cleared.</div>';
+      }
+
+      function copyScript() {
+        MetaOS.host.copyText(pythonScript);
+        MetaOS.host.notify('Python script copied to clipboard', 'Local Sync');
+      }
+
+      function escapeHtml(str) {
+        return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      }
+
+      window.addEventListener('load', loadSettings);
+    </script>
+  </body>
+</html>
+`.trim(),
+
+  "system/config/appearance.json": JSON.stringify({
+  "theme": "system/themes/light.json",
+  "typography": {
+    "uiFont": "Inter",
+    "monoFont": "monospace",
+    "fontSize": "medium"
+  },
+  "layout": {
+    "animations": true,
+    "homePath": "apps/home.html"
+  },
+  "locale": "en"
+}, null, 2),
+
+  "system/config/gdrive.json": JSON.stringify({
+  "clientId": "1005453887146-hif63i8bdng5kf75067nu7gquea617ps.apps.googleusercontent.com",
+  "scope": "https://www.googleapis.com/auth/drive.file",
+  "mountPath": "drive",
+  "folderId": null,
+  "folderName": null
+}, null, 2),
+
+  "system/config/llm.json": JSON.stringify({
+  "model": "gemini-3.6-flash"
+}, null, 2),
+
+  "system/config/network.json": JSON.stringify({
+  "proxyUrl": "https://corsproxy.io/?",
+  "allowCredentialsWithProxy": false
+}, null, 2),
+
+  "system/config/preferences.json": JSON.stringify({
+  "username": "User",
+  "agentName": "Itera",
+  "language": "English",
+  "autoUpdateSystemFiles": true
+}, null, 2),
+
+  "system/core/std.js": `
 /**
  * Itera OS v2 Guest Standard Library (std.js)
  * Clean, generic VFS and OS utilities for Guest Applications.
@@ -5820,7 +6848,7 @@ Use this Codex as a guidepost, and build a better Itera OS together with the use
 })(window);
 `.trim(),
 
-  'system/core/tw.js': `
+  "system/core/tw.js": `
 (() => {
   var qv = Object.create;
   var Hi = Object.defineProperty;
@@ -26392,7 +27420,7 @@ Check your Browserslist config to be sure that your targets are set up correctly
 /*! https://mths.be/cssesc v3.0.0 by @mathias */
 `.trim(),
 
-  'system/core/ui.js': `
+  "system/core/ui.js": `
 /**
  * Itera Guest UI Kit (ui.js) v2
  * Provides theme configuration, shared UI utilities, and OS-native dialogs.
@@ -26622,526 +27650,1313 @@ Check your Browserslist config to be sure that your targets are set up correctly
 })(window);
 `.trim(),
 
-  'system/registry/apps.json': JSON.stringify(
-    [
+  "system/credentials/README.md": `
+# system/credentials/
+
+**認証情報の一元管理領域。**
+
+## 目的
+
+PAT・API キー・OAuth トークンなどをここに集約する。
+
+散在させないのは、**クラウド同期の除外を「1 ディレクトリ」で表現するため**である。
+認証情報が \`system/config/\` や \`memory/\` に紛れていると、同期対象を広げるたびに
+除外漏れが生まれ、**認証情報が平文でクラウドへ流出する。**
+
+## ルール
+
+- 🔴 **この領域をクラウド同期の対象に含めてはならない。**
+- 端末を移行する場合、認証情報は同期ではなく**各端末で個別に設定する。**
+- 権限は R/W（デーモンが読み、認証アダプタが書くため）。
+  したがってゲストアプリからも読める。**秘匿性が要る値をここ以外に置かないこと**と同時に、
+  **信頼できないアプリを動かさないこと**が前提になる。
+
+## 命名
+
+プロバイダごとに 1 ファイル。
+
+\`\`\`
+system/credentials/github.json     { "pat": "..." }
+system/credentials/telegram.json   { "botToken": "...", "chatId": "..." }
+system/credentials/gdrive.json     { "clientId": "..." }
+\`\`\`
+
+## 注意
+
+- **短命なトークン（OAuth のアクセストークン等）は \`system/temp/\` に置いてよい。**
+  セッションリセットで破棄されるため、そちらのほうが安全な場合がある。
+  いずれにせよ \`system/temp/\` も同期対象外である。
+- 値を確認するときは、ファイルを直接開かず**キー構造だけ**を見ること。
+  会話ログに平文で残る。`.trim(),
+
+  "system/registry/adapters.json": JSON.stringify({
+  "adapters": [
+    {
+      "id": "google_drive",
+      "name": "Google Drive",
+      "path": "system/adapters/google_drive_auth.js",
+      "description": "Google Drive の 1 フォルダを drive/ にマウントする",
+      "enabled": true
+    }
+  ]
+}, null, 2),
+
+  "system/registry/apps.json": JSON.stringify([
+  {
+    "id": "notes",
+    "name": "Notes",
+    "icon": "📝",
+    "path": "apps/notes.html",
+    "description": "Markdown text editor",
+    "fileHandlers": [
       {
-        id: 'notes',
-        name: 'Notes',
-        icon: '📝',
-        path: 'apps/notes.html',
-        description: 'Markdown text editor',
-        fileHandlers: [
-          {
-            action: 'view',
-            extensions: ['md', 'txt'],
-            mimeTypes: ['text/markdown', 'text/plain'],
-          },
+        "action": "view",
+        "extensions": [
+          "md",
+          "txt"
         ],
-      },
-      {
-        id: 'tasks',
-        name: 'Tasks',
-        icon: '✅',
-        path: 'apps/tasks.html',
-        description: 'Manage daily to-dos',
-      },
-      {
-        id: 'calendar',
-        name: 'Calendar',
-        icon: '📅',
-        path: 'apps/calendar.html',
-        description: 'Monthly calendar and events',
-      },
-      {
-        id: 'settings',
-        name: 'Settings',
-        icon: '⚙️',
-        path: 'system/apps/settings.html',
-        description: 'System configuration',
-      },
-      {
-        id: 'billing',
-        name: 'Billing',
-        icon: '💳',
-        path: 'system/apps/billing.html',
-        description: 'API usage and cost dashboard',
-      },
-      {
-        id: 'local_sync',
-        name: 'Local Sync',
-        icon: '🔄',
-        path: 'apps/sync_app.html',
-        description: 'Sync VFS with local machine',
-      },
-    ],
-    null,
-    2,
-  ),
+        "mimeTypes": [
+          "text/markdown",
+          "text/plain"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "tasks",
+    "name": "Tasks",
+    "icon": "✅",
+    "path": "apps/tasks.html",
+    "description": "Manage daily to-dos"
+  },
+  {
+    "id": "calendar",
+    "name": "Calendar",
+    "icon": "📅",
+    "path": "apps/calendar.html",
+    "description": "Monthly calendar and events"
+  },
+  {
+    "id": "settings",
+    "name": "Settings",
+    "icon": "⚙️",
+    "path": "system/apps/settings.html",
+    "description": "System configuration"
+  },
+  {
+    "id": "billing",
+    "name": "Billing",
+    "icon": "💳",
+    "path": "system/apps/billing.html",
+    "description": "API usage and cost dashboard"
+  },
+  {
+    "id": "local_sync",
+    "name": "Local Sync",
+    "icon": "🔄",
+    "path": "system/apps/sync_app.html",
+    "description": "Sync VFS with local machine"
+  }
+], null, 2),
 
-  'system/registry/associations.json': JSON.stringify(
+  "system/registry/associations.json": JSON.stringify({
+  "extensions": {
+    "md": "notes",
+    "txt": "notes"
+  },
+  "mimeTypes": {
+    "text/markdown": "notes",
+    "text/plain": "notes"
+  }
+}, null, 2),
+
+  "system/registry/llm_profiles.json": JSON.stringify({
+  "providers": [
     {
-      extensions: {
-        md: 'notes',
-        txt: 'notes',
+      "id": "google",
+      "name": "Google (Gemini)",
+      "placeholder": "AIzaSy...",
+      "requiresUrl": false,
+      "defaultCapabilities": {
+        "maxMediaSizeMB": 100,
+        "supportedMimes": [
+          "application/pdf",
+          "image/*",
+          "video/*",
+          "audio/*"
+        ]
       },
-      mimeTypes: {
-        'text/markdown': 'notes',
-        'text/plain': 'notes',
+      "defaultConfig": {
+        "generationConfig": {
+          "thinkingConfig": {
+            "thinkingLevel": null,
+            "thinkingBudget": null
+          },
+          "maxOutputTokens": null,
+          "temperature": null
+        }
       },
+      "models": [
+        {
+          "id": "gemini-3.6-flash",
+          "name": "Gemini 3.6 Flash",
+          "contextTokens": 1048576,
+          "pricing": {
+            "input": 1.5,
+            "cached": 0.15,
+            "output": 7.5
+          },
+          "capabilities": {
+            "maxMediaSizeMB": 100,
+            "supportedMimes": [
+              "application/pdf",
+              "image/*",
+              "video/*",
+              "audio/*"
+            ]
+          },
+          "defaultConfig": {
+            "generationConfig": {
+              "thinkingConfig": {
+                "thinkingLevel": "medium"
+              }
+            }
+          }
+        },
+        {
+          "id": "gemini-3.5-flash",
+          "name": "Gemini 3.5 Flash",
+          "contextTokens": 1048576,
+          "pricing": {
+            "input": 1.5,
+            "cached": 0.15,
+            "output": 9
+          },
+          "capabilities": {
+            "maxMediaSizeMB": 100,
+            "supportedMimes": [
+              "application/pdf",
+              "image/*",
+              "video/*",
+              "audio/*"
+            ]
+          },
+          "defaultConfig": {
+            "generationConfig": {
+              "thinkingConfig": {
+                "thinkingLevel": "medium"
+              }
+            }
+          }
+        },
+        {
+          "id": "gemini-3.1-pro-preview",
+          "name": "Gemini 3.1 Pro",
+          "contextTokens": 1048576,
+          "pricing": {
+            "tiers": [
+              {
+                "maxTokens": 200000,
+                "input": 2,
+                "cached": 0.2,
+                "output": 12
+              },
+              {
+                "maxTokens": null,
+                "input": 4,
+                "cached": 0.4,
+                "output": 18
+              }
+            ]
+          },
+          "capabilities": {
+            "maxMediaSizeMB": 100,
+            "supportedMimes": [
+              "application/pdf",
+              "image/*",
+              "video/*",
+              "audio/*"
+            ]
+          },
+          "defaultConfig": {
+            "generationConfig": {
+              "thinkingConfig": {
+                "thinkingLevel": "high"
+              }
+            }
+          }
+        },
+        {
+          "id": "gemini-3.1-flash-lite",
+          "name": "Gemini 3.1 Flash Lite",
+          "contextTokens": 1048576,
+          "pricing": {
+            "input": 0.25,
+            "cached": 0.025,
+            "output": 1.5
+          },
+          "defaultConfig": {
+            "generationConfig": {
+              "thinkingConfig": {
+                "thinkingLevel": "minimal"
+              }
+            }
+          }
+        },
+        {
+          "id": "gemini-3-flash-preview",
+          "name": "Gemini 3 Flash",
+          "contextTokens": 1048576,
+          "pricing": {
+            "input": 0.5,
+            "cached": 0.05,
+            "output": 3
+          },
+          "defaultConfig": {
+            "generationConfig": {
+              "thinkingConfig": {
+                "thinkingLevel": "high"
+              }
+            }
+          }
+        }
+      ]
     },
-    null,
-    2,
-  ),
-
-  'system/registry/llm_profiles.json': JSON.stringify(
     {
-      providers: [
+      "id": "openai",
+      "name": "OpenAI",
+      "placeholder": "sk-proj-...",
+      "requiresUrl": false,
+      "defaultCapabilities": {
+        "maxMediaSizeMB": 50,
+        "supportedMimes": [
+          "image/*",
+          "application/pdf",
+          "application/vnd.openxmlformats-officedocument.*",
+          "text/*",
+          "application/json"
+        ]
+      },
+      "defaultConfig": {
+        "reasoning_effort": null,
+        "max_completion_tokens": null,
+        "max_tokens": null,
+        "temperature": null
+      },
+      "models": [
         {
-          id: 'google',
-          name: 'Google (Gemini)',
-          placeholder: 'AIzaSy...',
-          requiresUrl: false,
-          defaultCapabilities: {
-            maxMediaSizeMB: 100,
-            supportedMimes: ['application/pdf', 'image/*', 'video/*', 'audio/*'],
-          },
-          defaultConfig: {
-            generationConfig: {
-              thinkingConfig: {
-                thinkingLevel: null,
-                thinkingBudget: null,
+          "id": "gpt-5.6-sol",
+          "name": "GPT-5.6 Sol",
+          "contextTokens": 1050000,
+          "pricing": {
+            "tiers": [
+              {
+                "maxTokens": 271999,
+                "input": 5,
+                "cached": 0.5,
+                "cacheWrite": 6.25,
+                "output": 30
               },
-              maxOutputTokens: null,
-              temperature: null,
-            },
-          },
-          models: [
-            {
-              id: 'gemini-3.6-flash',
-              name: 'Gemini 3.6 Flash',
-              contextTokens: 1048576,
-              pricing: {
-                input: 1.5,
-                cached: 0.15,
-                output: 7.5,
-              },
-              capabilities: {
-                maxMediaSizeMB: 100,
-                supportedMimes: ['application/pdf', 'image/*', 'video/*', 'audio/*'],
-              },
-              defaultConfig: {
-                generationConfig: {
-                  thinkingConfig: {
-                    thinkingLevel: 'medium',
-                  },
-                },
-              },
-            },
-            {
-              id: 'gemini-3.5-flash',
-              name: 'Gemini 3.5 Flash',
-              contextTokens: 1048576,
-              pricing: {
-                input: 1.5,
-                cached: 0.15,
-                output: 9,
-              },
-              capabilities: {
-                maxMediaSizeMB: 100,
-                supportedMimes: ['application/pdf', 'image/*', 'video/*', 'audio/*'],
-              },
-              defaultConfig: {
-                generationConfig: {
-                  thinkingConfig: {
-                    thinkingLevel: 'medium',
-                  },
-                },
-              },
-            },
-            {
-              id: 'gemini-3.1-pro-preview',
-              name: 'Gemini 3.1 Pro',
-              contextTokens: 1048576,
-              pricing: {
-                tiers: [
-                  {
-                    maxTokens: 200000,
-                    input: 2,
-                    cached: 0.2,
-                    output: 12,
-                  },
-                  {
-                    maxTokens: null,
-                    input: 4,
-                    cached: 0.4,
-                    output: 18,
-                  },
-                ],
-              },
-              capabilities: {
-                maxMediaSizeMB: 100,
-                supportedMimes: ['application/pdf', 'image/*', 'video/*', 'audio/*'],
-              },
-              defaultConfig: {
-                generationConfig: {
-                  thinkingConfig: {
-                    thinkingLevel: 'high',
-                  },
-                },
-              },
-            },
-            {
-              id: 'gemini-3.1-flash-lite',
-              name: 'Gemini 3.1 Flash Lite',
-              contextTokens: 1048576,
-              pricing: {
-                input: 0.25,
-                cached: 0.025,
-                output: 1.5,
-              },
-              defaultConfig: {
-                generationConfig: {
-                  thinkingConfig: {
-                    thinkingLevel: 'minimal',
-                  },
-                },
-              },
-            },
-            {
-              id: 'gemini-3-flash-preview',
-              name: 'Gemini 3 Flash',
-              contextTokens: 1048576,
-              pricing: {
-                input: 0.5,
-                cached: 0.05,
-                output: 3,
-              },
-              defaultConfig: {
-                generationConfig: {
-                  thinkingConfig: {
-                    thinkingLevel: 'high',
-                  },
-                },
-              },
-            },
-          ],
+              {
+                "maxTokens": null,
+                "input": 10,
+                "cached": 1,
+                "cacheWrite": 12.5,
+                "output": 45
+              }
+            ]
+          }
         },
         {
-          id: 'openai',
-          name: 'OpenAI',
-          placeholder: 'sk-proj-...',
-          requiresUrl: false,
-          defaultCapabilities: {
-            maxMediaSizeMB: 50,
-            supportedMimes: [
-              'image/*',
-              'application/pdf',
-              'application/vnd.openxmlformats-officedocument.*',
-              'text/*',
-              'application/json',
-            ],
-          },
-          defaultConfig: {
-            reasoning_effort: null,
-            max_completion_tokens: null,
-            max_tokens: null,
-            temperature: null,
-          },
-          models: [
-            {
-              id: 'gpt-5.6-sol',
-              name: 'GPT-5.6 Sol',
-              contextTokens: 1050000,
-              pricing: {
-                tiers: [
-                  {
-                    maxTokens: 271999,
-                    input: 5,
-                    cached: 0.5,
-                    cacheWrite: 6.25,
-                    output: 30,
-                  },
-                  {
-                    maxTokens: null,
-                    input: 10,
-                    cached: 1,
-                    cacheWrite: 12.5,
-                    output: 45,
-                  },
-                ],
+          "id": "gpt-5.6-terra",
+          "name": "GPT-5.6 Terra",
+          "contextTokens": 1050000,
+          "pricing": {
+            "tiers": [
+              {
+                "maxTokens": 271999,
+                "input": 2.5,
+                "cached": 0.25,
+                "cacheWrite": 3.125,
+                "output": 15
               },
-            },
-            {
-              id: 'gpt-5.6-terra',
-              name: 'GPT-5.6 Terra',
-              contextTokens: 1050000,
-              pricing: {
-                tiers: [
-                  {
-                    maxTokens: 271999,
-                    input: 2.5,
-                    cached: 0.25,
-                    cacheWrite: 3.125,
-                    output: 15,
-                  },
-                  {
-                    maxTokens: null,
-                    input: 5,
-                    cached: 0.5,
-                    cacheWrite: 6.25,
-                    output: 22.5,
-                  },
-                ],
-              },
-            },
-            {
-              id: 'gpt-5.6-luna',
-              name: 'GPT-5.6 Luna',
-              contextTokens: 1050000,
-              pricing: {
-                tiers: [
-                  {
-                    maxTokens: 271999,
-                    input: 1,
-                    cached: 0.1,
-                    cacheWrite: 1.25,
-                    output: 6,
-                  },
-                  {
-                    maxTokens: null,
-                    input: 2,
-                    cached: 0.2,
-                    cacheWrite: 2.5,
-                    output: 9,
-                  },
-                ],
-              },
-            },
-            {
-              id: 'gpt-5.5',
-              name: 'GPT-5.5',
-              contextTokens: 1050000,
-              pricing: {
-                tiers: [
-                  {
-                    maxTokens: 271999,
-                    input: 5,
-                    cached: 0.5,
-                    output: 30,
-                  },
-                  {
-                    maxTokens: null,
-                    input: 10,
-                    cached: 1,
-                    output: 45,
-                  },
-                ],
-              },
-            },
-            {
-              id: 'gpt-5.5-pro',
-              name: 'GPT-5.5 Pro',
-              contextTokens: 1050000,
-              pricing: {
-                tiers: [
-                  {
-                    maxTokens: 271999,
-                    input: 30,
-                    cached: null,
-                    output: 180,
-                  },
-                  {
-                    maxTokens: null,
-                    input: 60,
-                    cached: null,
-                    output: 270,
-                  },
-                ],
-              },
-            },
-            {
-              id: 'gpt-5.4',
-              name: 'GPT-5.4',
-              contextTokens: 1050000,
-              pricing: {
-                tiers: [
-                  {
-                    maxTokens: 271999,
-                    input: 2.5,
-                    cached: 0.25,
-                    output: 15,
-                  },
-                  {
-                    maxTokens: null,
-                    input: 5,
-                    cached: 0.5,
-                    output: 22.5,
-                  },
-                ],
-              },
-            },
-            {
-              id: 'gpt-5.4-mini',
-              name: 'GPT-5.4 Mini',
-              contextTokens: 400000,
-              pricing: {
-                input: 0.75,
-                cached: 0.075,
-                output: 4.5,
-              },
-            },
-            {
-              id: 'gpt-5.4-nano',
-              name: 'GPT-5.4 Nano',
-              contextTokens: 400000,
-              pricing: {
-                input: 0.2,
-                cached: 0.02,
-                output: 1.25,
-              },
-            },
-            {
-              id: 'gpt-5.4-pro',
-              name: 'GPT-5.4 Pro',
-              contextTokens: 1050000,
-              pricing: {
-                tiers: [
-                  {
-                    maxTokens: 271999,
-                    input: 30,
-                    cached: null,
-                    output: 180,
-                  },
-                  {
-                    maxTokens: null,
-                    input: 60,
-                    cached: null,
-                    output: 270,
-                  },
-                ],
-              },
-            },
-          ],
+              {
+                "maxTokens": null,
+                "input": 5,
+                "cached": 0.5,
+                "cacheWrite": 6.25,
+                "output": 22.5
+              }
+            ]
+          }
         },
         {
-          id: 'anthropic',
-          name: 'Anthropic',
-          placeholder: 'sk-ant-...',
-          requiresUrl: false,
-          defaultCapabilities: {
-            maxMediaSizeMB: 500,
-            supportedMimes: ['image/*', 'application/pdf', 'text/plain'],
-          },
-          defaultConfig: {
-            thinking: null,
-            output_config: null,
-            max_tokens: null,
-            temperature: null,
-          },
-          models: [
-            {
-              id: 'claude-fable-5',
-              name: 'Claude Fable 5',
-              contextTokens: 1000000,
-              pricing: {
-                input: 10,
-                cached: 1,
-                output: 50,
+          "id": "gpt-5.6-luna",
+          "name": "GPT-5.6 Luna",
+          "contextTokens": 1050000,
+          "pricing": {
+            "tiers": [
+              {
+                "maxTokens": 271999,
+                "input": 1,
+                "cached": 0.1,
+                "cacheWrite": 1.25,
+                "output": 6
               },
-            },
-            {
-              id: 'claude-opus-4-8',
-              name: 'Claude Opus 4.8',
-              contextTokens: 1000000,
-              pricing: {
-                input: 5,
-                cached: 0.5,
-                output: 25,
-              },
-            },
-            {
-              id: 'claude-sonnet-5',
-              name: 'Claude Sonnet 5',
-              contextTokens: 1000000,
-              pricing: {
-                input: 3,
-                cached: 0.3,
-                output: 15,
-              },
-            },
-            {
-              id: 'claude-haiku-4-5',
-              name: 'Claude Haiku 4.5',
-              contextTokens: 200000,
-              pricing: {
-                input: 1,
-                cached: 0.1,
-                output: 5,
-              },
-            },
-          ],
+              {
+                "maxTokens": null,
+                "input": 2,
+                "cached": 0.2,
+                "cacheWrite": 2.5,
+                "output": 9
+              }
+            ]
+          }
         },
         {
-          id: 'openrouter',
-          name: 'OpenRouter',
-          placeholder: 'sk-or-v1-...',
-          requiresUrl: false,
-          defaultCapabilities: {
-            maxMediaSizeMB: 20,
-            supportedMimes: ['image/*', 'application/pdf', 'text/*', 'application/json'],
-          },
-          defaultConfig: {
-            max_tokens: null,
-            temperature: null,
-          },
-          models: [],
+          "id": "gpt-5.5",
+          "name": "GPT-5.5",
+          "contextTokens": 1050000,
+          "pricing": {
+            "tiers": [
+              {
+                "maxTokens": 271999,
+                "input": 5,
+                "cached": 0.5,
+                "output": 30
+              },
+              {
+                "maxTokens": null,
+                "input": 10,
+                "cached": 1,
+                "output": 45
+              }
+            ]
+          }
         },
         {
-          id: 'custom',
-          name: 'Local / Custom (OpenAI Compatible)',
-          placeholder: 'API Key (Optional)',
-          urlPlaceholder: 'http://localhost:11434/v1',
-          requiresUrl: true,
-          defaultCapabilities: {
-            maxMediaSizeMB: 20,
-            supportedMimes: ['image/*', 'application/pdf', 'text/*', 'application/json'],
-          },
-          defaultConfig: {
-            max_tokens: null,
-            temperature: null,
-          },
-          models: [],
+          "id": "gpt-5.5-pro",
+          "name": "GPT-5.5 Pro",
+          "contextTokens": 1050000,
+          "pricing": {
+            "tiers": [
+              {
+                "maxTokens": 271999,
+                "input": 30,
+                "cached": null,
+                "output": 180
+              },
+              {
+                "maxTokens": null,
+                "input": 60,
+                "cached": null,
+                "output": 270
+              }
+            ]
+          }
         },
-      ],
+        {
+          "id": "gpt-5.4",
+          "name": "GPT-5.4",
+          "contextTokens": 1050000,
+          "pricing": {
+            "tiers": [
+              {
+                "maxTokens": 271999,
+                "input": 2.5,
+                "cached": 0.25,
+                "output": 15
+              },
+              {
+                "maxTokens": null,
+                "input": 5,
+                "cached": 0.5,
+                "output": 22.5
+              }
+            ]
+          }
+        },
+        {
+          "id": "gpt-5.4-mini",
+          "name": "GPT-5.4 Mini",
+          "contextTokens": 400000,
+          "pricing": {
+            "input": 0.75,
+            "cached": 0.075,
+            "output": 4.5
+          }
+        },
+        {
+          "id": "gpt-5.4-nano",
+          "name": "GPT-5.4 Nano",
+          "contextTokens": 400000,
+          "pricing": {
+            "input": 0.2,
+            "cached": 0.02,
+            "output": 1.25
+          }
+        },
+        {
+          "id": "gpt-5.4-pro",
+          "name": "GPT-5.4 Pro",
+          "contextTokens": 1050000,
+          "pricing": {
+            "tiers": [
+              {
+                "maxTokens": 271999,
+                "input": 30,
+                "cached": null,
+                "output": 180
+              },
+              {
+                "maxTokens": null,
+                "input": 60,
+                "cached": null,
+                "output": 270
+              }
+            ]
+          }
+        }
+      ]
     },
-    null,
-    2,
-  ),
-
-  'system/registry/services.json': JSON.stringify(
-    [
-      {
-        id: 'git_daemon',
-        name: 'Git Client',
-        icon: '🐙',
-        path: 'system/services/git.html',
-        description: 'Background service providing Git operations.',
-        autoStart: false,
+    {
+      "id": "anthropic",
+      "name": "Anthropic",
+      "placeholder": "sk-ant-...",
+      "requiresUrl": false,
+      "defaultCapabilities": {
+        "maxMediaSizeMB": 500,
+        "supportedMimes": [
+          "image/*",
+          "application/pdf",
+          "text/plain"
+        ]
       },
-      {
-        id: 'local_sync_daemon',
-        name: 'Local Sync Daemon',
-        icon: '🔄',
-        path: 'system/services/local_sync.html',
-        description: 'Bi-directional sync with local python server.',
-        autoStart: false,
+      "defaultConfig": {
+        "thinking": null,
+        "output_config": null,
+        "max_tokens": null,
+        "temperature": null
       },
-    ],
-    null,
-    2,
-  ),
+      "models": [
+        {
+          "id": "claude-fable-5",
+          "name": "Claude Fable 5",
+          "contextTokens": 1000000,
+          "pricing": {
+            "input": 10,
+            "cached": 1,
+            "output": 50
+          }
+        },
+        {
+          "id": "claude-opus-4-8",
+          "name": "Claude Opus 4.8",
+          "contextTokens": 1000000,
+          "pricing": {
+            "input": 5,
+            "cached": 0.5,
+            "output": 25
+          }
+        },
+        {
+          "id": "claude-sonnet-5",
+          "name": "Claude Sonnet 5",
+          "contextTokens": 1000000,
+          "pricing": {
+            "input": 3,
+            "cached": 0.3,
+            "output": 15
+          }
+        },
+        {
+          "id": "claude-haiku-4-5",
+          "name": "Claude Haiku 4.5",
+          "contextTokens": 200000,
+          "pricing": {
+            "input": 1,
+            "cached": 0.1,
+            "output": 5
+          }
+        }
+      ]
+    },
+    {
+      "id": "openrouter",
+      "name": "OpenRouter",
+      "placeholder": "sk-or-v1-...",
+      "requiresUrl": false,
+      "defaultCapabilities": {
+        "maxMediaSizeMB": 20,
+        "supportedMimes": [
+          "image/*",
+          "application/pdf",
+          "text/*",
+          "application/json"
+        ]
+      },
+      "defaultConfig": {
+        "max_tokens": null,
+        "temperature": null
+      },
+      "models": []
+    },
+    {
+      "id": "custom",
+      "name": "Local / Custom (OpenAI Compatible)",
+      "placeholder": "API Key (Optional)",
+      "urlPlaceholder": "http://localhost:11434/v1",
+      "requiresUrl": true,
+      "defaultCapabilities": {
+        "maxMediaSizeMB": 20,
+        "supportedMimes": [
+          "image/*",
+          "application/pdf",
+          "text/*",
+          "application/json"
+        ]
+      },
+      "defaultConfig": {
+        "max_tokens": null,
+        "temperature": null
+      },
+      "models": []
+    }
+  ]
+}, null, 2),
 
-  'system/services/git.html': `
+  "system/registry/services.json": JSON.stringify([
+  {
+    "id": "git_daemon",
+    "name": "Git Client",
+    "icon": "🐙",
+    "path": "system/services/git.html",
+    "description": "Background service providing Git operations.",
+    "autoStart": false
+  },
+  {
+    "id": "local_sync_daemon",
+    "name": "Local Sync Daemon",
+    "icon": "🔄",
+    "path": "system/services/local_sync.html",
+    "description": "Bi-directional sync with local python server.",
+    "autoStart": false
+  },
+  {
+    "id": "gdrive_sync_daemon",
+    "name": "Google Drive Sync",
+    "icon": "☁️",
+    "path": "system/services/gdrive_sync.html",
+    "description": "Mounts a Google Drive folder at drive/ and syncs it bi-directionally.",
+    "autoStart": false
+  }
+], null, 2),
+
+  "system/services/gdrive_sync.html": `
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Google Drive Sync Daemon</title>
+  </head>
+  <body>
+    <script>
+      /**
+       * Google Drive Sync Daemon
+       *
+       * Drive の 1 フォルダを VFS へマウントし、3-way マージで双方向同期する。
+       * マウント先は設定で切り替える:
+       *   mountPath: "drive"  → 部分木マウント
+       *   mountPath: ""       → VFS 全体（ルートマウント）
+       *
+       * 認証は system/adapters/google_drive_auth.js が行い、本デーモンは
+       * system/temp/gdrive_token.json 経由でアクセストークンを受け取るだけ。
+       *
+       * ── firebase_sync.html からの本質的な変更点 ─────────────────
+       *
+       * 1. ハッシュ空間が異なるため L と R を直接比較しない
+       *    Drive の md5Checksum は Google が計算したもので、VFS のハッシュとは別物。
+       *    そのまま比較すると全ファイルが恒久的に「差分あり」となり、
+       *    延々とアップロードし続ける。
+       *    → アンカーに両方を保持し、それぞれ自分の系で比較する:
+       *         A[path].hash  ←→ L[path].hash   (VFS 側)
+       *         A[path].rhash ←→ R[path].md5    (Drive 側)
+       *
+       * 2. パスではなく fileId が正
+       *    Drive はパスを持たない。parents を辿って構成する派生情報にすぎない。
+       *
+       * 3. Google ネイティブ形式は同期対象外
+       *    Docs/Sheets/Slides は md5Checksum も size も持たず、比較が成立しない。
+       * ──────────────────────────────────────────────────
+       */
+
+      const CONFIG_PATH = 'system/config/gdrive.json';
+      const TOKEN_PATH = 'system/temp/gdrive_token.json';
+      const ANCHOR_PATH = 'system/temp/gdrive_anchor.json';
+
+      const POLL_INTERVAL_MS = 20000;
+      const DEBOUNCE_MS = 1500;
+
+      /**
+       * アンカーをサイクル途中で保存する間隔。
+       *
+       * 初回同期は数千ファイル・数時間に及ぶ。最後に一度しか保存しないと、
+       * 途中で落ちたときに進捗がまったく残らない。
+       */
+      const ANCHOR_FLUSH_MS = 10000;
+
+      const DRIVE_API = 'https://www.googleapis.com/drive/v3';
+      const DRIVE_UPLOAD = 'https://www.googleapis.com/upload/drive/v3';
+
+      /**
+       * system/ 配下は allowlist 方式。
+       * 環境ごとに異なる「設定」だけを同期し、ビルド成果物は同期しない。
+       */
+      const SYSTEM_SYNCED = ['system/config', 'system/registry', 'system/themes'];
+
+      /**
+       * 常に除外する領域。
+       *   system/credentials … 認証情報。クラウドへ出してはならない
+       *   system/temp        … 揮発領域。アンカーとトークンが入るため、
+       *                        含めると自分の書き込みで自分が起動する無限ループになる
+       *   system/logs        … ローカル固有かつ肥大する
+       *   trash              … 削除済み
+       */
+      const ALWAYS_EXCLUDED = ['system/credentials', 'system/temp', 'system/logs', 'trash'];
+
+      let config = null;
+      let mountPath = 'drive';
+      let rootFolderId = null;
+
+      let accessToken = null;
+      let tokenExpiresAt = 0;
+
+      let foreignMountPaths = [];
+      let remoteCache = {};
+      let syncTimer = null;
+      let isSyncing = false;
+      let lastError = null;
+
+      // ==========================================
+      // パス変換
+      //
+      // ★ mountPath が空文字（ルートマウント）のときの取り扱いに注意。
+      //   素朴に path.substring(mountPath.length + 1) と書くと、
+      //   空文字では先頭 1 文字を削ってしまう。
+      //   同様に path.startsWith(mountPath + '/') は '/' 始まり判定になり、
+      //   全ファイルがスキップされる（エラーも出ずに何も同期されない）。
+      // ==========================================
+
+      function toRel(path) {
+        return mountPath ? path.substring(mountPath.length + 1) : path;
+      }
+
+      function toFull(rel) {
+        return mountPath ? \`\${mountPath}/\${rel}\` : rel;
+      }
+
+      function isUnderMount(path) {
+        if (!mountPath) return !!path;
+        return path === mountPath || path.startsWith(mountPath + '/');
+      }
+
+      // ==========================================
+      // 除外判定
+      // ==========================================
+
+      function matchesPrefix(path, prefix) {
+        return path === prefix || path.startsWith(prefix + '/');
+      }
+
+      function isExcluded(path) {
+        if (!path) return true;
+
+        // 他プロバイダの管轄下（listMounts から導出）
+        for (const m of foreignMountPaths) {
+          if (matchesPrefix(path, m)) return true;
+        }
+
+        for (const p of ALWAYS_EXCLUDED) {
+          if (matchesPrefix(path, p)) return true;
+        }
+
+        // system/ 配下は allowlist
+        if (path === 'system' || path.startsWith('system/')) {
+          return !SYSTEM_SYNCED.some((p) => matchesPrefix(path, p));
+        }
+
+        return false;
+      }
+
+      /**
+       * 他プロバイダが管轄する部分木をマウント表から導出する。
+       *
+       * ★ fail-open にしてはならない。
+       * 取得に失敗したときに「他マウントは無い」とみなすと、他プロバイダの領域を
+       * 自分の同期対象に含めてしまう。1 サイクル飛ばせば次のポーリングで回復するため、
+       * 失敗時は中断する。
+       */
+      async function resolveForeignMounts() {
+        const mounts = await MetaOS.fs.listMounts();
+        const self = (mountPath || '').replace(/^\\/+|\\/+$/g, '');
+        return mounts.map((m) => (m.mountPath || '').replace(/^\\/+|\\/+$/g, '')).filter((p) => p !== '' && p !== self);
+      }
+
+      // ==========================================
+      // 基本ユーティリティ
+      // ==========================================
+
+      function log(msg, level = 'info') {
+        const tag = '[GDriveSync]';
+        if (level === 'error') console.error(tag, msg);
+        else if (level === 'warn') console.warn(tag, msg);
+        else console.log(tag, msg);
+      }
+
+      function isNativeDoc(mimeType) {
+        return (
+          typeof mimeType === 'string' &&
+          mimeType.startsWith('application/vnd.google-apps') &&
+          mimeType !== 'application/vnd.google-apps.folder'
+        );
+      }
+
+      function isFolder(mimeType) {
+        return mimeType === 'application/vnd.google-apps.folder';
+      }
+
+      // ==========================================
+      // 認証
+      // ==========================================
+
+      async function loadToken() {
+        try {
+          const raw = await MetaOS.fs.read(TOKEN_PATH);
+          const data = JSON.parse(raw || '{}');
+          if (!data.accessToken) return false;
+          if (data.expiresAt && Date.now() >= data.expiresAt) {
+            accessToken = null;
+            return false;
+          }
+          accessToken = data.accessToken;
+          tokenExpiresAt = data.expiresAt || 0;
+          return true;
+        } catch (e) {
+          return false;
+        }
+      }
+
+      /**
+       * ★ 401 を受けたら、ディスク上のトークンを読み直して 1 回だけ再試行する。
+       *
+       * accessToken はモジュール変数で、reconcile() の先頭で一度読むだけだった。
+       * ブラウザのみの OAuth は 1 時間・リフレッシュ無しのため、初回同期のように
+       * 長いサイクルでは走行中に必ず失効する。再読込が無いと、ユーザーが
+       * その場で再認証してもサイクルは復活せず、丸ごと捨てることになっていた。
+       */
+      async function driveFetch(url, options = {}, _retried = false) {
+        if (!accessToken) throw new Error('NOT_AUTHENTICATED');
+
+        const res = await MetaOS.net.fetch(url, {
+          ...options,
+          headers: {
+            ...(options.headers || {}),
+            Authorization: \`Bearer \${accessToken}\`,
+          },
+          responseType: options.responseType || 'json',
+        });
+
+        if (res.status === 401) {
+          accessToken = null;
+          if (!_retried && (await loadToken())) {
+            log('Access token was refreshed mid-cycle. Retrying.');
+            return driveFetch(url, options, true);
+          }
+          throw new Error('TOKEN_EXPIRED');
+        }
+        if (res.status < 200 || res.status >= 300) {
+          const detail =
+            typeof res.data === 'string' ? res.data.slice(0, 200) : JSON.stringify(res.data || {}).slice(0, 200);
+          throw new Error(\`Drive API \${res.status}: \${detail}\`);
+        }
+        return res.data;
+      }
+
+      // ==========================================
+      // リモート状態の取得
+      // ==========================================
+
+      async function fetchRemoteState() {
+        const result = {};
+        const queue = [{ id: rootFolderId, prefix: '' }];
+        let guard = 0;
+
+        while (queue.length > 0) {
+          if (++guard > 5000) {
+            log('Traversal guard tripped (>5000 folders). Aborting this cycle.', 'warn');
+            break;
+          }
+          const { id, prefix } = queue.shift();
+
+          let pageToken = null;
+          do {
+            const q = encodeURIComponent(\`'\${id}' in parents and trashed=false\`);
+            const fields = encodeURIComponent('nextPageToken,files(id,name,mimeType,md5Checksum,size,modifiedTime)');
+            let url = \`\${DRIVE_API}/files?q=\${q}&fields=\${fields}&pageSize=1000\`;
+            if (pageToken) url += \`&pageToken=\${encodeURIComponent(pageToken)}\`;
+
+            const data = await driveFetch(url);
+            const files = (data && data.files) || [];
+
+            for (const f of files) {
+              if (isNativeDoc(f.mimeType)) continue;
+
+              if (f.name.includes('/')) {
+                log(\`Skipping '\${f.name}': name contains a path separator.\`, 'warn');
+                continue;
+              }
+
+              const relPath = prefix ? \`\${prefix}/\${f.name}\` : f.name;
+              const fullPath = toFull(relPath);
+
+              // 除外領域はリモートから降ろさない
+              if (isExcluded(fullPath)) continue;
+
+              if (isFolder(f.mimeType)) {
+                result[fullPath] = { id: f.id, kind: 'directory' };
+                queue.push({ id: f.id, prefix: relPath });
+              } else {
+                result[fullPath] = {
+                  id: f.id,
+                  kind: 'file',
+                  md5: f.md5Checksum || null,
+                  size: Number(f.size || 0),
+                  modifiedTime: f.modifiedTime ? Date.parse(f.modifiedTime) : Date.now(),
+                };
+              }
+            }
+
+            pageToken = (data && data.nextPageToken) || null;
+          } while (pageToken);
+        }
+
+        return result;
+      }
+
+      // ==========================================
+      // アンカー
+      // ==========================================
+
+      async function getAnchor() {
+        try {
+          const raw = await MetaOS.fs.read(ANCHOR_PATH);
+          return JSON.parse(raw || '{}');
+        } catch (e) {
+          return {};
+        }
+      }
+
+      async function saveAnchor(anchor) {
+        await MetaOS.fs.write(ANCHOR_PATH, JSON.stringify(anchor, null, 2), {
+          overwrite: true,
+          silent: true,
+        });
+      }
+
+      // ==========================================
+      // Drive への書き込み
+      // ==========================================
+
+      async function ensureRemoteFolder(relDirPath, remoteState) {
+        if (!relDirPath) return rootFolderId;
+
+        const parts = relDirPath.split('/');
+        let parentId = rootFolderId;
+        let acc = '';
+
+        for (const part of parts) {
+          acc = acc ? \`\${acc}/\${part}\` : part;
+          const fullPath = toFull(acc);
+          const known = remoteState[fullPath];
+
+          if (known && known.kind === 'directory') {
+            parentId = known.id;
+            continue;
+          }
+
+          const created = await driveFetch(\`\${DRIVE_API}/files?fields=id\`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              name: part,
+              mimeType: 'application/vnd.google-apps.folder',
+              parents: [parentId],
+            }),
+          });
+          parentId = created.id;
+          remoteState[fullPath] = { id: created.id, kind: 'directory' };
+        }
+        return parentId;
+      }
+
+      async function uploadNew(path, bytes, remoteState) {
+        const rel = toRel(path);
+        const idx = rel.lastIndexOf('/');
+        const dir = idx === -1 ? '' : rel.substring(0, idx);
+        const name = idx === -1 ? rel : rel.substring(idx + 1);
+
+        const parentId = await ensureRemoteFolder(dir, remoteState);
+
+        const boundary = \`itera\${Date.now()}\${Math.random().toString(16).slice(2)}\`;
+        const metadata = JSON.stringify({ name, parents: [parentId] });
+
+        const enc = new TextEncoder();
+        const head = enc.encode(
+          \`--\${boundary}\\r\\nContent-Type: application/json; charset=UTF-8\\r\\n\\r\\n\${metadata}\\r\\n\` +
+            \`--\${boundary}\\r\\nContent-Type: application/octet-stream\\r\\n\\r\\n\`,
+        );
+        const tail = enc.encode(\`\\r\\n--\${boundary}--\\r\\n\`);
+
+        const body = new Uint8Array(head.length + bytes.length + tail.length);
+        body.set(head, 0);
+        body.set(bytes, head.length);
+        body.set(tail, head.length + bytes.length);
+
+        return await driveFetch(\`\${DRIVE_UPLOAD}/files?uploadType=multipart&fields=id,md5Checksum,size,modifiedTime\`, {
+          method: 'POST',
+          headers: { 'Content-Type': \`multipart/related; boundary=\${boundary}\` },
+          body,
+        });
+      }
+
+      async function uploadUpdate(fileId, bytes) {
+        return await driveFetch(
+          \`\${DRIVE_UPLOAD}/files/\${fileId}?uploadType=media&fields=id,md5Checksum,size,modifiedTime\`,
+          {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/octet-stream' },
+            body: bytes,
+          },
+        );
+      }
+
+      /**
+       * 削除ではなくゴミ箱へ送る。
+       * 同期の誤判定でユーザーのファイルが復元不能になる事故を避けるため、
+       * 恒久削除は行わない。
+       */
+      async function trashRemote(fileId) {
+        await driveFetch(\`\${DRIVE_API}/files/\${fileId}\`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ trashed: true }),
+        });
+      }
+
+      // ==========================================
+      // 3-way マージ
+      // ==========================================
+
+      function triggerSync() {
+        clearTimeout(syncTimer);
+        syncTimer = setTimeout(async () => {
+          if (isSyncing) {
+            triggerSync();
+            return;
+          }
+          isSyncing = true;
+          try {
+            await reconcile();
+            lastError = null;
+          } catch (e) {
+            if (e.message === 'NOT_AUTHENTICATED' || e.message === 'TOKEN_EXPIRED') {
+              log('Waiting for authentication...');
+            } else {
+              lastError = e.message;
+              log(\`Sync failed: \${e.message}\`, 'error');
+            }
+          } finally {
+            isSyncing = false;
+          }
+        }, DEBOUNCE_MS);
+      }
+
+      async function reconcile() {
+        if (!(await loadToken())) throw new Error('NOT_AUTHENTICATED');
+        if (!rootFolderId) throw new Error('Root folder is not configured');
+
+        // 管轄外の導出を最初に行う。失敗したらサイクルごと中断する（fail-closed）。
+        try {
+          foreignMountPaths = await resolveForeignMounts();
+        } catch (e) {
+          log('Could not resolve mount table. Skipping this cycle.', 'warn');
+          return;
+        }
+
+        const L = await MetaOS.fs.getSyncState(mountPath);
+        const R = await fetchRemoteState();
+        const A = await getAnchor();
+        remoteCache = R;
+
+        const isAnchorEmpty = Object.keys(A).length === 0;
+        const allPaths = new Set([...Object.keys(L), ...Object.keys(R), ...Object.keys(A)]);
+        const newAnchor = { ...A };
+
+        if (mountPath) allPaths.delete(mountPath);
+
+        let ops = 0;
+        let lastFlush = Date.now();
+
+        /**
+         * ★ ここでアンカーを定期保存する。
+         *
+         * newAnchor の各エントリは、対応する操作が成功した「後」にのみ書かれる。
+         * よって途中まで保存されたアンカーは常に正しい部分集合であり、
+         * 早めに永続化しても不整合は生じない。
+         * 失われるのは最大でも ANCHOR_FLUSH_MS 分の進捗にとどまる。
+         */
+        const breathe = async () => {
+          if (++ops % 25 === 0) await new Promise((r) => setTimeout(r, 0));
+          if (Date.now() - lastFlush >= ANCHOR_FLUSH_MS) {
+            lastFlush = Date.now();
+            try {
+              await saveAnchor(newAnchor);
+            } catch (e) {
+              log(\`Could not flush anchor: \${e.message}\`, 'warn');
+            }
+          }
+        };
+
+        for (const path of allPaths) {
+          if (!isUnderMount(path)) continue;
+          if (isExcluded(path)) continue;
+
+          try {
+            const l = L[path];
+            const r = R[path];
+            const a = A[path];
+
+            const lExists = !!l && !l.isDeleted;
+            const rExists = !!r;
+
+            // ★ ハッシュ空間が異なるため、L と R を直接比較してはならない。
+            const localChanged = lExists ? !a || a.hash !== l.hash : !!a;
+            const remoteChanged = rExists ? !a || a.rhash !== (r.md5 || null) : !!a;
+
+            // --- コールドスタート: アンカーが空ならリモートを正とする ---
+            if (isAnchorEmpty && rExists) {
+              if (r.kind === 'directory') {
+                if (!(await MetaOS.fs.exists(path))) await MetaOS.fs.mkdir(path);
+              } else {
+                await MetaOS.fs.createStub(path, {
+                  size: r.size,
+                  hash: null,
+                  updatedAt: r.modifiedTime,
+                });
+              }
+              newAnchor[path] = { id: r.id, kind: r.kind, hash: null, rhash: r.md5 || null };
+              await breathe();
+              continue;
+            }
+
+            if (!localChanged && !remoteChanged) continue;
+
+            // --- Pull (リモートのみ変化) ---
+            if (!localChanged && remoteChanged) {
+              if (!rExists) {
+                if (await MetaOS.fs.exists(path)) await MetaOS.fs.delete(path, { permanent: true });
+                delete newAnchor[path];
+              } else if (r.kind === 'directory') {
+                if (!(await MetaOS.fs.exists(path))) await MetaOS.fs.mkdir(path);
+                newAnchor[path] = { id: r.id, kind: 'directory', hash: null, rhash: null };
+              } else {
+                await MetaOS.fs.createStub(path, {
+                  size: r.size,
+                  hash: null,
+                  updatedAt: r.modifiedTime,
+                });
+                newAnchor[path] = { id: r.id, kind: 'file', hash: null, rhash: r.md5 || null };
+              }
+              await breathe();
+              continue;
+            }
+
+            // --- Push (ローカルのみ変化) ---
+            if (localChanged && !remoteChanged) {
+              if (!lExists) {
+                if (a && a.id) await trashRemote(a.id);
+                delete newAnchor[path];
+              } else if (l.kind === 'directory') {
+                const id = await ensureRemoteFolder(toRel(path), R);
+                newAnchor[path] = { id, kind: 'directory', hash: null, rhash: null };
+              } else {
+                const bytes = await MetaOS.fs.read(path, { encoding: 'binary' });
+                const res = a && a.id ? await uploadUpdate(a.id, bytes) : await uploadNew(path, bytes, R);
+                newAnchor[path] = {
+                  id: res.id,
+                  kind: 'file',
+                  hash: l.hash,
+                  rhash: res.md5Checksum || null,
+                };
+              }
+              await breathe();
+              continue;
+            }
+
+            // --- Conflict (両方変化) ---
+            if (lExists && l.kind !== 'directory') {
+              const conflictPath = path.match(/(\\.[^.]+)$/)
+                ? path.replace(/(\\.[^.]+)$/, ' (Conflicted Copy)$1')
+                : \`\${path} (Conflicted Copy)\`;
+              await MetaOS.fs.rename(path, conflictPath);
+            }
+
+            if (rExists) {
+              if (r.kind === 'directory') {
+                if (!(await MetaOS.fs.exists(path))) await MetaOS.fs.mkdir(path);
+                newAnchor[path] = { id: r.id, kind: 'directory', hash: null, rhash: null };
+              } else {
+                await MetaOS.fs.createStub(path, {
+                  size: r.size,
+                  hash: null,
+                  updatedAt: r.modifiedTime,
+                });
+                newAnchor[path] = { id: r.id, kind: 'file', hash: null, rhash: r.md5 || null };
+              }
+            } else {
+              delete newAnchor[path];
+            }
+            await breathe();
+          } catch (e) {
+            if (e.message === 'TOKEN_EXPIRED' || e.message === 'NOT_AUTHENTICATED') {
+              // ★ 中断はここからしか抜けない。捨てる前に進捗を残す。
+              //   これを怠るとアンカーが空のままになり、次サイクルが
+              //   コールドスタート分岐に入ってアップロード済みの実体をスタブ化する。
+              try {
+                await saveAnchor(newAnchor);
+              } catch (e2) {
+                log(\`Could not persist anchor before aborting: \${e2.message}\`, 'warn');
+              }
+              throw e;
+            }
+            log(\`Skipped '\${path}': \${e.message}\`, 'warn');
+          }
+        }
+
+        await saveAnchor(newAnchor);
+      }
+
+      // ==========================================
+      // 遅延実体化
+      // ==========================================
+
+      async function onFetchContent(path) {
+        try {
+          if (!(await loadToken())) return false;
+
+          const anchor = await getAnchor();
+          const entry = anchor[path] || remoteCache[path];
+          const fileId = entry && entry.id;
+          if (!fileId) {
+            log(\`No fileId known for \${path}\`, 'warn');
+            return false;
+          }
+
+          const res = await MetaOS.net.fetch(\`\${DRIVE_API}/files/\${fileId}?alt=media\`, {
+            headers: { Authorization: \`Bearer \${accessToken}\` },
+            responseType: 'arraybuffer',
+          });
+          if (res.status < 200 || res.status >= 300) {
+            log(\`Download failed for \${path}: HTTP \${res.status}\`, 'error');
+            return false;
+          }
+
+          await MetaOS.fs.write(path, res.data, { overwrite: true, silent: true });
+
+          // 実体化したのでアンカーのローカル側ハッシュを更新する。
+          // ここを怠ると次のサイクルで「ローカルが変化した」と誤判定し、
+          // 落としたばかりの内容をそのまま押し返してしまう。
+          try {
+            const stat = await MetaOS.fs.stat(path);
+            if (stat && anchor[path]) {
+              anchor[path].hash = stat.hash || null;
+              await saveAnchor(anchor);
+            }
+          } catch (e) {
+            log(\`Could not refresh anchor hash for \${path}: \${e.message}\`, 'warn');
+          }
+
+          return true;
+        } catch (e) {
+          log(\`onFetchContent failed for \${path}: \${e.message}\`, 'error');
+          return false;
+        }
+      }
+
+      // ==========================================
+      // 初期化
+      // ==========================================
+
+      async function init() {
+        if (!window.MetaOS) return setTimeout(init, 100);
+
+        try {
+          const raw = await MetaOS.fs.read(CONFIG_PATH);
+          config = JSON.parse(raw || '{}');
+        } catch (e) {
+          log(\`Config not found at \${CONFIG_PATH}. Daemon will stay idle.\`, 'warn');
+          return;
+        }
+
+        // 空文字はルートマウントを意味する。未指定（undefined）とは区別する。
+        mountPath = typeof config.mountPath === 'string' ? config.mountPath.replace(/^\\/+|\\/+$/g, '') : 'drive';
+
+        if (mountPath && !(await MetaOS.fs.exists(mountPath))) {
+          try {
+            await MetaOS.fs.mkdir(mountPath);
+          } catch (e) {
+            log(\`Could not create mount point '\${mountPath}': \${e.message}\`, 'error');
+            return;
+          }
+        }
+
+        await MetaOS.fs.registerSyncProvider(mountPath, {
+          onFetchContent,
+          onMutate: () => triggerSync(),
+        });
+
+        log(mountPath ? \`Mounted at /\${mountPath}\` : 'Mounted at VFS root');
+
+        const waitForFolder = async () => {
+          try {
+            const raw = await MetaOS.fs.read(CONFIG_PATH);
+            const cfg = JSON.parse(raw || '{}');
+            if (cfg.folderId) {
+              rootFolderId = cfg.folderId;
+              config = cfg;
+              log(\`Root folder resolved: \${rootFolderId}\`);
+              triggerSync();
+              return;
+            }
+          } catch (e) {
+            /* 設定が読めない間は待つ */
+          }
+          setTimeout(waitForFolder, 3000);
+        };
+        waitForFolder();
+
+        setInterval(() => {
+          if (rootFolderId) triggerSync();
+        }, POLL_INTERVAL_MS);
+      }
+
+      init();
+    </script>
+  </body>
+</html>
+`.trim(),
+
+  "system/services/git.html": `
 <!doctype html>
 <html lang="en">
   <head>
@@ -27154,7 +28969,7 @@ Check your Browserslist config to be sure that your targets are set up correctly
       import http from 'https://esm.sh/isomorphic-git@1.24.5/http/web';
 
       // ==========================================
-      // 1. FS Adapter for isomorphic-git
+      // 1. Robust FS Adapter for isomorphic-git
       // ==========================================
       const IgitFs = {
         promises: {
@@ -27162,19 +28977,29 @@ Check your Browserslist config to be sure that your targets are set up correctly
             const encoding = (opts && typeof opts === 'object' ? opts.encoding : opts) || 'binary';
             const isText = encoding === 'utf8' || encoding === 'utf-8';
             try {
-              const data = await MetaOS.fs.read(filepath, { encoding: isText ? undefined : 'binary' });
-              return isText ? data : new Uint8Array(data);
+              if (isText) {
+                const data = await MetaOS.fs.read(filepath);
+                return typeof data === 'string' ? data : new TextDecoder().decode(data);
+              }
+              const data = await MetaOS.fs.read(filepath, { encoding: 'binary' });
+              if (data instanceof Uint8Array) return data;
+              if (data instanceof ArrayBuffer) return new Uint8Array(data);
+              return new Uint8Array(data);
             } catch (e) {
-              const err = new Error(e.message);
+              const err = new Error(e.message || 'File not found');
               err.code = 'ENOENT';
               throw err;
             }
           },
-          async writeFile(filepath, data, opts) {
+          async writeFile(filepath, data) {
             try {
-              await MetaOS.fs.write(filepath, data, { overwrite: true, silent: true });
+              let content = data;
+              if (data instanceof Uint8Array) {
+                content = new Uint8Array(data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength));
+              }
+              await MetaOS.fs.write(filepath, content, { overwrite: true, silent: true });
             } catch (e) {
-              const err = new Error(e.message);
+              const err = new Error(e.message || 'Write failed');
               err.code = 'ENOENT';
               throw err;
             }
@@ -27183,7 +29008,7 @@ Check your Browserslist config to be sure that your targets are set up correctly
             try {
               await MetaOS.fs.delete(filepath, { permanent: true });
             } catch (e) {
-              const err = new Error(e.message);
+              const err = new Error(e.message || 'Delete failed');
               err.code = 'ENOENT';
               throw err;
             }
@@ -27196,24 +29021,34 @@ Check your Browserslist config to be sure that your targets are set up correctly
                 err.code = 'ENOTDIR';
                 throw err;
               }
-              const stats = await MetaOS.fs.list(filepath, { detail: true });
-              return stats.map((s) => s.name);
+              const list = await MetaOS.fs.list(filepath, { detail: true });
+              if (!Array.isArray(list)) return [];
+              return list
+                .map((s) => {
+                  if (!s) return null;
+                  if (typeof s === 'string') return s.split('/').pop();
+                  if (s.name) return s.name;
+                  if (s.path) return s.path.split('/').pop();
+                  return null;
+                })
+                .filter(Boolean);
             } catch (e) {
-              const err = new Error(e.message);
-              err.code = e.code === 'ENOTDIR' ? 'ENOTDIR' : 'ENOENT';
+              if (e.code === 'ENOTDIR') throw e;
+              const err = new Error(e.message || 'ENOENT');
+              err.code = 'ENOENT';
               throw err;
             }
           },
           async mkdir(filepath) {
             try {
               await MetaOS.fs.mkdir(filepath);
-            } catch (e) {} // 既存なら無視
+            } catch (e) {}
           },
           async rmdir(filepath) {
             try {
               await MetaOS.fs.delete(filepath, { permanent: true });
             } catch (e) {
-              const err = new Error(e.message);
+              const err = new Error(e.message || 'Delete failed');
               err.code = 'ENOENT';
               throw err;
             }
@@ -27222,19 +29057,21 @@ Check your Browserslist config to be sure that your targets are set up correctly
             try {
               const st = await MetaOS.fs.stat(filepath);
               const isDir = st.kind === 'directory';
+              const mtime = Number(st.updatedAt);
+              const ctime = Number(st.createdAt);
               return {
                 type: isDir ? 'dir' : 'file',
                 mode: isDir ? 0o040000 : 0o100644,
-                size: st.size || 0,
+                size: Number(st.size) || 0,
                 ino: 0,
-                mtimeMs: st.updatedAt,
-                ctimeMs: st.createdAt,
+                mtimeMs: isNaN(mtime) ? Date.now() : mtime,
+                ctimeMs: isNaN(ctime) ? Date.now() : ctime,
                 isDirectory: () => isDir,
                 isFile: () => !isDir,
                 isSymbolicLink: () => false,
               };
             } catch (e) {
-              const err = new Error(e.message);
+              const err = new Error(e.message || 'ENOENT');
               err.code = 'ENOENT';
               throw err;
             }
@@ -27243,10 +29080,14 @@ Check your Browserslist config to be sure that your targets are set up correctly
             return this.stat(filepath);
           },
           async readlink() {
-            throw new Error('Symlinks not supported');
+            const err = new Error('Symlinks not supported');
+            err.code = 'ENOSYS';
+            throw err;
           },
           async symlink() {
-            throw new Error('Symlinks not supported');
+            const err = new Error('Symlinks not supported');
+            err.code = 'ENOSYS';
+            throw err;
           },
         },
       };
@@ -27257,22 +29098,21 @@ Check your Browserslist config to be sure that your targets are set up correctly
       async function initDaemon() {
         if (!window.MetaOS) return setTimeout(initDaemon, 100);
 
-        // ★ 同時実行を防ぐための非同期キュー
-        let gitQueue = Promise.resolve();
+        let gitLock = Promise.resolve();
 
         const definition = \`<define_tag name="git">
 Executes a Git command.
 Attributes:
-- command (required): init | clone | status | add | commit | push | pull | log | checkout | branch
+- command (required): init | clone | status | add | commit | push | pull | fetch | log | checkout | branch | merge | tag
 - dir (required): Target directory path in VFS (e.g., 'projects/my_app').
-- url: Repository URL (for clone/pull/push).
+- url: Repository URL (for clone/pull/push/fetch).
 - filepath: File to add or checkout. Use '.' for all files.
 - message: Commit message.
 - author_name: Name for commit.
 - author_email: Email for commit.
-- token: Personal Access Token (PAT) for remote auth.
-- ref: Branch name.
-- depth: Clone depth (default 1 to save memory).
+- token: Personal Access Token (PAT). 省略時は VFS の認証情報を自動参照する。
+- ref: Branch or tag name.
+- depth: Clone/fetch depth (default 1 to save memory).
 - corsProxy: CORS proxy URL (default: 'https://cors.isomorphic-git.org').
 </define_tag>\`;
 
@@ -27281,12 +29121,32 @@ Attributes:
           description: 'Git version control operations',
           definition,
           handler: (p) => {
-            // ★ キューの最後尾に自身の処理を連結する (必ず順番に実行される)
             return new Promise((resolve) => {
-              gitQueue = gitQueue
+              gitLock = gitLock
                 .then(async () => {
                   const dir = p.dir || '';
                   const corsProxy = p.corsProxy || 'https://cors.isomorphic-git.org';
+
+                  // Credential resolution fallback
+                  // 参照順は「新location優先 → 旧location後方互換」。
+                  // 認証情報は system/credentials/ に一元化する（クラウド同期の除外を
+                  // 1ディレクトリで表現するため）。旧パスは未移行の環境向けに残す。
+                  if (!p.token) {
+                    for (const credPath of [
+                      'system/credentials/github.json',
+                      'system/config/credentials.json',
+                      'memory/credentials.json',
+                    ]) {
+                      try {
+                        const cred = JSON.parse(await MetaOS.fs.read(credPath));
+                        if (cred && cred.github && cred.github.pat) {
+                          p.token = cred.github.pat;
+                          break;
+                        }
+                      } catch (e) {}
+                    }
+                  }
+
                   const onAuth = () => ({ username: p.token });
 
                   let log = '';
@@ -27305,11 +29165,12 @@ Attributes:
                           dir,
                           url: p.url,
                           corsProxy,
-                          depth: p.depth ? parseInt(p.depth) : 1, // Default Shallow Clone
+                          ref: p.ref || undefined,
+                          depth: p.depth ? parseInt(p.depth) : 1,
                           singleBranch: true,
                           onAuth: p.token ? onAuth : undefined,
                         });
-                        log = \`Cloned \${p.url} into \${dir}\`;
+                        log = \`Cloned \${p.url} into \${dir}\` + (p.ref ? \` (ref: \${p.ref})\` : ' (default branch)');
                         break;
 
                       case 'status':
@@ -27379,6 +29240,19 @@ Attributes:
                         log = \`Pulled successfully\`;
                         break;
 
+                      case 'fetch':
+                        await git.fetch({
+                          fs: IgitFs,
+                          http,
+                          dir,
+                          corsProxy,
+                          ref: p.ref || undefined,
+                          depth: p.depth ? parseInt(p.depth) : 1,
+                          onAuth: p.token ? onAuth : undefined,
+                        });
+                        log = \`Fetched successfully\`;
+                        break;
+
                       case 'log':
                         const commits = await git.log({ fs: IgitFs, dir, depth: p.depth ? parseInt(p.depth) : 5 });
                         log = commits
@@ -27392,8 +29266,29 @@ Attributes:
                         break;
 
                       case 'checkout':
-                        await git.checkout({ fs: IgitFs, dir, ref: p.ref });
-                        log = \`Checked out \${p.ref}\`;
+                        if (p.filepath) {
+                          await git.checkout({ fs: IgitFs, dir, filepath: p.filepath });
+                          log = \`Checked out file \${p.filepath}\`;
+                        } else {
+                          await git.checkout({ fs: IgitFs, dir, ref: p.ref });
+                          log = \`Checked out branch/ref \${p.ref}\`;
+                        }
+                        break;
+
+                      case 'merge':
+                        const mergeRes = await git.merge({
+                          fs: IgitFs,
+                          dir,
+                          author: { name: p.author_name || 'Itera AI', email: p.author_email || 'ai@itera.os' },
+                          ours: 'HEAD',
+                          theirs: p.ref,
+                        });
+                        log = \`Merged \${p.ref} into HEAD (OID: \${mergeRes.oid ? mergeRes.oid.substring(0, 7) : 'clean'})\`;
+                        break;
+
+                      case 'tag':
+                        await git.tag({ fs: IgitFs, dir, ref: p.ref });
+                        log = \`Tagged \${p.ref}\`;
                         break;
 
                       default:
@@ -27405,7 +29300,6 @@ Attributes:
                   }
                 })
                 .catch((e) => {
-                  // キュー自体がコケて停止しないように保護
                   resolve({ error: true, log: \`Queue Error: \${e.message}\`, ui: \`❌ Git Error\` });
                 });
             });
@@ -27424,37 +29318,323 @@ Attributes:
 </html>
 `.trim(),
 
-  'system/services/local_sync.html': `
+  "system/services/local_sync.html": `
 <!doctype html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <title>Local Sync Daemon</title>
+    <title>Local Sync & Bridge Daemon v2</title>
   </head>
   <body>
     <script>
       async function initSyncDaemon() {
         if (!window.MetaOS) return setTimeout(initSyncDaemon, 100);
 
-        let config = { mountPath: 'data/local_sync', serverUrl: 'http://127.0.0.1:8000' };
+        let config = { mountPath: 'data/local_sync', serverUrl: 'http://127.0.0.1:8000', allowBash: true };
         try {
           const confData = await MetaOS.fs.read('system/config/local_sync.json');
           config = { ...config, ...JSON.parse(confData) };
         } catch (e) {}
 
         const { mountPath, serverUrl } = config;
+        const ANCHOR_PATH = 'system/temp/local_sync_anchor.json';
         let ws = null;
+        let isSyncing = false;
+        let syncTimer = null;
 
-        // 指定されたディレクトリが存在しなければ作成する
         if (!(await MetaOS.fs.exists(mountPath))) {
           try {
             await MetaOS.fs.mkdir(mountPath);
-          } catch (err) {
-            // 親ディレクトリがない場合などのエラーハンドリング
+          } catch (e) {}
+        }
+
+        async function getAnchor() {
+          try {
+            const str = await MetaOS.fs.read(ANCHOR_PATH);
+            return JSON.parse(str);
+          } catch {
+            return {};
           }
         }
 
-        // 1. Sync Providerの登録（マウント、オンデマンドフェッチ、ローカル変更の監視を統合）
+        async function saveAnchor(a) {
+          await MetaOS.fs.write(ANCHOR_PATH, JSON.stringify(a, null, 2), { overwrite: true, silent: true });
+        }
+
+        // ---- Ignore Pattern Support ----
+        // Patterns follow a minimal glob syntax (mirrors Python fnmatch semantics used server-side):
+        //  - '*' matches any sequence of characters (including '/').
+        //  - '?' matches a single character.
+        //  - A pattern containing '/' is matched against the FULL relative path.
+        //  - A pattern with no '/' is matched against ANY path segment (basename-style match).
+        //  - A trailing '/' marks a directory-style pattern (slash is stripped before matching).
+        async function getIgnorePatterns() {
+          try {
+            const confData = await MetaOS.fs.read('system/config/local_sync.json');
+            const conf = JSON.parse(confData);
+            return Array.isArray(conf.ignorePatterns) ? conf.ignorePatterns : [];
+          } catch (e) {
+            return [];
+          }
+        }
+
+        function globToRegex(glob) {
+          let re = '';
+          for (let i = 0; i < glob.length; i++) {
+            const c = glob[i];
+            if (c === '*') re += '.*';
+            else if (c === '?') re += '.';
+            else if ('.+^$()[]{}|\\\\'.includes(c)) re += '\\\\' + c;
+            else re += c;
+          }
+          return new RegExp('^' + re + '$');
+        }
+
+        function isIgnored(relPath, patterns) {
+          if (!patterns || patterns.length === 0) return false;
+          const parts = relPath.split('/');
+          for (let raw of patterns) {
+            let pat = (raw || '').trim();
+            if (!pat || pat.startsWith('#')) continue;
+            if (pat.endsWith('/')) pat = pat.slice(0, -1);
+            if (!pat) continue;
+            try {
+              if (pat.includes('/')) {
+                if (globToRegex(pat).test(relPath)) return true;
+              } else {
+                const re = globToRegex(pat);
+                if (parts.some((seg) => re.test(seg))) return true;
+              }
+            } catch (e) {}
+          }
+          return false;
+        }
+
+        async function pushIgnoreConfigToServer() {
+          try {
+            const patterns = await getIgnorePatterns();
+            await fetch(\`\${serverUrl}/api/config\`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ ignorePatterns: patterns }),
+            });
+          } catch (e) {
+            // Server may be offline at daemon boot time; sync_app.html also
+            // pushes this config directly when the user saves settings.
+          }
+        }
+
+        function parentPath(fullPath) {
+          const idx = fullPath.lastIndexOf('/');
+          return idx > 0 ? fullPath.substring(0, idx) : '';
+        }
+
+        // Best-effort recursive directory creation with knownDirs memoization.
+        // Skipping mkdir calls for directories already known to exist eliminates
+        // tens of thousands of redundant IPC round-trips over large trees.
+        async function ensureDirRecursive(dirPath, knownDirs) {
+          if (!dirPath) return;
+          const segments = dirPath.split('/').filter(Boolean);
+          let cur = '';
+          for (const seg of segments) {
+            cur = cur ? \`\${cur}/\${seg}\` : seg;
+            if (knownDirs && knownDirs.has(cur)) continue;
+            try {
+              await MetaOS.fs.mkdir(cur);
+            } catch (e) {
+              // Ignore "already exists"
+            }
+            if (knownDirs) knownDirs.add(cur);
+          }
+        }
+
+        function triggerSync() {
+          clearTimeout(syncTimer);
+          syncTimer = setTimeout(async () => {
+            if (isSyncing) {
+              triggerSync();
+              return;
+            }
+            isSyncing = true;
+            try {
+              await executeReconciliation();
+            } catch (e) {
+              console.error('[SyncDaemon] Reconciliation error:', e);
+            } finally {
+              isSyncing = false;
+            }
+          }, 1000);
+        }
+
+        // Refined 3-Way Merge State-Based Reconciliation
+        async function executeReconciliation() {
+          let remoteMeta = {};
+          try {
+            const res = await fetch(\`\${serverUrl}/api/meta\`);
+            if (!res.ok) return;
+            remoteMeta = await res.json();
+          } catch (e) {
+            console.warn('[SyncDaemon] Cannot fetch server metadata:', e.message);
+            return;
+          }
+
+          const rawIgnorePatterns = await getIgnorePatterns();
+          const compiledIgnore = compileIgnorePatterns(rawIgnorePatterns);
+          const localState = await MetaOS.fs.getSyncState(mountPath);
+          const anchor = await getAnchor();
+          const newAnchor = { ...anchor };
+
+          const knownDirs = new Set([mountPath]);
+          for (const [p, info] of Object.entries(localState)) {
+            if (info && info.kind === 'directory') {
+              knownDirs.add(p);
+            }
+          }
+
+          const allRelPathsSet = new Set([
+            ...Object.keys(remoteMeta),
+            ...Object.keys(localState).map((p) => p.substring(mountPath.length + 1)),
+            ...Object.keys(anchor),
+          ]);
+
+          // Process shallower paths first so that parent directories are always
+          // created/stubbed before their children are attempted.
+          const sortedRelPaths = Array.from(allRelPathsSet).sort((a, b) => {
+            const da = a.split('/').length;
+            const db = b.split('/').length;
+            if (da !== db) return da - db;
+            return a < b ? -1 : a > b ? 1 : 0;
+          });
+
+          let processedCount = 0;
+          for (const relPath of sortedRelPaths) {
+            if (!relPath || relPath.startsWith('.')) continue;
+            if (isIgnoredCompiled(relPath, compiledIgnore)) continue;
+
+            processedCount++;
+            if (processedCount % 50 === 0) {
+              await new Promise((resolve) => setTimeout(resolve, 0));
+            }
+
+            try {
+              const fullPath = \`\${mountPath}/\${relPath}\`;
+              const r = remoteMeta[relPath];
+              const l = localState[fullPath];
+              const a = anchor[relPath];
+
+              const isSameHash = (x, y) => (x?.hash || null) === (y?.hash || null);
+
+              if (!l && !r) continue;
+
+              // 1. Tombstone on Remote
+              if (r && r.isDeleted) {
+                if (l) {
+                  try {
+                    await MetaOS.fs.delete(fullPath, { permanent: true });
+                  } catch (e) {}
+                }
+                delete newAnchor[relPath];
+                continue;
+              }
+
+              // 2. Deleted Locally (Push Delete)
+              if (!l && r && a && isSameHash(r, a)) {
+                try {
+                  const delRes = await fetch(\`\${serverUrl}/api/file/\${relPath}\`, {
+                    method: 'DELETE',
+                    headers: a.hash ? { 'X-Expected-Hash': a.hash } : {},
+                  });
+                  if (delRes.ok) {
+                    delete newAnchor[relPath];
+                  }
+                } catch (e) {
+                  console.error('[SyncDaemon] Delete push failed:', relPath, e);
+                }
+                continue;
+              }
+
+              // 3. New on Remote (Pull Create)
+              if (r && !l && !a) {
+                if (r.kind === 'directory') {
+                  await ensureDirRecursive(fullPath, knownDirs);
+                  newAnchor[relPath] = { kind: 'directory', size: 0, updatedAt: r.updatedAt, hash: null };
+                } else {
+                  await ensureDirRecursive(parentPath(fullPath), knownDirs);
+                  await MetaOS.fs.createStub(fullPath, {
+                    size: r.size,
+                    updatedAt: r.updatedAt,
+                    hash: r.hash,
+                  });
+                  newAnchor[relPath] = { kind: r.kind, size: r.size, updatedAt: r.updatedAt, hash: r.hash };
+                }
+                continue;
+              }
+
+              // 4. New Locally (Push Create)
+              if (l && !r && !a) {
+                if (l.kind !== 'directory') {
+                  const u8 = await MetaOS.fs.read(fullPath, { encoding: 'binary' });
+                  const res = await fetch(\`\${serverUrl}/api/file/\${relPath}\`, {
+                    method: 'PUT',
+                    body: u8,
+                  });
+                  if (res.ok) {
+                    const data = await res.json();
+                    newAnchor[relPath] = { kind: l.kind, size: l.size, updatedAt: data.updatedAt, hash: data.hash };
+                  }
+                }
+                continue;
+              }
+
+              // 5. Modified Locally (Push Update)
+              if (l && r && !isSameHash(l, a) && isSameHash(r, a)) {
+                if (l.kind !== 'directory') {
+                  const u8 = await MetaOS.fs.read(fullPath, { encoding: 'binary' });
+                  const res = await fetch(\`\${serverUrl}/api/file/\${relPath}\`, {
+                    method: 'PUT',
+                    headers: a?.hash ? { 'X-Expected-Hash': a.hash } : {},
+                    body: u8,
+                  });
+                  if (res.ok) {
+                    const data = await res.json();
+                    newAnchor[relPath] = { kind: l.kind, size: l.size, updatedAt: data.updatedAt, hash: data.hash };
+                  }
+                }
+                continue;
+              }
+
+              // 6. Modified Remotely (Pull Update)
+              if (l && r && isSameHash(l, a) && !isSameHash(r, a)) {
+                if (r.kind === 'directory') {
+                  await ensureDirRecursive(fullPath, knownDirs);
+                } else {
+                  await ensureDirRecursive(parentPath(fullPath), knownDirs);
+                  await MetaOS.fs.createStub(fullPath, {
+                    size: r.size,
+                    updatedAt: r.updatedAt,
+                    hash: r.hash,
+                  });
+                }
+                newAnchor[relPath] = { kind: r.kind, size: r.size, updatedAt: r.updatedAt, hash: r.hash };
+                continue;
+              }
+
+              // 7. In Sync
+              if (l && r && isSameHash(l, r)) {
+                newAnchor[relPath] = { kind: l.kind, size: l.size, updatedAt: r.updatedAt, hash: r.hash };
+              }
+            } catch (e) {
+              // Isolate per-item failures so a single problematic file/directory
+              // never aborts the entire reconciliation pass.
+              console.error('[SyncDaemon] Item reconciliation failed:', relPath, e);
+              continue;
+            }
+          }
+
+          await saveAnchor(newAnchor);
+        }
+
+        // Register Sync Provider
         try {
           await MetaOS.fs.registerSyncProvider(mountPath, {
             onFetchContent: async (reqPath) => {
@@ -27463,12 +29643,7 @@ Attributes:
                 const res = await fetch(\`\${serverUrl}/api/file/\${relPath}\`);
                 if (!res.ok) return false;
                 const arrayBuffer = await res.arrayBuffer();
-
-                // 実体を VFS に書き込む (OSレベルでエコーキャンセルされるため source フラグは不要)
-                await MetaOS.fs.write(reqPath, new Uint8Array(arrayBuffer), {
-                  overwrite: true,
-                  silent: true,
-                });
+                await MetaOS.fs.write(reqPath, new Uint8Array(arrayBuffer), { overwrite: true, silent: true });
                 return true;
               } catch (e) {
                 console.error('[SyncDaemon] Fetch failed:', e);
@@ -27476,91 +29651,85 @@ Attributes:
               }
             },
             onMutate: async (mutations) => {
-              // OSから渡されるローカルの変更（自身が起こした変更は除外済み）
-              for (const m of mutations) {
-                const getRelPath = (p) => p.substring(mountPath.length + 1);
-
-                if (m.type === 'ATTACH' || m.type === 'MUTATE') {
-                  // ディレクトリの場合はスキップ
-                  if (m.node && m.node.kind === 'directory') continue;
-
-                  try {
-                    const relPath = getRelPath(m.path);
-                    const u8 = await MetaOS.fs.read(m.path, { encoding: 'binary' });
-                    await fetch(\`\${serverUrl}/api/file/\${relPath}\`, { method: 'PUT', body: u8 });
-                  } catch (e) {
-                    console.error('[SyncDaemon] Upload failed:', e);
-                  }
-                } else if (m.type === 'DETACH') {
-                  try {
-                    const relPath = getRelPath(m.path);
-                    await fetch(\`\${serverUrl}/api/file/\${relPath}\`, { method: 'DELETE' });
-                  } catch (e) {
-                    console.error('[SyncDaemon] Delete failed:', e);
-                  }
-                }
-              }
+              triggerSync();
             },
           });
-          MetaOS.ai.log(\`Local Sync Daemon successfully mounted at /\${mountPath}\`, 'system');
+          MetaOS.ai.log(\`Local Sync Daemon v2 mounted at /\${mountPath}\`, 'system');
         } catch (e) {
           console.error('[SyncDaemon] Provider registration failed:', e);
           return;
         }
 
-        // 2. 初期同期 (サーバーのメタデータを取得して VFS にスタブを作成)
+        // Register Dynamic LPML Tools (<bash_exec>)
         try {
-          const res = await fetch(\`\${serverUrl}/api/meta\`);
-          const remoteMeta = await res.json();
-          const localState = await MetaOS.fs.getSyncState(mountPath);
+          const statusRes = await fetch(\`\${serverUrl}/api/status\`);
+          if (statusRes.ok) {
+            const statusData = await statusRes.json();
+            if (statusData.allowBash) {
+              const definition = \`<define_tag name="bash_exec">
+Executes a bash command on the local machine running the Python sync server.
+Attributes:
+  - cwd (optional): Working directory relative to sync folder (default: '.').
+  - timeout (optional): Maximum execution time in seconds (default: 30, max: 300).
+Content:
+  The bash command string to execute.
+</define_tag>\`;
 
-          for (const [relPath, meta] of Object.entries(remoteMeta)) {
-            const fullPath = \`\${mountPath}/\${relPath}\`;
-            const local = localState[fullPath];
+              MetaOS.tools.register({
+                name: 'bash_exec',
+                description: 'Executes a bash command on the local machine running the Python sync server.',
+                definition,
+                handler: async (params) => {
+                  const cmd = (params.content || '').trim();
+                  const cwd = params.cwd || '.';
+                  const timeout = parseInt(params.timeout) || 30;
 
-            if (!local || local.hash !== meta.hash) {
-              await MetaOS.fs.createStub(fullPath, {
-                size: meta.size,
-                updatedAt: meta.updatedAt,
-                hash: meta.hash,
+                  try {
+                    const res = await fetch(\`\${serverUrl}/api/exec\`, {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ command: cmd, cwd: cwd, timeout: timeout }),
+                    });
+                    if (!res.ok) {
+                      const errData = await res.json().catch(() => ({}));
+                      return \`[Error \${res.status}]: \${errData.detail || 'Execution failed'}\`;
+                    }
+                    const data = await res.json();
+                    return \`[Exit Code: \${data.exitCode}] (Duration: \${data.durationMs}ms)\\n--- STDOUT ---\\n\${data.stdout}\\n--- STDERR ---\\n\${data.stderr}\`;
+                  } catch (e) {
+                    return \`Error executing bash command via Local Sync Server: \${e.message}\`;
+                  }
+                },
               });
+
+              MetaOS.ai.log(
+                definition + '\\n\\n[System] <bash_exec> tool successfully registered via Local Sync Server',
+                'tool_available',
+              );
             }
           }
         } catch (e) {
-          console.error('[SyncDaemon] Initial sync failed:', e);
+          console.warn('[SyncDaemon] Could not register dynamic tools:', e.message);
         }
 
-        // 3. リアルタイム監視 (WebSocket: サーバー -> Itera OS)
+        // Push ignore-pattern configuration to the host server (best-effort).
+        pushIgnoreConfigToServer();
+
+        // Initial Reconciliation
+        triggerSync();
+
+        // WebSocket Listener
         const connectWs = () => {
           const wsUrl = serverUrl.replace(/^http/, 'ws') + '/ws';
           ws = new WebSocket(wsUrl);
 
           ws.onmessage = async (e) => {
-            const data = JSON.parse(e.data);
-            const fullPath = \`\${mountPath}/\${data.path}\`;
-
-            if (data.type === 'create' || data.type === 'update') {
-              try {
-                // 外部エコーの防止: サーバーから通知されたファイルとローカルのファイルのハッシュを比較
-                // 自分がアップロードした結果の通知であれば、ハッシュが一致するため実体をスタブで破壊しない
-                const stat = await MetaOS.fs.stat(fullPath);
-                if (stat && stat.hash === data.meta.hash) {
-                  return; // すでに最新の状態（実体あり）なのでスキップ
-                }
-              } catch (err) {
-                // localにファイルが存在しない（エラーになる）場合はスタブを作ってよい
+            try {
+              const data = JSON.parse(e.data);
+              if (data.type === 'create' || data.type === 'update' || data.type === 'delete' || data.type === 'sync') {
+                triggerSync();
               }
-
-              await MetaOS.fs.createStub(fullPath, {
-                size: data.meta.size,
-                updatedAt: data.meta.updatedAt,
-                hash: data.meta.hash,
-              });
-            } else if (data.type === 'delete') {
-              try {
-                await MetaOS.fs.delete(fullPath, { permanent: true });
-              } catch (err) {}
-            }
+            } catch (err) {}
           };
           ws.onclose = () => setTimeout(connectWs, 5000);
         };
@@ -27573,137 +29742,125 @@ Attributes:
 </html>
 `.trim(),
 
-  'system/themes/dark.json': JSON.stringify(
-    {
-      meta: {
-        name: 'Itera Dark',
-        author: 'System',
-      },
-      colors: {
-        bg: {
-          app: '#0f172a',
-          panel: '#1e293b',
-          card: '#334155',
-          hover: '#475569',
-          overlay: '#000000',
-        },
-        border: {
-          main: '#334155',
-          highlight: '#3b82f6',
-        },
-        text: {
-          main: '#f1f5f9',
-          muted: '#94a3b8',
-          inverted: '#0f172a',
-          system: '#60a5fa',
-          tag_attr: '#94a3b8',
-          tag_content: '#cbd5e1',
-        },
-        accent: {
-          primary: '#3b82f6',
-          success: '#10b981',
-          warning: '#f59e0b',
-          error: '#ef4444',
-        },
-        tags: {
-          thinking: '#1e3a8a',
-          plan: '#064e3b',
-          report: '#312e81',
-          error: '#7f1d1d',
-        },
-      },
+  "system/themes/dark.json": JSON.stringify({
+  "meta": {
+    "name": "Itera Dark",
+    "author": "System"
+  },
+  "colors": {
+    "bg": {
+      "app": "#0f172a",
+      "panel": "#1e293b",
+      "card": "#334155",
+      "hover": "#475569",
+      "overlay": "#000000"
     },
-    null,
-    2,
-  ),
+    "border": {
+      "main": "#334155",
+      "highlight": "#3b82f6"
+    },
+    "text": {
+      "main": "#f1f5f9",
+      "muted": "#94a3b8",
+      "inverted": "#0f172a",
+      "system": "#60a5fa",
+      "tag_attr": "#94a3b8",
+      "tag_content": "#cbd5e1"
+    },
+    "accent": {
+      "primary": "#3b82f6",
+      "success": "#10b981",
+      "warning": "#f59e0b",
+      "error": "#ef4444"
+    },
+    "tags": {
+      "thinking": "#1e3a8a",
+      "plan": "#064e3b",
+      "report": "#312e81",
+      "error": "#7f1d1d"
+    }
+  }
+}, null, 2),
 
-  'system/themes/light.json': JSON.stringify(
-    {
-      meta: {
-        name: 'Itera Light',
-        author: 'System',
-      },
-      colors: {
-        bg: {
-          app: '#f9fafb',
-          panel: '#ffffff',
-          card: '#f3f4f6',
-          hover: '#e5e7eb',
-          overlay: '#000000',
-        },
-        border: {
-          main: '#e5e7eb',
-          highlight: '#3b82f6',
-        },
-        text: {
-          main: '#1f2937',
-          muted: '#6b7280',
-          inverted: '#ffffff',
-          system: '#2563eb',
-          tag_attr: '#6b7280',
-          tag_content: '#374151',
-        },
-        accent: {
-          primary: '#2563eb',
-          success: '#059669',
-          warning: '#d97706',
-          error: '#dc2626',
-        },
-        tags: {
-          thinking: '#1d4ed8',
-          plan: '#047857',
-          report: '#4338ca',
-          error: '#b91c1c',
-        },
-      },
+  "system/themes/light.json": JSON.stringify({
+  "meta": {
+    "name": "Itera Light",
+    "author": "System"
+  },
+  "colors": {
+    "bg": {
+      "app": "#f9fafb",
+      "panel": "#ffffff",
+      "card": "#f3f4f6",
+      "hover": "#e5e7eb",
+      "overlay": "#000000"
     },
-    null,
-    2,
-  ),
+    "border": {
+      "main": "#e5e7eb",
+      "highlight": "#3b82f6"
+    },
+    "text": {
+      "main": "#1f2937",
+      "muted": "#6b7280",
+      "inverted": "#ffffff",
+      "system": "#2563eb",
+      "tag_attr": "#6b7280",
+      "tag_content": "#374151"
+    },
+    "accent": {
+      "primary": "#2563eb",
+      "success": "#059669",
+      "warning": "#d97706",
+      "error": "#dc2626"
+    },
+    "tags": {
+      "thinking": "#1d4ed8",
+      "plan": "#047857",
+      "report": "#4338ca",
+      "error": "#b91c1c"
+    }
+  }
+}, null, 2),
 
-  'system/themes/midnight.json': JSON.stringify(
-    {
-      meta: {
-        name: 'Midnight Protocol',
-        author: 'System',
-      },
-      colors: {
-        bg: {
-          app: '#020617',
-          panel: '#0f172a',
-          card: '#1e293b',
-          hover: '#334155',
-          overlay: '#000000',
-        },
-        border: {
-          main: '#1e293b',
-          highlight: '#6366f1',
-        },
-        text: {
-          main: '#e2e8f0',
-          muted: '#64748b',
-          inverted: '#020617',
-          system: '#818cf8',
-          tag_attr: '#94a3b8',
-          tag_content: '#cbd5e1',
-        },
-        accent: {
-          primary: '#6366f1',
-          success: '#10b981',
-          warning: '#f59e0b',
-          error: '#f43f5e',
-        },
-        tags: {
-          thinking: '#312e81',
-          plan: '#064e3b',
-          report: '#4338ca',
-          error: '#881337',
-        },
-      },
+  "system/themes/midnight.json": JSON.stringify({
+  "meta": {
+    "name": "Midnight Protocol",
+    "author": "System"
+  },
+  "colors": {
+    "bg": {
+      "app": "#020617",
+      "panel": "#0f172a",
+      "card": "#1e293b",
+      "hover": "#334155",
+      "overlay": "#000000"
     },
-    null,
-    2,
-  ),
+    "border": {
+      "main": "#1e293b",
+      "highlight": "#6366f1"
+    },
+    "text": {
+      "main": "#e2e8f0",
+      "muted": "#64748b",
+      "inverted": "#020617",
+      "system": "#818cf8",
+      "tag_attr": "#94a3b8",
+      "tag_content": "#cbd5e1"
+    },
+    "accent": {
+      "primary": "#6366f1",
+      "success": "#10b981",
+      "warning": "#f59e0b",
+      "error": "#f43f5e"
+    },
+    "tags": {
+      "thinking": "#312e81",
+      "plan": "#064e3b",
+      "report": "#4338ca",
+      "error": "#881337"
+    }
+  }
+}, null, 2)
 };
 
-export const BUILD_TIME = 1786104922841;
+export const BUILD_TIME = 1786523383463;
