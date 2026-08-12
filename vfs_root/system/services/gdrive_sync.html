@@ -42,6 +42,14 @@
       const POLL_INTERVAL_MS = 20000;
       const DEBOUNCE_MS = 1500;
 
+      /**
+       * アンカーをサイクル途中で保存する間隔。
+       *
+       * 初回同期は数千ファイル・数時間に及ぶ。最後に一度しか保存しないと、
+       * 途中で落ちたときに進捗がまったく残らない。
+       */
+      const ANCHOR_FLUSH_MS = 10000;
+
       const DRIVE_API = 'https://www.googleapis.com/drive/v3';
       const DRIVE_UPLOAD = 'https://www.googleapis.com/upload/drive/v3';
 
@@ -185,7 +193,15 @@
         }
       }
 
-      async function driveFetch(url, options = {}) {
+      /**
+       * ★ 401 を受けたら、ディスク上のトークンを読み直して 1 回だけ再試行する。
+       *
+       * accessToken はモジュール変数で、reconcile() の先頭で一度読むだけだった。
+       * ブラウザのみの OAuth は 1 時間・リフレッシュ無しのため、初回同期のように
+       * 長いサイクルでは走行中に必ず失効する。再読込が無いと、ユーザーが
+       * その場で再認証してもサイクルは復活せず、丸ごと捨てることになっていた。
+       */
+      async function driveFetch(url, options = {}, _retried = false) {
         if (!accessToken) throw new Error('NOT_AUTHENTICATED');
 
         const res = await MetaOS.net.fetch(url, {
@@ -199,6 +215,10 @@
 
         if (res.status === 401) {
           accessToken = null;
+          if (!_retried && (await loadToken())) {
+            log('Access token was refreshed mid-cycle. Retrying.');
+            return driveFetch(url, options, true);
+          }
           throw new Error('TOKEN_EXPIRED');
         }
         if (res.status < 200 || res.status >= 300) {
@@ -439,8 +459,26 @@
         if (mountPath) allPaths.delete(mountPath);
 
         let ops = 0;
+        let lastFlush = Date.now();
+
+        /**
+         * ★ ここでアンカーを定期保存する。
+         *
+         * newAnchor の各エントリは、対応する操作が成功した「後」にのみ書かれる。
+         * よって途中まで保存されたアンカーは常に正しい部分集合であり、
+         * 早めに永続化しても不整合は生じない。
+         * 失われるのは最大でも ANCHOR_FLUSH_MS 分の進捗にとどまる。
+         */
         const breathe = async () => {
           if (++ops % 25 === 0) await new Promise((r) => setTimeout(r, 0));
+          if (Date.now() - lastFlush >= ANCHOR_FLUSH_MS) {
+            lastFlush = Date.now();
+            try {
+              await saveAnchor(newAnchor);
+            } catch (e) {
+              log(`Could not flush anchor: ${e.message}`, 'warn');
+            }
+          }
         };
 
         for (const path of allPaths) {
@@ -544,7 +582,17 @@
             }
             await breathe();
           } catch (e) {
-            if (e.message === 'TOKEN_EXPIRED' || e.message === 'NOT_AUTHENTICATED') throw e;
+            if (e.message === 'TOKEN_EXPIRED' || e.message === 'NOT_AUTHENTICATED') {
+              // ★ 中断はここからしか抜けない。捨てる前に進捗を残す。
+              //   これを怠るとアンカーが空のままになり、次サイクルが
+              //   コールドスタート分岐に入ってアップロード済みの実体をスタブ化する。
+              try {
+                await saveAnchor(newAnchor);
+              } catch (e2) {
+                log(`Could not persist anchor before aborting: ${e2.message}`, 'warn');
+              }
+              throw e;
+            }
             log(`Skipped '${path}': ${e.message}`, 'warn');
           }
         }
