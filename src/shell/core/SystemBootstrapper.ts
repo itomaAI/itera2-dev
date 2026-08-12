@@ -48,6 +48,7 @@ import { ProcessEventRecorder } from '../services/ProcessEventRecorder';
 import { HostGuestToolInvoker } from '../services/HostGuestToolInvoker';
 import { ProviderManager } from '../../core/vfs/ProviderManager';
 import { HistoryEventRecorder } from '../services/HistoryEventRecorder';
+import { SyncAdapterHost } from '../services/SyncAdapterHost';
 
 export class SystemBootstrapper {
   public static async boot(): Promise<void> {
@@ -114,6 +115,10 @@ export class SystemBootstrapper {
     const processManager = new ProcessManager(vfs, appRegistry, configManager);
     const uriRouter = new UriRouter('open');
 
+    // 同期アダプタのホスト。実際の読み込みは DesktopEnvironment（=描画スロットの供給元）
+    // の構築後に行う必要があるため、ここでは生成のみ。
+    const syncAdapterHost = new SyncAdapterHost(vfs, configManager, processManager);
+
     // ==========================================
     // 4. Shell Services & UI Layer
     // ==========================================
@@ -136,6 +141,7 @@ export class SystemBootstrapper {
       uriRouter,
       cognitiveManager,
       configManager,
+      syncAdapterHost,
     );
 
     // ==========================================
@@ -248,6 +254,12 @@ export class SystemBootstrapper {
 
     await cognitiveManager.refreshEngineConfig();
     await maintenanceDaemon.start();
+
+    // 同期アダプタの読み込み。
+    // DesktopEnvironment の構築後でなければ描画スロットを受け取れないため、
+    // ここまで遅延させている。個々のアダプタの失敗は内部で握り潰され、
+    // 起動シーケンス全体を止めない。
+    await syncAdapterHost.loadAll();
 
     // ダッシュボードの起動
     const homePath = configManager.get('appearance')?.layout?.homePath || 'apps/home.html';

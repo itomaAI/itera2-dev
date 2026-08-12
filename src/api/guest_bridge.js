@@ -194,6 +194,7 @@
             list: async (path, opts = {}) => transport.requestHost('fs:list', { path, opts }),
             exists: async (path) => transport.requestHost('fs:exists', { path }),
             getSyncState: async (path) => transport.requestHost('fs:get_sync_state', { path }),
+            listMounts: async () => transport.requestHost('fs:list_mounts', {}),
             resolveUrl: async (path) => transport.requestHost('fs:resolve_url', { path }),
             getAcl: async (path) => transport.requestHost('fs:get_acl', { path }),
             setAcl: async (path, acl, opts = {}) => transport.requestHost('fs:set_acl', { path, acl, opts }),
