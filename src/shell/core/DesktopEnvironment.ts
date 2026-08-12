@@ -117,7 +117,10 @@ export class DesktopEnvironment {
 
     adapterHost.onStatusChange((summary: SyncAdapterStatus) => {
       if (!btn) return;
-      const base = 'w-5 h-5 flex items-center justify-center rounded transition hover:bg-hover';
+      // ヘッダー群（🔒 / ⚙）と同じ寸法に揃えること。
+      // ここを index.html 側のクラスと食い違わせると、最初の状態通知で
+      // ボタンの見た目が別サイズに飛ぶ。
+      const base = 'p-1.5 rounded transition hover:bg-hover';
       const accentByState: Record<string, string> = {
         connected: summary.accentClass || 'text-primary',
         connecting: 'text-warning',
