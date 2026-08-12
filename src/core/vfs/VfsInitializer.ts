@@ -40,6 +40,7 @@ export class VfsInitializer {
       'system/temp',
       'system/logs',
       'system/upstream', // ★ 追加: 常に最新の公式OSファイルを保持するディレクトリ
+      'system/credentials', // ★ 追加: 認証情報の一元管理領域（クラウド同期の対象外）
     ];
 
     for (const dir of requiredDirs) {
@@ -167,6 +168,15 @@ export class VfsInitializer {
       'system/registry',
       'system/temp',
       'system/upstream', // ★ 追加: 再起動で元に戻るため、一時的な書き換えや実験を許可する
+      // ★ 認証情報の一元管理領域。
+      //   デーモン（git / github / telegram 等）が読み、認証アダプタが書くため R/W が要る。
+      //
+      //   この領域を独立させている理由は、クラウド同期の除外を「1 ディレクトリ」で
+      //   表現できるようにするため。認証情報が config や memory に散在していると、
+      //   同期対象を広げるたびに漏れが生まれ、PAT やトークンがクラウドへ流出する。
+      //
+      //   ★ ここを同期対象に含めてはならない。
+      'system/credentials',
     ];
 
     for (const rwPath of rwPaths) {
