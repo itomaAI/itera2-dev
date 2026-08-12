@@ -32,6 +32,8 @@ import { ProcessMonitorModal } from '../modals/ProcessMonitorModal';
 import { PropertiesModal } from '../modals/PropertiesModal';
 import { CommandPaletteModal } from '../modals/CommandPaletteModal';
 import { FilePickerModal } from '../modals/FilePickerModal';
+import { SyncModal } from '../modals/SyncModal';
+import type { SyncAdapterHost, SyncAdapterStatus } from '../services/SyncAdapterHost';
 // Services
 import { LpmlRenderer } from '../services/LpmlRenderer';
 
@@ -51,6 +53,7 @@ export class DesktopEnvironment {
   private _processMonitorModal: ProcessMonitorModal;
   private _propertiesModal: PropertiesModal;
   private _filePickerModal: FilePickerModal;
+  private _syncModal: SyncModal;
 
   private saveFeedbackTimer: ReturnType<typeof setTimeout> | null = null;
   private activePrincipal: Principal = USER_PRINCIPAL;
@@ -67,6 +70,7 @@ export class DesktopEnvironment {
     uriRouter: UriRouter,
     cognitiveManager: CognitiveManager,
     configManager: ConfigManager,
+    adapterHost: SyncAdapterHost,
   ) {
     const lpmlRenderer = new LpmlRenderer();
 
@@ -90,10 +94,39 @@ export class DesktopEnvironment {
     this._propertiesModal = new PropertiesModal(vfs);
     this._filePickerModal = new FilePickerModal(vfs, () => this.getActivePrincipal());
     this.commandPalette = new CommandPaletteModal(vfs, appRegistry, uriRouter, () => this.getActivePrincipal());
+    this._syncModal = new SyncModal(adapterHost);
 
     this._bindMobileNavigation();
     this._bindCommandPaletteShortcut();
     this._bindSudoToggle();
+    this._bindCloudSync(adapterHost);
+  }
+
+  /**
+   * ストレージパネルの雲アイコンに同期モーダルを結びつける。
+   *
+   * ホストが持つのは「ボタンを押したらモーダルを開く」ことと
+   * 「集約された状態でアイコンの色を変える」ことだけであり、
+   * どのプロバイダが存在するかは一切知らない。
+   */
+  private _bindCloudSync(adapterHost: SyncAdapterHost): void {
+    const btn = document.getElementById('btn-cloud-sync');
+    if (btn) {
+      btn.addEventListener('click', () => this._syncModal.toggle());
+    }
+
+    adapterHost.onStatusChange((summary: SyncAdapterStatus) => {
+      if (!btn) return;
+      const base = 'w-5 h-5 flex items-center justify-center rounded transition hover:bg-hover';
+      const accentByState: Record<string, string> = {
+        connected: summary.accentClass || 'text-primary',
+        connecting: 'text-warning',
+        error: 'text-error',
+        disconnected: 'text-text-muted hover:text-text-main',
+      };
+      btn.className = `${base} ${accentByState[summary.state] || accentByState.disconnected}`;
+      btn.setAttribute('title', summary.detail ? `Cloud Sync — ${summary.detail}` : 'Cloud Sync');
+    });
   }
 
   public getActivePrincipal(): Principal {
@@ -121,6 +154,7 @@ export class DesktopEnvironment {
       processMonitor: this._processMonitorModal,
       properties: this._propertiesModal,
       filePicker: this._filePickerModal,
+      sync: this._syncModal,
     };
   }
 

@@ -243,6 +243,25 @@ export class HostApiRouter {
       return true;
     });
 
+    // マウント表の読み取り。同期デーモンが「他プロバイダの管轄下」を
+    // 導出して自分の同期対象から外すために使う（除外リストのハードコード回避）。
+    // 構造情報のみで内容を含まないため読み取り専用で公開する。
+    //
+    // fail-closed: ProviderManager を参照できない状態で空配列を返すと、
+    // 呼び出し側は「他マウントは無い」とみなして他領域を自分の同期対象に
+    // 含めてしまう。例外にして呼び出し側のサイクルを中断させる。
+    //
+    // ※ ミャク楽Agent 側の同名ハンドラは services.json の reservedMountPath
+    //    （未登録だが予約済みのマウント）も併せて返すが、itera2-dev の
+    //    ServiceManifest には当該フィールドが存在しないため移植していない。
+    //    ルートマウントの同期デーモンを追加する場合は、デーモンの登録が
+    //    間に合わない起動直後の窓を塞ぐため、先に ServiceManifest の拡張が要る。
+    t.registerHandler('fs:list_mounts', async () => {
+      const pm = d.vfs.getProviderManager();
+      if (!pm) throw new Error('ProviderManager not connected.');
+      return pm.listMounts().map((m) => ({ ...m, registered: true }));
+    });
+
     // ==========================================
     // 2. AI & History (ai)
     // ==========================================

@@ -380,6 +380,7 @@ All methods (except \`on/off\`) are **Asynchronous** and return a \`Promise\`.
 - \`exists(path)\`: Returns boolean.
 - \`registerSyncProvider(path, handlers)\`: Registers the app as a Sync Provider. \`handlers.onFetchContent(path)\` is called to fetch missing stub contents. \`handlers.onMutate(mutations)\` receives an array of state changes (\`ATTACH\`, \`DETACH\`, \`MUTATE\`) avoiding echo-loops automatically.
 - \`unregisterSyncProvider(path)\`: Removes the sync provider registration.
+- \`listMounts()\`: Returns the current Sync Provider mount table as \`[{ mountPath, pid, registered }]\`. A daemon mounted at the root uses this to derive which subtrees belong to *other* providers and exclude them, instead of hardcoding an exclusion list. Note that mount resolution is longest-prefix-match, so the root mount ('') always loses to a deeper mount.
 - \`createStub(path, meta, opts)\`: Creates a metadata-only entry (placeholder) in the VFS without uploading actual content. Useful for Cloud Sync providers.
 
 **AI & History (MetaOS.ai)**:
