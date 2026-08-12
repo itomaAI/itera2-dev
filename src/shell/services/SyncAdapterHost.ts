@@ -171,9 +171,7 @@ export class SyncAdapterHost {
       };
       this.adapters.set(manifest.id, entry);
 
-      const container = this.containerFactory
-        ? this.containerFactory(manifest)
-        : document.createElement('div');
+      const container = this.containerFactory ? this.containerFactory(manifest) : document.createElement('div');
 
       const ctx: SyncAdapterContext = {
         apiVersion: ADAPTER_API_VERSION,
