@@ -14,5 +14,13 @@
     "path": "system/services/local_sync.html",
     "description": "Bi-directional sync with local python server.",
     "autoStart": false
+  },
+  {
+    "id": "gdrive_sync_daemon",
+    "name": "Google Drive Sync",
+    "icon": "☁️",
+    "path": "system/services/gdrive_sync.html",
+    "description": "Mounts a Google Drive folder at drive/ and syncs it bi-directionally.",
+    "autoStart": false
   }
 ]

@@ -1,0 +1,590 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Google Drive Sync Daemon</title>
+  </head>
+  <body>
+    <script>
+      /**
+       * Google Drive Sync Daemon
+       *
+       * Drive の 1 フォルダを VFS の drive/ にマウントし、3-way マージで双方向同期する。
+       * 認証は system/adapters/google_drive_auth.js が行い、本デーモンは
+       * system/temp/gdrive_token.json 経由でアクセストークンを受け取るだけ。
+       *
+       * ── firebase_sync.html からの本質的な変更点 ─────────────────
+       *
+       * 1. ハッシュ空間が異なるため L と R を直接比較しない
+       *    Firebase 版はクライアント自身が VFS のハッシュを書き込んでいたので
+       *    isSame(l, r) が成立した。しかし Drive の md5Checksum は Google が
+       *    計算したものであり、VFS のハッシュとは別物で比較できない。
+       *    そのまま移植すると全ファイルが恒久的に「差分あり」となり、
+       *    延々とアップロードし続ける。
+       *
+       *    → アンカーに両方のハッシュを保持し、それぞれ自分の系で比較する:
+       *         A[path].hash  ←→ L[path].hash   (VFS 側)
+       *         A[path].rhash ←→ R[path].md5    (Drive 側)
+       *
+       * 2. パスではなく fileId が正
+       *    Drive はパスを持たず、parents を辿って構成する派生情報にすぎない。
+       *    アンカーに fileId を保持し、更新時は ID を使う。
+       *
+       * 3. Google ネイティブ形式は同期対象外
+       *    Docs/Sheets/Slides は md5Checksum も size も持たないため、
+       *    ハッシュ比較が原理的に成立しない。除外しないと毎サイクル
+       *    「差分あり」と誤判定して回り続ける。
+       * ──────────────────────────────────────────────────
+       */
+
+      const CONFIG_PATH = 'system/config/gdrive.json';
+      const TOKEN_PATH = 'system/temp/gdrive_token.json';
+      const ANCHOR_PATH = 'system/temp/gdrive_anchor.json';
+
+      const POLL_INTERVAL_MS = 20000;
+      const DEBOUNCE_MS = 1500;
+
+      const DRIVE_API = 'https://www.googleapis.com/drive/v3';
+      const DRIVE_UPLOAD = 'https://www.googleapis.com/upload/drive/v3';
+
+      let config = null;
+      let mountPath = 'drive';
+      let rootFolderId = null;
+
+      let accessToken = null;
+      let tokenExpiresAt = 0;
+
+      let remoteCache = {}; // path -> { id, kind, md5, size, modifiedTime }
+      let syncTimer = null;
+      let isSyncing = false;
+      let lastError = null;
+
+      // ==========================================
+      // 基本ユーティリティ
+      // ==========================================
+
+      function log(msg, level = 'info') {
+        const tag = '[GDriveSync]';
+        if (level === 'error') console.error(tag, msg);
+        else if (level === 'warn') console.warn(tag, msg);
+        else console.log(tag, msg);
+      }
+
+      /**
+       * Google ネイティブ形式かどうか。
+       * フォルダはネイティブ形式だが構造として必要なので除外しない。
+       */
+      function isNativeDoc(mimeType) {
+        return (
+          typeof mimeType === 'string' &&
+          mimeType.startsWith('application/vnd.google-apps') &&
+          mimeType !== 'application/vnd.google-apps.folder'
+        );
+      }
+
+      function isFolder(mimeType) {
+        return mimeType === 'application/vnd.google-apps.folder';
+      }
+
+      // ==========================================
+      // 認証
+      // ==========================================
+
+      async function loadToken() {
+        try {
+          const raw = await MetaOS.fs.read(TOKEN_PATH);
+          const data = JSON.parse(raw || '{}');
+          if (!data.accessToken) return false;
+          // 期限切れのトークンで API を叩くと 401 が並ぶだけなので手前で弾く
+          if (data.expiresAt && Date.now() >= data.expiresAt) {
+            accessToken = null;
+            return false;
+          }
+          accessToken = data.accessToken;
+          tokenExpiresAt = data.expiresAt || 0;
+          return true;
+        } catch (e) {
+          return false;
+        }
+      }
+
+      async function driveFetch(url, options = {}) {
+        if (!accessToken) throw new Error('NOT_AUTHENTICATED');
+
+        const res = await MetaOS.net.fetch(url, {
+          ...options,
+          headers: {
+            ...(options.headers || {}),
+            Authorization: `Bearer ${accessToken}`,
+          },
+          responseType: options.responseType || 'json',
+        });
+
+        if (res.status === 401) {
+          // トークン失効。アダプタ側の再認証を待つ。
+          accessToken = null;
+          throw new Error('TOKEN_EXPIRED');
+        }
+        if (res.status < 200 || res.status >= 300) {
+          const detail = typeof res.data === 'string' ? res.data.slice(0, 200) : JSON.stringify(res.data || {}).slice(0, 200);
+          throw new Error(`Drive API ${res.status}: ${detail}`);
+        }
+        return res.data;
+      }
+
+      // ==========================================
+      // リモート状態の取得
+      // ==========================================
+
+      /**
+       * ルートフォルダから再帰的に走査し、path -> メタ情報 のマップを作る。
+       * Drive はパスを持たないため、ここで親子関係からパスを構成する。
+       */
+      async function fetchRemoteState() {
+        const result = {};
+        const queue = [{ id: rootFolderId, prefix: '' }];
+        let guard = 0;
+
+        while (queue.length > 0) {
+          if (++guard > 5000) {
+            log('Traversal guard tripped (>5000 folders). Aborting this cycle.', 'warn');
+            break;
+          }
+          const { id, prefix } = queue.shift();
+
+          let pageToken = null;
+          do {
+            const q = encodeURIComponent(`'${id}' in parents and trashed=false`);
+            const fields = encodeURIComponent('nextPageToken,files(id,name,mimeType,md5Checksum,size,modifiedTime)');
+            let url = `${DRIVE_API}/files?q=${q}&fields=${fields}&pageSize=1000`;
+            if (pageToken) url += `&pageToken=${encodeURIComponent(pageToken)}`;
+
+            const data = await driveFetch(url);
+            const files = (data && data.files) || [];
+
+            for (const f of files) {
+              // ネイティブ形式はハッシュ比較が成立しないため対象外
+              if (isNativeDoc(f.mimeType)) continue;
+
+              // パス区切りと衝突する名前は扱えないので飛ばす
+              if (f.name.includes('/')) {
+                log(`Skipping '${f.name}': name contains a path separator.`, 'warn');
+                continue;
+              }
+
+              const relPath = prefix ? `${prefix}/${f.name}` : f.name;
+              const fullPath = `${mountPath}/${relPath}`;
+
+              if (isFolder(f.mimeType)) {
+                result[fullPath] = { id: f.id, kind: 'directory' };
+                queue.push({ id: f.id, prefix: relPath });
+              } else {
+                result[fullPath] = {
+                  id: f.id,
+                  kind: 'file',
+                  md5: f.md5Checksum || null,
+                  size: Number(f.size || 0),
+                  modifiedTime: f.modifiedTime ? Date.parse(f.modifiedTime) : Date.now(),
+                };
+              }
+            }
+
+            pageToken = (data && data.nextPageToken) || null;
+          } while (pageToken);
+        }
+
+        return result;
+      }
+
+      // ==========================================
+      // アンカー
+      // ==========================================
+
+      async function getAnchor() {
+        try {
+          const raw = await MetaOS.fs.read(ANCHOR_PATH);
+          return JSON.parse(raw || '{}');
+        } catch (e) {
+          return {};
+        }
+      }
+
+      async function saveAnchor(anchor) {
+        await MetaOS.fs.write(ANCHOR_PATH, JSON.stringify(anchor, null, 2), {
+          overwrite: true,
+          silent: true,
+        });
+      }
+
+      // ==========================================
+      // Drive への書き込み
+      // ==========================================
+
+      /** 親フォルダを辿って作成し、その fileId を返す */
+      async function ensureRemoteFolder(relDirPath, remoteState) {
+        if (!relDirPath) return rootFolderId;
+
+        const parts = relDirPath.split('/');
+        let parentId = rootFolderId;
+        let acc = '';
+
+        for (const part of parts) {
+          acc = acc ? `${acc}/${part}` : part;
+          const fullPath = `${mountPath}/${acc}`;
+          const known = remoteState[fullPath];
+
+          if (known && known.kind === 'directory') {
+            parentId = known.id;
+            continue;
+          }
+
+          const created = await driveFetch(`${DRIVE_API}/files?fields=id`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              name: part,
+              mimeType: 'application/vnd.google-apps.folder',
+              parents: [parentId],
+            }),
+          });
+          parentId = created.id;
+          remoteState[fullPath] = { id: created.id, kind: 'directory' };
+        }
+        return parentId;
+      }
+
+      /**
+       * multipart で新規作成する。
+       * MetaOS.net.fetch は Blob をそのまま送れないため、境界を自前で組み立てる。
+       */
+      async function uploadNew(path, bytes, remoteState) {
+        const rel = path.substring(mountPath.length + 1);
+        const idx = rel.lastIndexOf('/');
+        const dir = idx === -1 ? '' : rel.substring(0, idx);
+        const name = idx === -1 ? rel : rel.substring(idx + 1);
+
+        const parentId = await ensureRemoteFolder(dir, remoteState);
+
+        const boundary = `itera${Date.now()}${Math.random().toString(16).slice(2)}`;
+        const metadata = JSON.stringify({ name, parents: [parentId] });
+
+        const enc = new TextEncoder();
+        const head = enc.encode(
+          `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${metadata}\r\n` +
+            `--${boundary}\r\nContent-Type: application/octet-stream\r\n\r\n`,
+        );
+        const tail = enc.encode(`\r\n--${boundary}--\r\n`);
+
+        const body = new Uint8Array(head.length + bytes.length + tail.length);
+        body.set(head, 0);
+        body.set(bytes, head.length);
+        body.set(tail, head.length + bytes.length);
+
+        return await driveFetch(
+          `${DRIVE_UPLOAD}/files?uploadType=multipart&fields=id,md5Checksum,size,modifiedTime`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': `multipart/related; boundary=${boundary}` },
+            body,
+          },
+        );
+      }
+
+      /** 既存ファイルの中身を差し替える */
+      async function uploadUpdate(fileId, bytes) {
+        return await driveFetch(
+          `${DRIVE_UPLOAD}/files/${fileId}?uploadType=media&fields=id,md5Checksum,size,modifiedTime`,
+          {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/octet-stream' },
+            body: bytes,
+          },
+        );
+      }
+
+      /**
+       * 削除ではなくゴミ箱へ送る。
+       * 同期の誤判定でユーザーのファイルが復元不能になる事故を避けるため、
+       * 恒久削除は行わない。
+       */
+      async function trashRemote(fileId) {
+        await driveFetch(`${DRIVE_API}/files/${fileId}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ trashed: true }),
+        });
+      }
+
+      // ==========================================
+      // 3-way マージ
+      // ==========================================
+
+      function triggerSync() {
+        clearTimeout(syncTimer);
+        syncTimer = setTimeout(async () => {
+          if (isSyncing) {
+            triggerSync();
+            return;
+          }
+          isSyncing = true;
+          try {
+            await reconcile();
+            lastError = null;
+          } catch (e) {
+            if (e.message === 'NOT_AUTHENTICATED' || e.message === 'TOKEN_EXPIRED') {
+              // 認証待ち。エラーではなく通常の状態として扱う。
+              log('Waiting for authentication...');
+            } else {
+              lastError = e.message;
+              log(`Sync failed: ${e.message}`, 'error');
+            }
+          } finally {
+            isSyncing = false;
+          }
+        }, DEBOUNCE_MS);
+      }
+
+      async function reconcile() {
+        if (!(await loadToken())) throw new Error('NOT_AUTHENTICATED');
+        if (!rootFolderId) throw new Error('Root folder is not configured');
+
+        const L = await MetaOS.fs.getSyncState(mountPath);
+        const R = await fetchRemoteState();
+        const A = await getAnchor();
+        remoteCache = R;
+
+        const isAnchorEmpty = Object.keys(A).length === 0;
+        const allPaths = new Set([...Object.keys(L), ...Object.keys(R), ...Object.keys(A)]);
+        const newAnchor = { ...A };
+
+        // マウントポイント自身は同期対象に含めない
+        allPaths.delete(mountPath);
+
+        let ops = 0;
+        const breathe = async () => {
+          if (++ops % 25 === 0) await new Promise((r) => setTimeout(r, 0));
+        };
+
+        for (const path of allPaths) {
+          if (!path.startsWith(mountPath + '/')) continue;
+
+          try {
+            const l = L[path];
+            const r = R[path];
+            const a = A[path];
+
+            const lExists = !!l && !l.isDeleted;
+            const rExists = !!r;
+
+            // ★ ハッシュ空間が異なるため、L と R を直接比較してはならない。
+            //   それぞれ自分の系でアンカーと比較する。
+            const localChanged = lExists ? !a || a.hash !== l.hash : !!a;
+            const remoteChanged = rExists ? !a || a.rhash !== (r.md5 || null) : !!a;
+
+            // --- コールドスタート: アンカーが空ならリモートを正とする ---
+            if (isAnchorEmpty && rExists) {
+              if (r.kind === 'directory') {
+                if (!(await MetaOS.fs.exists(path))) await MetaOS.fs.mkdir(path);
+              } else {
+                await MetaOS.fs.createStub(path, {
+                  size: r.size,
+                  hash: null,
+                  updatedAt: r.modifiedTime,
+                });
+              }
+              newAnchor[path] = { id: r.id, kind: r.kind, hash: null, rhash: r.md5 || null };
+              await breathe();
+              continue;
+            }
+
+            if (!localChanged && !remoteChanged) {
+              continue;
+            }
+
+            // --- Pull (リモートのみ変化) ---
+            if (!localChanged && remoteChanged) {
+              if (!rExists) {
+                if (await MetaOS.fs.exists(path)) await MetaOS.fs.delete(path, { permanent: true });
+                delete newAnchor[path];
+              } else if (r.kind === 'directory') {
+                if (!(await MetaOS.fs.exists(path))) await MetaOS.fs.mkdir(path);
+                newAnchor[path] = { id: r.id, kind: 'directory', hash: null, rhash: null };
+              } else {
+                // 実体は落とさずスタブにする（遅延実体化）
+                await MetaOS.fs.createStub(path, {
+                  size: r.size,
+                  hash: null,
+                  updatedAt: r.modifiedTime,
+                });
+                newAnchor[path] = { id: r.id, kind: 'file', hash: null, rhash: r.md5 || null };
+              }
+              await breathe();
+              continue;
+            }
+
+            // --- Push (ローカルのみ変化) ---
+            if (localChanged && !remoteChanged) {
+              if (!lExists) {
+                if (a && a.id) await trashRemote(a.id);
+                delete newAnchor[path];
+              } else if (l.kind === 'directory') {
+                const rel = path.substring(mountPath.length + 1);
+                const id = await ensureRemoteFolder(rel, R);
+                newAnchor[path] = { id, kind: 'directory', hash: null, rhash: null };
+              } else {
+                const bytes = await MetaOS.fs.read(path, { encoding: 'binary' });
+                const res = a && a.id ? await uploadUpdate(a.id, bytes) : await uploadNew(path, bytes, R);
+                newAnchor[path] = {
+                  id: res.id,
+                  kind: 'file',
+                  hash: l.hash,
+                  rhash: res.md5Checksum || null,
+                };
+              }
+              await breathe();
+              continue;
+            }
+
+            // --- Conflict (両方変化) ---
+            if (lExists && l.kind !== 'directory') {
+              const conflictPath = path.match(/(\.[^.]+)$/)
+                ? path.replace(/(\.[^.]+)$/, ' (Conflicted Copy)$1')
+                : `${path} (Conflicted Copy)`;
+              await MetaOS.fs.rename(path, conflictPath);
+            }
+
+            if (rExists) {
+              if (r.kind === 'directory') {
+                if (!(await MetaOS.fs.exists(path))) await MetaOS.fs.mkdir(path);
+                newAnchor[path] = { id: r.id, kind: 'directory', hash: null, rhash: null };
+              } else {
+                await MetaOS.fs.createStub(path, {
+                  size: r.size,
+                  hash: null,
+                  updatedAt: r.modifiedTime,
+                });
+                newAnchor[path] = { id: r.id, kind: 'file', hash: null, rhash: r.md5 || null };
+              }
+            } else {
+              delete newAnchor[path];
+            }
+            await breathe();
+          } catch (e) {
+            if (e.message === 'TOKEN_EXPIRED' || e.message === 'NOT_AUTHENTICATED') throw e;
+            log(`Skipped '${path}': ${e.message}`, 'warn');
+          }
+        }
+
+        await saveAnchor(newAnchor);
+      }
+
+      // ==========================================
+      // 遅延実体化
+      // ==========================================
+
+      async function onFetchContent(path) {
+        try {
+          if (!(await loadToken())) return false;
+
+          const anchor = await getAnchor();
+          const entry = anchor[path] || remoteCache[path];
+          const fileId = entry && entry.id;
+          if (!fileId) {
+            log(`No fileId known for ${path}`, 'warn');
+            return false;
+          }
+
+          const res = await MetaOS.net.fetch(`${DRIVE_API}/files/${fileId}?alt=media`, {
+            headers: { Authorization: `Bearer ${accessToken}` },
+            responseType: 'arraybuffer',
+          });
+          if (res.status < 200 || res.status >= 300) {
+            log(`Download failed for ${path}: HTTP ${res.status}`, 'error');
+            return false;
+          }
+
+          await MetaOS.fs.write(path, res.data, { overwrite: true, silent: true });
+
+          // 実体化したのでアンカーのローカル側ハッシュを更新する。
+          // ここを怠ると次のサイクルで「ローカルが変化した」と誤判定し、
+          // 落としたばかりの内容をそのまま押し返してしまう。
+          try {
+            const stat = await MetaOS.fs.stat(path);
+            if (stat && anchor[path]) {
+              anchor[path].hash = stat.hash || null;
+              await saveAnchor(anchor);
+            }
+          } catch (e) {
+            log(`Could not refresh anchor hash for ${path}: ${e.message}`, 'warn');
+          }
+
+          return true;
+        } catch (e) {
+          log(`onFetchContent failed for ${path}: ${e.message}`, 'error');
+          return false;
+        }
+      }
+
+      // ==========================================
+      // 初期化
+      // ==========================================
+
+      async function init() {
+        if (!window.MetaOS) return setTimeout(init, 100);
+
+        try {
+          const raw = await MetaOS.fs.read(CONFIG_PATH);
+          config = JSON.parse(raw || '{}');
+        } catch (e) {
+          log(`Config not found at ${CONFIG_PATH}. Daemon will stay idle.`, 'warn');
+          return;
+        }
+
+        mountPath = (config.mountPath || 'drive').replace(/^\/+|\/+$/g, '');
+
+        if (!(await MetaOS.fs.exists(mountPath))) {
+          try {
+            await MetaOS.fs.mkdir(mountPath);
+          } catch (e) {
+            log(`Could not create mount point '${mountPath}': ${e.message}`, 'error');
+            return;
+          }
+        }
+
+        await MetaOS.fs.registerSyncProvider(mountPath, {
+          onFetchContent,
+          onMutate: () => triggerSync(),
+        });
+
+        log(`Mounted at /${mountPath}`);
+
+        // フォルダ ID は認証後にアダプタが設定へ書き込む。
+        // 未設定のうちは待機し、書き込まれ次第同期を始める。
+        const waitForFolder = async () => {
+          try {
+            const raw = await MetaOS.fs.read(CONFIG_PATH);
+            const cfg = JSON.parse(raw || '{}');
+            if (cfg.folderId) {
+              rootFolderId = cfg.folderId;
+              config = cfg;
+              log(`Root folder resolved: ${rootFolderId}`);
+              triggerSync();
+              return;
+            }
+          } catch (e) {
+            /* 設定が読めない間は待つ */
+          }
+          setTimeout(waitForFolder, 3000);
+        };
+        waitForFolder();
+
+        // 安全網のポーリング。リモート側の変更は通知が来ないため必須。
+        setInterval(() => {
+          if (rootFolderId) triggerSync();
+        }, POLL_INTERVAL_MS);
+      }
+
+      init();
+    </script>
+  </body>
+</html>
