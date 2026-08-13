@@ -222,7 +222,12 @@
         if (res.status < 200 || res.status >= 300) {
           const detail =
             typeof res.data === 'string' ? res.data.slice(0, 200) : JSON.stringify(res.data || {}).slice(0, 200);
-          throw new Error(`Drive API ${res.status}: ${detail}`);
+          // ★ ステータスを構造化して持たせる。呼び出し側は「不在(404)」と
+          //   「判定不能(5xx・レート制限)」を区別する必要があり、
+          //   メッセージ文字列の解析でそれを行うのは脆い。
+          const err = new Error(`Drive API ${res.status}: ${detail}`);
+          err.status = res.status;
+          throw err;
         }
         return res.data;
       }
@@ -255,6 +260,23 @@
       let index = { byId: {}, pageToken: null, builtAt: 0, rootFolderId: null };
       let changesSupported = true;
 
+      /**
+       * ★ 索引がメモリ上でのみ変化していることを示す。
+       *
+       * index.byId は saveIndex() を経ない経路（ensureRemoteFolder / indexUploaded /
+       * trashRemote / verifyRemoteAlive）でも書き換わる。これらを保存しないまま
+       * 再起動すると、前回保存以降にアップロードした分が索引から欠落し、
+       * 次サイクルで「リモートから消えた」と誤読される。
+       *
+       * ただし 1 件ごとに保存すると数百 KB の書き込みを初回同期中に数千回行うため、
+       * アンカーと同じくダーティフラグ + 定期フラッシュ方式にする。
+       */
+      let indexDirty = false;
+
+      function markIndexDirty() {
+        indexDirty = true;
+      }
+
       function isAuthError(e) {
         return !!e && (e.message === 'TOKEN_EXPIRED' || e.message === 'NOT_AUTHENTICATED');
       }
@@ -276,7 +298,9 @@
             overwrite: true,
             silent: true,
           });
+          indexDirty = false;
         } catch (e) {
+          // 失敗時はフラグを落とさない。次のフラッシュ機会に再試行される。
           log(`Could not persist the index: ${e.message}`, 'warn');
         }
       }
@@ -507,19 +531,32 @@
        *   3-way マージの Pull 分岐がローカルの実体を恒久削除する。
        *   削除は稀なので、実行前に必ず現物を確認する。
        *   生きていた場合は索引へ戻し、取りこぼしをその場で修復する。
+       *
+       * ★ 戻り値は 3 値。「不在」と「判定不能」を混同してはならない。
+       *   以前はここが 2 値で、5xx・レート制限・通信瞬断まで「不在」に倒しており、
+       *   安全網の内部に安全網を無効化する穴が開いていた。
+       *
+       *     'alive'   … 現物が存在する（索引へ復元済み）
+       *     'gone'    … 存在しないことが確定した（404 / trashed）
+       *     'unknown' … 判定できなかった（5xx・ネットワーク・id 不明）
+       *
+       *   認証エラーは従来どおり throw し、サイクルを中断させる。
        */
       async function verifyRemoteAlive(fileId) {
-        if (!fileId) return null;
+        if (!fileId) return 'unknown';
         try {
           const f = await driveFetch(
             `${DRIVE_API}/files/${fileId}` + `?fields=id,name,mimeType,md5Checksum,size,modifiedTime,parents,trashed`,
           );
-          if (!f || !f.id || f.trashed) return null;
+          if (f && f.id && f.trashed === true) return 'gone';
+          if (!f || !f.id) return 'unknown'; // 200 だが解釈できない応答
           index.byId[f.id] = nodeFromDriveFile(f);
-          return index.byId[f.id];
+          markIndexDirty();
+          return 'alive';
         } catch (e) {
           if (isAuthError(e)) throw e;
-          return null; // 404 等はリモート不在とみなす
+          if (e && e.status === 404) return 'gone';
+          return 'unknown';
         }
       }
 
@@ -587,6 +624,8 @@
             modifiedTime: Date.now(),
           };
 
+          markIndexDirty();
+
           parentId = created.id;
           remoteState[fullPath] = { id: created.id, kind: 'directory' };
         }
@@ -605,6 +644,7 @@
           size: Number(res.size || 0),
           modifiedTime: res.modifiedTime ? Date.parse(res.modifiedTime) : Date.now(),
         };
+        markIndexDirty();
       }
 
       async function uploadNew(path, bytes, remoteState) {
@@ -667,6 +707,7 @@
           body: JSON.stringify({ trashed: true }),
         });
         delete index.byId[fileId];
+        markIndexDirty();
       }
 
       // ==========================================
@@ -740,6 +781,12 @@
             } catch (e) {
               log(`Could not flush anchor: ${e.message}`, 'warn');
             }
+            // ★ 索引も同じ間隔で永続化する。アップロードで得た fileId が
+            //   ディスクに残らないまま再起動すると、その分が索引から欠落し、
+            //   次サイクルで「リモートから消えた」と誤読される。
+            //   （この時点の索引は全件スキャン完了後の完全な集合であり、
+            //     部分的な索引を保存することにはならない）
+            if (indexDirty) await saveIndex();
           }
         };
 
@@ -782,10 +829,20 @@
               if (!rExists) {
                 // ★ 削除は取り返しがつかないため、索引だけを根拠に実行しない。
                 //   索引の取りこぼしは「リモートで削除された」と区別がつかない。
-                //   現物を 1 件確認し、生きていたら何もしない（索引は復元済みなので
-                //   次サイクルで正しい分岐に入る）。
-                if (a && a.id && (await verifyRemoteAlive(a.id))) {
+                //   現物を 1 件確認し、"不在が確定したときだけ" 削除する（fail-closed）。
+                //
+                //   'alive'   … 索引の取りこぼし。復元済みなので次サイクルで正しい分岐に入る。
+                //   'unknown' … 5xx・通信瞬断・アンカーに id が無い等。判断材料が無いので触らない。
+                //               本当に消えていた場合はローカルに残り続けるが、
+                //               ユーザーのファイルを誤って消すより軽微である。
+                const remoteState = a && a.id ? await verifyRemoteAlive(a.id) : 'unknown';
+                if (remoteState === 'alive') {
                   log(`'${path}' is still present on Drive. Index gap repaired.`, 'warn');
+                  await breathe();
+                  continue;
+                }
+                if (remoteState !== 'gone') {
+                  log(`Skipping deletion of '${path}': remote state is ${remoteState}.`, 'warn');
                   await breathe();
                   continue;
                 }
@@ -862,6 +919,9 @@
               } catch (e2) {
                 log(`Could not persist anchor before aborting: ${e2.message}`, 'warn');
               }
+              // ★ 索引も残す。アンカーだけを残すと、アップロード済みの id が
+              //   索引から欠落した状態で次サイクルが始まる。
+              if (indexDirty) await saveIndex();
               throw e;
             }
             log(`Skipped '${path}': ${e.message}`, 'warn');
@@ -869,6 +929,7 @@
         }
 
         await saveAnchor(newAnchor);
+        if (indexDirty) await saveIndex();
       }
 
       // ==========================================
