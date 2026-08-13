@@ -47,5 +47,12 @@
     "icon": "🔄",
     "path": "system/apps/sync_app.html",
     "description": "Sync VFS with local machine"
+  },
+  {
+    "id": "gdrive_sync",
+    "name": "Drive Sync",
+    "icon": "☁️",
+    "path": "system/apps/gdrive_app.html",
+    "description": "Manage Google Drive synchronization"
   }
 ]

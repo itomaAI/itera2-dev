@@ -77,6 +77,16 @@
       let tokenExpiresAt = 0;
 
       let foreignMountPaths = [];
+
+      /**
+       * 利用者が設定アプリで指定した追加の除外パス（VFS のフルパス）。
+       *
+       * ★ これは「同期しないもの」を増やす方向にしか働かない。
+       *   ALWAYS_EXCLUDED と SYSTEM_SYNCED を緩めることはできない。
+       *   認証情報の流出は取り返しがつかないため、除外は設定で穴を開けられない
+       *   構造にしておく。
+       */
+      let userExcludedPaths = [];
       let remoteCache = {};
       let syncTimer = null;
       let isSyncing = false;
@@ -125,6 +135,11 @@
           if (matchesPrefix(path, p)) return true;
         }
 
+        // 利用者指定の追加除外（増やす方向にのみ作用する）
+        for (const p of userExcludedPaths) {
+          if (matchesPrefix(path, p)) return true;
+        }
+
         // system/ 配下は allowlist
         if (path === 'system' || path.startsWith('system/')) {
           return !SYSTEM_SYNCED.some((p) => matchesPrefix(path, p));
@@ -141,6 +156,25 @@
        * 自分の同期対象に含めてしまう。1 サイクル飛ばせば次のポーリングで回復するため、
        * 失敗時は中断する。
        */
+      /**
+       * 設定から追加の除外パスを取り込む。
+       *
+       * 前後の空白とスラッシュを落として正規化し、空になったものは捨てる。
+       *
+       * ★ 空文字を残しても「全件除外」にはならない。
+       *   matchesPrefix(path, '') は path === '' か path.startsWith('/') を見るため、
+       *   通常のパスには一致しない（当初コメントに誤りがあり、変異試験で判明した）。
+       *   それでも捨てるのは、意味を持たない要素を毎パス走査する無駄を避け、
+       *   設定の内容と実際の挙動を一致させるため。
+       */
+      function applyUserExcludes(cfg) {
+        const list = cfg && Array.isArray(cfg.excludePaths) ? cfg.excludePaths : [];
+        userExcludedPaths = list
+          .filter((p) => typeof p === 'string')
+          .map((p) => p.trim().replace(/^\/+|\/+$/g, ''))
+          .filter((p) => p.length > 0);
+      }
+
       async function resolveForeignMounts() {
         const mounts = await MetaOS.fs.listMounts();
         const self = (mountPath || '').replace(/^\/+|\/+$/g, '');
@@ -996,6 +1030,7 @@
 
         // 空文字はルートマウントを意味する。未指定（undefined）とは区別する。
         mountPath = typeof config.mountPath === 'string' ? config.mountPath.replace(/^\/+|\/+$/g, '') : 'drive';
+        applyUserExcludes(config);
 
         if (mountPath && !(await MetaOS.fs.exists(mountPath))) {
           try {
@@ -1020,6 +1055,7 @@
             if (cfg.folderId) {
               rootFolderId = cfg.folderId;
               config = cfg;
+              applyUserExcludes(cfg);
               log(`Root folder resolved: ${rootFolderId}`);
               triggerSync();
               return;
