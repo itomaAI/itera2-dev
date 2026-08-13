@@ -76,6 +76,51 @@
         </div>
       </section>
 
+      <!-- 接続先フォルダ -->
+      <section class="bg-panel p-6 rounded-2xl border border-border-main shadow-sm">
+        <h2 class="text-sm font-bold uppercase tracking-wider mb-4">☁️ 接続先フォルダ</h2>
+
+        <div class="p-3 rounded-lg bg-card border border-border-main text-xs mb-4">
+          <div class="text-[10px] font-bold text-text-muted uppercase mb-1">現在の接続先</div>
+          <div id="current-folder" class="font-mono break-all">—</div>
+        </div>
+
+        <p class="text-xs text-text-muted mb-3">
+          複数の端末で同じ VFS を共有するには、<strong>すべての端末で同じフォルダを選ぶ</strong>必要があります。
+          既定では端末ごとに <code>Itera OS</code> という名前で新しいフォルダを作るため、
+          何も設定しないと別々のフォルダに繋がり、内容が共有されません。
+        </p>
+
+        <div class="flex gap-2 mb-3">
+          <button
+            onclick="listFolders()"
+            class="px-3 py-1.5 text-xs font-bold rounded-lg bg-card border border-border-main hover:bg-hover transition"
+          >
+            📂 Drive のフォルダを一覧
+          </button>
+          <input
+            type="text"
+            id="manual-folder-id"
+            class="flex-1 bg-card border border-border-main rounded-lg p-2 text-xs font-mono focus:border-primary focus:outline-none transition"
+            placeholder="folderId を直接入力"
+          />
+          <button
+            onclick="selectFolderById(document.getElementById('manual-folder-id').value.trim())"
+            class="px-3 py-1.5 text-xs font-bold rounded-lg bg-card border border-border-main hover:bg-hover transition whitespace-nowrap"
+          >
+            適用
+          </button>
+        </div>
+
+        <div id="folder-list" class="hidden space-y-1 max-h-64 overflow-y-auto"></div>
+
+        <p class="text-[10px] text-text-muted mt-3">
+          接続先を変えるとアンカーとの対応が崩れるため、同期状態を初期化します。
+          初期化後の最初のサイクルでは、リモートにあるものはスタブとして降り、
+          ローカルにしかないものはアップロードされます（どちらも削除されません）。
+        </p>
+      </section>
+
       <!-- 同期対象 -->
       <section class="bg-panel p-6 rounded-2xl border border-border-main shadow-sm">
         <h2 class="text-sm font-bold uppercase tracking-wider mb-4">📁 同期対象</h2>
@@ -273,6 +318,16 @@
           cell('索引の構築時刻', builtAt) +
           cell('folderId', config.folderId ? escapeHtml(config.folderId) : '—', true);
 
+        // 接続先フォルダの表示（未設定なら既定値の挙動を明示する）
+        const cf = DOM('current-folder');
+        if (cf) {
+          cf.innerHTML = config.folderId
+            ? `${escapeHtml(config.folderName || 'Itera OS')} ` +
+              `<span class="text-text-muted">(${escapeHtml(config.folderId)})</span>`
+            : '<span class="text-warning">未接続 — サインイン時に ' +
+              `「${escapeHtml(config.folderName || 'Itera OS')}」という名前で検索・作成されます</span>`;
+        }
+
         const warn = DOM('auth-warning');
         if (!token) {
           warn.classList.remove('hidden');
@@ -289,6 +344,167 @@
 
       function escapeHtml(s) {
         return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      }
+
+      // ==========================================
+      // 接続先フォルダ
+      //
+      // ★ drive.file スコープでは「このアプリが作成したもの」しか見えない。
+      //   したがって一覧に出るのは Itera が作ったフォルダだけであり、
+      //   利用者の Drive 全体を覗くことはない。
+      //   逆に言うと、他の手段で作ったフォルダは選べない。
+      // ==========================================
+
+      async function listFolders() {
+        const token = await getToken();
+        const box = DOM('folder-list');
+        box.classList.remove('hidden');
+        box.innerHTML = '<div class="text-xs text-text-muted p-2">読み込み中...</div>';
+
+        if (!token) {
+          box.innerHTML = '<div class="text-xs text-error p-2">未認証です。サインインしてください。</div>';
+          return;
+        }
+
+        try {
+          // ★ 必ず全ページ取得する。
+          //   1 ページで打ち切ると、親が取得漏れしたフォルダが
+          //   「親を持たない＝最上位」と誤判定される。
+          //   実際に 1,400 件超の環境で、同期ツリー内部の深いフォルダが
+          //   47 件も候補として並んだ。不完全な集合から構造を導いてはならない。
+          const all = [];
+          let next = null;
+          let pages = 0;
+          do {
+            const q = encodeURIComponent("mimeType='application/vnd.google-apps.folder' and trashed=false");
+            const fields = encodeURIComponent('nextPageToken,files(id,name,parents,createdTime)');
+            let url = `${DRIVE_API}/files?q=${q}&fields=${fields}&pageSize=1000`;
+            if (next) url += `&pageToken=${encodeURIComponent(next)}`;
+            const data = await driveFetch(token, url);
+            for (const f of (data && data.files) || []) all.push(f);
+            next = (data && data.nextPageToken) || null;
+            pages++;
+          } while (next && pages < 20);
+
+          if (next) {
+            box.innerHTML =
+              '<div class="text-xs text-error p-2">フォルダ数が多すぎて一覧を確定できません。' +
+              'folderId を直接入力してください。</div>';
+            return;
+          }
+
+          // 親がこのアプリから見えない＝アプリ管理ツリーの最上位。
+          // 同期ルートの候補はこれに限られる。
+          const ids = new Set(all.map((f) => f.id));
+          const tops = all.filter((f) => !(f.parents || []).some((p) => ids.has(p)));
+
+          if (tops.length === 0) {
+            box.innerHTML =
+              '<div class="text-xs text-text-muted p-2">このアプリが作成したフォルダが見つかりません。</div>';
+            return;
+          }
+
+          const cur = await readJson(CONFIG_PATH, {});
+          box.innerHTML = tops
+            .sort((a, b) => (a.createdTime < b.createdTime ? -1 : 1))
+            .map((f) => {
+              const isCurrent = f.id === cur.folderId;
+              return (
+                `<div class="flex items-center justify-between gap-2 p-2 rounded-lg border ${
+                  isCurrent ? 'border-success/60 bg-success/10' : 'border-border-main bg-card'
+                }">` +
+                `<div class="min-w-0">` +
+                `<div class="text-xs font-bold truncate">${escapeHtml(f.name)}` +
+                (isCurrent ? ' <span class="text-success">（現在の接続先）</span>' : '') +
+                `</div>` +
+                `<div class="text-[10px] text-text-muted font-mono truncate">${escapeHtml(f.id)}</div>` +
+                `</div>` +
+                (isCurrent
+                  ? ''
+                  : `<button onclick="selectFolderById('${f.id}', '${escapeHtml(f.name).replace(/'/g, "\\'")}')" ` +
+                    `class="px-3 py-1 text-[11px] font-bold rounded-lg bg-primary text-white hover:opacity-90 transition whitespace-nowrap">` +
+                    `これに接続</button>`) +
+                `</div>`
+              );
+            })
+            .join('');
+        } catch (e) {
+          box.innerHTML = `<div class="text-xs text-error p-2">取得に失敗しました: ${escapeHtml(e.message)}</div>`;
+        }
+      }
+
+      /**
+       * 接続先を切り替える。
+       *
+       * ★ アンカーと索引は「前回の同期時点」を表すため、接続先が変わったら必ず捨てる。
+       *   残すと、別フォルダの状態を今のフォルダの状態だと誤認し、
+       *   Pull 分岐がローカルを削除しうる。
+       *   （索引側には rootFolderId の照合があるが、アンカーには無い）
+       */
+      async function selectFolderById(folderId, folderName) {
+        if (!folderId) {
+          MetaOS.host.notify('folderId を入力してください', 'Google Drive Sync');
+          return;
+        }
+
+        const token = await getToken();
+        if (!token) {
+          MetaOS.host.notify('未認証です。サインインしてから実行してください', 'Google Drive Sync');
+          return;
+        }
+
+        // 実在とアクセス可否を確認してから切り替える。
+        let meta;
+        try {
+          meta = await driveFetch(token, `${DRIVE_API}/files/${folderId}?fields=id,name,mimeType,trashed`);
+        } catch (e) {
+          MetaOS.host.notify(`このフォルダにアクセスできません: ${e.message}`, 'Google Drive Sync');
+          return;
+        }
+        if (!meta || !meta.id || meta.trashed) {
+          MetaOS.host.notify('フォルダが見つからないか、ゴミ箱に入っています', 'Google Drive Sync');
+          return;
+        }
+        if (meta.mimeType !== 'application/vnd.google-apps.folder') {
+          MetaOS.host.notify('指定された ID はフォルダではありません', 'Google Drive Sync');
+          return;
+        }
+
+        const cur = await readJson(CONFIG_PATH, {});
+        if (cur.folderId === meta.id) {
+          MetaOS.host.notify('すでにこのフォルダに接続しています', 'Google Drive Sync');
+          return;
+        }
+
+        const res = await MetaOS.host.showMessageBox({
+          title: '接続先フォルダの変更',
+          message:
+            `接続先を「${meta.name}」に変更します。\n\n` +
+            '同期状態（アンカー・索引）を初期化します。\n' +
+            'ローカルのファイルも Drive のファイルも削除されません。\n' +
+            '初期化後、リモートにあるものはスタブとして降り、\n' +
+            'ローカルにしかないものはアップロードされます。\n\n続行しますか。',
+          type: 'warning',
+          buttons: [
+            { label: 'キャンセル', value: false, style: 'normal', isCancel: true },
+            { label: '接続する', value: true, style: 'primary', isDefault: true },
+          ],
+        });
+        if (!res || !res.action) return;
+
+        await stopDaemon();
+        await clearSyncState();
+        await MetaOS.fs.write(
+          CONFIG_PATH,
+          JSON.stringify({ ...cur, folderId: meta.id, folderName: folderName || meta.name }, null, 2),
+          { overwrite: true },
+        );
+        await startDaemon();
+
+        MetaOS.host.notify(`接続先を「${meta.name}」に変更しました`, 'Google Drive Sync');
+        DOM('folder-list').classList.add('hidden');
+        DOM('manual-folder-id').value = '';
+        await refresh();
       }
 
       // ==========================================
@@ -348,15 +564,19 @@
         const mountChanged = (current.mountPath || '') !== newMount;
 
         if (mountChanged) {
-          const ok = await MetaOS.host.showMessageBox({
+          const res = await MetaOS.host.showMessageBox({
             title: 'マウントパスの変更',
             message:
               'マウントパスを変更すると、既存のアンカーが指すパスと対応しなくなります。\n' +
               '同期状態（アンカー・索引）を初期化してから再同期します。\n' +
               'ローカルのファイルも Drive のファイルも削除されません。続行しますか。',
-            buttons: ['キャンセル', '続行'],
+            type: 'warning',
+            buttons: [
+              { label: 'キャンセル', value: false, style: 'normal', isCancel: true },
+              { label: '続行', value: true, style: 'primary', isDefault: true },
+            ],
           });
-          if (ok !== 1 && ok !== '続行') return;
+          if (!res || !res.action) return;
         }
 
         const excludePaths = DOM('cfg-exclude')
@@ -391,13 +611,17 @@
       }
 
       async function resetSyncState() {
-        const ok = await MetaOS.host.showMessageBox({
+        const res = await MetaOS.host.showMessageBox({
           title: '同期状態のリセット',
           message:
             'アンカーと索引を削除します。\nローカルのファイルも Drive のファイルも削除されません。\n続行しますか。',
-          buttons: ['キャンセル', 'リセット'],
+          type: 'warning',
+          buttons: [
+            { label: 'キャンセル', value: false, style: 'normal', isCancel: true },
+            { label: 'リセット', value: true, style: 'primary', isDefault: true },
+          ],
         });
-        if (ok !== 1 && ok !== 'リセット') return;
+        if (!res || !res.action) return;
 
         const wasRunning = await isDaemonRunning();
         await stopDaemon();
@@ -413,10 +637,19 @@
       // ==========================================
 
       async function driveFetch(token, url, options = {}) {
+        const method = (options.method || 'GET').toUpperCase();
+
+        // ★ DELETE の成功応答は 204 No Content で本文が空。
+        //   これを JSON として解析すると「unexpected end of data」で例外になり、
+        //   実際には成功しているのに失敗として報告される。
+        //   （実測: 空フォルダ 142 件の削除が全件「失敗」と表示されたが、
+        //     Drive 側では正しく消えていた）
+        const responseType = options.responseType || (method === 'DELETE' ? 'text' : 'json');
+
         const res = await MetaOS.net.fetch(url, {
           ...options,
           headers: { ...(options.headers || {}), Authorization: `Bearer ${token}` },
-          responseType: options.responseType || 'json',
+          responseType,
         });
         if (res.status === 401) throw new Error('認証が失効しています。サインインし直してください。');
         if (res.status < 200 || res.status >= 300) {
@@ -488,15 +721,19 @@
           return;
         }
 
-        const ok = await MetaOS.host.showMessageBox({
+        const res = await MetaOS.host.showMessageBox({
           title: 'Drive の同期フォルダを削除',
           message:
             `Drive 上のフォルダ「${config.folderName || 'Itera OS'}」と、その中身をすべて恒久削除します。\n` +
             'ゴミ箱を経由しないため復元できません。\n\n' +
             'ローカルの VFS は削除されません。\n続行しますか。',
-          buttons: ['キャンセル', '削除する'],
+          type: 'error',
+          buttons: [
+            { label: 'キャンセル', value: false, style: 'normal', isCancel: true, isDefault: true },
+            { label: '削除する', value: true, style: 'danger' },
+          ],
         });
-        if (ok !== 1 && ok !== '削除する') return;
+        if (!res || !res.action) return;
 
         DOM('op-log').innerHTML = '';
 

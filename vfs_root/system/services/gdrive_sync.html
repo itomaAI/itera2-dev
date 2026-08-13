@@ -142,7 +142,23 @@
 
         // system/ 配下は allowlist
         if (path === 'system' || path.startsWith('system/')) {
-          return !SYSTEM_SYNCED.some((p) => matchesPrefix(path, p));
+          // 許可領域そのもの、またはその配下
+          if (SYSTEM_SYNCED.some((p) => matchesPrefix(path, p))) return false;
+
+          // ★ 許可領域の「祖先」ディレクトリは除外してはならない。
+          //
+          //   'system' 自身はどの許可エントリにも前方一致しないため、素朴な
+          //   allowlist 判定では除外される。しかし derivePathMap() は除外した
+          //   パスを導出結果から落とすので、実在する 'system' フォルダが R から
+          //   消える。すると ensureRemoteFolder() は毎回「親が無い」と判断して
+          //   新しい 'system' を作り、その直後に既存の 'system/config' へ飛ぶため、
+          //   空のフォルダだけが取り残される。
+          //
+          //   実際に Drive 上へ空フォルダが 125 個堆積した（約 6 個/時）。
+          //   入れ物としての祖先は同期対象に含める必要がある。
+          if (SYSTEM_SYNCED.some((p) => matchesPrefix(p, path))) return false;
+
+          return true;
         }
 
         return false;
@@ -236,13 +252,18 @@
       async function driveFetch(url, options = {}, _retried = false) {
         if (!accessToken) throw new Error('NOT_AUTHENTICATED');
 
+        // ★ DELETE の成功応答は 204 No Content で本文が空。
+        //   JSON として解析すると例外になり、成功が失敗として報告される。
+        const method = (options.method || 'GET').toUpperCase();
+        const responseType = options.responseType || (method === 'DELETE' ? 'text' : 'json');
+
         const res = await MetaOS.net.fetch(url, {
           ...options,
           headers: {
             ...(options.headers || {}),
             Authorization: `Bearer ${accessToken}`,
           },
-          responseType: options.responseType || 'json',
+          responseType,
         });
 
         if (res.status === 401) {
