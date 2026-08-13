@@ -144,9 +144,7 @@
       async function resolveForeignMounts() {
         const mounts = await MetaOS.fs.listMounts();
         const self = (mountPath || '').replace(/^\/+|\/+$/g, '');
-        return mounts
-          .map((m) => (m.mountPath || '').replace(/^\/+|\/+$/g, ''))
-          .filter((p) => p !== '' && p !== self);
+        return mounts.map((m) => (m.mountPath || '').replace(/^\/+|\/+$/g, '')).filter((p) => p !== '' && p !== self);
       }
 
       // ==========================================
@@ -223,9 +221,7 @@
         }
         if (res.status < 200 || res.status >= 300) {
           const detail =
-            typeof res.data === 'string'
-              ? res.data.slice(0, 200)
-              : JSON.stringify(res.data || {}).slice(0, 200);
+            typeof res.data === 'string' ? res.data.slice(0, 200) : JSON.stringify(res.data || {}).slice(0, 200);
           throw new Error(`Drive API ${res.status}: ${detail}`);
         }
         return res.data;
@@ -352,10 +348,7 @@
         index = { byId, pageToken, builtAt: Date.now(), rootFolderId };
         changesSupported = !!pageToken;
 
-        log(
-          `Index built: ${Object.keys(byId).length} node(s), ` +
-            `${requests} request(s), ${Date.now() - t0} ms`,
-        );
+        log(`Index built: ${Object.keys(byId).length} node(s), ` + `${requests} request(s), ${Date.now() - t0} ms`);
         await saveIndex();
       }
 
@@ -471,8 +464,7 @@
           const prev = claimed.get(fullPath);
           if (prev) {
             const wins =
-              node.modifiedTime > prev.modifiedTime ||
-              (node.modifiedTime === prev.modifiedTime && id > prev.id);
+              node.modifiedTime > prev.modifiedTime || (node.modifiedTime === prev.modifiedTime && id > prev.id);
             log(`Duplicate remote path '${fullPath}'. Keeping ${wins ? id : prev.id}.`, 'warn');
             if (!wins) continue;
           }
@@ -520,8 +512,7 @@
         if (!fileId) return null;
         try {
           const f = await driveFetch(
-            `${DRIVE_API}/files/${fileId}` +
-              `?fields=id,name,mimeType,md5Checksum,size,modifiedTime,parents,trashed`,
+            `${DRIVE_API}/files/${fileId}` + `?fields=id,name,mimeType,md5Checksum,size,modifiedTime,parents,trashed`,
           );
           if (!f || !f.id || f.trashed) return null;
           index.byId[f.id] = nodeFromDriveFile(f);
@@ -943,10 +934,7 @@
         }
 
         // 空文字はルートマウントを意味する。未指定（undefined）とは区別する。
-        mountPath =
-          typeof config.mountPath === 'string'
-            ? config.mountPath.replace(/^\/+|\/+$/g, '')
-            : 'drive';
+        mountPath = typeof config.mountPath === 'string' ? config.mountPath.replace(/^\/+|\/+$/g, '') : 'drive';
 
         if (mountPath && !(await MetaOS.fs.exists(mountPath))) {
           try {
