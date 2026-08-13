@@ -1,6 +1,6 @@
 /**
  * AUTO-GENERATED FILE - DO NOT EDIT MANUALLY
- * Generated on: 2026-08-12T08:29:43.463Z
+ * Generated on: 2026-08-13T01:00:22.904Z
  */
 
 export const DEFAULT_FILES: Record<string, string> = {
@@ -28399,7 +28399,9 @@ system/credentials/gdrive.json     { "clientId": "..." }
       async function resolveForeignMounts() {
         const mounts = await MetaOS.fs.listMounts();
         const self = (mountPath || '').replace(/^\\/+|\\/+$/g, '');
-        return mounts.map((m) => (m.mountPath || '').replace(/^\\/+|\\/+$/g, '')).filter((p) => p !== '' && p !== self);
+        return mounts
+          .map((m) => (m.mountPath || '').replace(/^\\/+|\\/+$/g, ''))
+          .filter((p) => p !== '' && p !== self);
       }
 
       // ==========================================
@@ -28476,71 +28478,313 @@ system/credentials/gdrive.json     { "clientId": "..." }
         }
         if (res.status < 200 || res.status >= 300) {
           const detail =
-            typeof res.data === 'string' ? res.data.slice(0, 200) : JSON.stringify(res.data || {}).slice(0, 200);
+            typeof res.data === 'string'
+              ? res.data.slice(0, 200)
+              : JSON.stringify(res.data || {}).slice(0, 200);
           throw new Error(\`Drive API \${res.status}: \${detail}\`);
         }
         return res.data;
       }
 
       // ==========================================
-      // リモート状態の取得
+      // リモート索引（ベースライン + 差分）
+      //
+      // firebase_sync.html は vfs_index（チャンク化ベースライン）を一括ロードし、
+      // vfs_nodes（WAL）を onSnapshot で購読する。よって reconcile() の中では
+      // 通信をしない。Drive には購読が無いため、同じ性質を 2 つで再現する:
+      //
+      //   ベースライン … files.list のフラット検索（親を指定しない）。
+      //                  1,000 件/リクエストのため 6,000 件でも約 7 通信で揃う。
+      //   WAL         … changes.list。前回カーソル以降の差分だけを取る。
+      //
+      // ★ 索引は fileId を主キーとし、パスは毎サイクル導出する。
+      //   Drive はパスを持たず、フォルダ名の変更は配下すべてのパスを変える。
+      //   パスを直接保存して更新する実装は、リネーム時に必ず壊れる。
+      //
+      // ★ 以前の実装はフォルダごとに 'id' in parents を投げる BFS だった。
+      //   1,468 ディレクトリで 1,400 回以上のラウンドトリップを要し、しかも
+      //   キャッシュが無いため 20 秒ごとに永久に繰り返していた。
       // ==========================================
 
-      async function fetchRemoteState() {
-        const result = {};
-        const queue = [{ id: rootFolderId, prefix: '' }];
-        let guard = 0;
+      const INDEX_PATH = 'system/temp/gdrive_index.json';
 
-        while (queue.length > 0) {
-          if (++guard > 5000) {
-            log('Traversal guard tripped (>5000 folders). Aborting this cycle.', 'warn');
+      /** 差分が積み上がるとカーソルが失効しうるため、一定時間で作り直す。 */
+      const INDEX_MAX_AGE_MS = 24 * 60 * 60 * 1000;
+
+      let index = { byId: {}, pageToken: null, builtAt: 0, rootFolderId: null };
+      let changesSupported = true;
+
+      function isAuthError(e) {
+        return !!e && (e.message === 'TOKEN_EXPIRED' || e.message === 'NOT_AUTHENTICATED');
+      }
+
+      function nodeFromDriveFile(f) {
+        return {
+          name: f.name,
+          parents: Array.isArray(f.parents) ? f.parents.slice() : [],
+          kind: isFolder(f.mimeType) ? 'directory' : 'file',
+          md5: f.md5Checksum || null,
+          size: Number(f.size || 0),
+          modifiedTime: f.modifiedTime ? Date.parse(f.modifiedTime) : Date.now(),
+        };
+      }
+
+      async function saveIndex() {
+        try {
+          await MetaOS.fs.write(INDEX_PATH, JSON.stringify(index), {
+            overwrite: true,
+            silent: true,
+          });
+        } catch (e) {
+          log(\`Could not persist the index: \${e.message}\`, 'warn');
+        }
+      }
+
+      async function loadIndex() {
+        try {
+          const raw = await MetaOS.fs.read(INDEX_PATH);
+          const data = JSON.parse(raw || '{}');
+          if (!data || !data.byId || !data.builtAt) return false;
+
+          // ★ マウント先フォルダを差し替えたのに前の索引を使うと、
+          //   別フォルダの内容をこのフォルダの状態だと誤認する。
+          if (data.rootFolderId !== rootFolderId) return false;
+          if (Date.now() - data.builtAt > INDEX_MAX_AGE_MS) return false;
+
+          index = {
+            byId: data.byId,
+            pageToken: data.pageToken || null,
+            builtAt: data.builtAt,
+            rootFolderId,
+          };
+          changesSupported = !!index.pageToken;
+          log(\`Index restored from disk: \${Object.keys(index.byId).length} node(s)\`);
+          return true;
+        } catch (e) {
+          return false;
+        }
+      }
+
+      /**
+       * 全件をフラット検索で取得して索引を作り直す。
+       *
+       * ★ 変更カーソルはスキャンの「前」に取る。
+       *   後に取ると、スキャン中に起きた変更が両方から漏れる。
+       */
+      async function buildIndexFlat() {
+        let pageToken = null;
+        try {
+          const cur = await driveFetch(\`\${DRIVE_API}/changes/startPageToken?fields=startPageToken\`);
+          pageToken = (cur && cur.startPageToken) || null;
+        } catch (e) {
+          if (isAuthError(e)) throw e;
+          log(\`Could not obtain a change cursor: \${e.message}. Delta sync disabled.\`, 'warn');
+        }
+
+        const byId = {};
+        const t0 = Date.now();
+        let requests = 0;
+        let next = null;
+
+        do {
+          const q = encodeURIComponent('trashed=false');
+          const fields = encodeURIComponent(
+            'nextPageToken,files(id,name,mimeType,md5Checksum,size,modifiedTime,parents)',
+          );
+          let url = \`\${DRIVE_API}/files?q=\${q}&fields=\${fields}&pageSize=1000\`;
+          if (next) url += \`&pageToken=\${encodeURIComponent(next)}\`;
+
+          const data = await driveFetch(url);
+          requests++;
+
+          for (const f of (data && data.files) || []) {
+            if (isNativeDoc(f.mimeType)) continue;
+            byId[f.id] = nodeFromDriveFile(f);
+          }
+          next = (data && data.nextPageToken) || null;
+        } while (next);
+
+        index = { byId, pageToken, builtAt: Date.now(), rootFolderId };
+        changesSupported = !!pageToken;
+
+        log(
+          \`Index built: \${Object.keys(byId).length} node(s), \` +
+            \`\${requests} request(s), \${Date.now() - t0} ms\`,
+        );
+        await saveIndex();
+      }
+
+      /**
+       * 前回カーソル以降の差分を索引へ適用する。
+       * 差分が使えない環境では false を返し、呼び出し側が全件取得へ退避する。
+       */
+      async function applyChanges() {
+        if (!index.pageToken) return false;
+
+        let cursor = index.pageToken;
+        let applied = 0;
+
+        while (true) {
+          const fields = encodeURIComponent(
+            'newStartPageToken,nextPageToken,' +
+              'changes(fileId,removed,file(id,name,mimeType,md5Checksum,size,modifiedTime,parents,trashed))',
+          );
+          const url =
+            \`\${DRIVE_API}/changes?pageToken=\${encodeURIComponent(cursor)}\` +
+            \`&fields=\${fields}&pageSize=1000&includeRemoved=true\`;
+
+          let data;
+          try {
+            data = await driveFetch(url);
+          } catch (e) {
+            if (isAuthError(e)) throw e;
+            log(\`changes.list is unavailable (\${e.message}). Falling back to a full scan.\`, 'warn');
+            changesSupported = false;
+            return false;
+          }
+
+          for (const c of (data && data.changes) || []) {
+            const f = c.file;
+            if (c.removed || !f || f.trashed || isNativeDoc(f.mimeType)) {
+              delete index.byId[c.fileId];
+            } else {
+              index.byId[f.id] = nodeFromDriveFile(f);
+            }
+            applied++;
+          }
+
+          if (data && data.newStartPageToken) {
+            index.pageToken = data.newStartPageToken;
             break;
           }
-          const { id, prefix } = queue.shift();
+          cursor = (data && data.nextPageToken) || null;
+          if (!cursor) break;
+        }
 
-          let pageToken = null;
-          do {
-            const q = encodeURIComponent(\`'\${id}' in parents and trashed=false\`);
-            const fields = encodeURIComponent('nextPageToken,files(id,name,mimeType,md5Checksum,size,modifiedTime)');
-            let url = \`\${DRIVE_API}/files?q=\${q}&fields=\${fields}&pageSize=1000\`;
-            if (pageToken) url += \`&pageToken=\${encodeURIComponent(pageToken)}\`;
+        // ★ 無変更のときは書かない。20 秒ごとに数 MB を書き直すのは無駄なうえ、
+        //   カーソルだけ進めて保存しないことによる不利益は「再起動時に
+        //   少し前から差分を読み直す」ことだけで、適用は冪等なので害が無い。
+        if (applied > 0) {
+          log(\`Applied \${applied} remote change(s).\`);
+          await saveIndex();
+        }
+        return true;
+      }
 
-            const data = await driveFetch(url);
-            const files = (data && data.files) || [];
+      /**
+       * 索引（id 基準）から、このサイクルで使うパス表を導出する。
+       *
+       * rootFolderId から到達できないものは捨てる。これは範囲の限定であると同時に、
+       * ゴミ箱に入ったフォルダの子を自動的に除外する働きも持つ。
+       * （親フォルダは trashed=false の検索に現れないため、子は到達不能になる）
+       */
+      function derivePathMap() {
+        const byId = index.byId;
+        const memo = new Map();
+        const visiting = new Set();
 
-            for (const f of files) {
-              if (isNativeDoc(f.mimeType)) continue;
+        const relOf = (id) => {
+          if (id === rootFolderId) return '';
+          if (memo.has(id)) return memo.get(id);
 
-              if (f.name.includes('/')) {
-                log(\`Skipping '\${f.name}': name contains a path separator.\`, 'warn');
-                continue;
-              }
+          const node = byId[id];
+          if (!node) return null; // 圏外・ゴミ箱・親が取得できない
+          if (visiting.has(id)) return null; // 循環ガード（保険）
 
-              const relPath = prefix ? \`\${prefix}/\${f.name}\` : f.name;
-              const fullPath = toFull(relPath);
+          visiting.add(id);
+          let rel = null;
+          for (const parentId of node.parents.slice().sort()) {
+            const parentRel = relOf(parentId);
+            if (parentRel === null) continue;
+            rel = parentRel ? \`\${parentRel}/\${node.name}\` : node.name;
+            break;
+          }
+          visiting.delete(id);
 
-              // 除外領域はリモートから降ろさない
-              if (isExcluded(fullPath)) continue;
+          memo.set(id, rel);
+          return rel;
+        };
 
-              if (isFolder(f.mimeType)) {
-                result[fullPath] = { id: f.id, kind: 'directory' };
-                queue.push({ id: f.id, prefix: relPath });
-              } else {
-                result[fullPath] = {
-                  id: f.id,
+        const result = {};
+        const claimed = new Map();
+
+        for (const id of Object.keys(byId)) {
+          const node = byId[id];
+
+          if (node.name.includes('/')) {
+            log(\`Skipping '\${node.name}': name contains a path separator.\`, 'warn');
+            continue;
+          }
+
+          const rel = relOf(id);
+          if (rel === null || rel === '') continue;
+
+          const fullPath = toFull(rel);
+          if (isExcluded(fullPath)) continue;
+
+          // Drive は同一フォルダ内の同名を許す。どちらを採るかは決定的に選ぶ。
+          const prev = claimed.get(fullPath);
+          if (prev) {
+            const wins =
+              node.modifiedTime > prev.modifiedTime ||
+              (node.modifiedTime === prev.modifiedTime && id > prev.id);
+            log(\`Duplicate remote path '\${fullPath}'. Keeping \${wins ? id : prev.id}.\`, 'warn');
+            if (!wins) continue;
+          }
+          claimed.set(fullPath, { id, modifiedTime: node.modifiedTime });
+
+          result[fullPath] =
+            node.kind === 'directory'
+              ? { id, kind: 'directory' }
+              : {
+                  id,
                   kind: 'file',
-                  md5: f.md5Checksum || null,
-                  size: Number(f.size || 0),
-                  modifiedTime: f.modifiedTime ? Date.parse(f.modifiedTime) : Date.now(),
+                  md5: node.md5,
+                  size: node.size,
+                  modifiedTime: node.modifiedTime,
                 };
-              }
-            }
-
-            pageToken = (data && data.nextPageToken) || null;
-          } while (pageToken);
         }
 
         return result;
+      }
+
+      async function getRemoteState() {
+        if (!index.builtAt || index.rootFolderId !== rootFolderId) {
+          if (!(await loadIndex())) await buildIndexFlat();
+        } else if (Date.now() - index.builtAt > INDEX_MAX_AGE_MS) {
+          await buildIndexFlat();
+        } else if (changesSupported) {
+          if (!(await applyChanges())) await buildIndexFlat();
+        } else {
+          // 差分が使えなくても、全件フラット取得なら約 7 通信で済む。
+          await buildIndexFlat();
+        }
+
+        return derivePathMap();
+      }
+
+      /**
+       * リモートに本当に存在しないことを 1 件だけ直接確認する。
+       *
+       * ★ 索引の取りこぼしは「リモートで削除された」と等価に見え、
+       *   3-way マージの Pull 分岐がローカルの実体を恒久削除する。
+       *   削除は稀なので、実行前に必ず現物を確認する。
+       *   生きていた場合は索引へ戻し、取りこぼしをその場で修復する。
+       */
+      async function verifyRemoteAlive(fileId) {
+        if (!fileId) return null;
+        try {
+          const f = await driveFetch(
+            \`\${DRIVE_API}/files/\${fileId}\` +
+              \`?fields=id,name,mimeType,md5Checksum,size,modifiedTime,parents,trashed\`,
+          );
+          if (!f || !f.id || f.trashed) return null;
+          index.byId[f.id] = nodeFromDriveFile(f);
+          return index.byId[f.id];
+        } catch (e) {
+          if (isAuthError(e)) throw e;
+          return null; // 404 等はリモート不在とみなす
+        }
       }
 
       // ==========================================
@@ -28593,10 +28837,38 @@ system/credentials/gdrive.json     { "clientId": "..." }
               parents: [parentId],
             }),
           });
+
+          // ★ 自分の書き込みは即座に索引へ反映する。
+          //   反映を怠ると、次サイクルの導出結果に作ったばかりのものが現れず、
+          //   3-way マージが「リモートで消えた」と誤読する。
+          //   （parentId はこの直後に上書きされるため、ここで記録する）
+          index.byId[created.id] = {
+            name: part,
+            parents: [parentId],
+            kind: 'directory',
+            md5: null,
+            size: 0,
+            modifiedTime: Date.now(),
+          };
+
           parentId = created.id;
           remoteState[fullPath] = { id: created.id, kind: 'directory' };
         }
         return parentId;
+      }
+
+      /** アップロード結果を索引へ反映する。 */
+      function indexUploaded(res, name, parentId) {
+        if (!res || !res.id) return;
+        const prev = index.byId[res.id];
+        index.byId[res.id] = {
+          name: name !== null && name !== undefined ? name : prev ? prev.name : '',
+          parents: parentId ? [parentId] : prev ? prev.parents : [],
+          kind: 'file',
+          md5: res.md5Checksum || null,
+          size: Number(res.size || 0),
+          modifiedTime: res.modifiedTime ? Date.parse(res.modifiedTime) : Date.now(),
+        };
       }
 
       async function uploadNew(path, bytes, remoteState) {
@@ -28622,15 +28894,20 @@ system/credentials/gdrive.json     { "clientId": "..." }
         body.set(bytes, head.length);
         body.set(tail, head.length + bytes.length);
 
-        return await driveFetch(\`\${DRIVE_UPLOAD}/files?uploadType=multipart&fields=id,md5Checksum,size,modifiedTime\`, {
-          method: 'POST',
-          headers: { 'Content-Type': \`multipart/related; boundary=\${boundary}\` },
-          body,
-        });
+        const res = await driveFetch(
+          \`\${DRIVE_UPLOAD}/files?uploadType=multipart&fields=id,md5Checksum,size,modifiedTime\`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': \`multipart/related; boundary=\${boundary}\` },
+            body,
+          },
+        );
+        indexUploaded(res, name, parentId);
+        return res;
       }
 
       async function uploadUpdate(fileId, bytes) {
-        return await driveFetch(
+        const res = await driveFetch(
           \`\${DRIVE_UPLOAD}/files/\${fileId}?uploadType=media&fields=id,md5Checksum,size,modifiedTime\`,
           {
             method: 'PATCH',
@@ -28638,6 +28915,8 @@ system/credentials/gdrive.json     { "clientId": "..." }
             body: bytes,
           },
         );
+        indexUploaded(res, null, null);
+        return res;
       }
 
       /**
@@ -28651,6 +28930,7 @@ system/credentials/gdrive.json     { "clientId": "..." }
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ trashed: true }),
         });
+        delete index.byId[fileId];
       }
 
       // ==========================================
@@ -28694,7 +28974,7 @@ system/credentials/gdrive.json     { "clientId": "..." }
         }
 
         const L = await MetaOS.fs.getSyncState(mountPath);
-        const R = await fetchRemoteState();
+        const R = await getRemoteState();
         const A = await getAnchor();
         remoteCache = R;
 
@@ -28764,6 +29044,15 @@ system/credentials/gdrive.json     { "clientId": "..." }
             // --- Pull (リモートのみ変化) ---
             if (!localChanged && remoteChanged) {
               if (!rExists) {
+                // ★ 削除は取り返しがつかないため、索引だけを根拠に実行しない。
+                //   索引の取りこぼしは「リモートで削除された」と区別がつかない。
+                //   現物を 1 件確認し、生きていたら何もしない（索引は復元済みなので
+                //   次サイクルで正しい分岐に入る）。
+                if (a && a.id && (await verifyRemoteAlive(a.id))) {
+                  log(\`'\${path}' is still present on Drive. Index gap repaired.\`, 'warn');
+                  await breathe();
+                  continue;
+                }
                 if (await MetaOS.fs.exists(path)) await MetaOS.fs.delete(path, { permanent: true });
                 delete newAnchor[path];
               } else if (r.kind === 'directory') {
@@ -28909,7 +29198,10 @@ system/credentials/gdrive.json     { "clientId": "..." }
         }
 
         // 空文字はルートマウントを意味する。未指定（undefined）とは区別する。
-        mountPath = typeof config.mountPath === 'string' ? config.mountPath.replace(/^\\/+|\\/+$/g, '') : 'drive';
+        mountPath =
+          typeof config.mountPath === 'string'
+            ? config.mountPath.replace(/^\\/+|\\/+$/g, '')
+            : 'drive';
 
         if (mountPath && !(await MetaOS.fs.exists(mountPath))) {
           try {
@@ -28953,8 +29245,7 @@ system/credentials/gdrive.json     { "clientId": "..." }
       init();
     </script>
   </body>
-</html>
-`.trim(),
+</html>`.trim(),
 
   "system/services/git.html": `
 <!doctype html>
@@ -29863,4 +30154,4 @@ Content:
 }, null, 2)
 };
 
-export const BUILD_TIME = 1786523383463;
+export const BUILD_TIME = 1786582822904;
