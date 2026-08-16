@@ -8,6 +8,26 @@ import type { ToolParams } from '../types/tools';
 const PARSE_TERMINAL_TAGS = new Set(['yield', 'breathe', 'ask', 'finish']);
 const INTERRUPT_ACTION_TAGS = new Set(['ask', 'finish', 'breathe']);
 
+/**
+ * システムがコンテキストへ注入する専用タグ（LLM が生成してはならないもの）。
+ *
+ * これらは defaultExcludeTags に合流するため、内側の内容は解釈されず
+ * 生テキストとして保持される。すなわち「偽装したタグの内部に書かれた
+ * タグがアクションとして実行される」経路を塞ぐ。
+ *
+ * 一方でタグのノード自身はアクションとして残る。登録済みツールには
+ * 存在しないため ToolRegistry が UnknownToolError を投げ、Engine が
+ * 専用の syntax_warning を返す（黙って無視すると LLM が学習できない）。
+ */
+export const RESERVED_SYSTEM_TAGS = new Set([
+  'tool_output',
+  'event',
+  'system',
+  'toolset',
+  'user_input',
+  'user_attachment',
+]);
+
 export interface ParsedAction {
   type: string;
   params: ToolParams;
@@ -46,6 +66,9 @@ export class Translator {
       'user_input',
       'user_attachment',
       'inject_js',
+      // システム注入専用タグ。内側を解釈させないことで、偽装タグの
+      // 内部に置かれたタグが実行されるのを防ぐ。
+      ...RESERVED_SYSTEM_TAGS,
     ];
   }
 

@@ -11,6 +11,7 @@ import type { BaseProjector } from '../cognitive/Projector';
 import type { BaseLLMAdapter } from '../cognitive/adapters/BaseAdapter';
 import type { Translator, ParsedAction } from '../cognitive/Translator';
 import type { ToolRegistry } from './ToolRegistry';
+import { RESERVED_SYSTEM_TAGS } from '../cognitive/Translator';
 
 export const TurnType = {
   USER_INPUT: 'user_input',
@@ -46,6 +47,8 @@ export class Engine {
   private continuousToolCount: number = 0;
   private readonly MAX_CONTINUOUS_TOOLS: number = 50;
   private hasPendingEvents: boolean = false;
+  /** ユーザーが明示的に停止を要求したか（デバウンス待機中・ツール実行中の停止を成立させるため） */
+  private stopRequested: boolean = false;
 
   constructor(
     state: EngineState,
@@ -104,6 +107,9 @@ export class Engine {
 
   private _schedulePing(): void {
     if (this.isRunning) return;
+    // ユーザーが停止を要求した後は、実行中だったツールの結果更新などで
+    // ループが自動的に再開してしまわないようにする
+    if (this.stopRequested) return;
 
     if (this.debounceTimer) clearTimeout(this.debounceTimer);
 
@@ -135,6 +141,10 @@ export class Engine {
   }
 
   async injectUserTurn(inputContent: TurnContent, meta: TurnMeta = {}): Promise<void> {
+    // 明示的な新規要求なので、以前の停止要求は解除する。
+    // append() は同期的に _schedulePing() を呼ぶため、必ず append の前に解除すること。
+    this.stopRequested = false;
+
     const turnMeta: TurnMeta = {
       type: TurnType.USER_INPUT,
       trigger_llm: true,
@@ -149,6 +159,10 @@ export class Engine {
    * システムからの非同期割り込みイベントを注入する（タイマーやデーモンからの通知など）
    */
   injectSystemEvent(actionType: string, message: string, meta: TurnMeta = {}): void {
+    // タイマーやデーモンからの明示的な起床要求。停止によってこれらが
+    // 永久に無視されてしまわないよう、ここでも停止要求を解除する。
+    this.stopRequested = false;
+
     const turnMeta: TurnMeta = {
       type: TurnType.TOOL_EXECUTION,
       trigger_llm: true,
@@ -173,14 +187,20 @@ export class Engine {
   private async _ping(): Promise<void> {
     this.isRunning = true;
     this.abortController = new AbortController();
+    // 新しいサイクルを開始するため、前回の停止要求はここで解除する
+    this.stopRequested = false;
 
     try {
       if (!this._evaluateWakeUp()) {
+        // 【重要】ここで何も emit せずに return すると、送信時に立てられた
+        // setProcessing(true) を解除する者がいなくなり "Processing..." が永久に残る
+        this._emit('loop_stop', { reason: 'idle' });
         return; // 起床条件を満たさない場合は静かに待機
       }
 
       if (!this.projector || !this.llm) {
         console.warn('[Engine] Projector or LLM Adapter is not configured yet.');
+        this._emit('loop_stop', { reason: 'not_configured' });
         return;
       }
 
@@ -299,6 +319,12 @@ export class Engine {
   }
 
   private _dispatchActions(actions: ParsedAction[]): void {
+    // 【重要】このメソッドは await されずに呼ばれるため、実際にツールが動き出す頃には
+    // _ping() の finally が this.abortController = null を実行済みになっている。
+    // そのため this.abortController を後から参照する中断チェックは常に無効(undefined)だった。
+    // 呼び出し時点（まだ非null）でシグナルをローカルに捕捉しておく。
+    const signal = this.abortController?.signal;
+
     const context = {
       vfs: this.state.vfs,
       config: this.state.configManager,
@@ -353,8 +379,10 @@ export class Engine {
         await new Promise((resolve) => setTimeout(resolve, index * 50));
       }
 
-      // 待機中にループが停止（Abort）された場合は実行をキャンセル
-      if (this.abortController?.signal.aborted) {
+      // 待機中にループが停止（Abort）された場合は実行をキャンセル。
+      // this.abortController は既に null 化されている可能性があるため、
+      // 捕捉済みの signal と停止フラグの両方を見る。
+      if (signal?.aborted || this.stopRequested) {
         return;
       }
 
@@ -392,12 +420,23 @@ export class Engine {
         }
 
         if (err.code === 'UNKNOWN_TOOL') {
-          const warningMsg = [
-            `<system type="syntax_warning">`,
-            `[LPML Syntax Violation] You used an undefined or prohibited tag: <${err.actionType}>.`,
-            `ABSOLUTE PROHIBITION: You can only use the tags explicitly defined in your instructions or currently registered dynamic tools.`,
-            `</system>`,
-          ].join('\n');
+          const isReservedTag = RESERVED_SYSTEM_TAGS.has(err.actionType);
+          const warningMsg = (
+            isReservedTag
+              ? [
+                  `<system type="syntax_warning">`,
+                  `[LPML Protocol Violation] You generated <${err.actionType}>, which is a tag that only the OS may inject.`,
+                  `Forging it does not produce a result: the tag was rejected, and its inner content was kept as plain text (NOT interpreted, NOT executed).`,
+                  `NEVER generate this tag yourself. Tool results are delivered to you by the system after <yield />.`,
+                  `</system>`,
+                ]
+              : [
+                  `<system type="syntax_warning">`,
+                  `[LPML Syntax Violation] You used an undefined or prohibited tag: <${err.actionType}>.`,
+                  `ABSOLUTE PROHIBITION: You can only use the tags explicitly defined in your instructions or currently registered dynamic tools.`,
+                  `</system>`,
+                ]
+          ).join('\n');
 
           const warningTurn = this.state.history.append('system', warningMsg, {
             type: TurnType.ERROR,
@@ -411,8 +450,25 @@ export class Engine {
   }
 
   stop(): void {
+    // 停止要求を記録する。ストリーミング中以外（デバウンス待機中・ツール実行中）でも
+    // 確実に停止させるためのフラグ。
+    this.stopRequested = true;
+
+    // デバウンス待機中に押された場合、タイマーが生きていると1.5秒後に生成が始まってしまう
+    if (this.debounceTimer) {
+      clearTimeout(this.debounceTimer);
+      this.debounceTimer = null;
+    }
+    this.hasPendingEvents = false;
+
     if (this.abortController) {
+      // ストリーミング中: abort() 経由で AbortError が発生し、catch側が loop_stop を emit する
       this.abortController.abort();
+    } else {
+      // abortController が存在しない時間帯（デバウンス待機中／ツール実行中）は
+      // 誰も loop_stop を emit しないため、UIが "Processing..." のまま固着する。
+      // ここで明示的に emit して確実に解除する。
+      this._emit('loop_stop', { reason: 'abort' });
     }
   }
 }

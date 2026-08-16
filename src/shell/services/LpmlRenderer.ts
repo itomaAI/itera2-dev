@@ -14,8 +14,20 @@ export class LpmlRenderer {
     };
 
     const TAG_NAME_PATTERN = '[a-zA-Z0-9_\\-]+';
+
+    // 【重要】属性値には `<` `>` `&` が入りうる（例: search の query="() =&gt; x" や "a &amp;&amp; b"）。
+    // escape() によりそれらは &lt; / &gt; / &amp; になるため、旧実装の `[^&]*` では
+    // 属性の途中で走査が止まり、タグ全体がマッチ失敗して生テキストとして崩れて表示されていた。
+    // そこで Translator.PATTERN_ATTRIBUTE と同じ「引用符を認識する」方式に変更する。
+    // escape() は引用符( ' " )を変換しないため、この方式はエスケープ後の文字列でも正しく機能する。
+    // 値なし属性 / 引用符なし属性も従来どおり許容する（後方互換）。
+    const ATTR_PART = '\\s+[^"\'/=\\s]+(?:=(?:"(?:[^"\\\\]|\\\\.)*"|\'(?:[^\'\\\\]|\\\\.)*\'|[^\\s&]+))?';
+    const ATTRS_PATTERN = `((?:${ATTR_PART})*\\s*)`;
+
+    // キャプチャ位置は従来どおり: 1=タグ名 2=属性 3=内容 / 4=タグ名 5=属性
     const TAG_REGEX = new RegExp(
-      `&lt;(${TAG_NAME_PATTERN})([^&]*)&gt;([\\s\\S]*?)&lt;\\/\\1&gt;|` + `&lt;(${TAG_NAME_PATTERN})([^&]*)\\/&gt;`,
+      `&lt;(${TAG_NAME_PATTERN})${ATTRS_PATTERN}&gt;([\\s\\S]*?)&lt;\\/\\1&gt;|` +
+        `&lt;(${TAG_NAME_PATTERN})${ATTRS_PATTERN}\\/&gt;`,
       'g',
     );
 
@@ -52,9 +64,13 @@ export class LpmlRenderer {
     let colorClass = 'border-border-main bg-card';
     let isOpen = false;
 
+    // 旧実装の `([^"'\s]+)` は空白で切れるため path="my file.txt" が途中で欠けていた。
+    // また前方境界が無く type= が mimetype= の一部にも誤マッチしていたため、両方を修正する。
+    // なお attributes は escape() 済みなので、戻り値をそのまま innerHTML に埋めても安全。
     const getAttr = (key: string) => {
-      const m = attributes.match(new RegExp(`${key}=["']?([^"'\\s]+)["']?`));
-      return m ? m[1] : null;
+      const m = attributes.match(new RegExp(`(?:^|\\s)${key}=(?:"([^"]*)"|'([^']*)'|([^\\s]+))`));
+      if (!m) return null;
+      return m[1] !== undefined ? m[1] : m[2] !== undefined ? m[2] : m[3];
     };
 
     switch (tagName) {
