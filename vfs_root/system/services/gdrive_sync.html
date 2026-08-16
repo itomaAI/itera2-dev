@@ -817,6 +817,8 @@
         if (mountPath) allPaths.delete(mountPath);
 
         let ops = 0;
+        // コールドスタートでローカル実体を温存した件数（ループ後に要約を出す）
+        let coldStartKept = 0;
         let lastFlush = Date.now();
 
         /**
@@ -862,17 +864,46 @@
             const remoteChanged = rExists ? !a || a.rhash !== (r.md5 || null) : !!a;
 
             // --- コールドスタート: アンカーが空ならリモートを正とする ---
+            //
+            // ★ ただし「ローカルに実体があるファイル」を決してスタブ化しないこと。
+            //
+            //   createStub() は contentRef を外すため、ローカルのバイト列が失われる。
+            //   「リモートに同名パスがある」ことは、その実体を後から取得できることを
+            //   保証しない。接続先フォルダの変更、リモート側での削除、索引の取りこぼし
+            //   などで fileId は容易に到達不能になる。そうなった瞬間スタブは二度と
+            //   実体化できず、Push 分岐も read に失敗する（スタブは読めない）ため
+            //   自力復帰もできない。つまり片道の破壊になる。
+            //
+            //   2026-08-12 07:49 に実際にこれで 104 ファイルを失った。マウント先を
+            //   'drive' から VFS ルートへ変更したことでアンカーが空になり、当時の
+            //   接続先フォルダに存在したパスのローカル実体が捨てられた。そのフォルダは
+            //   現在到達不能で（Drive のゴミ箱にも無い）、内容は復元不能である。
+            //
+            //   したがってスタブ化は「ローカルに実体が無い」場合に限る。新規端末では
+            //   ローカルが存在しないため従来どおり動作し、挙動が変わるのは
+            //   「実体を捨てようとしていた場合」だけである。
+            //
+            //   実体がある場合はローカルを残し、anchor.hash を null にしておく。
+            //   次サイクルで localChanged が立ち、Push 分岐がリモートへ送る。
+            //   リモートを上書きしうるが、Drive 側は版管理とゴミ箱で復旧できる一方、
+            //   ローカルのバイト列は復旧できない。この非対称性に従って局所を優先する。
             if (isAnchorEmpty && rExists) {
               if (r.kind === 'directory') {
                 if (!(await MetaOS.fs.exists(path))) await MetaOS.fs.mkdir(path);
+                newAnchor[path] = { id: r.id, kind: 'directory', hash: null, rhash: r.md5 || null };
+              } else if (lExists && l.hash) {
+                // ローカルに実体がある。スタブ化せず温存し、次サイクルで Push する。
+                // （スタブは hash === null なので、この判定で実体の有無を見分けられる）
+                coldStartKept++;
+                newAnchor[path] = { id: r.id, kind: 'file', hash: null, rhash: r.md5 || null };
               } else {
                 await MetaOS.fs.createStub(path, {
                   size: r.size,
                   hash: null,
                   updatedAt: r.modifiedTime,
                 });
+                newAnchor[path] = { id: r.id, kind: 'file', hash: null, rhash: r.md5 || null };
               }
-              newAnchor[path] = { id: r.id, kind: r.kind, hash: null, rhash: r.md5 || null };
               await breathe();
               continue;
             }
@@ -981,6 +1012,14 @@
             }
             log(`Skipped '${path}': ${e.message}`, 'warn');
           }
+        }
+
+        if (coldStartKept > 0) {
+          log(
+            `Cold start: kept local content for ${coldStartKept} file(s) instead of replacing them with stubs. ` +
+              `These will be pushed to Drive on the next cycles.`,
+            'warn'
+          );
         }
 
         await saveAnchor(newAnchor);
