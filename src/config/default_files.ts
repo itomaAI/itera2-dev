@@ -1,6 +1,6 @@
 /**
  * AUTO-GENERATED FILE - DO NOT EDIT MANUALLY
- * Generated on: 2026-08-13T01:00:22.904Z
+ * Generated on: 2026-08-16T11:29:00.731Z
  */
 
 export const DEFAULT_FILES: Record<string, string> = {
@@ -4556,6 +4556,831 @@ export async function init(ctx) {
       // Auto-load on boot
       window.addEventListener('load', () => {
         setTimeout(loadData, 500);
+      });
+    </script>
+  </body>
+</html>
+`.trim(),
+
+  'system/apps/gdrive_app.html': `
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Google Drive Sync Manager</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="/system/core/ui.js"></script>
+    <script src="/system/core/std.js"></script>
+  </head>
+  <body class="bg-app text-text-main h-screen flex flex-col p-6 overflow-hidden">
+    <header class="flex items-center justify-between mb-4 shrink-0">
+      <div class="flex items-center gap-4">
+        <button
+          onclick="AppUI.home()"
+          class="p-2 -ml-2 rounded-full hover:bg-hover text-text-muted hover:text-text-main transition"
+        >
+          <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M10 19l-7-7m0 0l7-7m-7 7h18"
+            ></path>
+          </svg>
+        </button>
+        <div>
+          <h1 class="text-2xl font-bold tracking-tight">Google Drive Sync</h1>
+          <p class="text-xs text-text-muted">同期デーモンの管理・同期対象の設定・リモートフォルダの削除</p>
+        </div>
+      </div>
+      <div
+        id="status-badge"
+        class="px-3 py-1 bg-card border border-border-main rounded-lg text-xs font-bold text-text-muted flex items-center gap-2"
+      >
+        <span id="status-indicator" class="w-2 h-2 rounded-full bg-text-muted"></span>
+        <span id="status-text">確認中...</span>
+      </div>
+    </header>
+
+    <main class="flex-1 overflow-y-auto pb-10 space-y-6">
+      <!-- 状態 -->
+      <section class="bg-panel p-6 rounded-2xl border border-border-main shadow-sm">
+        <h2 class="text-sm font-bold uppercase tracking-wider mb-4">📊 状態</h2>
+        <div id="status-grid" class="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+          <div class="text-text-muted text-xs">読み込み中...</div>
+        </div>
+        <div id="auth-warning" class="hidden mt-4 p-3 rounded-lg bg-warning/10 border border-warning/40 text-xs"></div>
+      </section>
+
+      <!-- デーモン -->
+      <section class="bg-panel p-6 rounded-2xl border border-border-main shadow-sm">
+        <h2 class="text-sm font-bold uppercase tracking-wider mb-4">⚙️ 同期デーモン</h2>
+        <div class="flex items-center justify-between">
+          <div>
+            <h3 class="font-bold text-sm">バックグラウンド同期</h3>
+            <p class="text-xs text-text-muted">20 秒間隔のポーリングと、ローカル変更時の即時同期を行います。</p>
+          </div>
+          <label class="relative inline-flex items-center cursor-pointer">
+            <input type="checkbox" id="toggle-daemon" class="sr-only peer" onchange="onToggleDaemon(this.checked)" />
+            <div
+              class="w-11 h-6 bg-card peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-text-muted peer-checked:after:bg-white after:border-border-main after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-success border border-border-main shadow-inner transition-colors"
+            ></div>
+          </label>
+        </div>
+        <div class="mt-4 pt-4 border-t border-border-main/50 flex gap-2">
+          <button
+            onclick="restartDaemon()"
+            class="px-3 py-1.5 text-xs font-bold rounded-lg bg-card border border-border-main hover:bg-hover transition"
+          >
+            🔄 再起動（設定の再読込）
+          </button>
+          <button
+            onclick="refresh()"
+            class="px-3 py-1.5 text-xs font-bold rounded-lg bg-card border border-border-main hover:bg-hover transition"
+          >
+            ↻ 状態を更新
+          </button>
+        </div>
+      </section>
+
+      <!-- 接続先フォルダ -->
+      <section class="bg-panel p-6 rounded-2xl border border-border-main shadow-sm">
+        <h2 class="text-sm font-bold uppercase tracking-wider mb-4">☁️ 接続先フォルダ</h2>
+
+        <div class="p-3 rounded-lg bg-card border border-border-main text-xs mb-4">
+          <div class="text-[10px] font-bold text-text-muted uppercase mb-1">現在の接続先</div>
+          <div id="current-folder" class="font-mono break-all">—</div>
+        </div>
+
+        <p class="text-xs text-text-muted mb-3">
+          複数の端末で同じ VFS を共有するには、<strong>すべての端末で同じフォルダを選ぶ</strong>必要があります。
+          既定では端末ごとに <code>Itera OS</code> という名前で新しいフォルダを作るため、
+          何も設定しないと別々のフォルダに繋がり、内容が共有されません。
+        </p>
+
+        <div class="flex gap-2 mb-3">
+          <button
+            onclick="listFolders()"
+            class="px-3 py-1.5 text-xs font-bold rounded-lg bg-card border border-border-main hover:bg-hover transition"
+          >
+            📂 Drive のフォルダを一覧
+          </button>
+          <input
+            type="text"
+            id="manual-folder-id"
+            class="flex-1 bg-card border border-border-main rounded-lg p-2 text-xs font-mono focus:border-primary focus:outline-none transition"
+            placeholder="folderId を直接入力"
+          />
+          <button
+            onclick="selectFolderById(document.getElementById('manual-folder-id').value.trim())"
+            class="px-3 py-1.5 text-xs font-bold rounded-lg bg-card border border-border-main hover:bg-hover transition whitespace-nowrap"
+          >
+            適用
+          </button>
+        </div>
+
+        <div id="folder-list" class="hidden space-y-1 max-h-64 overflow-y-auto"></div>
+
+        <p class="text-[10px] text-text-muted mt-3">
+          接続先を変えるとアンカーとの対応が崩れるため、同期状態を初期化します。
+          初期化後の最初のサイクルでは、リモートにあるものはスタブとして降り、
+          ローカルにしかないものはアップロードされます（どちらも削除されません）。
+        </p>
+      </section>
+
+      <!-- 同期対象 -->
+      <section class="bg-panel p-6 rounded-2xl border border-border-main shadow-sm">
+        <h2 class="text-sm font-bold uppercase tracking-wider mb-4">📁 同期対象</h2>
+
+        <div class="mb-4">
+          <label class="block text-xs font-bold text-text-muted uppercase mb-1">マウントパス</label>
+          <input
+            type="text"
+            id="cfg-mount"
+            class="w-full bg-card border border-border-main rounded-lg p-2 text-sm font-mono focus:border-primary focus:outline-none transition"
+            placeholder="drive"
+          />
+          <p class="text-[10px] text-text-muted mt-1">
+            Drive フォルダを VFS のどこに割り当てるか。<strong>空欄にすると VFS ルート全体</strong
+            >が同期対象になります。 変更するとアンカーとの対応が崩れるため、保存時に同期状態を初期化します。
+          </p>
+        </div>
+
+        <div class="mb-4">
+          <label class="block text-xs font-bold text-text-muted uppercase mb-1">追加の除外パス（1 行 1 件）</label>
+          <textarea
+            id="cfg-exclude"
+            rows="4"
+            class="w-full bg-card border border-border-main rounded-lg p-2 text-xs font-mono focus:border-primary focus:outline-none transition"
+            placeholder="workspace&#10;data/03_resources/papers"
+          ></textarea>
+          <p class="text-[10px] text-text-muted mt-1">
+            前方一致（パス境界）で判定します。<code>trash</code> は <code>trashcan/</code> に一致しません。
+          </p>
+        </div>
+
+        <div class="p-3 rounded-lg bg-card border border-border-main text-xs space-y-2">
+          <div class="font-bold text-text-muted uppercase text-[10px]">固定ルール（変更不可）</div>
+          <div>
+            <span class="text-error font-bold">常に除外:</span>
+            <code>system/credentials</code>, <code>system/temp</code>, <code>system/logs</code>, <code>trash</code>
+          </div>
+          <div>
+            <span class="text-success font-bold">system/ 配下で同期:</span>
+            <code>system/config</code>, <code>system/registry</code>, <code>system/themes</code>
+            <span class="text-text-muted">（これ以外の system/ 配下は同期しません）</span>
+          </div>
+          <p class="text-text-muted">
+            認証情報の流出を防ぐため、この allowlist / denylist はアプリからは緩められません。
+            追加の除外のみ指定できます。
+          </p>
+        </div>
+
+        <button
+          onclick="saveSettings()"
+          class="mt-4 px-4 py-2 text-sm font-bold rounded-lg bg-primary text-white hover:opacity-90 transition"
+        >
+          保存してデーモンを再起動
+        </button>
+      </section>
+
+      <!-- 危険な操作 -->
+      <section class="bg-panel p-6 rounded-2xl border border-error/40 shadow-sm">
+        <h2 class="text-sm font-bold uppercase tracking-wider mb-4 text-error">⚠️ 危険な操作</h2>
+
+        <div class="space-y-6">
+          <div>
+            <h3 class="font-bold text-sm">同期状態のリセット</h3>
+            <p class="text-xs text-text-muted mb-2">
+              アンカーと索引を削除します。ローカルのファイルも Drive のファイルも消えません。
+              同期がおかしくなったときの復旧用です。次回起動時にリモートを正として再構成されます。
+            </p>
+            <button
+              onclick="resetSyncState()"
+              class="px-3 py-1.5 text-xs font-bold rounded-lg bg-card border border-border-main hover:bg-hover transition"
+            >
+              同期状態をリセット
+            </button>
+          </div>
+
+          <div class="pt-4 border-t border-border-main/50">
+            <h3 class="font-bold text-sm text-error">Drive 上の同期フォルダを削除</h3>
+            <p class="text-xs text-text-muted mb-2">
+              Drive 側のフォルダと中身を<strong>恒久削除</strong>します（ゴミ箱を経由しません）。 ローカルの VFS
+              は残ります。
+            </p>
+            <div class="p-3 rounded-lg bg-error/10 border border-error/40 text-xs mb-3 space-y-1">
+              <p class="font-bold">実行順序（安全のため固定）</p>
+              <p>1. デーモンを停止 → 2. Drive 側を削除 → 3. アンカー・索引・folderId を消去</p>
+              <p class="text-text-muted">
+                この順序を守らないと、次の同期サイクルが「リモートで全ファイルが削除された」と解釈し、
+                <strong>ローカルの実体を恒久削除します。</strong>
+              </p>
+            </div>
+            <div class="flex gap-2 items-center">
+              <input
+                type="text"
+                id="confirm-input"
+                class="flex-1 bg-card border border-error/40 rounded-lg p-2 text-sm font-mono focus:outline-none"
+                placeholder="DELETE と入力"
+              />
+              <button
+                onclick="deleteRemoteFolder()"
+                class="px-4 py-2 text-sm font-bold rounded-lg bg-error text-white hover:opacity-90 transition whitespace-nowrap"
+              >
+                Drive から削除
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div
+          id="op-log"
+          class="hidden mt-4 p-3 rounded-lg bg-card border border-border-main text-[11px] font-mono max-h-48 overflow-y-auto"
+        ></div>
+      </section>
+    </main>
+
+    <script>
+      const CONFIG_PATH = 'system/config/gdrive.json';
+      const TOKEN_PATH = 'system/temp/gdrive_token.json';
+      const ANCHOR_PATH = 'system/temp/gdrive_anchor.json';
+      const INDEX_PATH = 'system/temp/gdrive_index.json';
+      const DAEMON_PATH = 'system/services/gdrive_sync.html';
+      const PID = 'gdrive_sync_daemon';
+      const DRIVE_API = 'https://www.googleapis.com/drive/v3';
+
+      const DOM = (id) => document.getElementById(id);
+
+      let config = {};
+
+      function logOp(msg, cls = '') {
+        const el = DOM('op-log');
+        el.classList.remove('hidden');
+        const line = document.createElement('div');
+        line.className = cls;
+        line.textContent = msg;
+        el.appendChild(line);
+        el.scrollTop = el.scrollHeight;
+      }
+
+      async function readJson(path, fallback) {
+        try {
+          const raw = await MetaOS.fs.read(path);
+          return JSON.parse(raw || 'null') || fallback;
+        } catch (e) {
+          return fallback;
+        }
+      }
+
+      /**
+       * トークンは中身を絶対に表示しない。有効性の判定にのみ使う。
+       */
+      async function getToken() {
+        const data = await readJson(TOKEN_PATH, null);
+        if (!data || !data.accessToken) return null;
+        if (data.expiresAt && Date.now() >= data.expiresAt) return null;
+        return data.accessToken;
+      }
+
+      async function isDaemonRunning() {
+        const ps = await MetaOS.system.ps();
+        return ps.some((p) => p.pid === PID || p.path === DAEMON_PATH);
+      }
+
+      // ==========================================
+      // 表示
+      // ==========================================
+
+      async function refresh() {
+        config = await readJson(CONFIG_PATH, {});
+        const token = await getToken();
+        const running = await isDaemonRunning();
+        const anchor = await readJson(ANCHOR_PATH, {});
+        const index = await readJson(INDEX_PATH, null);
+
+        DOM('toggle-daemon').checked = running;
+        DOM('cfg-mount').value = typeof config.mountPath === 'string' ? config.mountPath : 'drive';
+        DOM('cfg-exclude').value = (config.excludePaths || []).join('\\n');
+
+        DOM('status-indicator').className =
+          'w-2 h-2 rounded-full ' + (running && token ? 'bg-success' : running ? 'bg-warning' : 'bg-text-muted');
+        DOM('status-text').textContent = !running ? '停止中' : token ? '同期中' : '未認証';
+
+        const anchorCount = Object.keys(anchor).length;
+        const indexCount = index && index.byId ? Object.keys(index.byId).length : 0;
+        const builtAt = index && index.builtAt ? new Date(index.builtAt).toLocaleString('ja-JP') : '—';
+
+        const cell = (label, value, mono) =>
+          \`<div><div class="text-[10px] font-bold text-text-muted uppercase">\${label}</div>\` +
+          \`<div class="\${mono ? 'font-mono text-xs' : ''} break-all">\${value}</div></div>\`;
+
+        DOM('status-grid').innerHTML =
+          cell('デーモン', running ? '<span class="text-success font-bold">稼働中</span>' : '停止中') +
+          cell(
+            '認証',
+            token
+              ? '<span class="text-success font-bold">有効</span>'
+              : '<span class="text-error font-bold">無効</span>',
+          ) +
+          cell('マウント', config.mountPath ? '/' + config.mountPath : 'VFS ルート', true) +
+          cell('Drive フォルダ', config.folderId ? escapeHtml(config.folderName || 'Itera OS') : '未設定', true) +
+          cell('同期済み（アンカー）', anchorCount.toLocaleString() + ' 件') +
+          cell('索引', indexCount.toLocaleString() + ' 件') +
+          cell('索引の構築時刻', builtAt) +
+          cell('folderId', config.folderId ? escapeHtml(config.folderId) : '—', true);
+
+        // 接続先フォルダの表示（未設定なら既定値の挙動を明示する）
+        const cf = DOM('current-folder');
+        if (cf) {
+          cf.innerHTML = config.folderId
+            ? \`\${escapeHtml(config.folderName || 'Itera OS')} \` +
+              \`<span class="text-text-muted">(\${escapeHtml(config.folderId)})</span>\`
+            : '<span class="text-warning">未接続 — サインイン時に ' +
+              \`「\${escapeHtml(config.folderName || 'Itera OS')}」という名前で検索・作成されます</span>\`;
+        }
+
+        const warn = DOM('auth-warning');
+        if (!token) {
+          warn.classList.remove('hidden');
+          warn.innerHTML =
+            '未認証です。設定アプリの <strong>Sync</strong> から Google にサインインしてください。' +
+            'トークンはブラウザのみの OAuth のため 1 時間で失効します。';
+        } else if (!config.folderId) {
+          warn.classList.remove('hidden');
+          warn.innerHTML = 'Drive 側の同期フォルダが未設定です。サインインし直すと自動的に作成されます。';
+        } else {
+          warn.classList.add('hidden');
+        }
+      }
+
+      function escapeHtml(s) {
+        return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      }
+
+      // ==========================================
+      // 接続先フォルダ
+      //
+      // ★ drive.file スコープでは「このアプリが作成したもの」しか見えない。
+      //   したがって一覧に出るのは Itera が作ったフォルダだけであり、
+      //   利用者の Drive 全体を覗くことはない。
+      //   逆に言うと、他の手段で作ったフォルダは選べない。
+      // ==========================================
+
+      async function listFolders() {
+        const token = await getToken();
+        const box = DOM('folder-list');
+        box.classList.remove('hidden');
+        box.innerHTML = '<div class="text-xs text-text-muted p-2">読み込み中...</div>';
+
+        if (!token) {
+          box.innerHTML = '<div class="text-xs text-error p-2">未認証です。サインインしてください。</div>';
+          return;
+        }
+
+        try {
+          // ★ 必ず全ページ取得する。
+          //   1 ページで打ち切ると、親が取得漏れしたフォルダが
+          //   「親を持たない＝最上位」と誤判定される。
+          //   実際に 1,400 件超の環境で、同期ツリー内部の深いフォルダが
+          //   47 件も候補として並んだ。不完全な集合から構造を導いてはならない。
+          const all = [];
+          let next = null;
+          let pages = 0;
+          do {
+            const q = encodeURIComponent("mimeType='application/vnd.google-apps.folder' and trashed=false");
+            const fields = encodeURIComponent('nextPageToken,files(id,name,parents,createdTime)');
+            let url = \`\${DRIVE_API}/files?q=\${q}&fields=\${fields}&pageSize=1000\`;
+            if (next) url += \`&pageToken=\${encodeURIComponent(next)}\`;
+            const data = await driveFetch(token, url);
+            for (const f of (data && data.files) || []) all.push(f);
+            next = (data && data.nextPageToken) || null;
+            pages++;
+          } while (next && pages < 20);
+
+          if (next) {
+            box.innerHTML =
+              '<div class="text-xs text-error p-2">フォルダ数が多すぎて一覧を確定できません。' +
+              'folderId を直接入力してください。</div>';
+            return;
+          }
+
+          // 親がこのアプリから見えない＝アプリ管理ツリーの最上位。
+          // 同期ルートの候補はこれに限られる。
+          const ids = new Set(all.map((f) => f.id));
+          const tops = all.filter((f) => !(f.parents || []).some((p) => ids.has(p)));
+
+          if (tops.length === 0) {
+            box.innerHTML =
+              '<div class="text-xs text-text-muted p-2">このアプリが作成したフォルダが見つかりません。</div>';
+            return;
+          }
+
+          const cur = await readJson(CONFIG_PATH, {});
+          box.innerHTML = tops
+            .sort((a, b) => (a.createdTime < b.createdTime ? -1 : 1))
+            .map((f) => {
+              const isCurrent = f.id === cur.folderId;
+              return (
+                \`<div class="flex items-center justify-between gap-2 p-2 rounded-lg border \${
+                  isCurrent ? 'border-success/60 bg-success/10' : 'border-border-main bg-card'
+                }">\` +
+                \`<div class="min-w-0">\` +
+                \`<div class="text-xs font-bold truncate">\${escapeHtml(f.name)}\` +
+                (isCurrent ? ' <span class="text-success">（現在の接続先）</span>' : '') +
+                \`</div>\` +
+                \`<div class="text-[10px] text-text-muted font-mono truncate">\${escapeHtml(f.id)}</div>\` +
+                \`</div>\` +
+                (isCurrent
+                  ? ''
+                  : \`<button onclick="selectFolderById('\${f.id}', '\${escapeHtml(f.name).replace(/'/g, "\\\\'")}')" \` +
+                    \`class="px-3 py-1 text-[11px] font-bold rounded-lg bg-primary text-white hover:opacity-90 transition whitespace-nowrap">\` +
+                    \`これに接続</button>\`) +
+                \`</div>\`
+              );
+            })
+            .join('');
+        } catch (e) {
+          box.innerHTML = \`<div class="text-xs text-error p-2">取得に失敗しました: \${escapeHtml(e.message)}</div>\`;
+        }
+      }
+
+      /**
+       * 接続先を切り替える。
+       *
+       * ★ アンカーと索引は「前回の同期時点」を表すため、接続先が変わったら必ず捨てる。
+       *   残すと、別フォルダの状態を今のフォルダの状態だと誤認し、
+       *   Pull 分岐がローカルを削除しうる。
+       *   （索引側には rootFolderId の照合があるが、アンカーには無い）
+       */
+      async function selectFolderById(folderId, folderName) {
+        if (!folderId) {
+          MetaOS.host.notify('folderId を入力してください', 'Google Drive Sync');
+          return;
+        }
+
+        const token = await getToken();
+        if (!token) {
+          MetaOS.host.notify('未認証です。サインインしてから実行してください', 'Google Drive Sync');
+          return;
+        }
+
+        // 実在とアクセス可否を確認してから切り替える。
+        let meta;
+        try {
+          meta = await driveFetch(token, \`\${DRIVE_API}/files/\${folderId}?fields=id,name,mimeType,trashed\`);
+        } catch (e) {
+          MetaOS.host.notify(\`このフォルダにアクセスできません: \${e.message}\`, 'Google Drive Sync');
+          return;
+        }
+        if (!meta || !meta.id || meta.trashed) {
+          MetaOS.host.notify('フォルダが見つからないか、ゴミ箱に入っています', 'Google Drive Sync');
+          return;
+        }
+        if (meta.mimeType !== 'application/vnd.google-apps.folder') {
+          MetaOS.host.notify('指定された ID はフォルダではありません', 'Google Drive Sync');
+          return;
+        }
+
+        const cur = await readJson(CONFIG_PATH, {});
+        if (cur.folderId === meta.id) {
+          MetaOS.host.notify('すでにこのフォルダに接続しています', 'Google Drive Sync');
+          return;
+        }
+
+        const res = await MetaOS.host.showMessageBox({
+          title: '接続先フォルダの変更',
+          message:
+            \`接続先を「\${meta.name}」に変更します。\\n\\n\` +
+            '同期状態（アンカー・索引）を初期化します。\\n' +
+            'ローカルのファイルも Drive のファイルも削除されません。\\n' +
+            '初期化後、リモートにあるものはスタブとして降り、\\n' +
+            'ローカルにしかないものはアップロードされます。\\n\\n続行しますか。',
+          type: 'warning',
+          buttons: [
+            { label: 'キャンセル', value: false, style: 'normal', isCancel: true },
+            { label: '接続する', value: true, style: 'primary', isDefault: true },
+          ],
+        });
+        if (!res || !res.action) return;
+
+        await stopDaemon();
+        await clearSyncState();
+        await MetaOS.fs.write(
+          CONFIG_PATH,
+          JSON.stringify({ ...cur, folderId: meta.id, folderName: folderName || meta.name }, null, 2),
+          { overwrite: true },
+        );
+        await startDaemon();
+
+        MetaOS.host.notify(\`接続先を「\${meta.name}」に変更しました\`, 'Google Drive Sync');
+        DOM('folder-list').classList.add('hidden');
+        DOM('manual-folder-id').value = '';
+        await refresh();
+      }
+
+      // ==========================================
+      // デーモン
+      // ==========================================
+
+      async function startDaemon() {
+        await MetaOS.system.spawn(DAEMON_PATH, { pid: PID, type: 'daemon', force: true });
+      }
+
+      async function stopDaemon() {
+        try {
+          await MetaOS.system.kill(PID);
+        } catch (e) {
+          /* 停止済み */
+        }
+        // kill の反映を待つ
+        for (let i = 0; i < 20; i++) {
+          if (!(await isDaemonRunning())) return true;
+          await new Promise((r) => setTimeout(r, 200));
+        }
+        return !(await isDaemonRunning());
+      }
+
+      async function onToggleDaemon(enabled) {
+        try {
+          if (enabled) {
+            await startDaemon();
+            MetaOS.host.notify('同期デーモンを開始しました', 'Google Drive Sync');
+          } else {
+            await stopDaemon();
+            MetaOS.host.notify('同期デーモンを停止しました', 'Google Drive Sync');
+          }
+        } catch (e) {
+          MetaOS.host.notify(\`失敗: \${e.message}\`, 'Google Drive Sync');
+        }
+        await refresh();
+      }
+
+      async function restartDaemon() {
+        await stopDaemon();
+        await startDaemon();
+        MetaOS.host.notify('デーモンを再起動しました', 'Google Drive Sync');
+        await refresh();
+      }
+
+      // ==========================================
+      // 設定の保存
+      //
+      // ★ folderId / clientId / scope は OAuth アダプタが所有する。
+      //   読み込んだ config を土台に差分だけ上書きし、他項目を消さない。
+      // ==========================================
+
+      async function saveSettings() {
+        const current = await readJson(CONFIG_PATH, {});
+        const newMount = DOM('cfg-mount')
+          .value.trim()
+          .replace(/^\\/+|\\/+$/g, '');
+        const mountChanged = (current.mountPath || '') !== newMount;
+
+        if (mountChanged) {
+          const res = await MetaOS.host.showMessageBox({
+            title: 'マウントパスの変更',
+            message:
+              'マウントパスを変更すると、既存のアンカーが指すパスと対応しなくなります。\\n' +
+              '同期状態（アンカー・索引）を初期化してから再同期します。\\n' +
+              'ローカルのファイルも Drive のファイルも削除されません。続行しますか。',
+            type: 'warning',
+            buttons: [
+              { label: 'キャンセル', value: false, style: 'normal', isCancel: true },
+              { label: '続行', value: true, style: 'primary', isDefault: true },
+            ],
+          });
+          if (!res || !res.action) return;
+        }
+
+        const excludePaths = DOM('cfg-exclude')
+          .value.split('\\n')
+          .map((s) => s.trim().replace(/^\\/+|\\/+$/g, ''))
+          .filter((s) => s.length > 0 && !s.startsWith('#'));
+
+        const next = { ...current, mountPath: newMount, excludePaths };
+        await MetaOS.fs.write(CONFIG_PATH, JSON.stringify(next, null, 2), { overwrite: true });
+
+        if (mountChanged) {
+          await stopDaemon();
+          await clearSyncState();
+        }
+
+        await restartDaemon();
+        MetaOS.host.notify('設定を保存しました', 'Google Drive Sync');
+      }
+
+      // ==========================================
+      // 同期状態のリセット
+      // ==========================================
+
+      async function clearSyncState() {
+        for (const p of [ANCHOR_PATH, INDEX_PATH]) {
+          try {
+            if (await MetaOS.fs.exists(p)) await MetaOS.fs.delete(p, { permanent: true });
+          } catch (e) {
+            logOp(\`削除できません: \${p} (\${e.message})\`, 'text-warning');
+          }
+        }
+      }
+
+      async function resetSyncState() {
+        const res = await MetaOS.host.showMessageBox({
+          title: '同期状態のリセット',
+          message:
+            'アンカーと索引を削除します。\\nローカルのファイルも Drive のファイルも削除されません。\\n続行しますか。',
+          type: 'warning',
+          buttons: [
+            { label: 'キャンセル', value: false, style: 'normal', isCancel: true },
+            { label: 'リセット', value: true, style: 'primary', isDefault: true },
+          ],
+        });
+        if (!res || !res.action) return;
+
+        const wasRunning = await isDaemonRunning();
+        await stopDaemon();
+        await clearSyncState();
+        logOp('同期状態をリセットしました。', 'text-success');
+        if (wasRunning) await startDaemon();
+        MetaOS.host.notify('同期状態をリセットしました', 'Google Drive Sync');
+        await refresh();
+      }
+
+      // ==========================================
+      // Drive 上の同期フォルダを削除
+      // ==========================================
+
+      async function driveFetch(token, url, options = {}) {
+        const method = (options.method || 'GET').toUpperCase();
+
+        // ★ DELETE の成功応答は 204 No Content で本文が空。
+        //   これを JSON として解析すると「unexpected end of data」で例外になり、
+        //   実際には成功しているのに失敗として報告される。
+        //   （実測: 空フォルダ 142 件の削除が全件「失敗」と表示されたが、
+        //     Drive 側では正しく消えていた）
+        const responseType = options.responseType || (method === 'DELETE' ? 'text' : 'json');
+
+        const res = await MetaOS.net.fetch(url, {
+          ...options,
+          headers: { ...(options.headers || {}), Authorization: \`Bearer \${token}\` },
+          responseType,
+        });
+        if (res.status === 401) throw new Error('認証が失効しています。サインインし直してください。');
+        if (res.status < 200 || res.status >= 300) {
+          const detail =
+            typeof res.data === 'string' ? res.data.slice(0, 200) : JSON.stringify(res.data || {}).slice(0, 200);
+          const err = new Error(\`Drive API \${res.status}: \${detail}\`);
+          err.status = res.status;
+          throw err;
+        }
+        return res.data;
+      }
+
+      /** フラット検索でメタデータを全件取得する（1,000 件/リクエスト）。 */
+      async function fetchAllFiles(token) {
+        const out = {};
+        let next = null;
+        do {
+          const q = encodeURIComponent('trashed=false');
+          const fields = encodeURIComponent('nextPageToken,files(id,name,mimeType,parents)');
+          let url = \`\${DRIVE_API}/files?q=\${q}&fields=\${fields}&pageSize=1000\`;
+          if (next) url += \`&pageToken=\${encodeURIComponent(next)}\`;
+          const data = await driveFetch(token, url);
+          for (const f of (data && data.files) || []) out[f.id] = f;
+          next = (data && data.nextPageToken) || null;
+        } while (next);
+        return out;
+      }
+
+      /**
+       * folderId から到達できる子孫を深さ順に並べる。
+       *
+       * ★ drive.file スコープでは、中身が残っているフォルダの削除が 403 で拒否される。
+       *   末端（深い側）から消す必要があるため、深さの降順に並べて返す。
+       */
+      function collectDescendants(byId, rootId) {
+        const childrenOf = {};
+        for (const id of Object.keys(byId)) {
+          for (const p of byId[id].parents || []) {
+            (childrenOf[p] = childrenOf[p] || []).push(id);
+          }
+        }
+        const out = [];
+        const walk = (id, depth) => {
+          for (const child of childrenOf[id] || []) {
+            out.push({ id: child, depth, node: byId[child] });
+            walk(child, depth + 1);
+          }
+        };
+        walk(rootId, 1);
+        out.sort((a, b) => b.depth - a.depth);
+        return out;
+      }
+
+      async function deleteRemoteFolder() {
+        if (DOM('confirm-input').value.trim() !== 'DELETE') {
+          MetaOS.host.notify('確認のため DELETE と入力してください', 'Google Drive Sync');
+          return;
+        }
+
+        config = await readJson(CONFIG_PATH, {});
+        if (!config.folderId) {
+          MetaOS.host.notify('削除対象の folderId が設定されていません', 'Google Drive Sync');
+          return;
+        }
+
+        const token = await getToken();
+        if (!token) {
+          MetaOS.host.notify('未認証です。サインインしてから実行してください', 'Google Drive Sync');
+          return;
+        }
+
+        const res = await MetaOS.host.showMessageBox({
+          title: 'Drive の同期フォルダを削除',
+          message:
+            \`Drive 上のフォルダ「\${config.folderName || 'Itera OS'}」と、その中身をすべて恒久削除します。\\n\` +
+            'ゴミ箱を経由しないため復元できません。\\n\\n' +
+            'ローカルの VFS は削除されません。\\n続行しますか。',
+          type: 'error',
+          buttons: [
+            { label: 'キャンセル', value: false, style: 'normal', isCancel: true, isDefault: true },
+            { label: '削除する', value: true, style: 'danger' },
+          ],
+        });
+        if (!res || !res.action) return;
+
+        DOM('op-log').innerHTML = '';
+
+        try {
+          // --- 手順 1: デーモンを停止する ---
+          //     ここを飛ばすと、削除の途中で同期サイクルが走り、
+          //     「リモートで削除された」と解釈してローカルを消しにいく。
+          logOp('1) デーモンを停止しています...');
+          if (!(await stopDaemon())) {
+            logOp('デーモンを停止できませんでした。中断します。', 'text-error');
+            return;
+          }
+          logOp('   停止しました。', 'text-success');
+
+          // --- 手順 2: Drive 側を削除する ---
+          logOp('2) Drive のメタデータを取得しています...');
+          const byId = await fetchAllFiles(token);
+          const targets = collectDescendants(byId, config.folderId);
+          logOp(\`   \${targets.length} 件の子孫を検出しました。\`);
+
+          let done = 0;
+          let failed = 0;
+          for (const t of targets) {
+            try {
+              await driveFetch(token, \`\${DRIVE_API}/files/\${t.id}\`, { method: 'DELETE' });
+              done++;
+              if (done % 25 === 0) logOp(\`   \${done}/\${targets.length} 件を削除...\`);
+            } catch (e) {
+              failed++;
+              logOp(\`   失敗: \${t.node && t.node.name} (\${e.message})\`, 'text-warning');
+            }
+          }
+          logOp(\`   子孫の削除: 成功 \${done} / 失敗 \${failed}\`, failed ? 'text-warning' : 'text-success');
+
+          try {
+            await driveFetch(token, \`\${DRIVE_API}/files/\${config.folderId}\`, { method: 'DELETE' });
+            logOp('   ルートフォルダを削除しました。', 'text-success');
+          } catch (e) {
+            logOp(\`   ルートフォルダの削除に失敗: \${e.message}\`, 'text-error');
+            logOp('   中身が残っている可能性があります。再実行してください。', 'text-warning');
+          }
+
+          // --- 手順 3: ローカルの同期状態を消す ---
+          //     folderId を残すと、存在しないフォルダを指したまま同期が走る。
+          logOp('3) ローカルの同期状態を消去しています...');
+          await clearSyncState();
+          const cur = await readJson(CONFIG_PATH, {});
+          await MetaOS.fs.write(CONFIG_PATH, JSON.stringify({ ...cur, folderId: null }, null, 2), {
+            overwrite: true,
+          });
+          logOp('   完了しました。', 'text-success');
+
+          logOp('');
+          logOp('デーモンは停止したままです。再開するには、サインインし直して', 'text-text-muted');
+          logOp('新しいフォルダを作成してから、上のトグルで起動してください。', 'text-text-muted');
+
+          DOM('confirm-input').value = '';
+          MetaOS.host.notify('Drive の同期フォルダを削除しました', 'Google Drive Sync');
+        } catch (e) {
+          logOp(\`中断しました: \${e.message}\`, 'text-error');
+          MetaOS.host.notify(\`失敗: \${e.message}\`, 'Google Drive Sync');
+        }
+
+        await refresh();
+      }
+
+      window.addEventListener('load', () => {
+        const boot = () => {
+          if (!window.MetaOS) return setTimeout(boot, 100);
+          refresh();
+        };
+        boot();
       });
     </script>
   </body>
@@ -27784,6 +28609,13 @@ system/credentials/gdrive.json     { "clientId": "..." }
         path: 'system/apps/sync_app.html',
         description: 'Sync VFS with local machine',
       },
+      {
+        id: 'gdrive_sync',
+        name: 'Drive Sync',
+        icon: '☁️',
+        path: 'system/apps/gdrive_app.html',
+        description: 'Manage Google Drive synchronization',
+      },
     ],
     null,
     2,
@@ -28340,6 +29172,16 @@ system/credentials/gdrive.json     { "clientId": "..." }
       let tokenExpiresAt = 0;
 
       let foreignMountPaths = [];
+
+      /**
+       * 利用者が設定アプリで指定した追加の除外パス（VFS のフルパス）。
+       *
+       * ★ これは「同期しないもの」を増やす方向にしか働かない。
+       *   ALWAYS_EXCLUDED と SYSTEM_SYNCED を緩めることはできない。
+       *   認証情報の流出は取り返しがつかないため、除外は設定で穴を開けられない
+       *   構造にしておく。
+       */
+      let userExcludedPaths = [];
       let remoteCache = {};
       let syncTimer = null;
       let isSyncing = false;
@@ -28388,9 +29230,30 @@ system/credentials/gdrive.json     { "clientId": "..." }
           if (matchesPrefix(path, p)) return true;
         }
 
+        // 利用者指定の追加除外（増やす方向にのみ作用する）
+        for (const p of userExcludedPaths) {
+          if (matchesPrefix(path, p)) return true;
+        }
+
         // system/ 配下は allowlist
         if (path === 'system' || path.startsWith('system/')) {
-          return !SYSTEM_SYNCED.some((p) => matchesPrefix(path, p));
+          // 許可領域そのもの、またはその配下
+          if (SYSTEM_SYNCED.some((p) => matchesPrefix(path, p))) return false;
+
+          // ★ 許可領域の「祖先」ディレクトリは除外してはならない。
+          //
+          //   'system' 自身はどの許可エントリにも前方一致しないため、素朴な
+          //   allowlist 判定では除外される。しかし derivePathMap() は除外した
+          //   パスを導出結果から落とすので、実在する 'system' フォルダが R から
+          //   消える。すると ensureRemoteFolder() は毎回「親が無い」と判断して
+          //   新しい 'system' を作り、その直後に既存の 'system/config' へ飛ぶため、
+          //   空のフォルダだけが取り残される。
+          //
+          //   実際に Drive 上へ空フォルダが 125 個堆積した（約 6 個/時）。
+          //   入れ物としての祖先は同期対象に含める必要がある。
+          if (SYSTEM_SYNCED.some((p) => matchesPrefix(p, path))) return false;
+
+          return true;
         }
 
         return false;
@@ -28404,12 +29267,29 @@ system/credentials/gdrive.json     { "clientId": "..." }
        * 自分の同期対象に含めてしまう。1 サイクル飛ばせば次のポーリングで回復するため、
        * 失敗時は中断する。
        */
+      /**
+       * 設定から追加の除外パスを取り込む。
+       *
+       * 前後の空白とスラッシュを落として正規化し、空になったものは捨てる。
+       *
+       * ★ 空文字を残しても「全件除外」にはならない。
+       *   matchesPrefix(path, '') は path === '' か path.startsWith('/') を見るため、
+       *   通常のパスには一致しない（当初コメントに誤りがあり、変異試験で判明した）。
+       *   それでも捨てるのは、意味を持たない要素を毎パス走査する無駄を避け、
+       *   設定の内容と実際の挙動を一致させるため。
+       */
+      function applyUserExcludes(cfg) {
+        const list = cfg && Array.isArray(cfg.excludePaths) ? cfg.excludePaths : [];
+        userExcludedPaths = list
+          .filter((p) => typeof p === 'string')
+          .map((p) => p.trim().replace(/^\\/+|\\/+$/g, ''))
+          .filter((p) => p.length > 0);
+      }
+
       async function resolveForeignMounts() {
         const mounts = await MetaOS.fs.listMounts();
         const self = (mountPath || '').replace(/^\\/+|\\/+$/g, '');
-        return mounts
-          .map((m) => (m.mountPath || '').replace(/^\\/+|\\/+$/g, ''))
-          .filter((p) => p !== '' && p !== self);
+        return mounts.map((m) => (m.mountPath || '').replace(/^\\/+|\\/+$/g, '')).filter((p) => p !== '' && p !== self);
       }
 
       // ==========================================
@@ -28467,13 +29347,18 @@ system/credentials/gdrive.json     { "clientId": "..." }
       async function driveFetch(url, options = {}, _retried = false) {
         if (!accessToken) throw new Error('NOT_AUTHENTICATED');
 
+        // ★ DELETE の成功応答は 204 No Content で本文が空。
+        //   JSON として解析すると例外になり、成功が失敗として報告される。
+        const method = (options.method || 'GET').toUpperCase();
+        const responseType = options.responseType || (method === 'DELETE' ? 'text' : 'json');
+
         const res = await MetaOS.net.fetch(url, {
           ...options,
           headers: {
             ...(options.headers || {}),
             Authorization: \`Bearer \${accessToken}\`,
           },
-          responseType: options.responseType || 'json',
+          responseType,
         });
 
         if (res.status === 401) {
@@ -28486,10 +29371,13 @@ system/credentials/gdrive.json     { "clientId": "..." }
         }
         if (res.status < 200 || res.status >= 300) {
           const detail =
-            typeof res.data === 'string'
-              ? res.data.slice(0, 200)
-              : JSON.stringify(res.data || {}).slice(0, 200);
-          throw new Error(\`Drive API \${res.status}: \${detail}\`);
+            typeof res.data === 'string' ? res.data.slice(0, 200) : JSON.stringify(res.data || {}).slice(0, 200);
+          // ★ ステータスを構造化して持たせる。呼び出し側は「不在(404)」と
+          //   「判定不能(5xx・レート制限)」を区別する必要があり、
+          //   メッセージ文字列の解析でそれを行うのは脆い。
+          const err = new Error(\`Drive API \${res.status}: \${detail}\`);
+          err.status = res.status;
+          throw err;
         }
         return res.data;
       }
@@ -28522,6 +29410,23 @@ system/credentials/gdrive.json     { "clientId": "..." }
       let index = { byId: {}, pageToken: null, builtAt: 0, rootFolderId: null };
       let changesSupported = true;
 
+      /**
+       * ★ 索引がメモリ上でのみ変化していることを示す。
+       *
+       * index.byId は saveIndex() を経ない経路（ensureRemoteFolder / indexUploaded /
+       * trashRemote / verifyRemoteAlive）でも書き換わる。これらを保存しないまま
+       * 再起動すると、前回保存以降にアップロードした分が索引から欠落し、
+       * 次サイクルで「リモートから消えた」と誤読される。
+       *
+       * ただし 1 件ごとに保存すると数百 KB の書き込みを初回同期中に数千回行うため、
+       * アンカーと同じくダーティフラグ + 定期フラッシュ方式にする。
+       */
+      let indexDirty = false;
+
+      function markIndexDirty() {
+        indexDirty = true;
+      }
+
       function isAuthError(e) {
         return !!e && (e.message === 'TOKEN_EXPIRED' || e.message === 'NOT_AUTHENTICATED');
       }
@@ -28543,7 +29448,9 @@ system/credentials/gdrive.json     { "clientId": "..." }
             overwrite: true,
             silent: true,
           });
+          indexDirty = false;
         } catch (e) {
+          // 失敗時はフラグを落とさない。次のフラッシュ機会に再試行される。
           log(\`Could not persist the index: \${e.message}\`, 'warn');
         }
       }
@@ -28615,10 +29522,7 @@ system/credentials/gdrive.json     { "clientId": "..." }
         index = { byId, pageToken, builtAt: Date.now(), rootFolderId };
         changesSupported = !!pageToken;
 
-        log(
-          \`Index built: \${Object.keys(byId).length} node(s), \` +
-            \`\${requests} request(s), \${Date.now() - t0} ms\`,
-        );
+        log(\`Index built: \${Object.keys(byId).length} node(s), \` + \`\${requests} request(s), \${Date.now() - t0} ms\`);
         await saveIndex();
       }
 
@@ -28734,8 +29638,7 @@ system/credentials/gdrive.json     { "clientId": "..." }
           const prev = claimed.get(fullPath);
           if (prev) {
             const wins =
-              node.modifiedTime > prev.modifiedTime ||
-              (node.modifiedTime === prev.modifiedTime && id > prev.id);
+              node.modifiedTime > prev.modifiedTime || (node.modifiedTime === prev.modifiedTime && id > prev.id);
             log(\`Duplicate remote path '\${fullPath}'. Keeping \${wins ? id : prev.id}.\`, 'warn');
             if (!wins) continue;
           }
@@ -28778,20 +29681,32 @@ system/credentials/gdrive.json     { "clientId": "..." }
        *   3-way マージの Pull 分岐がローカルの実体を恒久削除する。
        *   削除は稀なので、実行前に必ず現物を確認する。
        *   生きていた場合は索引へ戻し、取りこぼしをその場で修復する。
+       *
+       * ★ 戻り値は 3 値。「不在」と「判定不能」を混同してはならない。
+       *   以前はここが 2 値で、5xx・レート制限・通信瞬断まで「不在」に倒しており、
+       *   安全網の内部に安全網を無効化する穴が開いていた。
+       *
+       *     'alive'   … 現物が存在する（索引へ復元済み）
+       *     'gone'    … 存在しないことが確定した（404 / trashed）
+       *     'unknown' … 判定できなかった（5xx・ネットワーク・id 不明）
+       *
+       *   認証エラーは従来どおり throw し、サイクルを中断させる。
        */
       async function verifyRemoteAlive(fileId) {
-        if (!fileId) return null;
+        if (!fileId) return 'unknown';
         try {
           const f = await driveFetch(
-            \`\${DRIVE_API}/files/\${fileId}\` +
-              \`?fields=id,name,mimeType,md5Checksum,size,modifiedTime,parents,trashed\`,
+            \`\${DRIVE_API}/files/\${fileId}\` + \`?fields=id,name,mimeType,md5Checksum,size,modifiedTime,parents,trashed\`,
           );
-          if (!f || !f.id || f.trashed) return null;
+          if (f && f.id && f.trashed === true) return 'gone';
+          if (!f || !f.id) return 'unknown'; // 200 だが解釈できない応答
           index.byId[f.id] = nodeFromDriveFile(f);
-          return index.byId[f.id];
+          markIndexDirty();
+          return 'alive';
         } catch (e) {
           if (isAuthError(e)) throw e;
-          return null; // 404 等はリモート不在とみなす
+          if (e && e.status === 404) return 'gone';
+          return 'unknown';
         }
       }
 
@@ -28859,6 +29774,8 @@ system/credentials/gdrive.json     { "clientId": "..." }
             modifiedTime: Date.now(),
           };
 
+          markIndexDirty();
+
           parentId = created.id;
           remoteState[fullPath] = { id: created.id, kind: 'directory' };
         }
@@ -28877,6 +29794,7 @@ system/credentials/gdrive.json     { "clientId": "..." }
           size: Number(res.size || 0),
           modifiedTime: res.modifiedTime ? Date.parse(res.modifiedTime) : Date.now(),
         };
+        markIndexDirty();
       }
 
       async function uploadNew(path, bytes, remoteState) {
@@ -28939,6 +29857,7 @@ system/credentials/gdrive.json     { "clientId": "..." }
           body: JSON.stringify({ trashed: true }),
         });
         delete index.byId[fileId];
+        markIndexDirty();
       }
 
       // ==========================================
@@ -28993,6 +29912,8 @@ system/credentials/gdrive.json     { "clientId": "..." }
         if (mountPath) allPaths.delete(mountPath);
 
         let ops = 0;
+        // コールドスタートでローカル実体を温存した件数（ループ後に要約を出す）
+        let coldStartKept = 0;
         let lastFlush = Date.now();
 
         /**
@@ -29012,6 +29933,12 @@ system/credentials/gdrive.json     { "clientId": "..." }
             } catch (e) {
               log(\`Could not flush anchor: \${e.message}\`, 'warn');
             }
+            // ★ 索引も同じ間隔で永続化する。アップロードで得た fileId が
+            //   ディスクに残らないまま再起動すると、その分が索引から欠落し、
+            //   次サイクルで「リモートから消えた」と誤読される。
+            //   （この時点の索引は全件スキャン完了後の完全な集合であり、
+            //     部分的な索引を保存することにはならない）
+            if (indexDirty) await saveIndex();
           }
         };
 
@@ -29032,17 +29959,46 @@ system/credentials/gdrive.json     { "clientId": "..." }
             const remoteChanged = rExists ? !a || a.rhash !== (r.md5 || null) : !!a;
 
             // --- コールドスタート: アンカーが空ならリモートを正とする ---
+            //
+            // ★ ただし「ローカルに実体があるファイル」を決してスタブ化しないこと。
+            //
+            //   createStub() は contentRef を外すため、ローカルのバイト列が失われる。
+            //   「リモートに同名パスがある」ことは、その実体を後から取得できることを
+            //   保証しない。接続先フォルダの変更、リモート側での削除、索引の取りこぼし
+            //   などで fileId は容易に到達不能になる。そうなった瞬間スタブは二度と
+            //   実体化できず、Push 分岐も read に失敗する（スタブは読めない）ため
+            //   自力復帰もできない。つまり片道の破壊になる。
+            //
+            //   2026-08-12 07:49 に実際にこれで 104 ファイルを失った。マウント先を
+            //   'drive' から VFS ルートへ変更したことでアンカーが空になり、当時の
+            //   接続先フォルダに存在したパスのローカル実体が捨てられた。そのフォルダは
+            //   現在到達不能で（Drive のゴミ箱にも無い）、内容は復元不能である。
+            //
+            //   したがってスタブ化は「ローカルに実体が無い」場合に限る。新規端末では
+            //   ローカルが存在しないため従来どおり動作し、挙動が変わるのは
+            //   「実体を捨てようとしていた場合」だけである。
+            //
+            //   実体がある場合はローカルを残し、anchor.hash を null にしておく。
+            //   次サイクルで localChanged が立ち、Push 分岐がリモートへ送る。
+            //   リモートを上書きしうるが、Drive 側は版管理とゴミ箱で復旧できる一方、
+            //   ローカルのバイト列は復旧できない。この非対称性に従って局所を優先する。
             if (isAnchorEmpty && rExists) {
               if (r.kind === 'directory') {
                 if (!(await MetaOS.fs.exists(path))) await MetaOS.fs.mkdir(path);
+                newAnchor[path] = { id: r.id, kind: 'directory', hash: null, rhash: r.md5 || null };
+              } else if (lExists && l.hash) {
+                // ローカルに実体がある。スタブ化せず温存し、次サイクルで Push する。
+                // （スタブは hash === null なので、この判定で実体の有無を見分けられる）
+                coldStartKept++;
+                newAnchor[path] = { id: r.id, kind: 'file', hash: null, rhash: r.md5 || null };
               } else {
                 await MetaOS.fs.createStub(path, {
                   size: r.size,
                   hash: null,
                   updatedAt: r.modifiedTime,
                 });
+                newAnchor[path] = { id: r.id, kind: 'file', hash: null, rhash: r.md5 || null };
               }
-              newAnchor[path] = { id: r.id, kind: r.kind, hash: null, rhash: r.md5 || null };
               await breathe();
               continue;
             }
@@ -29054,10 +30010,20 @@ system/credentials/gdrive.json     { "clientId": "..." }
               if (!rExists) {
                 // ★ 削除は取り返しがつかないため、索引だけを根拠に実行しない。
                 //   索引の取りこぼしは「リモートで削除された」と区別がつかない。
-                //   現物を 1 件確認し、生きていたら何もしない（索引は復元済みなので
-                //   次サイクルで正しい分岐に入る）。
-                if (a && a.id && (await verifyRemoteAlive(a.id))) {
+                //   現物を 1 件確認し、"不在が確定したときだけ" 削除する（fail-closed）。
+                //
+                //   'alive'   … 索引の取りこぼし。復元済みなので次サイクルで正しい分岐に入る。
+                //   'unknown' … 5xx・通信瞬断・アンカーに id が無い等。判断材料が無いので触らない。
+                //               本当に消えていた場合はローカルに残り続けるが、
+                //               ユーザーのファイルを誤って消すより軽微である。
+                const remoteState = a && a.id ? await verifyRemoteAlive(a.id) : 'unknown';
+                if (remoteState === 'alive') {
                   log(\`'\${path}' is still present on Drive. Index gap repaired.\`, 'warn');
+                  await breathe();
+                  continue;
+                }
+                if (remoteState !== 'gone') {
+                  log(\`Skipping deletion of '\${path}': remote state is \${remoteState}.\`, 'warn');
                   await breathe();
                   continue;
                 }
@@ -29134,13 +30100,25 @@ system/credentials/gdrive.json     { "clientId": "..." }
               } catch (e2) {
                 log(\`Could not persist anchor before aborting: \${e2.message}\`, 'warn');
               }
+              // ★ 索引も残す。アンカーだけを残すと、アップロード済みの id が
+              //   索引から欠落した状態で次サイクルが始まる。
+              if (indexDirty) await saveIndex();
               throw e;
             }
             log(\`Skipped '\${path}': \${e.message}\`, 'warn');
           }
         }
 
+        if (coldStartKept > 0) {
+          log(
+            \`Cold start: kept local content for \${coldStartKept} file(s) instead of replacing them with stubs. \` +
+              \`These will be pushed to Drive on the next cycles.\`,
+            'warn',
+          );
+        }
+
         await saveAnchor(newAnchor);
+        if (indexDirty) await saveIndex();
       }
 
       // ==========================================
@@ -29206,10 +30184,8 @@ system/credentials/gdrive.json     { "clientId": "..." }
         }
 
         // 空文字はルートマウントを意味する。未指定（undefined）とは区別する。
-        mountPath =
-          typeof config.mountPath === 'string'
-            ? config.mountPath.replace(/^\\/+|\\/+$/g, '')
-            : 'drive';
+        mountPath = typeof config.mountPath === 'string' ? config.mountPath.replace(/^\\/+|\\/+$/g, '') : 'drive';
+        applyUserExcludes(config);
 
         if (mountPath && !(await MetaOS.fs.exists(mountPath))) {
           try {
@@ -29234,6 +30210,7 @@ system/credentials/gdrive.json     { "clientId": "..." }
             if (cfg.folderId) {
               rootFolderId = cfg.folderId;
               config = cfg;
+              applyUserExcludes(cfg);
               log(\`Root folder resolved: \${rootFolderId}\`);
               triggerSync();
               return;
@@ -29253,7 +30230,8 @@ system/credentials/gdrive.json     { "clientId": "..." }
       init();
     </script>
   </body>
-</html>`.trim(),
+</html>
+`.trim(),
 
   'system/services/git.html': `
 <!doctype html>
@@ -30174,4 +31152,4 @@ Content:
   ),
 };
 
-export const BUILD_TIME = 1786582822904;
+export const BUILD_TIME = 1786879740731;

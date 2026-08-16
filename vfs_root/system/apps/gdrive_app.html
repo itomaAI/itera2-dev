@@ -16,7 +16,12 @@
           class="p-2 -ml-2 rounded-full hover:bg-hover text-text-muted hover:text-text-main transition"
         >
           <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M10 19l-7-7m0 0l7-7m-7 7h18"
+            ></path>
           </svg>
         </button>
         <div>
@@ -49,9 +54,7 @@
         <div class="flex items-center justify-between">
           <div>
             <h3 class="font-bold text-sm">バックグラウンド同期</h3>
-            <p class="text-xs text-text-muted">
-              20 秒間隔のポーリングと、ローカル変更時の即時同期を行います。
-            </p>
+            <p class="text-xs text-text-muted">20 秒間隔のポーリングと、ローカル変更時の即時同期を行います。</p>
           </div>
           <label class="relative inline-flex items-center cursor-pointer">
             <input type="checkbox" id="toggle-daemon" class="sr-only peer" onchange="onToggleDaemon(this.checked)" />
@@ -134,8 +137,8 @@
             placeholder="drive"
           />
           <p class="text-[10px] text-text-muted mt-1">
-            Drive フォルダを VFS のどこに割り当てるか。<strong>空欄にすると VFS ルート全体</strong>が同期対象になります。
-            変更するとアンカーとの対応が崩れるため、保存時に同期状態を初期化します。
+            Drive フォルダを VFS のどこに割り当てるか。<strong>空欄にすると VFS ルート全体</strong
+            >が同期対象になります。 変更するとアンカーとの対応が崩れるため、保存時に同期状態を初期化します。
           </p>
         </div>
 
@@ -199,8 +202,8 @@
           <div class="pt-4 border-t border-border-main/50">
             <h3 class="font-bold text-sm text-error">Drive 上の同期フォルダを削除</h3>
             <p class="text-xs text-text-muted mb-2">
-              Drive 側のフォルダと中身を<strong>恒久削除</strong>します（ゴミ箱を経由しません）。
-              ローカルの VFS は残ります。
+              Drive 側のフォルダと中身を<strong>恒久削除</strong>します（ゴミ箱を経由しません）。 ローカルの VFS
+              は残ります。
             </p>
             <div class="p-3 rounded-lg bg-error/10 border border-error/40 text-xs mb-3 space-y-1">
               <p class="font-bold">実行順序（安全のため固定）</p>
@@ -310,7 +313,12 @@
 
         DOM('status-grid').innerHTML =
           cell('デーモン', running ? '<span class="text-success font-bold">稼働中</span>' : '停止中') +
-          cell('認証', token ? '<span class="text-success font-bold">有効</span>' : '<span class="text-error font-bold">無効</span>') +
+          cell(
+            '認証',
+            token
+              ? '<span class="text-success font-bold">有効</span>'
+              : '<span class="text-error font-bold">無効</span>',
+          ) +
           cell('マウント', config.mountPath ? '/' + config.mountPath : 'VFS ルート', true) +
           cell('Drive フォルダ', config.folderId ? escapeHtml(config.folderName || 'Itera OS') : '未設定', true) +
           cell('同期済み（アンカー）', anchorCount.toLocaleString() + ' 件') +
@@ -560,7 +568,9 @@
 
       async function saveSettings() {
         const current = await readJson(CONFIG_PATH, {});
-        const newMount = DOM('cfg-mount').value.trim().replace(/^\/+|\/+$/g, '');
+        const newMount = DOM('cfg-mount')
+          .value.trim()
+          .replace(/^\/+|\/+$/g, '');
         const mountChanged = (current.mountPath || '') !== newMount;
 
         if (mountChanged) {
