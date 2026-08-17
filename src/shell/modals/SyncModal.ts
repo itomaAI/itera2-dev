@@ -14,6 +14,7 @@
  */
 
 import type { SyncAdapterHost, SyncAdapterManifest, SyncAdapterStatus } from '../services/SyncAdapterHost';
+import { LABEL_KICKER } from '../styles/typography';
 
 export class SyncModal {
   private adapterHost: SyncAdapterHost;
@@ -90,7 +91,7 @@ export class SyncModal {
         </div>
         <div>
           <h2 class="font-bold text-text-main text-base leading-tight">Cloud Sync</h2>
-          <div class="text-[10px] text-text-muted font-mono uppercase tracking-widest mt-0.5">Sync Providers</div>
+          <div class="${LABEL_KICKER} text-text-muted mt-0.5">Sync Providers</div>
         </div>
       </div>
     `;

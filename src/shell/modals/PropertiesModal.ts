@@ -5,6 +5,7 @@
 
 import type { VfsService } from '../../core/vfs/VfsService';
 import { USER_PRINCIPAL, type AccessControlList, type VfsStat, type Principal } from '../../core/vfs/types';
+import { LABEL_KICKER } from '../styles/typography';
 
 export class PropertiesModal {
   private vfs: VfsService;
@@ -44,7 +45,7 @@ export class PropertiesModal {
       <div id="prop-icon" class="text-2xl shrink-0">📄</div>
       <div class="min-w-0">
         <h2 id="prop-title" class="font-bold text-text-main text-base leading-tight truncate">File.txt</h2>
-        <div class="text-[10px] text-text-muted font-mono uppercase tracking-widest mt-0.5">Properties</div>
+        <div class="${LABEL_KICKER} text-text-muted mt-0.5">Properties</div>
       </div>
     `;
 
@@ -271,7 +272,7 @@ export class PropertiesModal {
               <span class="text-lg">🤖</span>
               <div>
                 <div class="font-bold text-text-main">AI Agent</div>
-                <div class="text-[10px] text-text-muted">Autonomous modifications</div>
+                <div class="text-2xs text-text-muted">Autonomous modifications</div>
               </div>
             </div>
             <select id="perm-ai" class="bg-panel border border-border-main rounded text-xs p-1 text-text-main focus:outline-none focus:border-primary">
@@ -288,7 +289,7 @@ export class PropertiesModal {
               <span class="text-lg">🌐</span>
               <div>
                 <div class="font-bold text-text-main">Guest Apps</div>
-                <div class="text-[10px] text-text-muted">Any installed application</div>
+                <div class="text-2xs text-text-muted">Any installed application</div>
               </div>
             </div>
             <select id="perm-guest" class="bg-panel border border-border-main rounded text-xs p-1 text-text-main focus:outline-none focus:border-primary">

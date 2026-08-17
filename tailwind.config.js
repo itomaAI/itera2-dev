@@ -4,6 +4,15 @@ export default {
   darkMode: 'class',
   theme: {
     extend: {
+      // 10px。既定の root=16px でちょうど 0.625rem になる。
+      //
+      // 【重要】必ず「文字列」で定義すること。配列 ['0.625rem', { lineHeight: ... }]
+      // にすると line-height も出力され、置換元の text-[10px]（font-size のみを
+      // 出力し行間は継承）と挙動が変わってしまう。既存の見た目を1pxも動かさずに
+      // px固定を rem 化するのが目的なので、行間は継承のまま据え置く。
+      fontSize: {
+        '2xs': '0.625rem',
+      },
       fontFamily: {
         sans: [
           'var(--font-sans)',

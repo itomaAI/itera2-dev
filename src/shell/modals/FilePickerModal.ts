@@ -6,6 +6,7 @@
 import type { VfsService } from '../../core/vfs/VfsService';
 import type { Principal } from '../../core/vfs/types';
 import { TreeView } from '../panels/TreeView';
+import { LABEL_KICKER } from '../styles/typography';
 
 export interface FilePickerOptions {
   title?: string;
@@ -58,7 +59,7 @@ export class FilePickerModal {
       <div class="text-2xl shrink-0">📂</div>
       <div>
         <h2 id="file-picker-title" class="font-bold text-text-main text-base leading-tight">Select a File</h2>
-        <div id="file-picker-filters" class="text-[10px] text-text-muted font-mono uppercase tracking-widest mt-0.5">All Files</div>
+        <div id="file-picker-filters" class="${LABEL_KICKER} text-text-muted mt-0.5">All Files</div>
       </div>
     `;
 

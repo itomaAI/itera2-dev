@@ -7,6 +7,7 @@ import type { VfsService } from '../../core/vfs/VfsService';
 import type { AppRegistry } from '../../core/sys/AppRegistry';
 import type { UriRouter } from '../core/UriRouter';
 import type { Principal, VfsStat } from '../../core/vfs/types';
+import { LABEL_KICKER } from '../styles/typography';
 
 export interface CommandItem {
   id: string;
@@ -85,12 +86,12 @@ export class CommandPaletteModal {
     const footer = document.createElement('div');
     footer.className = 'px-5 py-3 border-t border-border-main bg-card flex items-center justify-between shrink-0';
     footer.innerHTML = `
-      <div class="text-[10px] text-text-muted font-bold tracking-wider flex items-center gap-4">
+      <div class="text-2xs text-text-muted font-bold tracking-wider flex items-center gap-4">
         <span><kbd class="bg-panel px-1.5 py-0.5 rounded border border-border-main font-mono text-text-main shadow-sm">↑</kbd> <kbd class="bg-panel px-1.5 py-0.5 rounded border border-border-main font-mono text-text-main shadow-sm">↓</kbd> Navigate</span>
         <span><kbd class="bg-panel px-1.5 py-0.5 rounded border border-border-main font-mono text-text-main shadow-sm">Enter</kbd> Select</span>
         <span><kbd class="bg-panel px-1.5 py-0.5 rounded border border-border-main font-mono text-text-main shadow-sm">Esc</kbd> Close</span>
       </div>
-      <div class="text-[10px] text-text-muted font-mono uppercase tracking-widest font-bold">Itera OS</div>
+      <div class="${LABEL_KICKER} text-text-muted font-bold">Itera OS</div>
     `;
 
     box.appendChild(header);
@@ -350,7 +351,7 @@ export class CommandPaletteModal {
         <div class="${iconClass}">${item.icon}</div>
         <div class="flex flex-col min-w-0">
           <div class="text-sm font-bold truncate ${titleClass}">${item.title}</div>
-          <div class="text-[10px] font-mono truncate opacity-80 ${isSelected ? 'text-white/80' : 'text-text-muted'}">${item.subtitle}</div>
+          <div class="text-2xs font-mono truncate opacity-80 ${isSelected ? 'text-white/80' : 'text-text-muted'}">${item.subtitle}</div>
         </div>
         ${isSelected ? '<div class="ml-auto text-xs opacity-70">↵</div>' : ''}
       `;

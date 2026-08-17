@@ -11,6 +11,7 @@ import type { LpmlRenderer } from '../services/LpmlRenderer';
 import { renderMarkdownTables } from '../../utils/markdownTable';
 import { renderMarkdownLite } from '../../utils/markdownLite';
 import hljs from 'highlight.js/lib/common';
+import { LABEL_STREAM } from '../styles/typography';
 
 /**
  * ターンの見た目は「会話レイヤ」と「機構レイヤ」の2種類しかない。
@@ -304,7 +305,7 @@ export class ChatPanel {
     // 以前はここだけクラス文字列を複製していたため、生成中と確定後で見た目がずれていた。
     div.className = `${BOX_BASE} ${CLS_MECH}`;
     div.innerHTML = `
-      <div class="flex justify-between items-center mb-1 opacity-50 text-[10px] font-bold uppercase">MODEL (Generating...)</div>
+      <div class="flex justify-between items-center mb-1 opacity-50 ${LABEL_STREAM}">MODEL (Generating...)</div>
       <div class="msg-content whitespace-pre-wrap break-all"></div>
     `;
     this.els.HISTORY.appendChild(div);
@@ -404,7 +405,7 @@ export class ChatPanel {
     const host = isSystem ? logBox : div;
 
     const header = document.createElement('div');
-    header.className = 'flex justify-between items-center mb-1 opacity-50 text-[10px] font-bold uppercase';
+    header.className = `flex justify-between items-center mb-1 opacity-50 ${LABEL_STREAM}`;
     header.textContent = role;
     host.appendChild(header);
 
@@ -549,7 +550,7 @@ export class ChatPanel {
     //
     // TODO: preferences.agentName に追従させる（現状は固定表記）。
     const header = document.createElement('div');
-    header.className = 'flex justify-between items-center mb-1 opacity-50 text-[10px] font-bold uppercase';
+    header.className = `flex justify-between items-center mb-1 opacity-50 ${LABEL_STREAM}`;
     header.textContent = source ? `Itera: ${source}` : 'Itera';
     div.appendChild(header);
 
@@ -594,7 +595,7 @@ export class ChatPanel {
         const div = document.createElement('div');
         div.className =
           'flex items-center gap-2 text-xs text-text-muted bg-error/10 border border-error/20 p-2 rounded mt-2';
-        div.innerHTML = `<span class="text-error">⚠️</span> <span class="line-through opacity-70">${mediaObj.path}</span> <span class="text-[10px] ml-auto">(File not found)</span>`;
+        div.innerHTML = `<span class="text-error">⚠️</span> <span class="line-through opacity-70">${mediaObj.path}</span> <span class="text-2xs ml-auto">(File not found)</span>`;
         container.appendChild(div);
       }
     } catch (e: any) {
@@ -618,7 +619,7 @@ export class ChatPanel {
     const codeBlocks: string[] = [];
     safeText = safeText.replace(/```(?:([a-zA-Z0-9_]+)\n)?([\s\S]*?)```/g, (_match, lang, code) => {
       const langClass = lang ? `language-${lang}` : 'language-plaintext';
-      const html = `<pre class="bg-card border border-border-main p-2 rounded mt-1 mb-1 overflow-x-auto text-text-main font-mono text-[10px] leading-relaxed font-normal"><code class="${langClass}">${code}</code></pre>`;
+      const html = `<pre class="bg-card border border-border-main p-2 rounded mt-1 mb-1 overflow-x-auto text-text-main font-mono text-2xs leading-relaxed font-normal"><code class="${langClass}">${code}</code></pre>`;
       const placeholder = `__CODEBLOCK_${codeBlocks.length}__`;
       codeBlocks.push(html);
       return placeholder;
@@ -656,7 +657,7 @@ export class ChatPanel {
       const div = document.createElement('div');
       div.className =
         'flex items-center gap-3 p-3 mt-2 rounded border border-border-main bg-card max-w-xs hover:bg-hover transition select-none cursor-pointer';
-      div.innerHTML = `<div class="text-2xl">📄</div><div class="flex flex-col overflow-hidden"><span class="text-xs text-text-main font-bold font-mono uppercase truncate">${mime}</span><span class="text-[10px] text-text-muted truncate">BINARY DATA</span></div>`;
+      div.innerHTML = `<div class="text-2xl">📄</div><div class="flex flex-col overflow-hidden"><span class="text-xs text-text-main font-bold font-mono uppercase truncate">${mime}</span><span class="text-2xs text-text-muted truncate">BINARY DATA</span></div>`;
       div.onclick = () => {
         if (this.events['preview_request']) {
           this.events['preview_request']('Attachment', src, mime, path);

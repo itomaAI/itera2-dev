@@ -158,7 +158,7 @@ export class LpmlRenderer {
 
     // 属性がある場合は薄く表示
     if (attributes.trim()) {
-      displayContent = `<div class="text-[10px] text-tag-attr mb-1 border-b border-border-main pb-1 opacity-70">${attributes.trim()}</div>${displayContent}`;
+      displayContent = `<div class="text-2xs text-tag-attr mb-1 border-b border-border-main pb-1 opacity-70">${attributes.trim()}</div>${displayContent}`;
     }
 
     // コンテンツがないタグ（自己完結タグ）の表示
@@ -170,7 +170,7 @@ export class LpmlRenderer {
     return `
       <details ${openAttr} class="mb-2 rounded border ${colorClass} overflow-hidden group">
         <summary class="cursor-pointer py-1.5 px-2 text-xs font-mono font-bold text-text-main bg-overlay/5 hover:bg-overlay/10 select-none flex items-center gap-2 list-none [&::-webkit-details-marker]:hidden">
-          <span class="group-open:rotate-90 transition-transform text-[10px]">▶</span> ${title}
+          <span class="group-open:rotate-90 transition-transform text-2xs">▶</span> ${title}
         </summary>
         <div class="p-2 text-xs font-mono overflow-x-auto bg-overlay/5 whitespace-pre-wrap text-tag-content">${displayContent}</div>
       </details>
