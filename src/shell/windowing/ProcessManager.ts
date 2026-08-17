@@ -239,8 +239,7 @@ export class ProcessManager {
       } else if (type === 'app') {
         // srcdoc は独立した文書なので、ホストの :root に定義した CSS 変数は
         // 継承されない。解決済みの値を埋め込む必要がある。
-        const uiFont =
-          getComputedStyle(document.documentElement).getPropertyValue('--font-sans').trim() || 'system-ui';
+        const uiFont = getComputedStyle(document.documentElement).getPropertyValue('--font-sans').trim() || 'system-ui';
         iframe.srcdoc = `<div style="color:#888; padding:20px; font-family:${uiFont}, system-ui, sans-serif;">No ${path} found.</div>`;
       }
 

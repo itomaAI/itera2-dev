@@ -170,7 +170,9 @@ export class TreeView {
       const name = mutation.node.name;
       const path = mutation.path;
       const isStub = mutation.node.meta && mutation.node.meta.syncState === 'stub';
-      const stubIndicator = isStub ? '<span class="ml-1 text-primary text-[0.625rem]" title="Cloud Only">☁️</span>' : '';
+      const stubIndicator = isStub
+        ? '<span class="ml-1 text-primary text-[0.625rem]" title="Cloud Only">☁️</span>'
+        : '';
       let icon =
         mutation.node.kind === 'directory' ? (this.expandedPaths.has(path) ? '📂' : '📁') : this._getFileIcon(name);
 

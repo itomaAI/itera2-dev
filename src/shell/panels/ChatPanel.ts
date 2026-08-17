@@ -35,12 +35,9 @@ const BOX_FRAME = 'p-3 rounded-lg border';
  * 本文の寸法が利用者の設定で動くため、rem で書くと本文だけが伸縮して
  * 見出しやコードとの上下関係が壊れる。
  */
-const CLS_USER =
-  `${BOX_FRAME} chat-body bg-panel text-text-main border-border-main border-r-[3px] border-r-primary/60 ml-4 shadow-sm`;
-const CLS_MECH =
-  `${BOX_FRAME} chat-system-message bg-overlay/5 text-text-muted border-border-main/60 mx-8`;
-const CLS_ARTIFACT =
-  `${BOX_FRAME} chat-body bg-panel text-text-main border-border-main border-l-[3px] border-l-speech/60 mr-4 shadow-sm`;
+const CLS_USER = `${BOX_FRAME} chat-body bg-panel text-text-main border-border-main border-r-[3px] border-r-primary/60 ml-4 shadow-sm`;
+const CLS_MECH = `${BOX_FRAME} chat-system-message bg-overlay/5 text-text-muted border-border-main/60 mx-8`;
+const CLS_ARTIFACT = `${BOX_FRAME} chat-body bg-panel text-text-main border-border-main border-l-[3px] border-l-speech/60 mr-4 shadow-sm`;
 
 const DOM_IDS = {
   HISTORY: 'chat-history',
