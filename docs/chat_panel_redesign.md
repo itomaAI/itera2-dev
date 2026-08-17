@@ -240,12 +240,17 @@ artifact?: { kind: 'speech'; text: string };
 したがって4主体モデルに対応させ、成果物枠には **`Itera`** を出す。
 これで `USER` と `Itera` が同じ語彙で左右の対になる。
 
+さらに、**主体に加えて由来も書く**（`ITERA: REPORT` / `ITERA: ASK`）。
+
+`report` と `ask` は枠が同一で、違いは「ループが止まるかどうか」だけだが、それは画面に出ない。
+ラベルが無いと**返事を待たれているのかどうかが利用者に分からない**。
+主体を先頭に置いたままなので `USER` との対の関係も壊れない。
+
+由来は `ToolExecutionEntry.actionType` から取る（`artifact` 自身は `kind` しか持たない）。
+
 - **未対応**: `preferences.agentName` への追従。現状は固定表記のため、
   エージェント名を変更した利用者の画面では表示が実態と食い違う。
   `setPrincipalProvider` と同じ注入パターンで `setAgentNameProvider` を足せば済む（コードにTODOを記載）。
-- **見送った案**: `ARTIFACT: REPORT`（チャネル＋由来を書く案）。
-  `report` と `ask` を画面上で区別できる利点があるが、会話レイヤに機構の語彙が入り
-  `USER` と対にならないため見送った。**`report` と `ask` が見分けられない問題は未解決のまま残る。**
 
 ### 削除ボタン
 

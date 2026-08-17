@@ -475,8 +475,9 @@ export class ChatPanel {
         }
 
         // 成果物は記録の箱の外（ターン直下）へ置く。
+        // actionType（report / ask）はヘッダーの由来表示に使う。
         if (item.output.artifact && artifactContainer) {
-          this._renderArtifact(artifactContainer, item.output.artifact, turnId);
+          this._renderArtifact(artifactContainer, item.output.artifact, turnId, item.actionType);
         }
       } else if (item.media) {
         this._renderMediaFromVfs(container, item.media);
@@ -526,7 +527,12 @@ export class ChatPanel {
    * 整形はシステム側の特権として行う（LLMの生出力は原稿のまま等幅で残る）。
    * renderMarkdownLite はブロック要素を返すので、whitespace-pre-wrap を付けてはならない。
    */
-  private _renderArtifact(container: HTMLElement, artifact: { kind?: string; text?: string }, turnId?: string) {
+  private _renderArtifact(
+    container: HTMLElement,
+    artifact: { kind?: string; text?: string },
+    turnId?: string,
+    source?: string,
+  ) {
     const text = artifact?.text || '';
     if (!text.trim()) return;
 
@@ -535,10 +541,16 @@ export class ChatPanel {
 
     // 他の3種（USER / MODEL / SYSTEM）と同じ位置・同じ大きさで主体を書く。
     // ここだけヘッダーが無いと、4つのうち1つだけ構造が欠けて見えるため。
+    //
+    // 主体に加えて由来（report / ask）も書く。両者は枠が同一で、違いは
+    // 「ループが止まるかどうか」だけであり、それは画面に出ないため、
+    // ラベルが無いと返事を待たれているのかどうかが利用者に分からない。
+    // uppercase が効くので、表示は "ITERA: REPORT" になる。
+    //
     // TODO: preferences.agentName に追従させる（現状は固定表記）。
     const header = document.createElement('div');
     header.className = 'flex justify-between items-center mb-1 opacity-50 text-[10px] font-bold uppercase';
-    header.textContent = 'Itera';
+    header.textContent = source ? `Itera: ${source}` : 'Itera';
     div.appendChild(header);
 
     if (turnId) {
