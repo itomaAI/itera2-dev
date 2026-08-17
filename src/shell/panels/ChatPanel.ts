@@ -408,26 +408,7 @@ export class ChatPanel {
     header.textContent = role;
     host.appendChild(header);
 
-    const btnDelete = document.createElement('button');
-    btnDelete.className =
-      'absolute top-2 right-2 text-text-muted hover:text-error opacity-100 md:opacity-0 group-hover:opacity-100 p-1 transition';
-    btnDelete.innerHTML = '×';
-    btnDelete.onclick = async (e) => {
-      e.stopPropagation();
-      const res = await window.AppUI?.showMessageBox({
-        title: 'Delete Message',
-        message: 'Are you sure you want to delete this message from the history?',
-        type: 'warning',
-        buttons: [
-          { label: 'Cancel', value: false, style: 'normal', isCancel: true },
-          { label: 'Delete', value: true, style: 'danger', isDefault: true },
-        ],
-      });
-      if (res && res.action && this.events['delete_turn']) {
-        this.events['delete_turn'](turn.id);
-      }
-    };
-    host.appendChild(btnDelete);
+    host.appendChild(this._createDeleteButton(turn.id));
 
     const body = document.createElement('div');
     body.className = 'break-words';
@@ -442,7 +423,7 @@ export class ChatPanel {
       }
     } else if (Array.isArray(turn.content)) {
       // 第4引数は成果物枠の置き場。記録の箱ではなくターン直下（＝兄弟）に置く。
-      this._renderArrayContent(body, turn.content, role, div);
+      this._renderArrayContent(body, turn.content, role, div, turn.id);
     }
 
     host.appendChild(body);
@@ -466,6 +447,7 @@ export class ChatPanel {
     contentArray: any[],
     role: string,
     artifactContainer?: HTMLElement,
+    turnId?: string,
   ) {
     contentArray.forEach((item) => {
       if (item.text) {
@@ -494,7 +476,7 @@ export class ChatPanel {
 
         // 成果物は記録の箱の外（ターン直下）へ置く。
         if (item.output.artifact && artifactContainer) {
-          this._renderArtifact(artifactContainer, item.output.artifact);
+          this._renderArtifact(artifactContainer, item.output.artifact, turnId);
         }
       } else if (item.media) {
         this._renderMediaFromVfs(container, item.media);
@@ -502,6 +484,36 @@ export class ChatPanel {
         this._appendMedia(container, item.inlineData.data, item.inlineData.mimeType);
       }
     });
+  }
+
+  /**
+   * ターン削除ボタン。記録の箱と成果物枠の両方から使う。
+   *
+   * 【重要】どちらから押しても消えるのは「ターン＝ひとつの出来事」である。
+   * 成果物だけをDOMから消す実装にはしない。履歴に残ったまま画面から消えると、
+   * 再描画（renderHistory）で復活して嘘になるため。
+   */
+  private _createDeleteButton(turnId: string): HTMLButtonElement {
+    const btn = document.createElement('button');
+    btn.className =
+      'absolute top-2 right-2 text-text-muted hover:text-error opacity-100 md:opacity-0 group-hover:opacity-100 p-1 transition';
+    btn.innerHTML = '×';
+    btn.onclick = async (e) => {
+      e.stopPropagation();
+      const res = await window.AppUI?.showMessageBox({
+        title: 'Delete Message',
+        message: 'Are you sure you want to delete this message from the history?',
+        type: 'warning',
+        buttons: [
+          { label: 'Cancel', value: false, style: 'normal', isCancel: true },
+          { label: 'Delete', value: true, style: 'danger', isDefault: true },
+        ],
+      });
+      if (res && res.action && this.events['delete_turn']) {
+        this.events['delete_turn'](turnId);
+      }
+    };
+    return btn;
   }
 
   /**
@@ -514,15 +526,29 @@ export class ChatPanel {
    * 整形はシステム側の特権として行う（LLMの生出力は原稿のまま等幅で残る）。
    * renderMarkdownLite はブロック要素を返すので、whitespace-pre-wrap を付けてはならない。
    */
-  private _renderArtifact(container: HTMLElement, artifact: { kind?: string; text?: string }) {
+  private _renderArtifact(container: HTMLElement, artifact: { kind?: string; text?: string }, turnId?: string) {
     const text = artifact?.text || '';
     if (!text.trim()) return;
 
     const div = document.createElement('div');
-    div.className = `${CLS_ARTIFACT} mt-2 break-words`;
+    div.className = `relative group ${CLS_ARTIFACT} mt-2 break-words`;
 
+    // 他の3種（USER / MODEL / SYSTEM）と同じ位置・同じ大きさで主体を書く。
+    // ここだけヘッダーが無いと、4つのうち1つだけ構造が欠けて見えるため。
+    // TODO: preferences.agentName に追従させる（現状は固定表記）。
+    const header = document.createElement('div');
+    header.className = 'flex justify-between items-center mb-1 opacity-50 text-[10px] font-bold uppercase';
+    header.textContent = 'Itera';
+    div.appendChild(header);
+
+    if (turnId) {
+      div.appendChild(this._createDeleteButton(turnId));
+    }
+
+    const body = document.createElement('div');
     const escaped = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-    div.innerHTML = renderMarkdownLite(escaped);
+    body.innerHTML = renderMarkdownLite(escaped);
+    div.appendChild(body);
 
     container.appendChild(div);
   }
