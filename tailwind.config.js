@@ -59,6 +59,7 @@ export default {
         success: 'rgb(var(--c-accent-success) / <alpha-value>)',
         warning: 'rgb(var(--c-accent-warning) / <alpha-value>)',
         error: 'rgb(var(--c-accent-error) / <alpha-value>)',
+        speech: 'rgb(var(--c-accent-speech) / <alpha-value>)',
         tag: {
           thinking: 'rgb(var(--c-tag-thinking) / <alpha-value>)',
           plan: 'rgb(var(--c-tag-plan) / <alpha-value>)',

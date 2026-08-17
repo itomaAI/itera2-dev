@@ -843,6 +843,9 @@
 
               const bg = themeData.colors?.bg?.app || '#1a1b26';
               const accent = themeData.colors?.accent?.primary || '#7aa2f7';
+              // 会話レイヤの2色（ユーザー＝primary / Iteraの発話＝speech）を並べて見せる。
+              // speech を持たないテーマは success に落とす（ThemeService と同じ既定）。
+              const speech = themeData.colors?.accent?.speech || themeData.colors?.accent?.success || accent;
 
               const div = document.createElement('div');
               div.className = `cursor-pointer p-4 rounded-xl border-2 transition-all relative overflow-hidden group shadow-sm hover:shadow-md ${isActive ? 'border-primary bg-primary/5 ring-4 ring-primary/10' : 'border-border-main hover:border-text-muted bg-card'}`;
@@ -856,7 +859,10 @@
               div.innerHTML = `
                             <div class="flex items-center gap-3 relative z-10">
                                 <div class="w-12 h-12 rounded-full border border-gray-600 shadow-inner shrink-0 flex items-center justify-center transition-transform group-hover:scale-105" style="background:${bg}">
-                                    <div class="w-5 h-5 rounded-full shadow-[0_0_10px_rgba(0,0,0,0.5)]" style="background:${accent}"></div>
+                                    <div class="flex items-center gap-1">
+                                        <div class="w-3.5 h-3.5 rounded-full shadow-[0_0_8px_rgba(0,0,0,0.5)]" style="background:${accent}"></div>
+                                        <div class="w-3.5 h-3.5 rounded-full shadow-[0_0_8px_rgba(0,0,0,0.5)]" style="background:${speech}"></div>
+                                    </div>
                                 </div>
                                 <div class="min-w-0 flex-1">
                                     <div class="font-bold text-sm truncate flex items-center justify-between" style="color:${isActive ? 'rgb(var(--c-accent-primary))' : 'inherit'}">

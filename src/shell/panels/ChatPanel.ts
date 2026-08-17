@@ -9,7 +9,28 @@ import type { Principal } from '../../core/vfs/types';
 import { USER_PRINCIPAL } from '../../core/vfs/types';
 import type { LpmlRenderer } from '../services/LpmlRenderer';
 import { renderMarkdownTables } from '../../utils/markdownTable';
+import { renderMarkdownLite } from '../../utils/markdownLite';
 import hljs from 'highlight.js/lib/common';
+
+/**
+ * ターンの見た目は「会話レイヤ」と「機構レイヤ」の2種類しかない。
+ *
+ *   会話レイヤ … ユーザー入力 と 成果物（Iteraの発話）。同じ幅・同じ面の高さで左右の対になる。
+ *   機構レイヤ … LLM生出力 と システムログ。同一の見た目で、左右32px内側に落として沈める。
+ *
+ * 【注意】bg-card は使わない。ライトでは地色より暗く、ダークでは明るいため、
+ * テーマによって「手前／奥」が反転する（light 243<249 / dark 55,65,81>31,41,55）。
+ * 「手前」は bg-panel（両テーマで地色より明るい）、「沈み」は bg-overlay のαで作る。
+ */
+const BOX_BASE = 'relative group mb-2 transition';
+const BOX_FRAME = 'p-3 rounded-lg border';
+
+const CLS_USER =
+  `${BOX_FRAME} text-sm bg-panel text-text-main border-border-main border-r-[3px] border-r-primary/60 ml-4 shadow-sm`;
+const CLS_MECH =
+  `${BOX_FRAME} text-xs font-mono bg-overlay/5 text-text-muted border-border-main/60 mx-8`;
+const CLS_ARTIFACT =
+  `${BOX_FRAME} text-sm bg-panel text-text-main border-border-main border-l-[3px] border-l-speech/60 mr-4 shadow-sm`;
 
 const DOM_IDS = {
   HISTORY: 'chat-history',
@@ -247,10 +268,11 @@ export class ChatPanel {
       this.els.BTN_STOP.classList.toggle('hidden', !processing);
     }
     if (this.els.AI_TYPING) {
+      // 【注意】ここで innerHTML を上書きしないこと。
+      // index.html 側に「● Thinking...」のマークアップが定義されており、
+      // 以前はこの上書きによってそれが毎回「Processing...」に置き換えられ、
+      // 静的マークアップが事実上死んでいた。表示/非表示の切り替えだけを行う。
       this.els.AI_TYPING.classList.toggle('hidden', !processing);
-      if (processing) {
-        this.els.AI_TYPING.innerHTML = `<span class="animate-pulse">●</span> Processing...`;
-      }
     }
   }
 
@@ -278,18 +300,23 @@ export class ChatPanel {
     if (turnId) {
       div.id = `turn-${turnId}`;
     }
-    div.className =
-      'relative group p-3 rounded-lg text-sm mb-2 border border-border-main bg-card text-text-main mr-4 transition';
+    // 確定後の描画(_appendTurn)と同じクラスを使う。
+    // 以前はここだけクラス文字列を複製していたため、生成中と確定後で見た目がずれていた。
+    div.className = `${BOX_BASE} ${CLS_MECH}`;
     div.innerHTML = `
       <div class="flex justify-between items-center mb-1 opacity-50 text-[10px] font-bold uppercase">MODEL (Generating...)</div>
-      <div class="msg-content whitespace-pre-wrap break-all font-mono">${this.currentStreamContent}</div>
+      <div class="msg-content whitespace-pre-wrap break-all"></div>
     `;
     this.els.HISTORY.appendChild(div);
     this.currentStreamEl = div.querySelector('.msg-content') as HTMLElement;
 
-    if (this.currentStreamContent && this.renderer) {
-      this.currentStreamEl.innerHTML = this.renderer.formatStream(this.currentStreamContent);
-      this.currentStreamEl.classList.remove('whitespace-pre-wrap');
+    if (this.currentStreamContent) {
+      if (this.renderer) {
+        this.currentStreamEl.innerHTML = this.renderer.formatStream(this.currentStreamContent, { streaming: true });
+        this.currentStreamEl.classList.remove('whitespace-pre-wrap');
+      } else {
+        this.currentStreamEl.textContent = this.currentStreamContent;
+      }
     }
   }
 
@@ -298,7 +325,9 @@ export class ChatPanel {
     this.currentStreamContent += chunk;
 
     if (this.renderer && this.renderer.formatStream) {
-      this.currentStreamEl.innerHTML = this.renderer.formatStream(this.currentStreamContent);
+      // streaming:true … 生成中はまだ成果物枠が存在しないため、report/ask を開いたまま見せる。
+      // 確定後は成果物枠が出るので _appendTurn 側では畳む。
+      this.currentStreamEl.innerHTML = this.renderer.formatStream(this.currentStreamContent, { streaming: true });
       this.currentStreamEl.classList.remove('whitespace-pre-wrap');
     } else {
       this.currentStreamEl.textContent = this.currentStreamContent;
@@ -359,47 +388,33 @@ export class ChatPanel {
     }
 
     const role = turn.role;
-    let baseClass = 'relative group p-3 rounded-lg text-sm mb-2 border transition';
+    const isSystem = role === 'system';
 
-    if (role === 'user') {
-      div.className = `${baseClass} bg-primary/10 text-text-main border-primary/20 ml-4`;
-    } else if (role === 'model') {
-      div.className = `${baseClass} bg-card text-text-main border-border-main mr-4`;
-    } else {
-      div.className = `${baseClass} bg-panel text-text-muted text-xs mx-8 font-mono border-border-main`;
+    // system ターンは「記録の箱」と「成果物の枠」を兄弟として並べる必要があるため、
+    // ターン自体は装飾を持たない透明なコンテナにする。
+    // （成果物を記録の箱の中に入れると mx-8 の内側に落ちてしまい、会話レイヤの幅にならない）
+    div.className = isSystem ? BOX_BASE : `${BOX_BASE} ${role === 'user' ? CLS_USER : CLS_MECH}`;
+
+    // 記録（ツール実行ログ）を入れる箱。system のときだけ独立した要素になる。
+    const logBox = document.createElement('div');
+    if (isSystem) {
+      logBox.className = `relative group ${CLS_MECH}`;
+      div.appendChild(logBox);
     }
+    const host = isSystem ? logBox : div;
 
     const header = document.createElement('div');
     header.className = 'flex justify-between items-center mb-1 opacity-50 text-[10px] font-bold uppercase';
     header.textContent = role;
-    div.appendChild(header);
+    host.appendChild(header);
 
-    const btnDelete = document.createElement('button');
-    btnDelete.className =
-      'absolute top-2 right-2 text-text-muted hover:text-error opacity-100 md:opacity-0 group-hover:opacity-100 p-1 transition';
-    btnDelete.innerHTML = '×';
-    btnDelete.onclick = async (e) => {
-      e.stopPropagation();
-      const res = await window.AppUI?.showMessageBox({
-        title: 'Delete Message',
-        message: 'Are you sure you want to delete this message from the history?',
-        type: 'warning',
-        buttons: [
-          { label: 'Cancel', value: false, style: 'normal', isCancel: true },
-          { label: 'Delete', value: true, style: 'danger', isDefault: true },
-        ],
-      });
-      if (res && res.action && this.events['delete_turn']) {
-        this.events['delete_turn'](turn.id);
-      }
-    };
-    div.appendChild(btnDelete);
+    host.appendChild(this._createDeleteButton(turn.id));
 
     const body = document.createElement('div');
-    body.className = 'break-all';
+    body.className = 'break-words';
 
     if (typeof turn.content === 'string') {
-      if (role === 'model' || (role === 'system' && turn.content.includes('<'))) {
+      if (role === 'model' || (isSystem && turn.content.includes('<'))) {
         if (this.renderer) body.innerHTML = this.renderer.formatStream(turn.content);
         else body.textContent = turn.content;
       } else {
@@ -407,25 +422,33 @@ export class ChatPanel {
         body.innerHTML = this._formatSystemMessage(turn.content);
       }
     } else if (Array.isArray(turn.content)) {
-      this._renderArrayContent(body, turn.content, role);
+      // 第4引数は成果物枠の置き場。記録の箱ではなくターン直下（＝兄弟）に置く。
+      this._renderArrayContent(body, turn.content, role, div, turn.id);
     }
 
-    div.appendChild(body);
+    host.appendChild(body);
 
     if (!isUpdate) {
       this.els.HISTORY!.appendChild(div);
     }
 
     // 外部ライブラリの適用（MathJaxはCDN、Highlight.jsはバンドル済み）
+    // 成果物枠は body の外（div直下）にあるため、div 全体を対象にする。
     if ((window as any).MathJax) {
-      (window as any).MathJax.typesetPromise([body]).catch((e: any) => console.warn('MathJax Error:', e));
+      (window as any).MathJax.typesetPromise([div]).catch((e: any) => console.warn('MathJax Error:', e));
     }
-    body.querySelectorAll('pre code').forEach((block) => {
+    div.querySelectorAll('pre code').forEach((block) => {
       hljs.highlightElement(block as HTMLElement);
     });
   }
 
-  private _renderArrayContent(container: HTMLElement, contentArray: any[], role: string) {
+  private _renderArrayContent(
+    container: HTMLElement,
+    contentArray: any[],
+    role: string,
+    artifactContainer?: HTMLElement,
+    turnId?: string,
+  ) {
     contentArray.forEach((item) => {
       if (item.text) {
         const div = document.createElement('div');
@@ -437,18 +460,12 @@ export class ChatPanel {
         }
         container.appendChild(div);
       } else if (item.output) {
+        // `ui` は全ツール共通で「絵文字＋短い動詞句」の実行ステータス。常に1行として描く。
+        // 以前は report/ask だけ本文が入っていたため text-system font-bold で特別扱いしていたが、
+        // 本文は artifact へ移したのでその分岐は不要になった。
         const div = document.createElement('div');
-        div.className = 'mb-1 whitespace-pre-wrap';
-        const uiText = item.output.ui || item.output.log || '';
-
-        if (item.output.ui) {
-          const span = document.createElement('span');
-          span.className = 'text-system font-bold block';
-          span.innerHTML = this._formatSystemMessage(uiText);
-          div.appendChild(span);
-        } else {
-          div.innerHTML = this._formatSystemMessage(uiText);
-        }
+        div.className = 'mb-0.5 whitespace-pre-wrap';
+        div.innerHTML = this._formatSystemMessage(item.output.ui || item.output.log || '');
         container.appendChild(div);
 
         if (item.output.media) {
@@ -456,12 +473,96 @@ export class ChatPanel {
         } else if (item.output.image) {
           this._appendMedia(container, item.output.image, item.output.mimeType);
         }
+
+        // 成果物は記録の箱の外（ターン直下）へ置く。
+        // actionType（report / ask）はヘッダーの由来表示に使う。
+        if (item.output.artifact && artifactContainer) {
+          this._renderArtifact(artifactContainer, item.output.artifact, turnId, item.actionType);
+        }
       } else if (item.media) {
         this._renderMediaFromVfs(container, item.media);
       } else if (item.inlineData) {
         this._appendMedia(container, item.inlineData.data, item.inlineData.mimeType);
       }
     });
+  }
+
+  /**
+   * ターン削除ボタン。記録の箱と成果物枠の両方から使う。
+   *
+   * 【重要】どちらから押しても消えるのは「ターン＝ひとつの出来事」である。
+   * 成果物だけをDOMから消す実装にはしない。履歴に残ったまま画面から消えると、
+   * 再描画（renderHistory）で復活して嘘になるため。
+   */
+  private _createDeleteButton(turnId: string): HTMLButtonElement {
+    const btn = document.createElement('button');
+    btn.className =
+      'absolute top-2 right-2 text-text-muted hover:text-error opacity-100 md:opacity-0 group-hover:opacity-100 p-1 transition';
+    btn.innerHTML = '×';
+    btn.onclick = async (e) => {
+      e.stopPropagation();
+      const res = await window.AppUI?.showMessageBox({
+        title: 'Delete Message',
+        message: 'Are you sure you want to delete this message from the history?',
+        type: 'warning',
+        buttons: [
+          { label: 'Cancel', value: false, style: 'normal', isCancel: true },
+          { label: 'Delete', value: true, style: 'danger', isDefault: true },
+        ],
+      });
+      if (res && res.action && this.events['delete_turn']) {
+        this.events['delete_turn'](turnId);
+      }
+    };
+    return btn;
+  }
+
+  /**
+   * 成果物枠（Iteraの発話）を描く。
+   *
+   * これは「ツールがChatPanelに残した成果物」であって、ツール実行結果の表示ではない。
+   * create_file がVFSにファイルを残すのと同じ関係にある。
+   * したがってログの箱の中ではなく、会話レイヤの幅（ユーザー入力と対になる幅）で描く。
+   *
+   * 整形はシステム側の特権として行う（LLMの生出力は原稿のまま等幅で残る）。
+   * renderMarkdownLite はブロック要素を返すので、whitespace-pre-wrap を付けてはならない。
+   */
+  private _renderArtifact(
+    container: HTMLElement,
+    artifact: { kind?: string; text?: string },
+    turnId?: string,
+    source?: string,
+  ) {
+    const text = artifact?.text || '';
+    if (!text.trim()) return;
+
+    const div = document.createElement('div');
+    div.className = `relative group ${CLS_ARTIFACT} mt-2 break-words`;
+
+    // 他の3種（USER / MODEL / SYSTEM）と同じ位置・同じ大きさで主体を書く。
+    // ここだけヘッダーが無いと、4つのうち1つだけ構造が欠けて見えるため。
+    //
+    // 主体に加えて由来（report / ask）も書く。両者は枠が同一で、違いは
+    // 「ループが止まるかどうか」だけであり、それは画面に出ないため、
+    // ラベルが無いと返事を待たれているのかどうかが利用者に分からない。
+    // uppercase が効くので、表示は "ITERA: REPORT" になる。
+    //
+    // TODO: preferences.agentName に追従させる（現状は固定表記）。
+    const header = document.createElement('div');
+    header.className = 'flex justify-between items-center mb-1 opacity-50 text-[10px] font-bold uppercase';
+    header.textContent = source ? `Itera: ${source}` : 'Itera';
+    div.appendChild(header);
+
+    if (turnId) {
+      div.appendChild(this._createDeleteButton(turnId));
+    }
+
+    const body = document.createElement('div');
+    const escaped = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    body.innerHTML = renderMarkdownLite(escaped);
+    div.appendChild(body);
+
+    container.appendChild(div);
   }
 
   /**

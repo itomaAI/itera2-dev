@@ -72,4 +72,6 @@ html[data-animations="false"] *, html[data-animations="false"] *::before, html[d
     --c-accent-success: 5 150 105;
     --c-accent-warning: 217 119 6;
     --c-accent-error: 220 38 38;
+    /* 成果物枠（Iteraの発話）のアクセント。テーマ未読込時の既定値 */
+    --c-accent-speech: 5 150 105;
 }

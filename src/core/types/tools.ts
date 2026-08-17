@@ -7,10 +7,28 @@
 
 import type { MediaRef } from './content';
 
+/**
+ * ツールがChatPanelに残す成果物。
+ *
+ * `log` が「LLMへ渡る記録」、`ui` が「ユーザーへ見せる実行ステータス（1行）」であるのに対し、
+ * これは「ツールの副作用としてChatPanelに置かれたもの」を表す。
+ * create_file がVFSにファイルを残すのと同じ関係で、report はここにメッセージを残す。
+ *
+ * 【重要】この値はLLMのコンテキストへ投影されない。
+ * serializeToolOutput() は log と params しか読まず、buildToolPromptNodes() の
+ * shouldEmit も log/media のみを見るため、追加のガードは不要である。
+ * report 本文は modelターンの生出力に既に含まれており、二重に入れてはならない。
+ */
+export interface ToolArtifact {
+  kind: 'speech';
+  text: string;
+}
+
 export interface ToolResult {
   log?: string;
   ui?: string;
   media?: MediaRef;
+  artifact?: ToolArtifact;
   error?: boolean;
   trigger_llm?: boolean;
   halt_loop?: boolean;

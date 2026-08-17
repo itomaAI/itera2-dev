@@ -102,6 +102,11 @@ export class ThemeService {
       setVar('--c-accent-success', colors.accent?.success);
       setVar('--c-accent-warning', colors.accent?.warning);
       setVar('--c-accent-error', colors.accent?.error);
+      // 成果物枠（Iteraの発話）のアクセント色。
+      // キーを持たないテーマ（既存インストールや利用者の自作テーマ）では success に落ちる。
+      // このフォールバックが「キーが無ければ既定に戻る」の実体であり、
+      // マイグレーション処理を書かずに済ませるための仕掛けである。
+      setVar('--c-accent-speech', colors.accent?.speech || colors.accent?.success);
       setVar('--c-tag-thinking', colors.tags?.thinking || colors.accent?.primary);
       setVar('--c-tag-plan', colors.tags?.plan || colors.accent?.success);
       setVar('--c-tag-report', colors.tags?.report || colors.accent?.warning);
