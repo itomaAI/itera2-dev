@@ -6,7 +6,8 @@
  *
  * NOTE: これは完全なMarkdownパーサではない。ChatPanel._formatSystemMessage や
  * markdownTable.ts と同じく、正規表現ベースの実用的な処理に留めている。
- * 対応するのは 見出し / 箇条書き / 番号付きリスト / 強調 / インラインコード /
+ * 対応するのは 見出し / 箇条書き / 番号付きリスト / 入れ子リスト /
+ * タスクリスト（`- [ ]` `- [x]`）/ 強調 / インラインコード /
  * コードフェンス / GFMのパイプ表 のみ。
  *
  * IMPORTANT: 入力は **HTMLエスケープ済み** であることを前提とする
@@ -18,7 +19,9 @@
  *    （Translator._parseToTree の __PROTECTED_...__ と同じ考え方）
  * 2. 斜体 `*em*` は意図的に未対応。箇条書きの `* item` と区別がつかないため、
  *    中途半端に実装するより出さない方が安全と判断した。
- * 3. ネストしたリストは未対応（1段のみ）。
+ * 3. 入れ子リストは行頭の空白の量で判定する（2026-08-17 対応）。
+ *    入れ子は必ず親の `<li>` の中に入れること。別のリストとして切り出すと
+ *    番号が 1 に戻る。実際にそう見えていた不具合の原因がこれだった。
  * 4. ブロック要素を組み立てて返すので、描画側のコンテナに
  *    `whitespace-pre-wrap` を付けてはならない（段落が二重に空く）。
  */
@@ -83,7 +86,12 @@ export function renderMarkdownLite(escapedText: string): string {
   const lines = text.split('\n');
   const out: string[] = [];
   let paragraph: string[] = [];
-  let list: { ordered: boolean; items: string[] } | null = null;
+
+  // リスト行はいったん「インデントの深さ付きで」平らに集め、
+  // ブロックの終わりでまとめて組み立てる。
+  // 行を読んだ時点で深さを捨ててしまうと、あとから入れ子を復元できない。
+  type ListEntry = { indent: number; ordered: boolean; text: string };
+  let listEntries: ListEntry[] | null = null;
 
   const flushParagraph = () => {
     if (paragraph.length === 0) return;
@@ -91,13 +99,66 @@ export function renderMarkdownLite(escapedText: string): string {
     paragraph = [];
   };
 
+  /** `[ ]` / `[x]` で始まる項目はチェックボックスとして描く（GFMのタスクリスト）。 */
+  const renderItem = (text: string, sub: string): string => {
+    const task = text.match(/^\[([ xX])\]\s+(.*)$/);
+    if (!task) return `<li class="my-0.5">${inline(text)}${sub}</li>`;
+    const checked = task[1] === ' ' ? '' : ' checked';
+    return (
+      `<li class="my-0.5 list-none">` +
+      `<div class="flex items-start gap-2">` +
+      `<input type="checkbox" disabled${checked} class="mt-[0.25em] shrink-0 accent-primary" />` +
+      `<span>${inline(task[2])}</span>` +
+      `</div>${sub}</li>`
+    );
+  };
+
+  /**
+   * entries[i] から、深さ indent の並びをひとつのリストとして組み立てる。
+   * より深い行が現れたら再帰し、直前の項目の中へ入れる。
+   * 戻り値は [HTML, 次に見る位置]。
+   *
+   * 入れ子を親の <li> の中に入れるのが要点。別の <ol> として切り出すと
+   * 番号が 1 に戻ってしまう（実際にそう見えていた）。
+   */
+  // 自己参照するため const のアロー関数ではなく関数宣言にしている
+  // （再帰する const は型推論で any になることがあり、型検査を通せない環境で詰まる）。
+  function buildList(entries: ListEntry[], start: number, indent: number): [string, number] {
+    const ordered = entries[start].ordered;
+    const items: { text: string; sub: string }[] = [];
+    let i = start;
+
+    while (i < entries.length && entries[i].indent >= indent) {
+      if (entries[i].indent > indent) {
+        const [subHtml, next] = buildList(entries, i, entries[i].indent);
+        if (items.length > 0) items[items.length - 1].sub += subHtml;
+        else items.push({ text: '', sub: subHtml });
+        i = next;
+        continue;
+      }
+      // 同じ深さで種類が変わったら、そこで区切って別のリストにする
+      if (entries[i].ordered !== ordered) break;
+      items.push({ text: entries[i].text, sub: '' });
+      i++;
+    }
+
+    const tag = ordered ? 'ol' : 'ul';
+    const style = ordered ? 'list-decimal' : 'list-disc';
+    const body = items.map((it) => renderItem(it.text, it.sub)).join('');
+    return [`<${tag} class="${style} pl-5 my-2 leading-relaxed">${body}</${tag}>`, i];
+  }
+
   const flushList = () => {
-    if (!list) return;
-    const tag = list.ordered ? 'ol' : 'ul';
-    const style = list.ordered ? 'list-decimal' : 'list-disc';
-    const items = list.items.map((it) => `<li class="my-0.5">${inline(it)}</li>`).join('');
-    out.push(`<${tag} class="${style} pl-5 my-2 leading-relaxed">${items}</${tag}>`);
-    list = null;
+    const entries = listEntries;
+    listEntries = null;
+    if (!entries || entries.length === 0) return;
+
+    let i = 0;
+    while (i < entries.length) {
+      const [html, next] = buildList(entries, i, entries[i].indent);
+      out.push(html);
+      i = next;
+    }
   };
 
   const flushAll = () => {
@@ -138,33 +199,27 @@ export function renderMarkdownLite(escapedText: string): string {
       continue;
     }
 
-    // 箇条書き
-    const bullet = line.match(/^\s*[-*]\s+(.*)$/);
+    // 箇条書き。先頭の空白は捨てずに深さとして持つ（入れ子の判定に使う）
+    const bullet = line.match(/^(\s*)[-*]\s+(.*)$/);
     if (bullet) {
       flushParagraph();
-      if (!list || list.ordered) {
-        flushList();
-        list = { ordered: false, items: [] };
-      }
-      list.items.push(bullet[1]);
+      if (!listEntries) listEntries = [];
+      listEntries.push({ indent: bullet[1].length, ordered: false, text: bullet[2] });
       continue;
     }
 
     // 番号付きリスト
-    const ordered = line.match(/^\s*\d+[.)]\s+(.*)$/);
+    const ordered = line.match(/^(\s*)\d+[.)]\s+(.*)$/);
     if (ordered) {
       flushParagraph();
-      if (!list || !list.ordered) {
-        flushList();
-        list = { ordered: true, items: [] };
-      }
-      list.items.push(ordered[1]);
+      if (!listEntries) listEntries = [];
+      listEntries.push({ indent: ordered[1].length, ordered: true, text: ordered[2] });
       continue;
     }
 
-    // リストの継続行はリスト項目へ足す（折り返しを段落に落とさない）
-    if (list) {
-      list.items[list.items.length - 1] += ' ' + line.trim();
+    // リストの継続行は直前の項目へ足す（折り返しを段落に落とさない）
+    if (listEntries && listEntries.length > 0) {
+      listEntries[listEntries.length - 1].text += ' ' + line.trim();
       continue;
     }
 
