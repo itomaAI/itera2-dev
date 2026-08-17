@@ -19,12 +19,18 @@ export function registerSysTools(registry: ToolRegistry): void {
     }),
   });
 
+  // 【重要】ask / report の `ui` には本文を入れないこと。
+  // `ui` は全ツール共通で「絵文字＋短い動詞句」の実行ステータスであり、
+  // 本文は `artifact` としてChatPanelへ渡す（別の枠に描かれる）。
+  // 以前は ui に本文を積んでいたため、レポートがログの箱の中に等幅で描かれ、
+  // かつ modelターンの生出力と合わせて二重に表示されていた。
   registry.registerSystemTool(setId, setName, {
     name: 'ask',
     description: 'Ask user a question.',
     impl: async (params: any) => ({
       log: `Waiting for user input.`,
-      ui: `❓ ${params.content}`,
+      ui: `❓ ask`,
+      artifact: { kind: 'speech' as const, text: params.content || '' },
       halt_loop: true,
     }),
   });
@@ -34,7 +40,8 @@ export function registerSysTools(registry: ToolRegistry): void {
     description: 'Report to user.',
     impl: async (params: any) => ({
       log: `Displayed message to user.`,
-      ui: `📢 ${params.content}`,
+      ui: `📢 report`,
+      artifact: { kind: 'speech' as const, text: params.content || '' },
       trigger_llm: false,
     }),
   });

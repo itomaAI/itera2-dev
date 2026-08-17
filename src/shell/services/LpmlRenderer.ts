@@ -6,7 +6,13 @@
 export class LpmlRenderer {
   constructor() {}
 
-  formatStream(text: string): string {
+  /**
+   * LPML文字列を表示用HTMLへ変換する。
+   *
+   * opts.streaming … 生成中かどうか。生成中は report/ask を開いたまま見せる。
+   * 確定後は成果物枠（Iteraの発話）が別に描かれるため、原稿側は畳んで重複を避ける。
+   */
+  formatStream(text: string, opts: { streaming?: boolean } = {}): string {
     const escape = (str: string) => {
       const div = document.createElement('div');
       div.textContent = str;
@@ -47,7 +53,7 @@ export class LpmlRenderer {
       const attributes = match[2] || match[5] || '';
       const content = match[3] || '';
 
-      parts.push(this._createTagHTML(tagName, attributes, content));
+      parts.push(this._createTagHTML(tagName, attributes, content, opts.streaming === true));
       lastIndex = TAG_REGEX.lastIndex;
     }
 
@@ -59,9 +65,14 @@ export class LpmlRenderer {
     return parts.join('');
   }
 
-  private _createTagHTML(tagName: string, attributes: string, content: string): string {
+  private _createTagHTML(tagName: string, attributes: string, content: string, streaming = false): string {
+    // 機構レイヤ（LLM生出力・システムログ）の中では、タグ箱は中立の見た目にする。
+    // 意味は絵文字が担っているため色は不要であり、色を残すと「沈めたはずの機構」が
+    // かえって前に出てしまう。例外は error と syntax_warning だけ。
+    const NEUTRAL = 'border-border-main bg-overlay/5';
+
     let title = tagName;
-    let colorClass = 'border-border-main bg-card';
+    let colorClass = NEUTRAL;
     let isOpen = false;
 
     // 旧実装の `([^"'\s]+)` は空白で切れるため path="my file.txt" が途中で欠けていた。
@@ -75,43 +86,36 @@ export class LpmlRenderer {
 
     switch (tagName) {
       case 'thinking':
-        title = '💭 Thinking';
-        colorClass = 'border-tag-thinking bg-tag-thinking/10';
+        title = '💭 thinking';
         break;
       case 'plan':
-        title = '📅 Plan';
-        colorClass = 'border-tag-plan bg-tag-plan/10';
+        title = '📅 plan';
         break;
       case 'report':
-        title = '📢 Report';
-        colorClass = 'border-tag-report bg-tag-report/20';
-        isOpen = true;
+        title = '📢 report';
+        // 生成中だけ開く。確定後は成果物枠に同じ本文が出るため畳んで重複を避ける。
+        isOpen = streaming;
         break;
       case 'ask':
-        title = '❓ Question';
-        colorClass = 'border-tag-report bg-tag-report/20';
-        isOpen = true;
+        title = '❓ ask';
+        isOpen = streaming;
         break;
       case 'yield':
-        title = '⏳ Waiting for System...';
-        colorClass = 'border-border-main bg-card/50';
+        title = '⏳ yield';
         break;
       case 'breathe':
-        title = '💨 Taking a breath...';
-        colorClass = 'border-border-main bg-card/50';
+        title = '💨 breathe';
         break;
       case 'finish':
-        title = '✅ Standby';
-        colorClass = 'border-success bg-success/20';
-        isOpen = true;
+        title = '✅ finish';
         break;
       case 'create_file':
       case 'edit_file':
         const path = getAttr('path') || 'file';
         title = `📝 ${tagName}: ${path}`;
-        colorClass = 'border-warning bg-warning/10';
         break;
       case 'error':
+        // 例外1: エラーは色を残す
         title = '⚠️ Error';
         colorClass = 'border-tag-error bg-tag-error/10';
         isOpen = true;
@@ -119,37 +123,29 @@ export class LpmlRenderer {
       case 'tool_output':
         const actionName = getAttr('action') || 'unknown';
         const status = getAttr('status') || 'success';
-        title = `📥 System Output: [${actionName}]`;
+        title = `📥 ${actionName}`;
         if (status === 'error') {
+          // 例外2: 失敗したツール実行は色を残す
           colorClass = 'border-error bg-error/10';
-          title = `⚠️ System Error: [${actionName}]`;
+          title = `⚠️ ${actionName} (error)`;
           isOpen = true;
-        } else {
-          colorClass = 'border-border-main bg-panel/80';
-          isOpen = false;
         }
         break;
       case 'event':
-        const eventType = getAttr('type') || 'unknown';
-        title = `🔔 Event: ${eventType}`;
-        colorClass = 'border-primary bg-primary/10';
-        isOpen = false;
+        title = `🔔 ${getAttr('type') || 'unknown'}`;
         break;
       case 'system':
         const sysType = getAttr('type') || 'info';
-        title = `💻 System: ${sysType}`;
+        title = `💻 ${sysType}`;
         if (sysType === 'syntax_warning') {
+          // 例外3: 記法違反の警告は色を残す
           colorClass = 'border-error bg-error/10';
-          title = `🚨 System Warning: LPML Syntax`;
+          title = `🚨 LPML Syntax Warning`;
           isOpen = true;
-        } else {
-          colorClass = 'border-system bg-system/10';
-          isOpen = false;
         }
         break;
       default:
         title = `⚙️ ${tagName}`;
-        colorClass = 'border-border-main bg-card/50';
     }
 
     const openAttr = isOpen ? 'open' : '';

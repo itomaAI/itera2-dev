@@ -27,7 +27,8 @@
             "primary": "#2563eb",
             "success": "#059669",
             "warning": "#d97706",
-            "error": "#dc2626"
+            "error": "#dc2626",
+            "speech": "#059669"
         },
         "tags": {
             "thinking": "#1d4ed8",
