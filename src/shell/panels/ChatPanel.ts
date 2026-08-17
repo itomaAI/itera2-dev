@@ -26,12 +26,21 @@ import { LABEL_STREAM } from '../styles/typography';
 const BOX_BASE = 'relative group mb-2 transition';
 const BOX_FRAME = 'p-3 rounded-lg border';
 
+/**
+ * 寸法は chat-body / chat-system-message（style.css）から取る。
+ * どちらも CSS 変数を読むだけのクラスで、値は外観設定から ThemeService 経由で入る。
+ * ここに text-sm のような固定の寸法クラスを書き戻さないこと。設定が効かなくなる。
+ *
+ * この枠の「中」に置くものは em で書く（本文に対する比）。
+ * 本文の寸法が利用者の設定で動くため、rem で書くと本文だけが伸縮して
+ * 見出しやコードとの上下関係が壊れる。
+ */
 const CLS_USER =
-  `${BOX_FRAME} text-sm bg-panel text-text-main border-border-main border-r-[3px] border-r-primary/60 ml-4 shadow-sm`;
+  `${BOX_FRAME} chat-body bg-panel text-text-main border-border-main border-r-[3px] border-r-primary/60 ml-4 shadow-sm`;
 const CLS_MECH =
-  `${BOX_FRAME} text-xs font-mono bg-overlay/5 text-text-muted border-border-main/60 mx-8`;
+  `${BOX_FRAME} chat-system-message bg-overlay/5 text-text-muted border-border-main/60 mx-8`;
 const CLS_ARTIFACT =
-  `${BOX_FRAME} text-sm bg-panel text-text-main border-border-main border-l-[3px] border-l-speech/60 mr-4 shadow-sm`;
+  `${BOX_FRAME} chat-body bg-panel text-text-main border-border-main border-l-[3px] border-l-speech/60 mr-4 shadow-sm`;
 
 const DOM_IDS = {
   HISTORY: 'chat-history',
@@ -619,7 +628,7 @@ export class ChatPanel {
     const codeBlocks: string[] = [];
     safeText = safeText.replace(/```(?:([a-zA-Z0-9_]+)\n)?([\s\S]*?)```/g, (_match, lang, code) => {
       const langClass = lang ? `language-${lang}` : 'language-plaintext';
-      const html = `<pre class="bg-card border border-border-main p-2 rounded mt-1 mb-1 overflow-x-auto text-text-main font-mono text-[0.625rem] leading-relaxed font-normal"><code class="${langClass}">${code}</code></pre>`;
+      const html = `<pre class="bg-card border border-border-main p-2 rounded mt-1 mb-1 overflow-x-auto text-text-main font-mono text-[0.833em] leading-relaxed font-normal"><code class="${langClass}">${code}</code></pre>`;
       const placeholder = `__CODEBLOCK_${codeBlocks.length}__`;
       codeBlocks.push(html);
       return placeholder;
@@ -628,7 +637,7 @@ export class ChatPanel {
     safeText = renderMarkdownTables(safeText);
 
     safeText = safeText.replace(/`([^`]+)`/g, (_match, code) => {
-      return `<code class="bg-app text-primary px-1 rounded font-mono text-xs font-normal">${code}</code>`;
+      return `<code class="bg-app text-primary px-1 rounded font-mono font-normal">${code}</code>`;
     });
 
     codeBlocks.forEach((html, idx) => {

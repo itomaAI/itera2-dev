@@ -26,29 +26,33 @@
 import { renderMarkdownTables } from './markdownTable';
 
 /**
- * 寸法は必ず rem 基準のトークンで書くこと。px 固定にしてはならない。
+ * 【重要】ここの寸法は必ず em で書くこと。rem も px も使ってはならない。
  *
- * 外観設定のフォントサイズは root の font-size を 14/16/18/20px に変えて効かせる。
- * 本文（成果物枠 = text-sm）は rem なので追従するが、px 固定の見出しは追従しない。
- * 以前ここは 16/15/14px で書かれており、既定の 16px でも h3 が本文と同寸、
- * x-large では本文 17.5px に対して 16/15/14px と、見出し3段すべてが本文より
- * 小さくなっていた（実測値）。見出しの階層が反転していたことになる。
+ * この整形器の出力は成果物枠（.chat-body）の中に置かれる。
+ * 本文の寸法は外観設定で 12/13/14/16px と利用者が変えられるため、
+ * rem で書くと本文だけが伸縮し、見出しやコードとの上下関係が壊れる。
+ * 実際、本文を 16px にすると rem 基準の h3（14px）は本文より小さくなる。
+ * em にしておけば本文に対する比が保たれ、どの設定でも階層が崩れない。
  *
- * h3 が本文と同じ text-sm なのは意図的（2026-08-17 決定）。
+ * 既定（本文 14px）での実寸は h1 18px / h2 16px / h3 14px / コード 12px。
+ * 以前は 16/15/14px の px 固定で、全体スケールを上げると
+ * 見出し3段すべてが本文より小さくなっていた（実測値）。
+ *
+ * h3 が本文と同寸（1em）なのは意図的（2026-08-17 決定）。
  * 太字と通常の印象差が十分に大きいため、サイズを変えなくても見出しとして読める。
  * 幅の狭いチャット欄では、寸法の段数を増やすより字面を揃えるほうが落ち着く。
  *
- * なお leading-relaxed は text-xs が持つ行間より後に適用される
+ * なお leading-relaxed は text-* が持つ行間より後に適用される
  * （Tailwind は lineHeight プラグインを fontSize より後ろに置くため）。
  * 両方を並べる書き方で意図どおりになる。冗長ではない。
  */
 const PRE_CLASS =
-  'bg-app border border-border-main p-2 rounded my-2 overflow-x-auto text-text-main font-mono text-xs leading-relaxed';
-const CODE_CLASS = 'bg-overlay/10 text-primary px-1 rounded font-mono text-xs';
+  'bg-app border border-border-main p-2 rounded my-2 overflow-x-auto text-text-main font-mono text-[0.86em] leading-relaxed';
+const CODE_CLASS = 'bg-overlay/10 text-primary px-1 rounded font-mono text-[0.86em]';
 const H_CLASS: Record<number, string> = {
-  1: 'font-bold text-text-main text-lg mt-4 mb-2 first:mt-0',
-  2: 'font-bold text-text-main text-base mt-4 mb-2 first:mt-0',
-  3: 'font-bold text-text-main text-sm mt-3 mb-1.5 first:mt-0',
+  1: 'font-bold text-text-main text-[1.29em] mt-4 mb-2 first:mt-0',
+  2: 'font-bold text-text-main text-[1.14em] mt-4 mb-2 first:mt-0',
+  3: 'font-bold text-text-main text-[1em] mt-3 mb-1.5 first:mt-0',
 };
 
 const TABLE_LINE = /^<div class="overflow-x-auto my-2">.*$/gm;
