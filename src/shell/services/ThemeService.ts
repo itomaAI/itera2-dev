@@ -43,10 +43,40 @@ export class ThemeService {
       const locale = appearance.locale || 'en';
       document.documentElement.lang = locale;
 
-      const uiFont = appearance.typography?.uiFont || 'Inter';
+      // Inter は同梱していないため既定にしない（宣言しても読み込まれず、
+      // Inter が入っている端末でだけ字面が変わる）。
+      const uiFont = appearance.typography?.uiFont || 'system-ui';
       const monoFont = appearance.typography?.monoFont || 'monospace';
       root.style.setProperty('--font-sans', uiFont);
       root.style.setProperty('--font-mono', monoFont);
+
+      // 会話本文の寸法。キーは既定尺（root=16px）での px 値。
+      // 全体スケールが親なので、ここは rem で持ち相対関係を保つ。
+      const bodySizeMap: Record<string, string> = {
+        '12': '0.75rem',
+        '13': '0.8125rem',
+        '14': '0.875rem',
+        '16': '1rem',
+      };
+      const bodySize = appearance.typography?.chatBodySize || '14';
+      root.style.setProperty('--size-chat-body', bodySizeMap[bodySize] || '0.875rem');
+
+      // 機構レイヤ（LLM生出力・システムログ）の書体と寸法。
+      const systemFontMap: Record<string, string> = {
+        sans: 'var(--font-sans)',
+        mono: 'var(--font-mono)',
+      };
+      const systemFont = appearance.typography?.systemFont || 'mono';
+      root.style.setProperty('--font-system-output', systemFontMap[systemFont] || 'var(--font-mono)');
+
+      const systemSizeMap: Record<string, string> = {
+        '10': '0.625rem',
+        '12': '0.75rem',
+        '14': '0.875rem',
+        '16': '1rem',
+      };
+      const systemSize = appearance.typography?.systemFontSize || '12';
+      root.style.setProperty('--size-system-output', systemSizeMap[systemSize] || '0.75rem');
 
       const sizeMap: Record<string, string> = {
         small: '14px',

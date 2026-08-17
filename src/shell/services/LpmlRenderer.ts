@@ -156,23 +156,33 @@ export class LpmlRenderer {
     // テーブル変換は維持する）。
     let displayContent = content.trim();
 
+    // 【重要】ここでは書体と寸法を指定しない。
+    //
+    // このタグボックスは機構レイヤ（.chat-system-message）の中に描かれる。
+    // 書体と寸法は外観設定（System Output Font / Size）から CSS 変数経由で
+    // 入るため、font-mono や text-xs を書くとその設定が効かなくなる。
+    // 機構レイヤに見えているものはほぼ全てこのタグボックスなので、
+    // ここを固定すると設定そのものが機能しなくなる。
+    //
+    // 寸法を変えたい場合だけ em（本文に対する比）で書くこと。rem は不可。
+
     // 属性がある場合は薄く表示
     if (attributes.trim()) {
-      displayContent = `<div class="text-[0.625rem] text-tag-attr mb-1 border-b border-border-main pb-1 opacity-70">${attributes.trim()}</div>${displayContent}`;
+      displayContent = `<div class="text-[0.833em] text-tag-attr mb-1 border-b border-border-main pb-1 opacity-70">${attributes.trim()}</div>${displayContent}`;
     }
 
     // コンテンツがないタグ（自己完結タグ）の表示
     if (!displayContent) {
-      return `<div class="text-xs font-mono py-1 px-2 rounded border ${colorClass} mb-2 inline-block opacity-80 text-text-main" title="&lt;${tagName} /&gt;">${title}</div>`;
+      return `<div class="py-1 px-2 rounded border ${colorClass} mb-2 inline-block opacity-80 text-text-main" title="&lt;${tagName} /&gt;">${title}</div>`;
     }
 
     // コンテンツがあるタグ
     return `
       <details ${openAttr} class="mb-2 rounded border ${colorClass} overflow-hidden group">
-        <summary class="cursor-pointer py-1.5 px-2 text-xs font-mono font-bold text-text-main bg-overlay/5 hover:bg-overlay/10 select-none flex items-center gap-2 list-none [&::-webkit-details-marker]:hidden">
-          <span class="group-open:rotate-90 transition-transform text-[0.625rem]">▶</span> ${title}
+        <summary class="cursor-pointer py-1.5 px-2 font-bold text-text-main bg-overlay/5 hover:bg-overlay/10 select-none flex items-center gap-2 list-none [&::-webkit-details-marker]:hidden">
+          <span class="group-open:rotate-90 transition-transform text-[0.833em]">▶</span> ${title}
         </summary>
-        <div class="p-2 text-xs font-mono overflow-x-auto bg-overlay/5 whitespace-pre-wrap text-tag-content">${displayContent}</div>
+        <div class="p-2 overflow-x-auto bg-overlay/5 whitespace-pre-wrap text-tag-content">${displayContent}</div>
       </details>
     `.trim();
   }

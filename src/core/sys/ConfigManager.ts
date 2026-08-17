@@ -17,7 +17,17 @@ export interface OsConfig {
   appearance: {
     theme: string;
     locale?: string;
-    typography?: { uiFont: string; monoFont: string; fontSize: string };
+    typography?: {
+      uiFont: string;
+      monoFont: string;
+      fontSize: string;
+      /** 会話本文（ユーザー入力とIteraの発話）の寸法。既定尺での px 値をキーにする。 */
+      chatBodySize?: string;
+      /** 機構レイヤ（LLM生出力・システムログ）の書体。'mono' | 'sans' */
+      systemFont?: string;
+      /** 機構レイヤの寸法。既定尺での px 値をキーにする。 */
+      systemFontSize?: string;
+    };
     layout?: { animations: boolean; homePath?: string };
   };
   llm: { model: string; [key: string]: any };
@@ -35,7 +45,14 @@ const DEFAULT_CONFIG: OsConfig = {
   appearance: {
     theme: 'system/themes/light.json',
     locale: 'en',
-    typography: { uiFont: 'Inter', monoFont: 'monospace', fontSize: 'medium' },
+    typography: {
+      uiFont: 'system-ui',
+      monoFont: 'monospace',
+      fontSize: 'medium',
+      chatBodySize: '14',
+      systemFont: 'mono',
+      systemFontSize: '12',
+    },
     layout: { animations: true, homePath: 'apps/home.html' },
   },
   llm: { model: 'gemini-3.6-flash' },

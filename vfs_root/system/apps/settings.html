@@ -382,7 +382,6 @@
                   data-key="typography.uiFont"
                   class="w-full bg-card border border-border-main rounded-lg px-3 py-2 text-sm text-text-main focus:outline-none focus:border-primary transition cursor-pointer"
                 >
-                  <option value="Inter">Inter (Default)</option>
                   <option value="system-ui">System Default</option>
                   <option value="Roboto">Roboto</option>
                   <option value="sans-serif">Sans Serif</option>
@@ -415,6 +414,46 @@
                   <option value="medium">Medium (Default)</option>
                   <option value="large">Large</option>
                   <option value="x-large">Extra Large</option>
+                </select>
+              </div>
+              <div>
+                <label class="block text-xs font-bold text-text-muted uppercase mb-1.5">Chat Body Size</label>
+                <select
+                  id="config-app-chatbodysize"
+                  data-category="appearance"
+                  data-key="typography.chatBodySize"
+                  class="w-full bg-card border border-border-main rounded-lg px-3 py-2 text-sm text-text-main focus:outline-none focus:border-primary transition cursor-pointer"
+                >
+                  <option value="12">Compact (12px)</option>
+                  <option value="13">Snug (13px)</option>
+                  <option value="14">Default (14px)</option>
+                  <option value="16">Comfortable (16px)</option>
+                </select>
+              </div>
+              <div>
+                <label class="block text-xs font-bold text-text-muted uppercase mb-1.5">System Output Font</label>
+                <select
+                  id="config-app-systemfont"
+                  data-category="appearance"
+                  data-key="typography.systemFont"
+                  class="w-full bg-card border border-border-main rounded-lg px-3 py-2 text-sm text-text-main focus:outline-none focus:border-primary transition cursor-pointer"
+                >
+                  <option value="mono">Monospace (Default)</option>
+                  <option value="sans">UI Sans-Serif</option>
+                </select>
+              </div>
+              <div>
+                <label class="block text-xs font-bold text-text-muted uppercase mb-1.5">System Output Size</label>
+                <select
+                  id="config-app-systemfontsize"
+                  data-category="appearance"
+                  data-key="typography.systemFontSize"
+                  class="w-full bg-card border border-border-main rounded-lg px-3 py-2 text-sm text-text-main focus:outline-none focus:border-primary transition cursor-pointer"
+                >
+                  <option value="10">Tiny (10px)</option>
+                  <option value="12">Default (12px)</option>
+                  <option value="14">Large (14px)</option>
+                  <option value="16">Extra Large (16px)</option>
                 </select>
               </div>
             </div>
@@ -486,9 +525,12 @@
 
           DOM('config-app-locale').value = configs.appearance.locale || 'en';
           DOM('config-app-homepath').value = configs.appearance.layout?.homePath || 'apps/home.html';
-          DOM('config-app-uifont').value = configs.appearance.typography?.uiFont || 'Inter';
+          DOM('config-app-uifont').value = configs.appearance.typography?.uiFont || 'system-ui';
           DOM('config-app-monofont').value = configs.appearance.typography?.monoFont || 'monospace';
           DOM('config-app-fontsize').value = configs.appearance.typography?.fontSize || 'medium';
+          DOM('config-app-chatbodysize').value = configs.appearance.typography?.chatBodySize || '14';
+          DOM('config-app-systemfont').value = configs.appearance.typography?.systemFont || 'mono';
+          DOM('config-app-systemfontsize').value = configs.appearance.typography?.systemFontSize || '12';
           DOM('config-app-animations').checked = configs.appearance.layout?.animations !== false;
 
           await loadLlmProfiles(configs.llm.model || 'gemini-3.6-flash');
@@ -563,6 +605,9 @@
         'config-app-uifont',
         'config-app-monofont',
         'config-app-fontsize',
+        'config-app-chatbodysize',
+        'config-app-systemfont',
+        'config-app-systemfontsize',
         'config-app-animations',
       ].forEach((id) => {
         const el = DOM(id);

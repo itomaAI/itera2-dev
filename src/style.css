@@ -51,9 +51,34 @@ html[data-animations="false"] *, html[data-animations="false"] *::before, html[d
 .hljs-comment, .hljs-quote { color: rgb(var(--c-text-muted)); font-style: italic; }
 .hljs-number, .hljs-literal { color: rgb(var(--c-accent-warning)); }
 
+/* ------------------------------------------------------------------
+   チャットの文字寸法。外観設定から制御する。
+   ThemeService が下の変数を書き換え、ここが受ける。
+   色やフォントと同じ経路（config → ThemeService → CSS変数）に揃えてある。
+
+   【重要】この2クラスの中身は em で書くこと。
+   本文の寸法が利用者の設定で動くため、中の見出しやコードを rem で書くと
+   本文だけが伸縮して階層が壊れる（本文を16pxにすると h3 が本文より
+   小さくなる、など）。枠の外＝chrome やラベルは rem のままでよい。
+   ------------------------------------------------------------------ */
+.chat-body {
+    font-size: var(--size-chat-body, 0.875rem);
+}
+
+.chat-system-message {
+    font-family: var(--font-system-output, var(--font-mono));
+    font-size: var(--size-system-output, 0.75rem);
+}
+
 :root {
-    --font-sans: 'Inter';
+    /* Inter は同梱していないため既定にしない。宣言だけして読み込まないと、
+       Inter が入っている端末とそうでない端末で字面が変わる。 */
+    --font-sans: system-ui;
     --font-mono: monospace;
+
+    --size-chat-body: 0.875rem;
+    --font-system-output: var(--font-mono);
+    --size-system-output: 0.75rem;
 
     --c-bg-app: 17 24 39;
     --c-bg-panel: 31 41 55;
