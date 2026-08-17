@@ -171,9 +171,9 @@ export class ProcessMonitorModal {
           <div class="flex flex-col min-w-0">
             <div class="flex items-center gap-2 mb-1">
               <span class="font-bold text-sm text-text-main truncate">${displayName}</span>
-              <span class="text-2xs font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border ${badgeColor}">${proc.state}</span>
+              <span class="text-[0.625rem] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border ${badgeColor}">${proc.state}</span>
             </div>
-            <div class="text-2xs text-text-muted font-mono truncate" title="${proc.path}">${proc.path} ${displayName !== proc.pid && !isDaemon ? `(${proc.pid})` : ''}</div>
+            <div class="text-[0.625rem] text-text-muted font-mono truncate" title="${proc.path}">${proc.path} ${displayName !== proc.pid && !isDaemon ? `(${proc.pid})` : ''}</div>
           </div>
         </div>
       `;

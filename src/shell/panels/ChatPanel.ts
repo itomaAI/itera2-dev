@@ -595,7 +595,7 @@ export class ChatPanel {
         const div = document.createElement('div');
         div.className =
           'flex items-center gap-2 text-xs text-text-muted bg-error/10 border border-error/20 p-2 rounded mt-2';
-        div.innerHTML = `<span class="text-error">⚠️</span> <span class="line-through opacity-70">${mediaObj.path}</span> <span class="text-2xs ml-auto">(File not found)</span>`;
+        div.innerHTML = `<span class="text-error">⚠️</span> <span class="line-through opacity-70">${mediaObj.path}</span> <span class="text-[0.625rem] ml-auto">(File not found)</span>`;
         container.appendChild(div);
       }
     } catch (e: any) {
@@ -619,7 +619,7 @@ export class ChatPanel {
     const codeBlocks: string[] = [];
     safeText = safeText.replace(/```(?:([a-zA-Z0-9_]+)\n)?([\s\S]*?)```/g, (_match, lang, code) => {
       const langClass = lang ? `language-${lang}` : 'language-plaintext';
-      const html = `<pre class="bg-card border border-border-main p-2 rounded mt-1 mb-1 overflow-x-auto text-text-main font-mono text-2xs leading-relaxed font-normal"><code class="${langClass}">${code}</code></pre>`;
+      const html = `<pre class="bg-card border border-border-main p-2 rounded mt-1 mb-1 overflow-x-auto text-text-main font-mono text-[0.625rem] leading-relaxed font-normal"><code class="${langClass}">${code}</code></pre>`;
       const placeholder = `__CODEBLOCK_${codeBlocks.length}__`;
       codeBlocks.push(html);
       return placeholder;
@@ -657,7 +657,7 @@ export class ChatPanel {
       const div = document.createElement('div');
       div.className =
         'flex items-center gap-3 p-3 mt-2 rounded border border-border-main bg-card max-w-xs hover:bg-hover transition select-none cursor-pointer';
-      div.innerHTML = `<div class="text-2xl">📄</div><div class="flex flex-col overflow-hidden"><span class="text-xs text-text-main font-bold font-mono uppercase truncate">${mime}</span><span class="text-2xs text-text-muted truncate">BINARY DATA</span></div>`;
+      div.innerHTML = `<div class="text-2xl">📄</div><div class="flex flex-col overflow-hidden"><span class="text-xs text-text-main font-bold font-mono uppercase truncate">${mime}</span><span class="text-[0.625rem] text-text-muted truncate">BINARY DATA</span></div>`;
       div.onclick = () => {
         if (this.events['preview_request']) {
           this.events['preview_request']('Attachment', src, mime, path);

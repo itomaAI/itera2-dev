@@ -272,7 +272,7 @@ export class PropertiesModal {
               <span class="text-lg">🤖</span>
               <div>
                 <div class="font-bold text-text-main">AI Agent</div>
-                <div class="text-2xs text-text-muted">Autonomous modifications</div>
+                <div class="text-[0.625rem] text-text-muted">Autonomous modifications</div>
               </div>
             </div>
             <select id="perm-ai" class="bg-panel border border-border-main rounded text-xs p-1 text-text-main focus:outline-none focus:border-primary">
@@ -289,7 +289,7 @@ export class PropertiesModal {
               <span class="text-lg">🌐</span>
               <div>
                 <div class="font-bold text-text-main">Guest Apps</div>
-                <div class="text-2xs text-text-muted">Any installed application</div>
+                <div class="text-[0.625rem] text-text-muted">Any installed application</div>
               </div>
             </div>
             <select id="perm-guest" class="bg-panel border border-border-main rounded text-xs p-1 text-text-main focus:outline-none focus:border-primary">

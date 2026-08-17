@@ -86,7 +86,7 @@ export class CommandPaletteModal {
     const footer = document.createElement('div');
     footer.className = 'px-5 py-3 border-t border-border-main bg-card flex items-center justify-between shrink-0';
     footer.innerHTML = `
-      <div class="text-2xs text-text-muted font-bold tracking-wider flex items-center gap-4">
+      <div class="text-[0.625rem] text-text-muted font-bold tracking-wider flex items-center gap-4">
         <span><kbd class="bg-panel px-1.5 py-0.5 rounded border border-border-main font-mono text-text-main shadow-sm">↑</kbd> <kbd class="bg-panel px-1.5 py-0.5 rounded border border-border-main font-mono text-text-main shadow-sm">↓</kbd> Navigate</span>
         <span><kbd class="bg-panel px-1.5 py-0.5 rounded border border-border-main font-mono text-text-main shadow-sm">Enter</kbd> Select</span>
         <span><kbd class="bg-panel px-1.5 py-0.5 rounded border border-border-main font-mono text-text-main shadow-sm">Esc</kbd> Close</span>
@@ -351,7 +351,7 @@ export class CommandPaletteModal {
         <div class="${iconClass}">${item.icon}</div>
         <div class="flex flex-col min-w-0">
           <div class="text-sm font-bold truncate ${titleClass}">${item.title}</div>
-          <div class="text-2xs font-mono truncate opacity-80 ${isSelected ? 'text-white/80' : 'text-text-muted'}">${item.subtitle}</div>
+          <div class="text-[0.625rem] font-mono truncate opacity-80 ${isSelected ? 'text-white/80' : 'text-text-muted'}">${item.subtitle}</div>
         </div>
         ${isSelected ? '<div class="ml-auto text-xs opacity-70">↵</div>' : ''}
       `;

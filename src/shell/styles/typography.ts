@@ -42,20 +42,20 @@ export const LABEL_TITLE = 'font-bold text-base leading-tight';
  * 見出しに添える小さな飾り札（kicker）。1つの面に1回だけ出ることが条件。
  * 例: "Properties" / "Sync Providers" / "Real-time Process List"
  */
-export const LABEL_KICKER = 'font-mono text-2xs uppercase tracking-widest';
+export const LABEL_KICKER = 'font-mono text-[0.625rem] uppercase tracking-widest';
 
 /**
  * 領域や入力欄に付ける見出し。静止していて、1面に数回まで。
  * 例: "Storage" / "Itera Agent" / API キーの各ラベル
  */
-export const LABEL_SECTION = 'font-bold text-2xs uppercase tracking-wider';
+export const LABEL_SECTION = 'font-bold text-[0.625rem] uppercase tracking-wider';
 
 /**
  * 流れの中で反復し、スクロールする単位に付ける札。
  * 例: チャットの各ターン見出し。
  * 字間を空けないのは意図的。反復するものを飾ると本文が負ける。
  */
-export const LABEL_STREAM = 'font-bold text-2xs uppercase';
+export const LABEL_STREAM = 'font-bold text-[0.625rem] uppercase';
 
 /**
  * ─────────────────────────────────────────────────────────────
