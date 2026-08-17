@@ -628,7 +628,7 @@ export class ChatPanel {
     safeText = renderMarkdownTables(safeText);
 
     safeText = safeText.replace(/`([^`]+)`/g, (_match, code) => {
-      return `<code class="bg-app text-primary px-1 rounded font-mono text-[11px] font-normal">${code}</code>`;
+      return `<code class="bg-app text-primary px-1 rounded font-mono text-xs font-normal">${code}</code>`;
     });
 
     codeBlocks.forEach((html, idx) => {

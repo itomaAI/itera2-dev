@@ -126,7 +126,7 @@ export class SyncModal {
 
     this.emptyNotice = document.createElement('div');
     this.emptyNotice.className =
-      'text-[11px] text-text-muted text-center py-6 border border-dashed border-border-main rounded-lg leading-relaxed';
+      'text-xs text-text-muted text-center py-6 border border-dashed border-border-main rounded-lg leading-relaxed';
     this.emptyNotice.innerHTML =
       'No sync adapters installed.<br /><span class="font-mono">system/registry/adapters.json</span>';
 

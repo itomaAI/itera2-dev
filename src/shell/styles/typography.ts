@@ -67,9 +67,8 @@ export const LABEL_STREAM = 'font-bold text-2xs uppercase';
  *   - index.html の一部（12px の sans bold 大文字・字間 wider）
  *   - SyncModal.ts / DialogService.ts（同上、および 14px 版）
  *
- * また px 固定が 8 件残っている（11px ×4 / 12px / 14px / 15px / 16px 各1）。
- * 名前付きの寸法へ寄せると line-height も付与されて行間が変わるため、
- * 見出し階層の再設計（markdownLite.ts）とまとめて判断する。
+ * px 固定のサイズ指定は 2026-08-17 にホストシェルから一掃した（44件 → 0件）。
+ * 新しく px 固定を持ち込まないこと。外観設定のフォントサイズが効かなくなる。
  *
  * 【注意】この注記に Tailwind のクラス名をそのまま書かないこと。
  * content 走査の対象になり未使用の CSS が生成されるうえ、
