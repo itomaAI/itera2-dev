@@ -25,13 +25,30 @@
 
 import { renderMarkdownTables } from './markdownTable';
 
+/**
+ * 寸法は必ず rem 基準のトークンで書くこと。px 固定にしてはならない。
+ *
+ * 外観設定のフォントサイズは root の font-size を 14/16/18/20px に変えて効かせる。
+ * 本文（成果物枠 = text-sm）は rem なので追従するが、px 固定の見出しは追従しない。
+ * 以前ここは 16/15/14px で書かれており、既定の 16px でも h3 が本文と同寸、
+ * x-large では本文 17.5px に対して 16/15/14px と、見出し3段すべてが本文より
+ * 小さくなっていた（実測値）。見出しの階層が反転していたことになる。
+ *
+ * h3 が本文と同じ text-sm なのは意図的（2026-08-17 決定）。
+ * 太字と通常の印象差が十分に大きいため、サイズを変えなくても見出しとして読める。
+ * 幅の狭いチャット欄では、寸法の段数を増やすより字面を揃えるほうが落ち着く。
+ *
+ * なお leading-relaxed は text-xs が持つ行間より後に適用される
+ * （Tailwind は lineHeight プラグインを fontSize より後ろに置くため）。
+ * 両方を並べる書き方で意図どおりになる。冗長ではない。
+ */
 const PRE_CLASS =
-  'bg-app border border-border-main p-2 rounded my-2 overflow-x-auto text-text-main font-mono text-[11px] leading-relaxed';
-const CODE_CLASS = 'bg-overlay/10 text-primary px-1 rounded font-mono text-[12px]';
+  'bg-app border border-border-main p-2 rounded my-2 overflow-x-auto text-text-main font-mono text-xs leading-relaxed';
+const CODE_CLASS = 'bg-overlay/10 text-primary px-1 rounded font-mono text-xs';
 const H_CLASS: Record<number, string> = {
-  1: 'font-bold text-text-main text-[16px] mt-4 mb-2 first:mt-0',
-  2: 'font-bold text-text-main text-[15px] mt-4 mb-2 first:mt-0',
-  3: 'font-bold text-text-main text-[14px] mt-3 mb-1.5 first:mt-0',
+  1: 'font-bold text-text-main text-lg mt-4 mb-2 first:mt-0',
+  2: 'font-bold text-text-main text-base mt-4 mb-2 first:mt-0',
+  3: 'font-bold text-text-main text-sm mt-3 mb-1.5 first:mt-0',
 };
 
 const TABLE_LINE = /^<div class="overflow-x-auto my-2">.*$/gm;

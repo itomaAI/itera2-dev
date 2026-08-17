@@ -14,6 +14,7 @@
  */
 
 import type { SyncAdapterHost, SyncAdapterManifest, SyncAdapterStatus } from '../services/SyncAdapterHost';
+import { LABEL_KICKER } from '../styles/typography';
 
 export class SyncModal {
   private adapterHost: SyncAdapterHost;
@@ -90,7 +91,7 @@ export class SyncModal {
         </div>
         <div>
           <h2 class="font-bold text-text-main text-base leading-tight">Cloud Sync</h2>
-          <div class="text-[10px] text-text-muted font-mono uppercase tracking-widest mt-0.5">Sync Providers</div>
+          <div class="${LABEL_KICKER} text-text-muted mt-0.5">Sync Providers</div>
         </div>
       </div>
     `;
@@ -125,7 +126,7 @@ export class SyncModal {
 
     this.emptyNotice = document.createElement('div');
     this.emptyNotice.className =
-      'text-[11px] text-text-muted text-center py-6 border border-dashed border-border-main rounded-lg leading-relaxed';
+      'text-xs text-text-muted text-center py-6 border border-dashed border-border-main rounded-lg leading-relaxed';
     this.emptyNotice.innerHTML =
       'No sync adapters installed.<br /><span class="font-mono">system/registry/adapters.json</span>';
 

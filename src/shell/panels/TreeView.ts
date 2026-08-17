@@ -170,7 +170,7 @@ export class TreeView {
       const name = mutation.node.name;
       const path = mutation.path;
       const isStub = mutation.node.meta && mutation.node.meta.syncState === 'stub';
-      const stubIndicator = isStub ? '<span class="ml-1 text-primary text-[10px]" title="Cloud Only">☁️</span>' : '';
+      const stubIndicator = isStub ? '<span class="ml-1 text-primary text-[0.625rem]" title="Cloud Only">☁️</span>' : '';
       let icon =
         mutation.node.kind === 'directory' ? (this.expandedPaths.has(path) ? '📂' : '📁') : this._getFileIcon(name);
 
@@ -271,7 +271,7 @@ export class TreeView {
     if (path === 'system') icon = '⚙️';
 
     const isStub = meta && meta.syncState === 'stub';
-    const stubIndicator = isStub ? '<span class="ml-1 text-primary text-[10px]" title="Cloud Only">☁️</span>' : '';
+    const stubIndicator = isStub ? '<span class="ml-1 text-primary text-[0.625rem]" title="Cloud Only">☁️</span>' : '';
 
     div.innerHTML = `
       <span class="mr-2 opacity-80 text-xs pointer-events-none flex-shrink-0">${icon}</span>

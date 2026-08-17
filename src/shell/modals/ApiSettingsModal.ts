@@ -64,7 +64,7 @@ export class ApiSettingsModal {
         wrapper.className = 'flex flex-col gap-1.5 p-3 rounded-lg bg-card/50 border border-border-main/50';
 
         const label = document.createElement('label');
-        label.className = 'block text-[10px] font-bold text-text-muted uppercase tracking-wider mb-1';
+        label.className = 'block text-[0.625rem] font-bold text-text-muted uppercase tracking-wider mb-1';
         label.textContent = provider.name;
         wrapper.appendChild(label);
 

@@ -8,6 +8,7 @@
 import type { ProcessManager } from '../windowing/ProcessManager';
 import type { AppRegistry } from '../../core/sys/AppRegistry';
 import type { ConfigManager } from '../../core/sys/ConfigManager';
+import { LABEL_KICKER } from '../styles/typography';
 
 export class ProcessMonitorModal {
   private processManager: ProcessManager;
@@ -51,7 +52,7 @@ export class ProcessMonitorModal {
         <div class="w-8 h-8 rounded-lg bg-primary/20 text-primary flex items-center justify-center text-lg">📊</div>
         <div>
           <h2 class="font-bold text-text-main text-base leading-tight">Activity Monitor</h2>
-          <div class="text-[10px] text-text-muted font-mono uppercase tracking-widest mt-0.5">Real-time Process List</div>
+          <div class="${LABEL_KICKER} text-text-muted mt-0.5">Real-time Process List</div>
         </div>
       </div>
     `;
@@ -170,9 +171,9 @@ export class ProcessMonitorModal {
           <div class="flex flex-col min-w-0">
             <div class="flex items-center gap-2 mb-1">
               <span class="font-bold text-sm text-text-main truncate">${displayName}</span>
-              <span class="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border ${badgeColor}">${proc.state}</span>
+              <span class="text-[0.625rem] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border ${badgeColor}">${proc.state}</span>
             </div>
-            <div class="text-[10px] text-text-muted font-mono truncate" title="${proc.path}">${proc.path} ${displayName !== proc.pid && !isDaemon ? `(${proc.pid})` : ''}</div>
+            <div class="text-[0.625rem] text-text-muted font-mono truncate" title="${proc.path}">${proc.path} ${displayName !== proc.pid && !isDaemon ? `(${proc.pid})` : ''}</div>
           </div>
         </div>
       `;

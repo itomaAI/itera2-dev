@@ -200,7 +200,7 @@ export class DesktopEnvironment {
     if (statusEl) {
       statusEl.classList.remove('opacity-0');
       statusEl.textContent = 'Saved';
-      statusEl.className = 'text-[9px] text-success italic transition-opacity';
+      statusEl.className = 'text-[0.625rem] text-success italic transition-opacity';
     }
 
     this.saveFeedbackTimer = setTimeout(() => {
