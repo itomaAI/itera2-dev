@@ -7,12 +7,20 @@ import type { VfsService } from '../vfs/VfsService';
 import type { VfsEventBus } from '../vfs/VfsEventBus';
 import { SYSTEM_PRINCIPAL } from '../vfs/types';
 
+/**
+ * 自律ループで連続実行できるツール回数の既定の上限。
+ * `preferences.maxContinuousTools` が未設定・不正なときはこの値へ倒す。
+ */
+export const DEFAULT_MAX_CONTINUOUS_TOOLS = 50;
+
 export interface OsConfig {
   preferences: {
     username: string;
     agentName: string;
     language: string;
     autoUpdateSystemFiles: boolean;
+    /** 自律ループで連続実行できるツール回数の上限。0 以下で無制限。 */
+    maxContinuousTools: number;
   };
   appearance: {
     theme: string;
@@ -41,6 +49,7 @@ const DEFAULT_CONFIG: OsConfig = {
     agentName: 'Itera',
     language: 'English',
     autoUpdateSystemFiles: true,
+    maxContinuousTools: DEFAULT_MAX_CONTINUOUS_TOOLS,
   },
   appearance: {
     theme: 'system/themes/light.json',

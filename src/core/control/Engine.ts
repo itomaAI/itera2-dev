@@ -7,6 +7,7 @@ import type { HistoryManager, Turn, TurnContent, TurnMeta } from '../state/Histo
 import type { ToolExecutionEntry } from '../types/tools';
 import type { VfsService } from '../vfs/VfsService';
 import type { ConfigManager } from '../sys/ConfigManager';
+import { DEFAULT_MAX_CONTINUOUS_TOOLS } from '../sys/ConfigManager';
 import type { BaseProjector } from '../cognitive/Projector';
 import type { BaseLLMAdapter } from '../cognitive/adapters/BaseAdapter';
 import type { Translator, ParsedAction } from '../cognitive/Translator';
@@ -45,7 +46,6 @@ export class Engine {
 
   private debounceTimer: ReturnType<typeof setTimeout> | null = null;
   private continuousToolCount: number = 0;
-  private readonly MAX_CONTINUOUS_TOOLS: number = 50;
   private hasPendingEvents: boolean = false;
   /** ユーザーが明示的に停止を要求したか（デバウンス待機中・ツール実行中の停止を成立させるため） */
   private stopRequested: boolean = false;
@@ -77,6 +77,26 @@ export class Engine {
     if (this.listeners[event]) {
       this.listeners[event].forEach((cb) => cb(data));
     }
+  }
+
+  /**
+   * 自律ループで連続実行できるツール回数の上限。
+   * `system/config/preferences.json` の `maxContinuousTools` を毎サイクル読むので、
+   * 設定の変更は再起動なしで効く。**0 以下は「上限なし」を意味する。**
+   *
+   * 読めない値（未設定・空文字・NaN など）は「上限なし」ではなく既定値へ倒す。
+   * 設定の失敗が、そのまま暴走の許可に化けるのを避けるため。
+   */
+  private get maxContinuousTools(): number {
+    // 型は number だが、手書きの JSON では文字列など何が入っていてもおかしくない。
+    // unknown として受けて、実行時に判定する。
+    const raw: unknown = this.state.configManager?.get('preferences')?.maxContinuousTools;
+    if (typeof raw === 'number' && Number.isFinite(raw)) return raw;
+    if (typeof raw === 'string' && raw.trim() !== '') {
+      const parsed = Number(raw);
+      if (Number.isFinite(parsed)) return parsed;
+    }
+    return DEFAULT_MAX_CONTINUOUS_TOOLS;
   }
 
   private _onHistoryChange(payload: any): void {
@@ -205,10 +225,11 @@ export class Engine {
       }
 
       // 暴走チェック
-      if (this.MAX_CONTINUOUS_TOOLS > 0 && this.continuousToolCount >= this.MAX_CONTINUOUS_TOOLS) {
+      const maxContinuousTools = this.maxContinuousTools;
+      if (maxContinuousTools > 0 && this.continuousToolCount >= maxContinuousTools) {
         this.state.history.append(
           'system',
-          `<event type="system_alert">\nSystem Alert: Max continuous tool executions (${this.MAX_CONTINUOUS_TOOLS}) reached. Auto-trigger paused.\n</event>`,
+          `<event type="system_alert">\nSystem Alert: Max continuous tool executions (${maxContinuousTools}) reached. Auto-trigger paused.\n</event>`,
           {
             type: TurnType.ERROR,
             trigger_llm: false,

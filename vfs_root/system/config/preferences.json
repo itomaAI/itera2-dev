@@ -2,5 +2,6 @@
   "username": "User",
   "agentName": "Itera",
   "language": "English",
-  "autoUpdateSystemFiles": true
+  "autoUpdateSystemFiles": true,
+  "maxContinuousTools": 50
 }

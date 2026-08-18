@@ -140,6 +140,22 @@
 
           <div class="space-y-6">
             <div>
+              <label class="block text-xs font-bold text-text-muted uppercase mb-1.5">Autonomous Loop Limit</label>
+              <input
+                type="number"
+                id="config-maxContinuousTools"
+                data-category="preferences"
+                data-key="maxContinuousTools"
+                step="1"
+                class="w-full md:w-1/2 font-mono bg-card border border-border-main rounded-lg px-3 py-2 text-sm text-text-main focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/30 transition shadow-inner"
+                placeholder="50"
+              />
+              <p class="text-[10px] text-text-muted mt-1.5 opacity-80">
+                How many tool executions the agent may chain without your input. Set 0 or -1 for no limit.
+              </p>
+            </div>
+
+            <div>
               <label class="block text-xs font-bold text-text-muted uppercase mb-1.5">CORS Proxy URL</label>
               <input
                 type="text"
@@ -520,6 +536,9 @@
           DOM('config-username').value = configs.preferences.username || '';
           DOM('config-agentName').value = configs.preferences.agentName || '';
           DOM('config-language').value = configs.preferences.language || 'English';
+          // 0 は「無制限」を意味する正当な値なので、|| で既定値へ倒してはならない。
+          DOM('config-maxContinuousTools').value =
+            typeof configs.preferences.maxContinuousTools === 'number' ? configs.preferences.maxContinuousTools : 50;
           DOM('config-network-proxyUrl').value = configs.network.proxyUrl || '';
           DOM('config-network-allowCredentialsWithProxy').checked = !!configs.network.allowCredentialsWithProxy;
 
@@ -579,7 +598,17 @@
         const keyPath = e.target.getAttribute('data-key');
         if (!category || !keyPath) return;
 
-        const val = e.target.type === 'checkbox' ? e.target.checked : e.target.value;
+        let val;
+        if (e.target.type === 'checkbox') {
+          val = e.target.checked;
+        } else if (e.target.type === 'number') {
+          // 入力途中（空文字・'-' だけ）を保存すると、設定が壊れた値で上書きされる。
+          const parsed = Number(e.target.value);
+          if (e.target.value.trim() === '' || !Number.isFinite(parsed)) return;
+          val = Math.trunc(parsed);
+        } else {
+          val = e.target.value;
+        }
 
         const parts = keyPath.split('.');
         let targetObj = configs[category];
@@ -598,6 +627,7 @@
         'config-username',
         'config-agentName',
         'config-language',
+        'config-maxContinuousTools',
         'config-network-proxyUrl',
         'config-network-allowCredentialsWithProxy',
         'config-app-locale',

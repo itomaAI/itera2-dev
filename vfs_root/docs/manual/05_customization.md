@@ -8,15 +8,19 @@ You can modify these files directly via the code editor, or have the AI agent do
 
 This directory holds the dynamic configuration of your OS environment.
 
-*   **`preferences.json`**: Holds your identity and language settings.
+*   **`preferences.json`**: Holds your identity, language and agent behavior settings.
     ```json
     {
       "username": "User",
       "agentName": "Itera",
       "language": "English",
-      "autoUpdateSystemFiles": true
+      "autoUpdateSystemFiles": true,
+      "maxContinuousTools": 50
     }
     ```
+    `maxContinuousTools` caps how many tool executions the agent may chain without your input.
+    **Set it to `0` (or any negative number such as `-1`) to remove the limit entirely.**
+    Unreadable values fall back to the default (50) rather than to "no limit".
 *   **`llm.json`**: Configures the active AI provider and model.
     ```json
     {
