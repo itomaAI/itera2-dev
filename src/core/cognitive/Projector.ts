@@ -19,6 +19,35 @@ export interface LlmCapabilities {
   providerOptions?: Record<string, any>;
 }
 
+/**
+ * 添付を組み立てられなかった理由。
+ *
+ * - `missing`: VFS に実体が無い
+ * - `no_credentials`: 送信先へアップロードするための鍵が無い（未設定・失効など）
+ * - `upload_failed`: アップロードそのものが失敗した
+ */
+export type MediaAttachFailure = 'missing' | 'no_credentials' | 'upload_failed';
+
+export type MediaAttachResult<T> = { ok: true; value: T } | { ok: false; reason: MediaAttachFailure };
+
+/**
+ * 添付を付けられなかったときに、代わりにプロンプトへ入れる注記。
+ *
+ * **黙って落とさないこと**と、**理由を取り違えないこと**の両方が要る。
+ * 「VFS から読めなかった」と誤って出すと、実際には鍵が無いだけなのに保存先を疑わせる。
+ */
+export function buildMediaFailureNotice(path: string, reason: MediaAttachFailure): string {
+  switch (reason) {
+    case 'no_credentials':
+      return `\n[System: The file '${path}' was NOT sent. This provider needs a file-upload API key, which is not configured or has expired.]\n`;
+    case 'upload_failed':
+      return `\n[System: The file '${path}' was NOT sent. Uploading it to the provider failed.]\n`;
+    case 'missing':
+    default:
+      return `\n[System: The file '${path}' was NOT sent. It could not be loaded from VFS.]\n`;
+  }
+}
+
 export abstract class BaseProjector {
   protected systemPrompt: string;
   protected capabilities: LlmCapabilities;
@@ -179,7 +208,8 @@ export class GeminiProjector extends BaseProjector {
             const support = await this.checkMediaSupport(vfs, node.media, SYSTEM_PRINCIPAL);
             if (support.supported) {
               const fileData = await this._resolveMediaFile(node.media, vfs, apiKey, signal);
-              if (fileData) parts.push({ fileData });
+              if (fileData.ok) parts.push({ fileData: fileData.value });
+              else parts.push({ text: buildMediaFailureNotice(node.media.path, fileData.reason) });
             } else {
               parts.push({
                 text: this.getUnsupportedMessage(node.media.path, node.media.mimeType, support.reason!),
@@ -202,11 +232,8 @@ export class GeminiProjector extends BaseProjector {
           const support = await this.checkMediaSupport(vfs, node.media, SYSTEM_PRINCIPAL);
           if (support.supported) {
             const fileData = await this._resolveMediaFile(node.media, vfs, apiKey, signal);
-            if (fileData) parts.push({ fileData });
-            else
-              parts.push({
-                text: `\n[System: The image file '${node.media.path}' could not be loaded from VFS.]\n`,
-              });
+            if (fileData.ok) parts.push({ fileData: fileData.value });
+            else parts.push({ text: buildMediaFailureNotice(node.media.path, fileData.reason) });
           } else {
             parts.push({
               text: this.getUnsupportedMessage(node.media.path, node.media.mimeType, support.reason!),
@@ -221,16 +248,23 @@ export class GeminiProjector extends BaseProjector {
     return [];
   }
 
-  private async _resolveMediaFile(mediaObj: any, vfs: VfsService, apiKey: string, signal?: AbortSignal): Promise<any> {
+  private async _resolveMediaFile(
+    mediaObj: any,
+    vfs: VfsService,
+    apiKey: string,
+    signal?: AbortSignal,
+  ): Promise<MediaAttachResult<any>> {
     const geminiMeta = mediaObj.metadata?.gemini;
     if (geminiMeta && geminiMeta.fileUri && geminiMeta.expirationTime) {
       if (new Date(geminiMeta.expirationTime) > new Date(Date.now() + 60 * 60 * 1000)) {
-        return { fileUri: geminiMeta.fileUri, mimeType: mediaObj.mimeType };
+        return { ok: true, value: { fileUri: geminiMeta.fileUri, mimeType: mediaObj.mimeType } };
       }
     }
 
-    if (!vfs.exists(SYSTEM_PRINCIPAL, mediaObj.path)) return null;
-    if (!apiKey) return null;
+    if (!vfs.exists(SYSTEM_PRINCIPAL, mediaObj.path)) return { ok: false, reason: 'missing' };
+    // 鍵が未設定・失効なら上げられない。ここで黙って落とすと、添付を送ったつもりの
+    // 利用者に何も知らせないまま応答が返る。
+    if (!apiKey) return { ok: false, reason: 'no_credentials' };
 
     try {
       const blob = await vfs.readBlob(SYSTEM_PRINCIPAL, mediaObj.path);
@@ -243,10 +277,10 @@ export class GeminiProjector extends BaseProjector {
         name: uploadResult.name,
       };
 
-      return { fileUri: uploadResult.fileUri, mimeType: mediaObj.mimeType };
+      return { ok: true, value: { fileUri: uploadResult.fileUri, mimeType: mediaObj.mimeType } };
     } catch (e) {
       console.error('[Projector] File upload failed:', e);
-      return null;
+      return { ok: false, reason: 'upload_failed' };
     }
   }
 
@@ -369,10 +403,12 @@ export class OpenAIProjector extends BaseProjector {
             if (support.supported) {
               if (node.media.mimeType?.startsWith('image/')) {
                 const imgUrl = await this._resolveMediaDataUrl(node.media, vfs);
-                if (imgUrl) parts.push({ type: 'image_url', image_url: { url: imgUrl } });
+                if (imgUrl.ok) parts.push({ type: 'image_url', image_url: { url: imgUrl.value } });
+                else parts.push({ type: 'text', text: buildMediaFailureNotice(node.media.path, imgUrl.reason) });
               } else {
                 const fileData = await this._resolveFileData(node.media, vfs);
-                if (fileData) parts.push({ type: 'file', file: fileData });
+                if (fileData.ok) parts.push({ type: 'file', file: fileData.value });
+                else parts.push({ type: 'text', text: buildMediaFailureNotice(node.media.path, fileData.reason) });
               }
             } else {
               parts.push({
@@ -398,20 +434,12 @@ export class OpenAIProjector extends BaseProjector {
           if (support.supported) {
             if (node.media.mimeType?.startsWith('image/')) {
               const imgUrl = await this._resolveMediaDataUrl(node.media, vfs);
-              if (imgUrl) parts.push({ type: 'image_url', image_url: { url: imgUrl } });
-              else
-                parts.push({
-                  type: 'text',
-                  text: `\n[System: The image file '${node.media.path}' could not be loaded from VFS.]\n`,
-                });
+              if (imgUrl.ok) parts.push({ type: 'image_url', image_url: { url: imgUrl.value } });
+              else parts.push({ type: 'text', text: buildMediaFailureNotice(node.media.path, imgUrl.reason) });
             } else {
               const fileData = await this._resolveFileData(node.media, vfs);
-              if (fileData) parts.push({ type: 'file', file: fileData });
-              else
-                parts.push({
-                  type: 'text',
-                  text: `\n[System: The file '${node.media.path}' could not be loaded from VFS.]\n`,
-                });
+              if (fileData.ok) parts.push({ type: 'file', file: fileData.value });
+              else parts.push({ type: 'text', text: buildMediaFailureNotice(node.media.path, fileData.reason) });
             }
           } else {
             parts.push({
@@ -428,15 +456,15 @@ export class OpenAIProjector extends BaseProjector {
     return [];
   }
 
-  private async _resolveMediaDataUrl(mediaObj: any, vfs: VfsService): Promise<string | null> {
-    if (!vfs.exists(SYSTEM_PRINCIPAL, mediaObj.path)) return null;
+  private async _resolveMediaDataUrl(mediaObj: any, vfs: VfsService): Promise<MediaAttachResult<string>> {
+    if (!vfs.exists(SYSTEM_PRINCIPAL, mediaObj.path)) return { ok: false, reason: 'missing' };
     const blob = await vfs.readBlob(SYSTEM_PRINCIPAL, mediaObj.path);
     const base64 = await this._blobToBase64(blob);
-    return `data:${mediaObj.mimeType || 'image/png'};base64,${base64}`;
+    return { ok: true, value: `data:${mediaObj.mimeType || 'image/png'};base64,${base64}` };
   }
 
-  private async _resolveFileData(mediaObj: any, vfs: VfsService): Promise<any | null> {
-    if (!vfs.exists(SYSTEM_PRINCIPAL, mediaObj.path)) return null;
+  private async _resolveFileData(mediaObj: any, vfs: VfsService): Promise<MediaAttachResult<any>> {
+    if (!vfs.exists(SYSTEM_PRINCIPAL, mediaObj.path)) return { ok: false, reason: 'missing' };
     const blob = await vfs.readBlob(SYSTEM_PRINCIPAL, mediaObj.path);
     const base64 = await this._blobToBase64(blob);
     const filename = mediaObj.path.split('/').pop() || 'file';
@@ -445,8 +473,11 @@ export class OpenAIProjector extends BaseProjector {
     const dataUri = `data:${mimeType};base64,${base64}`;
 
     return {
-      filename: filename,
-      file_data: dataUri,
+      ok: true,
+      value: {
+        filename: filename,
+        file_data: dataUri,
+      },
     };
   }
 }
@@ -557,7 +588,8 @@ export class AnthropicProjector extends BaseProjector {
                 state.configManager,
                 signal,
               );
-              if (fileObj) parts.push(fileObj);
+              if (fileObj.ok) parts.push(fileObj.value);
+              else parts.push({ type: 'text', text: buildMediaFailureNotice(node.media.path, fileObj.reason) });
             } else {
               parts.push({
                 type: 'text',
@@ -587,12 +619,8 @@ export class AnthropicProjector extends BaseProjector {
               state.configManager,
               signal,
             );
-            if (fileObj) parts.push(fileObj);
-            else
-              parts.push({
-                type: 'text',
-                text: `\n[System: The file '${node.media.path}' could not be loaded from VFS.]\n`,
-              });
+            if (fileObj.ok) parts.push(fileObj.value);
+            else parts.push({ type: 'text', text: buildMediaFailureNotice(node.media.path, fileObj.reason) });
           } else {
             parts.push({
               type: 'text',
@@ -614,14 +642,15 @@ export class AnthropicProjector extends BaseProjector {
     apiKey: string,
     configManager: ConfigManager,
     signal?: AbortSignal,
-  ): Promise<any | null> {
+  ): Promise<MediaAttachResult<any>> {
     const anthropicMeta = mediaObj.metadata?.anthropic;
     if (anthropicMeta && anthropicMeta.fileId) {
-      return this._buildAnthropicContentBlock(anthropicMeta.fileId, mediaObj.mimeType);
+      return { ok: true, value: this._buildAnthropicContentBlock(anthropicMeta.fileId, mediaObj.mimeType) };
     }
 
-    if (!vfs.exists(SYSTEM_PRINCIPAL, mediaObj.path)) return null;
-    if (!apiKey) return null;
+    if (!vfs.exists(SYSTEM_PRINCIPAL, mediaObj.path)) return { ok: false, reason: 'missing' };
+    // 鍵が無ければ上げられない（Gemini 側と同じ理由）。
+    if (!apiKey) return { ok: false, reason: 'no_credentials' };
 
     try {
       const blob = await vfs.readBlob(SYSTEM_PRINCIPAL, mediaObj.path);
@@ -634,10 +663,10 @@ export class AnthropicProjector extends BaseProjector {
         fileId: uploadResult.id,
       };
 
-      return this._buildAnthropicContentBlock(uploadResult.id, mediaObj.mimeType || blob.type);
+      return { ok: true, value: this._buildAnthropicContentBlock(uploadResult.id, mediaObj.mimeType || blob.type) };
     } catch (e) {
       console.error('[Projector] Anthropic file upload failed:', e);
-      return null;
+      return { ok: false, reason: 'upload_failed' };
     }
   }
 
