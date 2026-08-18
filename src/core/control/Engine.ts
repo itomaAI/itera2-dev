@@ -244,14 +244,19 @@ export class Engine {
         // （上限1で実測したとき、約40件が1.5秒間隔で積まれ続けた）。
         if (!this.haltedByToolCap) {
           this.haltedByToolCap = true;
-          this.state.history.append(
+          // 【重要】積むだけでは画面に出ない。チャット欄は履歴を直接見ておらず、
+          // turn_end → EventOrchestrator → ChatPanel.appendTurn の経路でしか描かれない。
+          // ここで emit を落としていたため、利用者からは「黙って止まった」ようにしか見えなかった。
+          // 停止の理由は、止まった当人（AI）ではなく利用者に届かなければ意味がない。
+          const alertTurn = this.state.history.append(
             'system',
-            `<event type="system_alert">\nSystem Alert: Max continuous tool executions (${maxContinuousTools}) reached. Auto-trigger paused.\n</event>`,
+            `<event type="system_alert">\nSystem Alert: Max continuous tool executions (${maxContinuousTools}) reached. Auto-trigger paused.\nSend a message in this chat to resume. Raising the limit alone does NOT resume it.\nThe limit can be changed in Settings > Autonomous Loop Limit (0 = unlimited).\n</event>`,
             {
               type: TurnType.ERROR,
               trigger_llm: false,
             },
           );
+          this._emit('turn_end', { role: 'system', turn: alertTurn });
         }
         // loop_stop は毎回 emit する。ここを黙って return すると
         // UI の "Processing..." を解除する者がいなくなる。

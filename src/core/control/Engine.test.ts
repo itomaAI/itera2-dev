@@ -63,11 +63,22 @@ function createHarness(preferences: any) {
   const stops: any[] = [];
   engine.on('loop_stop', (d: any) => stops.push(d));
 
+  // 【重要】「履歴に積まれた」と「画面に届いた」は別のことである。
+  // チャット欄は履歴を直接見ておらず、turn_end を受けて初めて描く。
+  // 欠陥はまさにその隙間に住んでいたので、観測点は append ではなく通知にする。
+  const turnEnds: any[] = [];
+  engine.on('turn_end', (d: any) => turnEnds.push(d));
+
+  /** 警告が turn_end として通知された回数（＝利用者の画面に出た回数） */
+  const deliveredAlerts = () =>
+    turnEnds.filter((d: any) => typeof d?.turn?.content === 'string' && d.turn.content.includes(ALERT_MARK));
+
   /** 連続実行回数を count に固定して1サイクル回し、止まったかどうかを返す */
   const runCycleAt = async (count: number) => {
     (engine as any).continuousToolCount = count;
     stops.length = 0;
     appended.length = 0;
+    turnEnds.length = 0;
     createContext.mockClear();
     await (engine as any)._ping();
     return {
@@ -96,7 +107,17 @@ function createHarness(preferences: any) {
     await (engine as any)._ping();
   };
 
-  return { runCycleAt, pingAgain, appendTurn, flush, alertCount, reachedProjector, createContext, stops };
+  return {
+    runCycleAt,
+    pingAgain,
+    appendTurn,
+    flush,
+    alertCount,
+    deliveredAlerts,
+    reachedProjector,
+    createContext,
+    stops,
+  };
 }
 
 describe('Engine: 自律ループの連続ツール実行上限', () => {
@@ -259,5 +280,65 @@ describe('Engine: 上限に達して停止した後', () => {
 
     // 連続回数も 0 に戻るので、上限1のままでも1回は動ける
     expect(h.reachedProjector()).toBe(true);
+  });
+});
+
+/**
+ * 停止したことが「利用者に」見えるか。
+ *
+ * 上限に達したときの警告は履歴に積まれていたが、画面には一度も出ていなかった。
+ * チャット欄は履歴を直接見ておらず、Engine が emit する turn_end を
+ * EventOrchestrator が受けて ChatPanel.appendTurn を呼ぶ経路でしか描かないため、
+ * emit を落としていた append は「記録には残るが誰も描かない」ものになっていた。
+ * 利用者からは、OS が理由も言わずに黙って止まったようにしか見えない。
+ *
+ * したがって観測点は append ではなく通知に置く。
+ * 「積まれたこと」を見る試験は、この欠陥がある状態でも通ってしまう。
+ */
+describe('Engine: 停止したことが利用者に見えるか', () => {
+  beforeEach(() => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('停止の警告は turn_end として通知される（本命）', async () => {
+    const h = createHarness({ maxContinuousTools: 1 });
+
+    const atLimit = await h.runCycleAt(1);
+    expect(atLimit.stopped).toBe(true);
+    // 履歴には積まれている（ここまでは欠陥のある実装でも成立していた）
+    expect(h.alertCount()).toBe(1);
+
+    // 画面へ届いたか。届いていなければ、利用者にとっては黙って止まったのと同じ。
+    const delivered = h.deliveredAlerts();
+    expect(delivered.length).toBe(1);
+    expect(delivered[0].role).toBe('system');
+    expect(delivered[0].turn.content).toContain(`(1)`);
+  });
+
+  it('通知も1連続につき1回だけ（画面が警告で埋まらない）', async () => {
+    const h = createHarness({ maxContinuousTools: 1 });
+    await h.runCycleAt(1);
+
+    await h.pingAgain();
+    await h.pingAgain();
+    await h.flush();
+
+    expect(h.deliveredAlerts().length).toBe(1);
+  });
+
+  it('警告文に、再開のしかたと上限の変え方が書かれている', async () => {
+    // 「止まった」だけでは利用者は次に何をすればよいか分からない。
+    // 特に「上限を上げても再開しない」は仕様であって、書かなければ伝わらない。
+    const h = createHarness({ maxContinuousTools: 3 });
+    const atLimit = await h.runCycleAt(3);
+
+    expect(atLimit.alert).toContain('Send a message in this chat to resume');
+    expect(atLimit.alert).toContain('does NOT resume');
+    expect(atLimit.alert).toContain('Autonomous Loop Limit');
   });
 });
