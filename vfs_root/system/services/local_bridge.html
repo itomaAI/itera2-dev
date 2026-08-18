@@ -242,6 +242,81 @@
           } catch (e) {}
         }
 
+        // ---------- 衝突（両側が動いた） ----------
+
+        // 1ファイルにつき1度だけ知らせる。毎周期（約20秒ごと）鳴らすと無視されるようになる。
+        // 解消したら忘れる（分岐7・8の成功時に削除）。
+        const conflictNotified = new Set();
+
+        /**
+         * 両側がアンカーから動いたか。
+         *
+         * ★ 分岐5（ローカルだけ）・6（リモートだけ）・7（一致）のいずれでもないことを、
+         *   条件として明示する。ここを「その他」で受けると、
+         *   将来また別の場合分けが漏れたときに黙って飲み込んでしまう。
+         *
+         * 内容が同じなら衝突ではない。両側が別々に同じ結果へ辿り着いた場合で、
+         * これは分岐7が吸収する（実際、止まった項目はこれで復旧させた）。
+         */
+        function isConflict(l, r, a, same) {
+          if (!l || !r) return false;
+          if (same(l, r)) return false;
+          return !same(l, a) && !same(r, a);
+        }
+
+        /**
+         * 衝突の解消。方針は「どちらも消さない」（2026-08-18 山内さん判断）。
+         *
+         *   1. VFS 側の内容を <名前>.conflict-<時刻> としてホストへ退避する
+         *   2. 元のパスはホスト側を正として揃える（git やツールはホスト側で動くため）
+         *   3. 必ず知らせる
+         *
+         * ★ 退避に失敗したら**何もしない**。上書きすれば消える側ができてしまう。
+         *   その場合この項目は止まったままだが、止まっていることは通知する。
+         *   黙って止まるのが元の欠陥であり、そこへ戻してはならない。
+         */
+        async function resolveConflict(mount, rel, full, r, next) {
+          const { conn, root, mountPath } = mount;
+          const key = `${mountPath}/${rel}`;
+          const notifyOnce = (msg) => {
+            log(msg);
+            if (conflictNotified.has(key)) return;
+            conflictNotified.add(key);
+            try {
+              MetaOS.host.notify(msg, 'Local Bridge');
+            } catch (e) {}
+            try {
+              MetaOS.ai.log(msg, 'warning');
+            } catch (e) {}
+          };
+
+          const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+          const backupRel = `${rel}.conflict-${stamp}`;
+
+          let saved = null;
+          try {
+            const u8 = await MetaOS.fs.read(full, { encoding: 'binary' });
+            saved = await getJson(api(conn, `/api/${root}/file/${backupRel}`), { method: 'PUT', body: u8 });
+          } catch (e) {
+            notifyOnce(
+              `[Local Bridge] /${mountPath}/${rel} は両側が変更されています。` +
+                `VFS 側の退避に失敗したため、このファイルの同期を保留しました（内容はどちらも保持しています）。\n` +
+                `理由: ${e.message}`,
+            );
+            return;
+          }
+
+          await MetaOS.fs.createStub(full, { size: r.size, updatedAt: r.updatedAt, hash: r.hash });
+          next[rel] = { kind: 'file', size: r.size, updatedAt: r.updatedAt, hash: r.hash };
+          if (saved) next[backupRel] = { kind: 'file', size: saved.size, updatedAt: saved.updatedAt, hash: saved.hash };
+          conflictNotified.delete(key);
+
+          notifyOnce(
+            `[Local Bridge] /${mountPath}/${rel} は両側が変更されていました。\n` +
+              `ホスト側を採用し、VFS 側の内容は ${backupRel} として保存しました。どちらも失われていません。`,
+          );
+        }
+
         // ---------- 調停（3-way マージ） ----------
         async function reconcile(mount) {
           const { conn, root, mountPath } = mount;
@@ -373,6 +448,21 @@
               // 7. 一致している
               if (l && r && same(l, r)) {
                 next[rel] = { kind: l.kind, size: r.size, updatedAt: r.updatedAt, hash: r.hash };
+                conflictNotified.delete(`${mountPath}/${rel}`);
+                continue;
+              }
+
+              // 8. 両方が動いた（衝突）
+              //
+              // ★ ここが無かった（T-0013）。分岐1〜7のどれにも該当しないまま素通りし、
+              //   next は { ...anchor } で作られるため**古いアンカーがそのまま残る**。
+              //   次の巡回でも同じ判定になり、この項目は**永久に、無言で**同期されなくなる。
+              //   アンカーを消しても直らない（分岐5・6・7がいずれも成立しないため）。
+              //   実際に、私の edit_file とデーモンの書き込みが同一ミリ秒で衝突して発生した。
+              if (isConflict(l, r, a, same)) {
+                if (l.kind === 'directory' || r.kind === 'directory') continue;
+                await resolveConflict(mount, rel, full, r, next);
+                continue;
               }
             } catch (e) {
               log(`項目の調停に失敗 ${conn.name}/${root}/${rel}: ${e.message}`);
