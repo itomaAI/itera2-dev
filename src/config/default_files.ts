@@ -1,6 +1,6 @@
 /**
  * AUTO-GENERATED FILE - DO NOT EDIT MANUALLY
- * Generated on: 2026-08-18T04:55:38.899Z
+ * Generated on: 2026-08-18T06:16:07.512Z
  */
 
 export const DEFAULT_FILES: Record<string, string> = {
@@ -28836,9 +28836,32 @@ system/credentials/gdrive.json     { "clientId": "..." }
       function isExcluded(path) {
         if (!path) return true;
 
-        // 他プロバイダの管轄下（listMounts から導出）
+        // 他プロバイダの管轄（listMounts から導出）。前置一致は双方向に見る。
+        //
+        //   (a) path が m の配下   … 相手の領域そのもの
+        //   (b) m が path の配下   … path は相手のマウント地点の「祖先」
+        //
+        // ★ (b) を除外しないと、'local' や 'local/yachiyo' のような
+        //   「入れ物だけ」がこちらの同期対象として残る。これは危険である。
+        //   Drive 側でそのフォルダが消えると、取り込みが VFS のディレクトリを削除し、
+        //   ディレクトリ削除は配下（＝相手の管轄）ごと巻き添えにする。
+        //   相手がそれを「ローカルで削除された」と読めば、
+        //   利用者の実機のファイルまで削除が伝播する。
+        //
+        // ★ SYSTEM_SYNCED（下記）とは逆向きの規則である点に注意。
+        //   あちらは「配下を同期するので入れ物も要る」ため祖先を残す。
+        //   こちらは「配下を一切同期しない」ので入れ物ごと要らない。
+        //   規則が逆になる理由は、祖先の下に同期対象があるか否かである。
+        //
+        // ▼ 既知の限界: 除外された祖先の下に、マウントではない兄弟
+        //   （例: detach の退避先 'local/<接続>/.detached-*'）が置かれると、
+        //   その兄弟は同期対象のまま親だけが R から落ちるため、
+        //   ensureRemoteFolder() が毎サイクル空フォルダを作り続ける
+        //   （SYSTEM_SYNCED で実際に 125 個堆積したのと同じ様式）。
+        //   マウントの入れ物（既定では 'local/'）には他のものを置かないこと。
         for (const m of foreignMountPaths) {
           if (matchesPrefix(path, m)) return true;
+          if (matchesPrefix(m, path)) return true;
         }
 
         for (const p of ALWAYS_EXCLUDED) {
@@ -32005,4 +32028,4 @@ Attributes:
   ),
 };
 
-export const BUILD_TIME = 1787028938899;
+export const BUILD_TIME = 1787033767512;
