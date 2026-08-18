@@ -230,20 +230,23 @@ export class VfsService {
 
     if (this.providerManager) {
       // マウントポイント自身の印（isMountPoint）に加えて、
-      // 「同期プロバイダの管轄下にあるか」（isVirtual）を全ノードに配る。
+      // 「ルート以外の同期プロバイダの管轄下にあるか」（isVirtual）を配る。
       //
-      // 印を配下すべてに付けるのは、利用者から見て
-      // 「この階層より下は VFS の中だけの存在ではない」ことが常に分かるようにするため。
-      // マウント地点にだけ印を付けると、深い階層を開いている間は手掛かりが消える。
+      // ★ ルートマウント（mountPath === ''）は印を付けない。
+      //   Google ドライブ同期は VFS 全体をマウントしうる。その構成では
+      //   「プロバイダの管轄下か」で印を付けると**全ディレクトリが該当**し、
+      //   印としての情報量がゼロになる（実際にそうなった）。
+      //   印が意味を持つのは、管轄が**切り替わる境界**から先だけである。
       //
-      // マウントは前置一致なので、親が管轄下なら子も必ず管轄下である。
-      // その性質を使って親から伝播させ、ノードごとの検索を省く。
+      // マウントは最長前置一致なので、親が非ルートのマウント配下なら
+      // 子も必ず同じマウントの配下になる。その性質を使って親から伝播させる。
       const attachMountInfo = (nodes: TreeNode[], parentIsVirtual: boolean) => {
         for (const node of nodes) {
           if (this.providerManager!.isMountPoint(node.path)) {
             node.isMountPoint = true;
           }
-          const isVirtual = parentIsVirtual || this.providerManager!.findProviderForPath(node.path) !== null;
+          const info = parentIsVirtual ? null : this.providerManager!.findProviderForPath(node.path);
+          const isVirtual = parentIsVirtual || (!!info && info.mountPath !== '');
           if (isVirtual) node.isVirtual = true;
           if (node.children) attachMountInfo(node.children, isVirtual);
         }
