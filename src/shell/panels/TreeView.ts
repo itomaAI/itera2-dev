@@ -187,19 +187,18 @@ export class TreeView {
       const name = mutation.node.name;
       const path = mutation.path;
       const isStub = mutation.node.meta && mutation.node.meta.syncState === 'stub';
-      const stubIndicator = isStub
-        ? '<span class="ml-1 text-primary text-[0.625rem]" title="Cloud Only">☁️</span>'
-        : '';
+      // 薄さ＝中身がまだ手元に無い（スタブ）。☁️＝同期対象。役割を分けている。
       // 同期プロバイダの印は差分更新の入力（VfsNode）には入っていない。
       // 描いた時に DOM へ残してあるので、そこから引き継ぐ。
       // ここを落とすと「配下のファイルが1つ同期されるたびに親の印が消える」ことになる。
       const isVirtual = targetDiv.dataset.virtual === '1';
       const isMountPoint = targetDiv.dataset.mount === '1';
-      const iconHtml = this._getIconHtml(path, mutation.node.kind, name, isVirtual, isMountPoint);
+      const iconHtml = this._getIconHtml(path, mutation.node.kind, name, isMountPoint);
+      const syncIndicator = this._getSyncIndicator(isVirtual, !!isStub);
 
       targetDiv.innerHTML = `
         ${iconHtml}
-        <span class="truncate pointer-events-none flex-1${isStub ? ' text-text-muted' : ''}">${name}${stubIndicator}</span>
+        <span class="truncate pointer-events-none flex-1${isStub ? ' text-text-muted' : ''}">${name}${syncIndicator}</span>
         <button class="menu-btn w-6 h-6 flex items-center justify-center text-text-muted hover:text-text-main hover:bg-hover rounded ml-1 transition flex-shrink-0 opacity-100 md:opacity-0 group-hover:opacity-100">
           ⋮
         </button>
@@ -293,14 +292,15 @@ export class TreeView {
       div.addEventListener('drop', (e) => this._handleDrop(e, path, div));
     }
 
-    const iconHtml = this._getIconHtml(path, kind, name, isVirtual, isMountPoint);
+    const iconHtml = this._getIconHtml(path, kind, name, isMountPoint);
 
+    // 薄さ＝中身がまだ手元に無い（スタブ）。☁️＝同期対象。役割を分けている。
     const isStub = meta && meta.syncState === 'stub';
-    const stubIndicator = isStub ? '<span class="ml-1 text-primary text-[0.625rem]" title="Cloud Only">☁️</span>' : '';
+    const syncIndicator = this._getSyncIndicator(isVirtual, !!isStub);
 
     div.innerHTML = `
       ${iconHtml}
-      <span class="truncate pointer-events-none flex-1${isStub ? ' text-text-muted' : ''}">${name}${stubIndicator}</span>
+      <span class="truncate pointer-events-none flex-1${isStub ? ' text-text-muted' : ''}">${name}${syncIndicator}</span>
       <button class="menu-btn w-6 h-6 flex items-center justify-center text-text-muted hover:text-text-main hover:bg-hover rounded ml-1 transition flex-shrink-0 opacity-100 md:opacity-0 group-hover:opacity-100">
         ⋮
       </button>
@@ -349,35 +349,35 @@ export class TreeView {
     if (path === 'system') return '⚙️';
     if (kind !== 'directory') return this._getFileIcon(name);
     // マウント地点も含め、ディレクトリは開閉が分かる形を保つ。
-    // 同期の印はアイコンを置き換えず、隅のバッジで重ねる（_getIconHtml）。
+    // 同期の印はアイコンに重ねず、名前の右に出す（_getSyncIndicator）。
     return this.expandedPaths.has(path) ? '📂' : '📁';
   }
 
-  /**
-   * アイコン一式（バッジ込み）の HTML を返す。
-   *
-   * 名前の隣ではなくアイコンの隅に重ねるのは、
-   * 名前の隣に置くと**行が横に伸びて名前が読みにくくなる**ため。
-   * 開閉（📂/📁）は木を読むうえで最も重要な手掛かりなので潰さない。
-   *
-   * バッジを出すのは「ルート以外のプロバイダが管轄する領域」だけである
-   * （判定は VfsService.getTree。ルート同期は全ディレクトリが該当してしまうので出さない）。
-   */
-  private _getIconHtml(path: string, kind: string, name: string, isVirtual: boolean, isMountPoint: boolean): string {
+  /** アイコン欄。★ 子要素を持たせないこと（開閉トグルが textContent で書き換えるため） */
+  private _getIconHtml(path: string, kind: string, name: string, isMountPoint: boolean): string {
     const icon = this._getIcon(path, kind, name, isMountPoint);
-    const base = 'mr-2 opacity-80 text-xs pointer-events-none flex-shrink-0';
+    return `<span class="mr-2 opacity-80 text-xs pointer-events-none flex-shrink-0">${icon}</span>`;
+  }
 
-    if (!isVirtual || kind !== 'directory') {
-      return `<span class="${base}">${icon}</span>`;
-    }
-
-    const title = isMountPoint ? 'Sync provider mount point' : 'Inside a synced folder';
-    return (
-      `<span class="relative ${base} inline-flex items-center" title="${title}">` +
-      `${icon}` +
-      `<span class="absolute -bottom-1 -right-1 text-[0.5rem] leading-none">☁️</span>` +
-      `</span>`
-    );
+  /**
+   * 名前の右に出す同期の印（2026-08-18 山内さん判断）。
+   *
+   * ★ ☁️ の意味は「スタブ（中身が無い）」ではなく「**同期対象**」である。
+   *   以前はスタブにだけ付けていたが、ディレクトリとファイルで印の位置も意味も
+   *   食い違っていた。ここを揃え、役割を2つに分けた:
+   *
+   *     ☁️        … このファイル／フォルダは同期プロバイダの管轄下にある
+   *     文字の薄さ … 中身がまだ手元に無い（スタブ）
+   *
+   *   したがって同期対象のファイルは、実体化されていても ☁️ を出し続ける。
+   *
+   * ★ 出すのは「ルート以外のプロバイダが管轄する領域」だけ（判定は VfsService.getTree）。
+   *   ルート同期（VFS 全体）まで含めると全件に付き、印としての情報量がゼロになる。
+   */
+  private _getSyncIndicator(isVirtual: boolean, isStub: boolean): string {
+    if (!isVirtual) return '';
+    const title = isStub ? 'Synced (content is on the host)' : 'Synced';
+    return `<span class="ml-1 text-primary text-[0.625rem]" title="${title}">☁️</span>`;
   }
 
   private _getFileIcon(filename: string): string {
@@ -465,18 +465,11 @@ export class TreeView {
         ul.classList.toggle('hidden');
         const iconSpan = (e.currentTarget as HTMLElement).querySelector('span:first-child');
         if (iconSpan) {
-          // 開閉のたびにアイコンを描き直すので、規則は _getIconHtml に一本化する。
-          // ★ textContent で書き換えてはならない。バッジは同じ span の子なので、
-          //   文字列を代入した瞬間に**バッジごと消える**（印が消える事故の典型）。
-          //   要素まるごと差し替える。
+          // 開閉のたびにアイコンを決め直すので、規則は _getIcon に一本化する。
+          // 同期の印は名前の右（別の span）にあるため、ここで消える心配は無い。
+          // アイコン欄は子要素を持たない約束なので textContent でよい。
           const target = e.currentTarget as HTMLElement;
-          iconSpan.outerHTML = this._getIconHtml(
-            path,
-            kind,
-            target.dataset.name || '',
-            target.dataset.virtual === '1',
-            target.dataset.mount === '1',
-          );
+          iconSpan.textContent = this._getIcon(path, kind, target.dataset.name || '', target.dataset.mount === '1');
         }
       }
     } else {
