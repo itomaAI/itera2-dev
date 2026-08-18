@@ -1,6 +1,6 @@
 /**
  * AUTO-GENERATED FILE - DO NOT EDIT MANUALLY
- * Generated on: 2026-08-18T06:29:26.023Z
+ * Generated on: 2026-08-18T06:40:37.568Z
  */
 
 export const DEFAULT_FILES: Record<string, string> = {
@@ -31195,6 +31195,8 @@ if __name__ == "__main__":
          * ★ 退避に失敗したら**何もしない**。上書きすれば消える側ができてしまう。
          *   その場合この項目は止まったままだが、止まっていることは通知する。
          *   黙って止まるのが元の欠陥であり、そこへ戻してはならない。
+         *
+         * @returns {Promise<boolean>} 解消できたか（false なら保留＝どちらも触っていない）
          */
         async function resolveConflict(mount, rel, full, r, next) {
           const { conn, root, mountPath } = mount;
@@ -31224,7 +31226,7 @@ if __name__ == "__main__":
                 \`VFS 側の退避に失敗したため、このファイルの同期を保留しました（内容はどちらも保持しています）。\\n\` +
                 \`理由: \${e.message}\`,
             );
-            return;
+            return false;
           }
 
           await MetaOS.fs.createStub(full, { size: r.size, updatedAt: r.updatedAt, hash: r.hash });
@@ -31236,6 +31238,7 @@ if __name__ == "__main__":
             \`[Local Bridge] /\${mountPath}/\${rel} は両側が変更されていました。\\n\` +
               \`ホスト側を採用し、VFS 側の内容は \${backupRel} として保存しました。どちらも失われていません。\`,
           );
+          return true;
         }
 
         // ---------- 調停（3-way マージ） ----------
@@ -31738,11 +31741,19 @@ Attributes:
   - limit (optional): Max matches (default 40).
 </define_tag>\`,
           local_fetch: \`<define_tag name="local_fetch">
-Materializes stubs: downloads real bytes from the host into the VFS.
+Materializes stubs and re-checks already-materialized files against the host.
 Attributes:
-  - path (required): Path relative to the root. A directory materializes everything under it.
+  - path (required): Path relative to the root. A directory covers everything under it.
   - connection (optional) / root (optional): Target selection.
-  - limit (optional): Max files to materialize (default 200).
+  - limit (optional): Max files to process (default 200).
+Behaviour:
+  - stub                    => download from the host
+  - materialized, same hash => reported as "一致" (nothing to do)
+  - materialized, different => treated as a conflict: the VFS copy is saved on the
+                               host as <name>.conflict-<time>, then the host copy wins
+  - stash failed            => reported as "保留"; neither side is touched
+  - missing on the host     => reported; nothing is deleted
+Note: it never reports success without comparing hashes with the host.
 </define_tag>\`,
           local_release: \`<define_tag name="local_release">
 Turns materialized files back into stubs to free VFS space.
@@ -31835,6 +31846,25 @@ Attributes:
         // 実体化済みのエントリは syncState キー自体が消える。
         const isStub = (info) => !!info && info.syncState === 'stub';
 
+        /**
+         * local_fetch が1件をどう扱うかを決める。
+         *
+         * ★ 「実体があるか」と「ホストと一致しているか」を混同しないための関数である。
+         *   以前の実装は前者だけを見て「既に実体」と成功を返しており、
+         *   中身が食い違っていても何もしなかった（T-0013）。
+         *
+         *   'stub'     … まだ中身が無い。落としてくる
+         *   'gone'     … ホストに無い。**消さない**。数えて報告するだけ
+         *   'match'    … ホストと一致。することは無い
+         *   'conflict' … 実体があり、かつ違う。調停と同じ方針で扱う（どちらも消さない）
+         */
+        function classifyFetchTarget(info, r) {
+          if (isStub(info)) return 'stub';
+          if (!r || r.isDeleted) return 'gone';
+          if ((info?.hash || null) === (r.hash || null)) return 'match';
+          return 'conflict';
+        }
+
         MetaOS.tools.register({
           name: 'local_fetch',
           description: 'Materializes stubs from the host machine.',
@@ -31852,22 +31882,66 @@ Attributes:
                 ([full, info]) => info.kind !== 'directory' && (full === target || full.startsWith(target + '/')),
               );
               if (!targets.length) return \`対象がありません: \${p.path}\`;
+
+              // ★ ホスト側の meta を必ず引く。
+              //   以前は「実体化済みなら何もしない」で成功を返していた。しかしそれは
+              //   『VFS に実体があるか』の報告であって『ホストと一致しているか』の報告ではない。
+              //   中身が食い違っていても「既に実体」と答えるため、修復に使えないばかりか
+              //   「確認した」という誤った安心を与えていた（T-0013 で実際に踏んだ）。
+              const remote = await getJson(api(conn, \`/api/\${root}/meta\`));
+              const mount = mounts.get(mountPath);
+
               let done = 0,
-                already = 0,
+                matched = 0,
+                resolved = 0,
+                held = 0,
+                gone = 0,
                 failed = 0;
+
               for (const [full, info] of targets.slice(0, limit)) {
-                if (!isStub(info)) {
-                  already++;
-                  continue;
-                }
+                const rel = full.substring(mountPath.length + 1);
+                const r = remote[rel];
                 try {
-                  await MetaOS.fs.read(full, { encoding: 'binary' }); // 読むと onFetchContent が走る
-                  done++;
+                  const kind = classifyFetchTarget(info, r);
+                  if (kind === 'stub') {
+                    await MetaOS.fs.read(full, { encoding: 'binary' }); // 読むと onFetchContent が走る
+                    done++;
+                    continue;
+                  }
+                  if (kind === 'gone') {
+                    // ホストに無いものを消しはしない。数えて報告するだけにとどめる。
+                    gone++;
+                    continue;
+                  }
+                  if (kind === 'match') {
+                    matched++;
+                    continue;
+                  }
+                  // 'conflict' … 実体があり、ホストと違う。調停と同じ方針で扱う（どちらも消さない）。
+                  // ここで素直に上書きすると、VFS 側にしか無い編集が黙って消える。
+                  if (!mount) {
+                    held++;
+                    continue;
+                  }
+                  // next を捨てているのは、アンカーの更新を次の巡回に任せるため。
+                  // 解消後は l と r が一致するので、分岐7が拾って正しい値を書く。
+                  const ok = await resolveConflict(mount, rel, full, r, {});
+                  if (ok) resolved++;
+                  else held++;
                 } catch (e) {
                   failed++;
                 }
               }
-              return \`実体化: \${done} 件 / 既に実体: \${already} 件 / 失敗: \${failed} 件（対象 \${targets.length} 件、上限 \${limit}）\`;
+
+              const parts = [
+                \`実体化: \${done} 件\`,
+                \`一致: \${matched} 件\`,
+                \`衝突を解消: \${resolved} 件\`,
+                \`保留: \${held} 件\`,
+                \`ホストに無し: \${gone} 件\`,
+                \`失敗: \${failed} 件\`,
+              ];
+              return \`\${parts.join(' / ')}（対象 \${targets.length} 件、上限 \${limit}）\`;
             } catch (e) {
               return \`[エラー] \${e.message}\`;
             }
@@ -32097,4 +32171,4 @@ Attributes:
 }, null, 2)
 };
 
-export const BUILD_TIME = 1787034566023;
+export const BUILD_TIME = 1787035237568;

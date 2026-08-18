@@ -83,3 +83,55 @@ describe('local_bridge: 衝突（両側が動いた）の判定', () => {
     expect(isConflict(F('X'), F('X'), undefined, same)).toBe(false);
   });
 });
+
+/**
+ * local_fetch の1件ごとの判断（T-0013 の派生）
+ *
+ * 以前の実装は「実体化済みなら何もしない」で成功を返していた。
+ * それは『VFS に実体があるか』の報告であって『ホストと一致しているか』の報告ではない。
+ * 中身が食い違っていても「既に実体」と答えるため、修復に使えないばかりか
+ * 「確認した」という誤った安心を与えていた。
+ */
+function loadClassifyFetchTarget() {
+  const src = readFileSync(SOURCE_PATH, 'utf-8');
+  const isStub = src.match(/const isStub = \(info\) => [^;]+;/);
+  const fn = src.match(/function classifyFetchTarget\(info, r\) \{[\s\S]*?\n {8}\}/);
+  if (!isStub || !fn) {
+    throw new Error(
+      'local_bridge.html から classifyFetchTarget / isStub を取り出せなかった。' +
+        '実装の書き方が変わった可能性がある。試験を通す前に、まず対象を確認すること。',
+    );
+  }
+  const factory = new Function(`${isStub[0]}\n${fn[0]}\nreturn classifyFetchTarget;`);
+  return factory() as (info: any, r: any) => string;
+}
+
+describe('local_fetch: 1件ごとの扱いを決める', () => {
+  it('スタブは落としてくる', () => {
+    const classify = loadClassifyFetchTarget();
+    expect(classify({ syncState: 'stub', hash: 'H' }, { hash: 'H' })).toBe('stub');
+  });
+
+  it('実体があり、ホストと一致していれば何もしない', () => {
+    const classify = loadClassifyFetchTarget();
+    expect(classify({ hash: 'H' }, { hash: 'H' })).toBe('match');
+  });
+
+  it('実体があり、ホストと違えば衝突として扱う（本命 / 以前は「既に実体」と嘘をついていた）', () => {
+    const classify = loadClassifyFetchTarget();
+    expect(classify({ hash: 'LOCAL' }, { hash: 'HOST' })).toBe('conflict');
+  });
+
+  it('ホストに無いものは衝突ではない（消さずに報告するだけ）', () => {
+    const classify = loadClassifyFetchTarget();
+    expect(classify({ hash: 'LOCAL' }, undefined)).toBe('gone');
+    expect(classify({ hash: 'LOCAL' }, { isDeleted: true })).toBe('gone');
+  });
+
+  it('スタブ判定は syncState で行う（hash の有無では判定できない）', () => {
+    const classify = loadClassifyFetchTarget();
+    // createStub にホスト側のハッシュを渡しているため、スタブでも hash は非 null。
+    // hash で判定すると、スタブが「実体あり」に見えて実体化されなくなる（過去に踏んだ）。
+    expect(classify({ syncState: 'stub', hash: 'H' }, { hash: 'OTHER' })).toBe('stub');
+  });
+});
