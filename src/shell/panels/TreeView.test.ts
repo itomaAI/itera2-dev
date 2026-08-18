@@ -188,3 +188,66 @@ describe('TreeView: 同期の印', () => {
     expect(cloudCount(MOUNT)).toBe(1);
   });
 });
+
+/**
+ * 新規ノードの追加（ATTACH）経路。
+ *
+ * ツリーの描画経路は4つある: 初期描画 / 差分更新(MUTATE) / 開閉トグル / **追加(ATTACH)**。
+ * 前の3つは印の扱いを統一したが、**この4つ目を見落として配信した**。
+ * 症状は「同期フォルダの中に新規ファイルを作ると雲が付かない。再読込すると付く」。
+ * 追加経路は mutation（VfsNode）しか持たず isVirtual が入っていないため、
+ * 渡さなければ既定の false になり、印の無い行が描かれていた。
+ *
+ * 判定は親から受け継ぐ。マウントは前方一致なので、親が同期対象なら子も必ず同期対象である。
+ */
+describe('TreeView: 新規ノードの追加（ATTACH）', () => {
+  beforeEach(() => {
+    document.body.innerHTML = '';
+  });
+
+  /** 親ディレクトリを1つ描いてから、その中へ ATTACH する */
+  function attachInto(parent: any, child: any) {
+    const { view } = makeView();
+    view.render([parent]);
+    view.applyMutations(
+      [
+        {
+          type: 'ATTACH',
+          nodeId: child.id,
+          path: child.path,
+          node: { ...child, parentId: parent.id },
+        },
+      ],
+      () => [],
+    );
+    return view;
+  }
+
+  it('同期フォルダの中に作った新規ファイルには、その場で雲が付く（本命 / 報告された不具合）', () => {
+    const parent = dir('src', `${MOUNT}/src`, { isVirtual: true, children: [dir('sub', `${MOUNT}/src/sub`)] });
+    attachInto(parent, file('new.ts', `${MOUNT}/src/new.ts`));
+
+    // 直っていなければ 0 になる（再読込するまで付かない、という報告どおりの状態）
+    expect(cloudCount(`${MOUNT}/src/new.ts`)).toBe(1);
+  });
+
+  it('マウント地点の直下に作った場合も雲が付く', () => {
+    // マウント地点の行も data-virtual を持つので、判定そのものは上の試験と同じ経路を通る。
+    // それでも残すのは、これが実際によく起きる場面（リポジトリ直下にファイルを作る）だから。
+    const parent = dir('ws_itera', MOUNT, {
+      isMountPoint: true,
+      isVirtual: true,
+      children: [dir('src', `${MOUNT}/src`)],
+    });
+    attachInto(parent, file('README.md', `${MOUNT}/README.md`));
+
+    expect(cloudCount(`${MOUNT}/README.md`)).toBe(1);
+  });
+
+  it('同期対象でないフォルダの中では、新規ファイルにも雲を付けない（陰性対照）', () => {
+    const parent = dir('data', 'data', { children: [dir('sub', 'data/sub')] });
+    attachInto(parent, file('memo.md', 'data/memo.md'));
+
+    expect(cloudCount('data/memo.md')).toBe(0);
+  });
+});

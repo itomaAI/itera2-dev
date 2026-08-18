@@ -148,7 +148,16 @@ export class TreeView {
     let parentUl: HTMLElement | null = null;
     let indentLevel = 0;
 
+    // ★ 同期の印は親から受け継ぐ。
+    //   ここは「新しく作られたノード」を描く経路で、mutation は VfsNode しか持たないため
+    //   isVirtual が入っていない。渡し忘れると、同期フォルダの中に新規作成したファイルだけ
+    //   雲が付かず、再読込して初めて付く（実際にこの状態で配信してしまった）。
+    //   マウントは前方一致なので、親が同期対象なら子も必ず同期対象になる。
+    //   新規ノードがマウント地点そのものになることは無いので isMountPoint は常に false。
+    let isVirtual = false;
+
     if (mutation.node.parentId === null) {
+      // 最上位のノード。ルート以外のマウントの配下ではありえないので false のままでよい。
       parentUl = document.getElementById('vfs-tree-root');
     } else {
       parentUl = document.getElementById(`vfs-children-${mutation.node.parentId}`);
@@ -157,6 +166,11 @@ export class TreeView {
         const paddingRaw = parentDiv.style.paddingLeft || '8px';
         const parentPadding = parseInt(paddingRaw.replace('px', ''), 10);
         indentLevel = (parentPadding - 8) / 12 + 1;
+        // マウント地点の行も data-virtual を持つ（getTree はルート以外のマウントに
+        // isVirtual を立てる。ルートはノードとして描かれない）。したがってここは
+        // data-virtual だけを見ればよい。data-mount も見る条件を一度書いたが、
+        // 変異試験で「外しても何も落ちない」＝起きえない場合だと分かったので落とした。
+        isVirtual = parentDiv.dataset.virtual === '1';
       }
     }
 
@@ -169,6 +183,8 @@ export class TreeView {
       mutation.node.kind,
       mutation.node.meta,
       indentLevel,
+      isVirtual,
+      false,
     );
 
     parentUl.appendChild(newLi);
