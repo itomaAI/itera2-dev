@@ -11,7 +11,7 @@
  *        （設定の失敗が、そのまま暴走の許可に化けるのを避けるため）
  */
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { Engine } from './Engine';
 import { DEFAULT_MAX_CONTINUOUS_TOOLS } from '../sys/ConfigManager';
 
@@ -19,15 +19,24 @@ const ALERT_MARK = 'Max continuous tool executions';
 
 function createHarness(preferences: any) {
   const appended: any[] = [];
+  const turns: any[] = [{ id: 'u1', timestamp: 0, role: 'user', content: 'hi', meta: { trigger_llm: true } }];
+  const subscribers: Function[] = [];
 
   // 実物の HistoryManager は IndexedDB を開くので使わない。
   // Engine が触るのは on / get / append / update の4つだけ。
+  // 【重要】on() のコールバックは捨てずに繋ぐ。ここを繋がないと
+  // 「履歴が変わる → 起床を予約する」という、今回の欠陥が住んでいた経路を試験できない。
   const history = {
-    on: () => () => {},
-    get: () => [{ id: 'u1', timestamp: 0, role: 'user', content: 'hi', meta: { trigger_llm: true } }],
+    on: (_event: string, cb: Function) => {
+      subscribers.push(cb);
+      return () => {};
+    },
+    get: () => turns,
     append: (role: string, content: any, meta: any) => {
       const turn = { id: `a${appended.length}`, timestamp: 0, role, content, meta };
       appended.push(turn);
+      turns.push(turn);
+      subscribers.forEach((cb) => cb({ type: 'append', turn }));
       return turn;
     },
     update: () => null,
@@ -68,13 +77,37 @@ function createHarness(preferences: any) {
     };
   };
 
-  return { runCycleAt };
+  /** 履歴に何か積まれた状況を作る（外部のデーモンやツール結果を模す） */
+  const appendTurn = (role: string, meta: any = { trigger_llm: true }) =>
+    history.append(role, '<event type="x" />', meta);
+
+  /** デバウンス（1500ms）を越えて時間を進め、予約されていた起床を走らせる */
+  const flush = async () => {
+    await vi.advanceTimersByTimeAsync(2000);
+  };
+
+  const alertCount = () =>
+    appended.filter((t) => typeof t.content === 'string' && t.content.includes(ALERT_MARK)).length;
+
+  const reachedProjector = () => createContext.mock.calls.length > 0;
+
+  /** カウンタも記録も触らずに、もう一度サイクルを回す（積み上げ側の判定だけを見るため） */
+  const pingAgain = async () => {
+    await (engine as any)._ping();
+  };
+
+  return { runCycleAt, pingAgain, appendTurn, flush, alertCount, reachedProjector, createContext, stops };
 }
 
 describe('Engine: 自律ループの連続ツール実行上限', () => {
   beforeEach(() => {
     // 番兵の例外で毎回 console.error が出るため黙らせる
     vi.spyOn(console, 'error').mockImplementation(() => {});
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   it('設定が無ければ既定値（50）で止まる', async () => {
@@ -139,5 +172,92 @@ describe('Engine: 自律ループの連続ツール実行上限', () => {
       expect(atDefault.stopped, `value=${JSON.stringify(bad)}`).toBe(true);
       expect(atDefault.alert).toContain(`(${DEFAULT_MAX_CONTINUOUS_TOOLS})`);
     }
+  });
+});
+
+/**
+ * 上限に達した「後」のふるまい。
+ *
+ * 上限1で実物を動かしたところ、警告が約40件・1.5秒間隔で積まれ続けた。
+ * 警告自身が履歴の変更であり、それが次の起床を予約してしまうため、
+ * 「Auto-trigger paused」と名乗りながら実際には回り続けていた。
+ * さらに、その状態で設定値を上げると、停止していたループがそのまま走り出した。
+ *
+ * 仕様（2026-08-18 山内さん判断）: **止まったら、利用者が発言するまで再開しない。**
+ */
+describe('Engine: 上限に達して停止した後', () => {
+  beforeEach(() => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('警告は1連続につき1回しか積まない', async () => {
+    const h = createHarness({ maxContinuousTools: 1 });
+
+    expect((await h.runCycleAt(1)).stopped).toBe(true);
+    expect(h.alertCount()).toBe(1);
+
+    // 【重要】ここは _schedulePing 側の門ではなく、積み上げ側の判定を見る試験である。
+    // 時間を進めるだけでは、起床が予約されない限り _ping が再入しないので、
+    // 積み上げ側を外しても落ちない（＝何も守らない試験になる）。
+    // そのため _ping を直接もう一度回して、警告が増えないことを確かめる。
+    await h.pingAgain();
+    await h.pingAgain();
+    expect(h.alertCount()).toBe(1);
+
+    // 循環が無いことも併せて確認する
+    await h.flush();
+    expect(h.alertCount()).toBe(1);
+  });
+
+  it('停止中に履歴が動いても起床しない', async () => {
+    const h = createHarness({ maxContinuousTools: 1 });
+    await h.runCycleAt(1);
+    h.createContext.mockClear();
+    h.stops.length = 0;
+
+    // 遅れて返ったツール結果やデーモンの通知が積まれた状況
+    h.appendTurn('system');
+    await h.flush();
+
+    // 【重要】「実行に至らなかったこと」を見てはいけない。
+    // 起床してしまっても、上限判定が同じ場所で跳ね返すので実行には至らず、
+    // 予約を止める門を外しても落ちない試験になる（実際に変異試験で素通りした）。
+    // 見るべきは「そもそも一度も起きなかったこと」。起床すれば loop_stop が出る。
+    expect(h.stops.length).toBe(0);
+    expect(h.reachedProjector()).toBe(false);
+  });
+
+  it('設定値を上げても、それだけでは再開しない（本命）', async () => {
+    const preferences: any = { maxContinuousTools: 1 };
+    const h = createHarness(preferences);
+    await h.runCycleAt(1);
+    h.createContext.mockClear();
+
+    // 山内さんが設定アプリで上限を無制限にした、という状況。
+    // 設定の書き込みは VFS イベントとして履歴にも現れる。
+    preferences.maxContinuousTools = 0;
+    h.appendTurn('system');
+    await h.flush();
+
+    // 上限そのものは外れているが、停止は解除されない。
+    // 「設定を確認しにいっただけ」で私が走り出さないこと。
+    expect(h.reachedProjector()).toBe(false);
+  });
+
+  it('利用者が発言すれば解除されて動き出す', async () => {
+    const h = createHarness({ maxContinuousTools: 1 });
+    await h.runCycleAt(1);
+    h.createContext.mockClear();
+
+    h.appendTurn('user');
+    await h.flush();
+
+    // 連続回数も 0 に戻るので、上限1のままでも1回は動ける
+    expect(h.reachedProjector()).toBe(true);
   });
 });

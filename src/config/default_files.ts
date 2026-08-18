@@ -1,6 +1,6 @@
 /**
  * AUTO-GENERATED FILE - DO NOT EDIT MANUALLY
- * Generated on: 2026-08-18T04:37:54.571Z
+ * Generated on: 2026-08-18T04:55:38.899Z
  */
 
 export const DEFAULT_FILES: Record<string, string> = {
@@ -3270,8 +3270,11 @@ This directory holds the dynamic configuration of your OS environment.
     }
     \`\`\`
     \`maxContinuousTools\` caps how many tool executions the agent may chain without your input.
-    **Set it to \`0\` (or any negative number such as \`-1\`) to remove the limit entirely.**
+    **Set it to \`0\` to remove the limit entirely.**
     Unreadable values fall back to the default (50) rather than to "no limit".
+    Once the limit is reached the agent stops and stays stopped: raising the limit does **not**
+    resume it, because that would turn editing a config file into an unintended resume.
+    Say something to the agent to let it continue.
 *   **\`llm.json\`**: Configures the active AI provider and model.
     \`\`\`json
     {
@@ -6226,7 +6229,7 @@ python3 itera_bridge_server.py detach foo</pre>
                 placeholder="50"
               />
               <p class="text-[10px] text-text-muted mt-1.5 opacity-80">
-                How many tool executions the agent may chain without your input. Set 0 or -1 for no limit.
+                How many tool executions the agent may chain without your input. Set 0 for no limit.
               </p>
             </div>
 
@@ -32002,4 +32005,4 @@ Attributes:
   ),
 };
 
-export const BUILD_TIME = 1787027874571;
+export const BUILD_TIME = 1787028938899;

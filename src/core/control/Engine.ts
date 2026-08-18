@@ -47,6 +47,8 @@ export class Engine {
   private debounceTimer: ReturnType<typeof setTimeout> | null = null;
   private continuousToolCount: number = 0;
   private hasPendingEvents: boolean = false;
+  /** 連続実行の上限に達して停止中か。解除は利用者の発言（と明示的なタスク要求）だけ。 */
+  private haltedByToolCap: boolean = false;
   /** ユーザーが明示的に停止を要求したか（デバウンス待機中・ツール実行中の停止を成立させるため） */
   private stopRequested: boolean = false;
 
@@ -113,6 +115,10 @@ export class Engine {
             turn.content.includes('<event type="system_task">'))
         ) {
           this.continuousToolCount = 0;
+          // 上限による停止も、ここで一緒に解除する。
+          // 【重要】この解除は下の _schedulePing() より前に置くこと。
+          // 後ろに置くと、解除した本人のターンでは起床できない。
+          this.haltedByToolCap = false;
         }
       }
 
@@ -130,6 +136,11 @@ export class Engine {
     // ユーザーが停止を要求した後は、実行中だったツールの結果更新などで
     // ループが自動的に再開してしまわないようにする
     if (this.stopRequested) return;
+    // 連続実行の上限で停止した後は、利用者が明示的に発言するまで起床しない。
+    // ここを通していると「止まった」と表示しながら回り続ける。また、設定値を
+    // 上げただけで停止中のループが不意に走り出す（実測）。
+    // 起床を予約する経路はここ1箇所なので、判定もここに集約する。
+    if (this.haltedByToolCap) return;
 
     if (this.debounceTimer) clearTimeout(this.debounceTimer);
 
@@ -227,14 +238,23 @@ export class Engine {
       // 暴走チェック
       const maxContinuousTools = this.maxContinuousTools;
       if (maxContinuousTools > 0 && this.continuousToolCount >= maxContinuousTools) {
-        this.state.history.append(
-          'system',
-          `<event type="system_alert">\nSystem Alert: Max continuous tool executions (${maxContinuousTools}) reached. Auto-trigger paused.\n</event>`,
-          {
-            type: TurnType.ERROR,
-            trigger_llm: false,
-          },
-        );
+        // 【重要】警告は1連続につき1回だけ積む。
+        // 警告自身も履歴の変更なので _onHistoryChange → _schedulePing を呼ぶ。
+        // 無条件に積むと「警告を積む → 起床 → また上限 → 警告を積む」が延々と回る
+        // （上限1で実測したとき、約40件が1.5秒間隔で積まれ続けた）。
+        if (!this.haltedByToolCap) {
+          this.haltedByToolCap = true;
+          this.state.history.append(
+            'system',
+            `<event type="system_alert">\nSystem Alert: Max continuous tool executions (${maxContinuousTools}) reached. Auto-trigger paused.\n</event>`,
+            {
+              type: TurnType.ERROR,
+              trigger_llm: false,
+            },
+          );
+        }
+        // loop_stop は毎回 emit する。ここを黙って return すると
+        // UI の "Processing..." を解除する者がいなくなる。
         this._emit('loop_stop', { reason: 'max_tools' });
         return;
       }

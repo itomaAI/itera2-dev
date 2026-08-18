@@ -19,8 +19,11 @@ This directory holds the dynamic configuration of your OS environment.
     }
     ```
     `maxContinuousTools` caps how many tool executions the agent may chain without your input.
-    **Set it to `0` (or any negative number such as `-1`) to remove the limit entirely.**
+    **Set it to `0` to remove the limit entirely.**
     Unreadable values fall back to the default (50) rather than to "no limit".
+    Once the limit is reached the agent stops and stays stopped: raising the limit does **not**
+    resume it, because that would turn editing a config file into an unintended resume.
+    Say something to the agent to let it continue.
 *   **`llm.json`**: Configures the active AI provider and model.
     ```json
     {
