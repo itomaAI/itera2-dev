@@ -23,3 +23,7 @@ public/vendor
 *.njsproj
 *.sln
 *.sw?
+
+# Python (tests/)
+__pycache__/
+*.pyc
