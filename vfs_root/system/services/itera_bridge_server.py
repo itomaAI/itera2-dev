@@ -20,6 +20,7 @@ Itera OS の VFS へ `local/<接続名>/<ルート名>` としてマウントさ
 """
 
 import argparse
+import asyncio
 import fnmatch
 import getpass
 import hashlib
@@ -35,7 +36,11 @@ import time
 import uuid
 from pathlib import Path
 
-VERSION = "3.4.0"
+VERSION = "3.5.0"
+# long-poll（変更があるまで応答を保留する）の上限と刻み。
+# 刻みは応答の遅れの下限になるので細かく、ただし空回りが目に見えない程度に。
+MAX_LONG_POLL_SEC = 60.0
+LONG_POLL_STEP_SEC = 0.1
 CONFIG_DIR = Path.home() / ".itera"
 ROOTS_FILE = CONFIG_DIR / "roots.json"
 MACHINE_FILE = CONFIG_DIR / "machine.json"
@@ -304,6 +309,20 @@ class Bridge:
             for s in self.scanners.values():
                 s.set_ignore(patterns)
 
+    def rev_token(self):
+        """いまの状態を表す短い文字列。ルートの増減と各ルートの rev を含む。
+
+        約束するのは一点だけ:「中身が変わればこの文字列も変わる」。
+        OS 側はこれを解釈せず、受け取った値をそのまま since に載せて返す。
+        """
+        with _state_lock:
+            names = sorted(self.state["roots"].keys())
+        parts = []
+        for name in names:
+            s = self.scanners.get(name)
+            parts.append(f"{name}:{s.rev if s else 0}")
+        return "|".join(parts)
+
     def describe(self):
         out = []
         for name, path in self.state["roots"].items():
@@ -348,8 +367,7 @@ def build_app(bridge):
             raise HTTPException(status_code=400, detail="ルート外のパスは操作できません")
         return target
 
-    @app.get("/api/status")
-    async def status():
+    def status_payload():
         # 同一性を平坦に載せる。OS 側はこれを接続名の決定と、
         # アンカー照合（別の機械に繋ぎ替えられていないか）に使う。
         out = {
@@ -357,9 +375,29 @@ def build_app(bridge):
             "execEnabled": bridge.exec_enabled,
             "roots": bridge.describe(),
             "ignorePatterns": bridge.state["ignorePatterns"],
+            # 変更検知の版。OS 側はこれをそのまま since に載せて返してくる。
+            "revToken": bridge.rev_token(),
+            # long-poll に対応していることの明示。旧サーバーはこの鍵を持たないので、
+            # OS 側は「無ければ従来の間隔ポーリング」と判断できる。
+            "longPoll": True,
         }
         out.update(host_identity())
         return out
+
+    @app.get("/api/status")
+    async def status(wait: float = 0.0, since: str = ""):
+        """wait>0 かつ since が渡されたら、版が変わるまで応答を保留する（long-poll）。
+
+        反映の遅れの支配項は OS 側の 5 秒ポーリングだった（実測）。
+        「変わったら即返す」経路を足して、その待ちを 0 にする。
+        待機は asyncio.sleep で行う。イベントループもワーカースレッドも塞がない。
+        since が空・古い・壊れているときは待たずに即返す（誤って待たせない）。
+        """
+        if wait > 0 and since:
+            deadline = time.monotonic() + min(wait, MAX_LONG_POLL_SEC)
+            while bridge.rev_token() == since and time.monotonic() < deadline:
+                await asyncio.sleep(LONG_POLL_STEP_SEC)
+        return status_payload()
 
     @app.get("/api/roots")
     async def list_roots():
