@@ -14,24 +14,48 @@
   <body class="bg-app text-text-main h-screen flex flex-col overflow-hidden">
     <header class="flex items-center justify-between px-5 py-3 border-b border-border-main shrink-0">
       <div class="flex items-center gap-3">
-        <button onclick="AppUI.home()" class="p-2 -ml-2 rounded-full hover:bg-hover text-text-muted hover:text-text-main transition">
+        <button
+          onclick="AppUI.home()"
+          class="p-2 -ml-2 rounded-full hover:bg-hover text-text-muted hover:text-text-main transition"
+        >
           <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M10 19l-7-7m0 0l7-7m-7 7h18"
+            ></path>
           </svg>
         </button>
         <h1 class="text-xl font-bold tracking-tight">Local Bridge</h1>
         <span id="daemonState" class="text-[0.6875rem] text-text-muted hidden sm:inline"></span>
       </div>
       <div class="flex items-center gap-2">
-        <button onclick="refresh()" class="p-2 rounded hover:bg-hover text-text-muted hover:text-primary transition" title="再読込">
+        <button
+          onclick="refresh()"
+          class="p-2 rounded hover:bg-hover text-text-muted hover:text-primary transition"
+          title="再読込"
+        >
           <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+            ></path>
           </svg>
         </button>
-        <button onclick="restartDaemon()" class="px-3 py-2 rounded-lg border border-border-main text-sm hover:bg-hover transition" title="設定の変更はデーモンを再起動すると反映されます">
+        <button
+          onclick="restartDaemon()"
+          class="px-3 py-2 rounded-lg border border-border-main text-sm hover:bg-hover transition"
+          title="設定の変更はデーモンを再起動すると反映されます"
+        >
           デーモン再起動
         </button>
-        <button onclick="addConnection()" class="px-3 py-2 rounded-lg bg-primary text-text-inverted text-sm font-bold hover:bg-primary/90 shadow transition">
+        <button
+          onclick="addConnection()"
+          class="px-3 py-2 rounded-lg bg-primary text-text-inverted text-sm font-bold hover:bg-primary/90 shadow transition"
+        >
           ＋ 接続を追加
         </button>
       </div>
@@ -55,7 +79,11 @@
       const MOUNT_BASE = 'local';
 
       const DOM = (id) => document.getElementById(id);
-      const esc = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      const esc = (s) =>
+        String(s == null ? '' : s)
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;');
       const short = (id) => (id ? String(id).slice(0, 8) : '—');
 
       let state = { config: null, conns: [], mounts: [], daemon: false };
@@ -176,7 +204,10 @@
         if (!n) return '0 B';
         const u = ['B', 'KB', 'MB', 'GB'];
         let i = 0;
-        while (n >= 1024 && i < u.length - 1) { n /= 1024; i++; }
+        while (n >= 1024 && i < u.length - 1) {
+          n /= 1024;
+          i++;
+        }
         return `${n.toFixed(i ? 1 : 0)} ${u[i]}`;
       };
 
@@ -262,9 +293,7 @@
                       (d.mounted ? '' : ' <span class="text-warning text-[0.6875rem]">未マウント</span>')
                     : '<span class="text-text-muted text-[0.6875rem]">接続名の確定待ち</span>';
                   const counts =
-                    d.stubs === null
-                      ? '—'
-                      : `スタブ ${d.stubs} / 実体 ${d.materialized}（${fmtBytes(d.bytes)}）`;
+                    d.stubs === null ? '—' : `スタブ ${d.stubs} / 実体 ${d.materialized}（${fmtBytes(d.bytes)}）`;
                   const warn = d.mismatch
                     ? `<div class="text-error text-[0.6875rem] mt-1">同一性が食い違います: ${esc(d.mismatch)} — 同期は停止します</div>`
                     : '';
@@ -439,9 +468,7 @@ python3 itera_bridge_server.py detach foo</pre>
         });
         if (!res || res.action !== true) return;
         await mutateConfig((cfg) => {
-          cfg.connections = (cfg.connections || []).filter(
-            (x) => (x.serverUrl || '').replace(/\/+$/, '') !== url,
-          );
+          cfg.connections = (cfg.connections || []).filter((x) => (x.serverUrl || '').replace(/\/+$/, '') !== url);
           return cfg;
         });
         notifyRestartNeeded();

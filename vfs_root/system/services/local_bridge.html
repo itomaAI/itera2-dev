@@ -26,7 +26,17 @@
 
         const DEFAULT_CONFIG = {
           connections: [{ serverUrl: 'http://127.0.0.1:8001', execMode: 'ask', enabled: true }],
-          ignorePatterns: ['.git', '.venv', 'venv', 'node_modules', '__pycache__', '*.pyc', '.DS_Store', 'dist', 'build'],
+          ignorePatterns: [
+            '.git',
+            '.venv',
+            'venv',
+            'node_modules',
+            '__pycache__',
+            '*.pyc',
+            '.DS_Store',
+            'dist',
+            'build',
+          ],
         };
 
         let config = DEFAULT_CONFIG;
@@ -34,7 +44,10 @@
           config = { ...DEFAULT_CONFIG, ...JSON.parse(await MetaOS.fs.read(CONFIG_PATH)) };
         } catch (e) {
           try {
-            await MetaOS.fs.write(CONFIG_PATH, JSON.stringify(DEFAULT_CONFIG, null, 2), { overwrite: true, silent: true });
+            await MetaOS.fs.write(CONFIG_PATH, JSON.stringify(DEFAULT_CONFIG, null, 2), {
+              overwrite: true,
+              silent: true,
+            });
           } catch (e2) {}
         }
 
@@ -266,7 +279,8 @@
           ]);
 
           const sorted = Array.from(rels).sort((a, b) => {
-            const da = a.split('/').length, db = b.split('/').length;
+            const da = a.split('/').length,
+              db = b.split('/').length;
             return da !== db ? da - db : a < b ? -1 : a > b ? 1 : 0;
           });
 
@@ -479,9 +493,7 @@
               await MetaOS.fs.delete(mountPath, { permanent: true });
               log(`[detach] ${mountPath} を削除しました（スタブ ${files.length} 件）。`);
             } else {
-              const stamp = new Date()
-                .toLocaleDateString('sv-SE')
-                .replace(/-/g, '');
+              const stamp = new Date().toLocaleDateString('sv-SE').replace(/-/g, '');
               let dest = `${mountPath}.detached-${stamp}`;
               for (let i = 2; await MetaOS.fs.exists(dest); i++) dest = `${mountPath}.detached-${stamp}-${i}`;
               await MetaOS.fs.rename(mountPath, dest);
@@ -661,21 +673,26 @@
           const ready = connections.filter((c) => c.name);
           if (name) {
             const c = connections.find((x) => x.name === name);
-            if (!c) throw new Error(`接続 '${name}' はありません（${connections.map(connLabel).join(', ') || 'なし'}）`);
+            if (!c)
+              throw new Error(`接続 '${name}' はありません（${connections.map(connLabel).join(', ') || 'なし'}）`);
             return c;
           }
           if (ready.length === 1) return ready[0];
           if (!ready.length) {
             throw new Error(`接続がまだ確立していません（${connections.map(connLabel).join(', ') || '設定なし'}）`);
           }
-          throw new Error(`接続が複数あります。connection 属性で指定してください（${ready.map((c) => c.name).join(', ')}）`);
+          throw new Error(
+            `接続が複数あります。connection 属性で指定してください（${ready.map((c) => c.name).join(', ')}）`,
+          );
         }
 
         function resolveRoot(conn, root) {
           if (root) return root;
           const owned = Array.from(mounts.values()).filter((m) => m.conn === conn);
           if (owned.length === 1) return owned[0].root;
-          throw new Error(`ルートが複数あります。root 属性で指定してください（${owned.map((m) => m.root).join(', ') || 'なし'}）`);
+          throw new Error(
+            `ルートが複数あります。root 属性で指定してください（${owned.map((m) => m.root).join(', ') || 'なし'}）`,
+          );
         }
 
         // 同期を止めたマウントに対して VFS 側を触る操作を通さない。
@@ -824,9 +841,14 @@ Attributes:
                 ([full, info]) => info.kind !== 'directory' && (full === target || full.startsWith(target + '/')),
               );
               if (!targets.length) return `対象がありません: ${p.path}`;
-              let done = 0, already = 0, failed = 0;
+              let done = 0,
+                already = 0,
+                failed = 0;
               for (const [full, info] of targets.slice(0, limit)) {
-                if (!isStub(info)) { already++; continue; }
+                if (!isStub(info)) {
+                  already++;
+                  continue;
+                }
                 try {
                   await MetaOS.fs.read(full, { encoding: 'binary' }); // 読むと onFetchContent が走る
                   done++;
@@ -878,8 +900,14 @@ Attributes:
               for (const [full, info] of targets) {
                 const rel = full.substring(mountPath.length + 1);
                 const v = verify.results?.[rel];
-                if (!v || !v.present) { skipped.push(`${rel}: ホストに実体が無い`); continue; }
-                if (v.hash !== info.hash) { skipped.push(`${rel}: ハッシュ不一致`); continue; }
+                if (!v || !v.present) {
+                  skipped.push(`${rel}: ホストに実体が無い`);
+                  continue;
+                }
+                if (v.hash !== info.hash) {
+                  skipped.push(`${rel}: ハッシュ不一致`);
+                  continue;
+                }
                 try {
                   await MetaOS.fs.createStub(full, { size: v.size, updatedAt: info.updatedAt, hash: v.hash });
                   released++;
@@ -888,7 +916,13 @@ Attributes:
                 }
               }
               let out = `スタブ化: ${released} 件 / 見送り: ${skipped.length} 件（対象 ${targets.length} 件）`;
-              if (skipped.length) out += '\n見送りの理由:\n' + skipped.slice(0, 20).map((s) => '  - ' + s).join('\n');
+              if (skipped.length)
+                out +=
+                  '\n見送りの理由:\n' +
+                  skipped
+                    .slice(0, 20)
+                    .map((s) => '  - ' + s)
+                    .join('\n');
               return out;
             } catch (e) {
               return `[エラー] ${e.message}`;
@@ -921,10 +955,7 @@ Attributes:
           setInterval(() => refreshConn(conn), ROOT_POLL_MS);
         }
 
-        MetaOS.ai.log(
-          'Local Bridge v3.2 起動\n' + (summary.join('\n') || '（有効な接続がありません）'),
-          'system',
-        );
+        MetaOS.ai.log('Local Bridge v3.2 起動\n' + (summary.join('\n') || '（有効な接続がありません）'), 'system');
       })();
     </script>
   </body>
