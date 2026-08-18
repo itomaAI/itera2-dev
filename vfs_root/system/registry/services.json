@@ -8,11 +8,11 @@
     "autoStart": false
   },
   {
-    "id": "local_sync_daemon",
-    "name": "Local Sync Daemon",
-    "icon": "🔄",
-    "path": "system/services/local_sync.html",
-    "description": "Bi-directional sync with local python server.",
+    "id": "local_bridge",
+    "name": "Local Bridge",
+    "icon": "🖥️",
+    "path": "system/services/local_bridge.html",
+    "description": "Mounts local machine directories at local/<host>/<root> and provides shell, search and stub tools.",
     "autoStart": false
   },
   {

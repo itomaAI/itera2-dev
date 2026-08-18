@@ -1,0 +1,475 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Local Bridge</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="../system/core/ui.js"></script>
+    <script src="../system/core/std.js"></script>
+  </head>
+  <body class="bg-app text-text-main h-screen flex flex-col overflow-hidden">
+    <header class="flex items-center justify-between px-5 py-3 border-b border-border-main shrink-0">
+      <div class="flex items-center gap-3">
+        <button onclick="AppUI.home()" class="p-2 -ml-2 rounded-full hover:bg-hover text-text-muted hover:text-text-main transition">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
+          </svg>
+        </button>
+        <h1 class="text-xl font-bold tracking-tight">Local Bridge</h1>
+        <span id="daemonState" class="text-[0.6875rem] text-text-muted hidden sm:inline"></span>
+      </div>
+      <div class="flex items-center gap-2">
+        <button onclick="refresh()" class="p-2 rounded hover:bg-hover text-text-muted hover:text-primary transition" title="再読込">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+          </svg>
+        </button>
+        <button onclick="restartDaemon()" class="px-3 py-2 rounded-lg border border-border-main text-sm hover:bg-hover transition" title="設定の変更はデーモンを再起動すると反映されます">
+          デーモン再起動
+        </button>
+        <button onclick="addConnection()" class="px-3 py-2 rounded-lg bg-primary text-text-inverted text-sm font-bold hover:bg-primary/90 shadow transition">
+          ＋ 接続を追加
+        </button>
+      </div>
+    </header>
+
+    <div class="flex-1 overflow-y-auto min-h-0">
+      <div id="alerts" class="px-5 pt-4 space-y-2"></div>
+      <div id="conns" class="p-5 space-y-4"></div>
+      <div id="dist" class="px-5 pb-8"></div>
+    </div>
+
+    <script>
+      const CONFIG_PATH = 'system/config/local_bridge.json';
+      const ANCHOR_DIR = 'data/apps/local_bridge/anchors';
+      // 配信後は system/services/ に入る。開発中のこの環境では services/ にある。
+      // どちらでも動くよう両方を見る。
+      const SERVER_PATHS = ['system/services/itera_bridge_server.py', 'services/itera_bridge_server.py'];
+      // デーモンも配信後は system/services/ に入る。存在する方を使う。
+      const DAEMON_PATHS = ['system/services/local_bridge.html', 'services/local_bridge.html'];
+      const DAEMON_PID = 'local_bridge';
+      const MOUNT_BASE = 'local';
+
+      const DOM = (id) => document.getElementById(id);
+      const esc = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      const short = (id) => (id ? String(id).slice(0, 8) : '—');
+
+      let state = { config: null, conns: [], mounts: [], daemon: false };
+
+      // 設定は「読んで・変えて・書く」を毎回やり直す。
+      // 開いたときの内容を持ち回って書き戻すと、デーモンが書き込む name / machineId を
+      // 消してしまう（Handoff アプリが同じ作りで実際に事故を起こしている）。
+      async function mutateConfig(fn) {
+        let cfg;
+        try {
+          cfg = JSON.parse(await MetaOS.fs.read(CONFIG_PATH));
+        } catch (e) {
+          alertBox('設定を読めませんでした: ' + e.message, 'error');
+          return false;
+        }
+        const next = fn(cfg);
+        if (!next) return false;
+        await MetaOS.fs.write(CONFIG_PATH, JSON.stringify(next, null, 2), { overwrite: true });
+        await refresh();
+        return true;
+      }
+
+      function alertBox(msg, kind) {
+        const cls =
+          kind === 'error'
+            ? 'text-error border-error/40 bg-error/10'
+            : kind === 'warn'
+              ? 'text-warning border-warning/40 bg-warning/10'
+              : 'text-text-muted border-border-main';
+        DOM('alerts').insertAdjacentHTML(
+          'beforeend',
+          `<div class="border rounded-lg px-4 py-2 text-sm ${cls}">${esc(msg)}</div>`,
+        );
+      }
+
+      async function probe(cfgConn) {
+        const url = (cfgConn.serverUrl || '').replace(/\/+$/, '');
+        const out = { cfg: cfgConn, url, ok: false, status: null, error: null };
+        if (cfgConn.enabled === false) {
+          out.error = '無効';
+          return out;
+        }
+        try {
+          const res = await fetch(url + '/api/status');
+          if (!res.ok) throw new Error('HTTP ' + res.status);
+          out.status = await res.json();
+          out.ok = true;
+        } catch (e) {
+          out.error = e.message;
+        }
+        return out;
+      }
+
+      async function anchorFor(name, root) {
+        try {
+          const raw = await MetaOS.fs.read(`${ANCHOR_DIR}/${name}__${root}.json`);
+          const obj = JSON.parse(raw);
+          return obj && obj.v === 2 ? obj.identity || null : null;
+        } catch (e) {
+          return null;
+        }
+      }
+
+      async function rootDetail(conn, r) {
+        const name = conn.cfg.name;
+        const mountPath = name ? `${MOUNT_BASE}/${name}/${r.name}` : null;
+        const d = {
+          name: r.name,
+          hostPath: r.path,
+          files: r.files,
+          rev: r.rev,
+          mountPath,
+          mounted: !!mountPath && state.mounts.includes(mountPath),
+          stubs: null,
+          materialized: null,
+          bytes: 0,
+          mismatch: null,
+        };
+        if (!mountPath) return d;
+
+        const prev = await anchorFor(name, r.name);
+        const now = conn.status || {};
+        if (prev) {
+          if (prev.machineId && now.machineId && prev.machineId !== now.machineId) {
+            d.mismatch = `別の機械（前回 ${prev.hostname || short(prev.machineId)}）`;
+          } else if (prev.path && r.path && prev.path !== r.path) {
+            d.mismatch = `実パスが変わった（前回 ${prev.path}）`;
+          }
+        }
+
+        try {
+          const st = await MetaOS.fs.getSyncState(mountPath);
+          let stubs = 0;
+          const mats = [];
+          for (const [full, info] of Object.entries(st)) {
+            if (!info || info.kind === 'directory') continue;
+            if (info.syncState === 'stub') stubs++;
+            else mats.push(full);
+          }
+          d.stubs = stubs;
+          d.materialized = mats.length;
+          // getSyncState は size を返さない（返ってくると思い込んで 0 B と表示していた）。
+          // 実体はふつう少数なので、その分だけ stat して合計する。
+          let bytes = 0;
+          for (const p of mats.slice(0, 200)) {
+            try {
+              const s = await MetaOS.fs.stat(p);
+              bytes += (s && s.size) || 0;
+            } catch (e) {}
+          }
+          d.bytes = bytes;
+          d.bytesPartial = mats.length > 200;
+        } catch (e) {}
+        return d;
+      }
+
+      const fmtBytes = (n) => {
+        if (!n) return '0 B';
+        const u = ['B', 'KB', 'MB', 'GB'];
+        let i = 0;
+        while (n >= 1024 && i < u.length - 1) { n /= 1024; i++; }
+        return `${n.toFixed(i ? 1 : 0)} ${u[i]}`;
+      };
+
+      async function refresh() {
+        DOM('alerts').innerHTML = '';
+        let cfg;
+        try {
+          cfg = JSON.parse(await MetaOS.fs.read(CONFIG_PATH));
+        } catch (e) {
+          DOM('conns').innerHTML = '';
+          alertBox('設定ファイルを読めません: ' + CONFIG_PATH, 'error');
+          return;
+        }
+        state.config = cfg;
+
+        try {
+          const ps = await MetaOS.system.ps();
+          // pid だけで判定してはいけない。このアプリ自身が pid `local_bridge` を
+          // 名乗ってデーモンを置き換えてしまい、「自分を見つけて稼働中」と表示した事故がある。
+          // 見るべきはパス。
+          state.daemon = ps.some((p) => DAEMON_PATHS.includes(p.path) && p.type === 'daemon');
+        } catch (e) {
+          state.daemon = false;
+        }
+        DOM('daemonState').textContent = state.daemon ? 'デーモン稼働中' : 'デーモン停止中';
+
+        try {
+          state.mounts = (await MetaOS.fs.listMounts()).filter((m) => m.pid === DAEMON_PID).map((m) => m.mountPath);
+        } catch (e) {
+          state.mounts = [];
+        }
+
+        state.conns = await Promise.all((cfg.connections || []).map(probe));
+
+        if (!state.daemon) {
+          alertBox('デーモンが動いていません。マウントは行われません。「デーモン再起動」で起動できます。', 'warn');
+        }
+
+        // 同じ machineId を名乗る接続が2本以上あると、同じディレクトリを二重に同期して壊れる。
+        // ssh -L を挟むと URL では気づけないので、ここで見る意味がある。
+        const byId = new Map();
+        for (const c of state.conns) {
+          const id = c.status && c.status.machineId;
+          if (!id) continue;
+          byId.set(id, (byId.get(id) || []).concat([c]));
+        }
+        for (const [, list] of byId) {
+          if (list.length > 1) {
+            alertBox(
+              `同じ機械に ${list.length} 本の接続が繋がっています（` +
+                list.map((c) => c.url).join(' / ') +
+                '）。同じディレクトリを二重にマウントしていると壊れます。',
+              'error',
+            );
+          }
+        }
+
+        await render();
+        renderDist();
+      }
+
+      async function render() {
+        const parts = [];
+        for (const c of state.conns) {
+          const st = c.status;
+          const name = c.cfg.name;
+          const badge = c.ok
+            ? '<span class="text-success text-xs font-bold">接続中</span>'
+            : c.cfg.enabled === false
+              ? '<span class="text-text-muted text-xs">無効</span>'
+              : '<span class="text-error text-xs font-bold">未接続</span>';
+
+          const roots = [];
+          if (c.ok && Array.isArray(st.roots)) {
+            for (const r of st.roots) roots.push(await rootDetail(c, r));
+          }
+
+          const rootRows = roots.length
+            ? roots
+                .map((d) => {
+                  const mountCell = d.mountPath
+                    ? `<code class="text-[0.6875rem]">/${esc(d.mountPath)}</code>` +
+                      (d.mounted ? '' : ' <span class="text-warning text-[0.6875rem]">未マウント</span>')
+                    : '<span class="text-text-muted text-[0.6875rem]">接続名の確定待ち</span>';
+                  const counts =
+                    d.stubs === null
+                      ? '—'
+                      : `スタブ ${d.stubs} / 実体 ${d.materialized}（${fmtBytes(d.bytes)}）`;
+                  const warn = d.mismatch
+                    ? `<div class="text-error text-[0.6875rem] mt-1">同一性が食い違います: ${esc(d.mismatch)} — 同期は停止します</div>`
+                    : '';
+                  return `<tr class="border-t border-border-main/60 align-top">
+                    <td class="py-2 pr-3 font-medium">${esc(d.name)}${warn}</td>
+                    <td class="py-2 pr-3 text-text-muted"><code class="text-[0.6875rem]">${esc(d.hostPath || '')}</code></td>
+                    <td class="py-2 pr-3">${mountCell}</td>
+                    <td class="py-2 pr-3 text-text-muted text-[0.6875rem] whitespace-nowrap" title="ホストが把握している件数。ディレクトリを含むため、右の合計とは一致しません。">${d.files} 件</td>
+                    <td class="py-2 text-text-muted text-[0.6875rem] whitespace-nowrap">${counts}</td>
+                  </tr>`;
+                })
+                .join('')
+            : `<tr><td colspan="5" class="py-3 text-text-muted text-sm">${
+                c.ok ? 'ルートがありません（ホストで <code>itera attach &lt;DIR&gt;</code>）' : esc(c.error || '')
+              }</td></tr>`;
+
+          const ident = c.ok
+            ? `${esc(st.hostname || '名乗りなし')} <span class="text-text-muted">/ ${esc(st.user || '?')} / ${esc(st.platform || '?')}</span>
+               <span class="text-text-muted text-[0.6875rem]">machineId ${esc(short(st.machineId))}</span>`
+            : `<span class="text-text-muted">${esc(c.error || '')}</span>`;
+
+          parts.push(`
+            <section class="border border-border-main rounded-xl overflow-hidden">
+              <div class="flex items-center justify-between px-4 py-3 border-b border-border-main">
+                <div class="flex items-center gap-3 min-w-0">
+                  <h2 class="font-bold truncate">${esc(name || '(名前未確定)')}</h2>
+                  ${badge}
+                  <code class="text-[0.6875rem] text-text-muted truncate">${esc(c.url)}</code>
+                  ${c.ok ? `<span class="text-[0.6875rem] text-text-muted">v${esc(st.version)}</span>` : ''}
+                </div>
+                <div class="flex items-center gap-2 shrink-0">
+                  <label class="text-[0.6875rem] text-text-muted">実行</label>
+                  <select onchange="setExecMode('${esc(c.url)}', this.value)"
+                          class="bg-app border border-border-main rounded px-2 py-1 text-xs">
+                    <option value="ask" ${(c.cfg.execMode || 'ask') === 'ask' ? 'selected' : ''}>都度確認</option>
+                    <option value="auto" ${c.cfg.execMode === 'auto' ? 'selected' : ''}>自動</option>
+                  </select>
+                  <button onclick="toggleEnabled('${esc(c.url)}')"
+                          class="px-2 py-1 rounded border border-border-main text-xs hover:bg-hover">
+                    ${c.cfg.enabled === false ? '有効化' : '無効化'}
+                  </button>
+                  <button onclick="removeConnection('${esc(c.url)}')"
+                          class="px-2 py-1 rounded border border-error/40 text-error text-xs hover:bg-error/10">削除</button>
+                </div>
+              </div>
+              <div class="px-4 py-2 text-sm border-b border-border-main/60">${ident}</div>
+              <table class="w-full text-sm px-4">
+                <thead class="text-[0.6875rem] text-text-muted">
+                  <tr><th class="text-left py-2 pl-4">ルート</th><th class="text-left">ホスト側の実パス</th>
+                      <th class="text-left">マウント先</th><th class="text-left">件数</th><th class="text-left">VFS の状態</th></tr>
+                </thead>
+                <tbody class="[&_td:first-child]:pl-4">${rootRows}</tbody>
+              </table>
+            </section>`);
+        }
+        DOM('conns').innerHTML = parts.join('') || '<p class="text-text-muted text-sm">接続が設定されていません。</p>';
+      }
+
+      function renderDist() {
+        DOM('dist').innerHTML = `
+          <section class="border border-border-main rounded-xl p-4">
+            <h2 class="font-bold mb-1">ホスト側サーバーの配布</h2>
+            <p class="text-text-muted text-sm mb-3">
+              1ファイルでサーバーと CLI を兼ねます。接続したい機械に置いて起動してください。
+              依存は <code>fastapi</code> / <code>uvicorn</code>（任意で <code>watchdog</code>）。
+            </p>
+            <div class="flex flex-wrap items-center gap-2 mb-3">
+              <button onclick="downloadServer()" class="px-3 py-2 rounded-lg bg-primary text-text-inverted text-sm font-bold hover:bg-primary/90">
+                itera_bridge_server.py をダウンロード
+              </button>
+              <button onclick="copyServer()" class="px-3 py-2 rounded-lg border border-border-main text-sm hover:bg-hover">
+                本文をクリップボードへコピー
+              </button>
+              <span class="text-text-muted text-[0.6875rem]">ダウンロードがブロックされる環境ではコピーを使ってください</span>
+            </div>
+            <pre class="bg-hover/50 border border-border-main rounded-lg p-3 text-[0.75rem] overflow-x-auto">python3 itera_bridge_server.py serve --port 8001
+python3 itera_bridge_server.py attach ~/projects/foo   # ルートを追加
+python3 itera_bridge_server.py ls
+python3 itera_bridge_server.py detach foo</pre>
+            <p class="text-text-muted text-[0.6875rem] mt-2">
+              ssh 越しの機械に繋ぐときは <code>ssh -L 8002:localhost:8002 &lt;host&gt;</code> のように転送し、
+              この画面で <code>http://127.0.0.1:8002</code> を追加します。接続名はサーバーが名乗るホスト名から決まります。
+            </p>
+          </section>`;
+      }
+
+      async function serverSource() {
+        for (const p of SERVER_PATHS) {
+          try {
+            return await MetaOS.fs.read(p);
+          } catch (e) {}
+        }
+        throw new Error('itera_bridge_server.py が見つかりません（' + SERVER_PATHS.join(' / ') + '）');
+      }
+
+      async function downloadServer() {
+        try {
+          const text = await serverSource();
+          const blob = new Blob([text], { type: 'text/x-python' });
+          const a = document.createElement('a');
+          a.href = URL.createObjectURL(blob);
+          a.download = 'itera_bridge_server.py';
+          document.body.appendChild(a);
+          a.click();
+          setTimeout(() => {
+            URL.revokeObjectURL(a.href);
+            a.remove();
+          }, 1000);
+        } catch (e) {
+          alertBox('ダウンロードに失敗しました: ' + e.message + ' — コピーをお試しください。', 'error');
+        }
+      }
+
+      async function copyServer() {
+        try {
+          await MetaOS.host.copyText(await serverSource());
+          MetaOS.host.notify('itera_bridge_server.py をコピーしました', 'Local Bridge');
+        } catch (e) {
+          alertBox('コピーに失敗しました: ' + e.message, 'error');
+        }
+      }
+
+      async function setExecMode(url, mode) {
+        await mutateConfig((cfg) => {
+          const c = (cfg.connections || []).find((x) => (x.serverUrl || '').replace(/\/+$/, '') === url);
+          if (!c) return null;
+          c.execMode = mode;
+          return cfg;
+        });
+        notifyRestartNeeded();
+      }
+
+      async function toggleEnabled(url) {
+        await mutateConfig((cfg) => {
+          const c = (cfg.connections || []).find((x) => (x.serverUrl || '').replace(/\/+$/, '') === url);
+          if (!c) return null;
+          c.enabled = c.enabled === false;
+          return cfg;
+        });
+        notifyRestartNeeded();
+      }
+
+      async function addConnection() {
+        const url = prompt('サーバーの URL', 'http://127.0.0.1:8002');
+        if (!url) return;
+        const clean = url.trim().replace(/\/+$/, '');
+        const ok = await mutateConfig((cfg) => {
+          cfg.connections = cfg.connections || [];
+          if (cfg.connections.some((x) => (x.serverUrl || '').replace(/\/+$/, '') === clean)) {
+            alertBox('その URL はすでに登録されています。', 'warn');
+            return null;
+          }
+          // name は書かない。サーバーが名乗るホスト名をデーモンが採用して書き戻す。
+          cfg.connections.push({ serverUrl: clean, execMode: 'ask', enabled: true });
+          return cfg;
+        });
+        if (ok) notifyRestartNeeded();
+      }
+
+      async function removeConnection(url) {
+        const res = await MetaOS.host.showMessageBox({
+          title: '接続の削除',
+          message: `${url} を設定から削除しますか。`,
+          detail:
+            'VFS 側のサブツリー（local/<接続名>/…）はこの操作では消しません。' +
+            '実体化したファイルが残っている可能性があるためです。不要なら手で削除してください。',
+          type: 'question',
+          buttons: [
+            { label: 'やめる', value: false, style: 'normal', isCancel: true },
+            { label: '削除する', value: true, style: 'danger', isDefault: true },
+          ],
+        });
+        if (!res || res.action !== true) return;
+        await mutateConfig((cfg) => {
+          cfg.connections = (cfg.connections || []).filter(
+            (x) => (x.serverUrl || '').replace(/\/+$/, '') !== url,
+          );
+          return cfg;
+        });
+        notifyRestartNeeded();
+      }
+
+      let restartHinted = false;
+      function notifyRestartNeeded() {
+        if (restartHinted) return;
+        restartHinted = true;
+        alertBox('設定を変更しました。「デーモン再起動」を押すと反映されます。', 'warn');
+      }
+
+      async function daemonPath() {
+        for (const p of DAEMON_PATHS) {
+          if (await MetaOS.fs.exists(p)) return p;
+        }
+        throw new Error('デーモン本体が見つかりません（' + DAEMON_PATHS.join(' / ') + '）');
+      }
+
+      async function restartDaemon() {
+        try {
+          await MetaOS.system.spawn(await daemonPath(), { pid: DAEMON_PID, type: 'daemon', forceReload: true });
+          restartHinted = false;
+          setTimeout(refresh, 1500);
+        } catch (e) {
+          alertBox('デーモンを起動できませんでした: ' + e.message, 'error');
+        }
+      }
+
+      refresh();
+      setInterval(refresh, 15000);
+    </script>
+  </body>
+</html>

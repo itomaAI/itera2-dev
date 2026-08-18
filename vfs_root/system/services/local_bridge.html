@@ -1,0 +1,931 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Itera Local Bridge Daemon v3</title>
+  </head>
+  <body>
+    <script>
+      // Itera Local Bridge Daemon v3
+      //   接続(サーバー) x ルート(ディレクトリ) の二段構造。
+      //   マウント先は local/<接続名>/<ルート名> に固定する。
+      //   設計メモ: docs/blueprints/local_bridge_v3.md
+      (async function main() {
+        if (!window.MetaOS) return setTimeout(main, 100);
+
+        const CONFIG_PATH = 'system/config/local_bridge.json';
+        // アンカーは非揮発の場所に置く。system/temp はセッション破棄で消え、
+        // 「アンカーが無い」状態は調停の分岐4（ローカルに新規）を誤成立させる。
+        const ANCHOR_DIR = 'data/apps/local_bridge/anchors';
+        const LEGACY_ANCHOR_DIR = 'system/temp/local_bridge';
+        const MOUNT_BASE = 'local';
+        // ホスト側の変更に気づく唯一の経路なので短めにする。
+        // 変更が無ければ /api/status を1本叩くだけで、調停は rev が動いたときしか走らない。
+        const ROOT_POLL_MS = 5000;
+        const ANCHOR_VERSION = 2;
+
+        const DEFAULT_CONFIG = {
+          connections: [{ serverUrl: 'http://127.0.0.1:8001', execMode: 'ask', enabled: true }],
+          ignorePatterns: ['.git', '.venv', 'venv', 'node_modules', '__pycache__', '*.pyc', '.DS_Store', 'dist', 'build'],
+        };
+
+        let config = DEFAULT_CONFIG;
+        try {
+          config = { ...DEFAULT_CONFIG, ...JSON.parse(await MetaOS.fs.read(CONFIG_PATH)) };
+        } catch (e) {
+          try {
+            await MetaOS.fs.write(CONFIG_PATH, JSON.stringify(DEFAULT_CONFIG, null, 2), { overwrite: true, silent: true });
+          } catch (e2) {}
+        }
+
+        const log = (msg) => console.log('[LocalBridge] ' + msg);
+
+        async function saveConfig() {
+          try {
+            await MetaOS.fs.write(CONFIG_PATH, JSON.stringify(config, null, 2), { overwrite: true, silent: true });
+          } catch (e) {
+            log(`設定の書き戻しに失敗: ${e.message}`);
+          }
+        }
+
+        // 接続の実行時表現。name はサーバーが名乗ったホスト名で確定させる。
+        // 設定に name があればそれを優先する（一度決まったマウントパスを勝手に変えない）。
+        const connections = (config.connections || [])
+          .filter((c) => c && c.enabled !== false)
+          .map((cfg) => ({
+            cfg,
+            name: cfg.name || null,
+            serverUrl: (cfg.serverUrl || '').replace(/\/+$/, ''),
+            execMode: cfg.execMode || 'ask',
+            identity: null,
+          }));
+
+        const mounts = new Map(); // mountPath -> {conn, root, rootPath, syncing, halted, timer}
+
+        // ホスト名をマウント名に使える形へ落とす。'.local' は Bonjour の飾りなので落とす。
+        function sanitizeName(raw) {
+          const s = String(raw || '')
+            .trim()
+            .toLowerCase()
+            .replace(/\.local$/, '')
+            .replace(/[^a-z0-9._-]+/g, '-')
+            .replace(/^[-.]+|[-.]+$/g, '');
+          return s || 'unknown-host';
+        }
+
+        // ---------- 無視パターン ----------
+        function globToRegex(glob) {
+          let re = '';
+          for (const c of glob) {
+            if (c === '*') re += '.*';
+            else if (c === '?') re += '.';
+            else if ('.+^$()[]{}|\\'.includes(c)) re += '\\' + c;
+            else re += c;
+          }
+          return new RegExp('^' + re + '$');
+        }
+
+        function compileIgnorePatterns(patterns) {
+          const compiled = [];
+          for (const raw of patterns || []) {
+            let pat = (raw || '').trim();
+            if (!pat || pat.startsWith('#')) continue;
+            if (pat.endsWith('/')) pat = pat.slice(0, -1);
+            if (!pat) continue;
+            try {
+              compiled.push({ re: globToRegex(pat), matchesFullPath: pat.includes('/') });
+            } catch (e) {}
+          }
+          return compiled;
+        }
+
+        function isIgnoredCompiled(rel, compiled) {
+          if (!compiled || !compiled.length) return false;
+          const parts = rel.split('/');
+          for (const entry of compiled) {
+            if (entry.matchesFullPath) {
+              if (entry.re.test(rel)) return true;
+            } else if (parts.some((seg) => entry.re.test(seg))) return true;
+          }
+          return false;
+        }
+
+        const COMPILED_IGNORE = compileIgnorePatterns(config.ignorePatterns);
+
+        // ---------- 補助 ----------
+        const api = (conn, path) => `${conn.serverUrl}${path}`;
+
+        async function getJson(url, opts) {
+          const res = await fetch(url, opts);
+          if (!res.ok) {
+            const text = await res.text().catch(() => '');
+            const err = new Error(`HTTP ${res.status} ${text.slice(0, 200)}`);
+            err.status = res.status;
+            throw err;
+          }
+          return res.json();
+        }
+
+        function parentPath(full) {
+          const i = full.lastIndexOf('/');
+          return i > 0 ? full.substring(0, i) : '';
+        }
+
+        async function ensureDirRecursive(dir, knownDirs) {
+          if (!dir) return;
+          let cur = '';
+          for (const seg of dir.split('/').filter(Boolean)) {
+            cur = cur ? `${cur}/${seg}` : seg;
+            if (knownDirs && knownDirs.has(cur)) continue;
+            try {
+              await MetaOS.fs.mkdir(cur);
+            } catch (e) {}
+            if (knownDirs) knownDirs.add(cur);
+          }
+        }
+
+        const anchorPath = (conn, root) => `${ANCHOR_DIR}/${conn.name}__${root}.json`;
+        const legacyAnchorPath = (conn, root) => `${LEGACY_ANCHOR_DIR}/${conn.name}__${root}.json`;
+
+        /**
+         * アンカーを読む。返すのは { identity, entries, fresh }。
+         * identity は「前回このマウントが向き合っていた相手」で、machineId と実パスを持つ。
+         * 旧形式（rel -> info の平坦な地図）は identity を持たないため null を返す。
+         * その場合は初回の照合を素通しし、以後は今回の相手を記録する（trust on first use）。
+         */
+        async function loadAnchor(conn, root) {
+          for (const p of [anchorPath(conn, root), legacyAnchorPath(conn, root)]) {
+            let raw;
+            try {
+              raw = await MetaOS.fs.read(p);
+            } catch (e) {
+              continue;
+            }
+            try {
+              const obj = JSON.parse(raw);
+              if (obj && obj.v === ANCHOR_VERSION) {
+                return { identity: obj.identity || null, entries: obj.entries || {}, fresh: false };
+              }
+              return { identity: null, entries: obj || {}, fresh: false };
+            } catch (e) {
+              // 壊れたアンカーを空として扱うと、全ファイルが「ローカルに新規」に見える。
+              // 空にするのではなく、調停を止められるよう壊れていることを伝える。
+              log(`アンカーが壊れています (${p}): ${e.message}`);
+              return { identity: null, entries: null, fresh: false, broken: true };
+            }
+          }
+          return { identity: null, entries: {}, fresh: true };
+        }
+
+        async function saveAnchor(conn, root, rootPath, entries) {
+          const body = {
+            v: ANCHOR_VERSION,
+            identity: {
+              machineId: conn.identity?.machineId || null,
+              hostname: conn.identity?.hostname || null,
+              path: rootPath || null,
+            },
+            entries,
+          };
+          await MetaOS.fs.write(anchorPath(conn, root), JSON.stringify(body), { overwrite: true, silent: true });
+        }
+
+        /**
+         * 「前回の相手」と「今の相手」が同じかを見る。
+         * 違っていたら調停してはならない。同名ルートを別ディレクトリに向け直した場合、
+         * 残骸が新しいディレクトリへ送信される（分岐4）ためである。
+         * 判定材料が無いとき（旧サーバーは machineId を名乗らない）は、
+         * 分かる範囲だけで比べる。パスは v3.0 のサーバーでも取れる。
+         */
+        function identityMismatch(prev, conn, rootPath) {
+          if (!prev) return null;
+          const now = conn.identity || {};
+          if (prev.machineId && now.machineId && prev.machineId !== now.machineId) {
+            return `別の機械です（前回 ${prev.hostname || prev.machineId} / 今回 ${now.hostname || now.machineId}）`;
+          }
+          if (prev.path && rootPath && prev.path !== rootPath) {
+            return `ルートの実パスが変わりました（前回 ${prev.path} / 今回 ${rootPath}）`;
+          }
+          return null;
+        }
+
+        /**
+         * 調停を止める。止めた事実が見えないと「同期されている」と思い込まれる。
+         * 1マウントにつき1度だけ通知する（毎周期鳴らすと無視されるようになる）。
+         */
+        function halt(mount, reason) {
+          if (mount.halted) return;
+          mount.halted = reason;
+          clearTimeout(mount.timer);
+          const msg =
+            `[Local Bridge] /${mount.mountPath} の同期を停止しました。\n${reason}\n` +
+            `意図した組み合わせであれば、アンカー ${anchorPath(mount.conn, mount.root)} を削除すると再開します。`;
+          log(msg);
+          try {
+            MetaOS.host.notify(msg, 'Local Bridge');
+          } catch (e) {}
+          try {
+            MetaOS.ai.log(msg, 'warning', { trigger_llm: true });
+          } catch (e) {}
+        }
+
+        // ---------- 調停（3-way マージ） ----------
+        async function reconcile(mount) {
+          const { conn, root, mountPath } = mount;
+          let remote;
+          try {
+            remote = await getJson(api(conn, `/api/${root}/meta`));
+          } catch (e) {
+            log(`meta 取得に失敗 (${conn.name}/${root}): ${e.message}`);
+            return;
+          }
+
+          const local = await MetaOS.fs.getSyncState(mountPath);
+          const loaded = await loadAnchor(conn, root);
+
+          if (loaded.broken) {
+            return halt(mount, 'アンカーが壊れているため調停を中止しました。');
+          }
+          const mismatch = identityMismatch(loaded.identity, conn, mount.rootPath);
+          if (mismatch) {
+            return halt(mount, `同一性が食い違うため調停を中止しました。${mismatch}`);
+          }
+
+          const anchor = loaded.entries;
+          const next = { ...anchor };
+
+          const knownDirs = new Set([mountPath]);
+          for (const [p, info] of Object.entries(local)) {
+            if (info && info.kind === 'directory') knownDirs.add(p);
+          }
+
+          const rels = new Set([
+            ...Object.keys(remote),
+            ...Object.keys(local).map((p) => p.substring(mountPath.length + 1)),
+            ...Object.keys(anchor),
+          ]);
+
+          const sorted = Array.from(rels).sort((a, b) => {
+            const da = a.split('/').length, db = b.split('/').length;
+            return da !== db ? da - db : a < b ? -1 : a > b ? 1 : 0;
+          });
+
+          let n = 0;
+          for (const rel of sorted) {
+            if (!rel) continue;
+            if (isIgnoredCompiled(rel, COMPILED_IGNORE)) continue;
+            if (++n % 50 === 0) await new Promise((r) => setTimeout(r, 0));
+
+            try {
+              const full = `${mountPath}/${rel}`;
+              const r = remote[rel];
+              const l = local[full];
+              const a = anchor[rel];
+              const same = (x, y) => (x?.hash || null) === (y?.hash || null);
+
+              if (!l && !r) {
+                delete next[rel];
+                continue;
+              }
+
+              // 1. リモートで削除済み（墓石）
+              if (r && r.isDeleted) {
+                if (l) {
+                  try {
+                    await MetaOS.fs.delete(full, { permanent: true });
+                  } catch (e) {}
+                }
+                delete next[rel];
+                continue;
+              }
+
+              // 2. ローカルで削除された → リモートへ反映
+              if (!l && r && a && same(r, a)) {
+                const res = await fetch(api(conn, `/api/${root}/file/${rel}`), {
+                  method: 'DELETE',
+                  headers: a.hash ? { 'X-Expected-Hash': a.hash } : {},
+                });
+                if (res.ok) delete next[rel];
+                continue;
+              }
+
+              // 3. リモートに新規 → スタブを作る
+              if (r && !l && !a) {
+                if (r.kind === 'directory') {
+                  await ensureDirRecursive(full, knownDirs);
+                  next[rel] = { kind: 'directory', size: 0, updatedAt: r.updatedAt, hash: null };
+                } else {
+                  await ensureDirRecursive(parentPath(full), knownDirs);
+                  await MetaOS.fs.createStub(full, { size: r.size, updatedAt: r.updatedAt, hash: r.hash });
+                  next[rel] = { kind: 'file', size: r.size, updatedAt: r.updatedAt, hash: r.hash };
+                }
+                continue;
+              }
+
+              // 4. ローカルに新規 → リモートへ送る
+              if (l && !r && !a) {
+                if (l.kind === 'directory') continue;
+                const u8 = await MetaOS.fs.read(full, { encoding: 'binary' });
+                const data = await getJson(api(conn, `/api/${root}/file/${rel}`), { method: 'PUT', body: u8 });
+                next[rel] = { kind: 'file', size: data.size, updatedAt: data.updatedAt, hash: data.hash };
+                continue;
+              }
+
+              // 5. ローカルだけ変わった → 送る
+              if (l && r && !same(l, a) && same(r, a)) {
+                if (l.kind === 'directory') continue;
+                const u8 = await MetaOS.fs.read(full, { encoding: 'binary' });
+                const data = await getJson(api(conn, `/api/${root}/file/${rel}`), {
+                  method: 'PUT',
+                  headers: a?.hash ? { 'X-Expected-Hash': a.hash } : {},
+                  body: u8,
+                });
+                next[rel] = { kind: 'file', size: data.size, updatedAt: data.updatedAt, hash: data.hash };
+                continue;
+              }
+
+              // 6. リモートだけ変わった → スタブへ差し替える
+              if (l && r && same(l, a) && !same(r, a)) {
+                if (r.kind === 'directory') {
+                  await ensureDirRecursive(full, knownDirs);
+                } else {
+                  await ensureDirRecursive(parentPath(full), knownDirs);
+                  await MetaOS.fs.createStub(full, { size: r.size, updatedAt: r.updatedAt, hash: r.hash });
+                }
+                next[rel] = { kind: r.kind, size: r.size, updatedAt: r.updatedAt, hash: r.hash };
+                continue;
+              }
+
+              // 7. 一致している
+              if (l && r && same(l, r)) {
+                next[rel] = { kind: l.kind, size: r.size, updatedAt: r.updatedAt, hash: r.hash };
+              }
+            } catch (e) {
+              log(`項目の調停に失敗 ${conn.name}/${root}/${rel}: ${e.message}`);
+            }
+          }
+
+          await saveAnchor(conn, root, mount.rootPath, next);
+        }
+
+        function scheduleSync(mount) {
+          if (mount.halted) return;
+          clearTimeout(mount.timer);
+          mount.timer = setTimeout(async () => {
+            if (mount.halted) return;
+            if (mount.syncing) return scheduleSync(mount);
+            mount.syncing = true;
+            try {
+              await reconcile(mount);
+            } catch (e) {
+              log(`調停エラー: ${e.message}`);
+            } finally {
+              mount.syncing = false;
+            }
+          }, 800);
+        }
+
+        // ---------- マウント管理 ----------
+        async function mountRoot(conn, rootInfo) {
+          const root = rootInfo.name;
+          const mountPath = `${MOUNT_BASE}/${conn.name}/${root}`;
+          const known = mounts.get(mountPath);
+          if (known) {
+            // 実パスが動いていたら覚え直す。次の調停で同一性照合に引っかかる。
+            if (rootInfo.path) known.rootPath = rootInfo.path;
+            return;
+          }
+          await ensureDirRecursive(mountPath, null);
+          const mount = {
+            conn,
+            root,
+            rootPath: rootInfo.path || null,
+            mountPath,
+            syncing: false,
+            halted: null,
+            timer: null,
+          };
+
+          await MetaOS.fs.registerSyncProvider(mountPath, {
+            onFetchContent: async (reqPath) => {
+              const rel = reqPath.substring(mountPath.length + 1);
+              try {
+                const res = await fetch(api(conn, `/api/${root}/file/${rel}`));
+                if (!res.ok) return false;
+                const buf = await res.arrayBuffer();
+                await MetaOS.fs.write(reqPath, new Uint8Array(buf), { overwrite: true, silent: true });
+                return true;
+              } catch (e) {
+                log(`実体取得に失敗 ${rel}: ${e.message}`);
+                return false;
+              }
+            },
+            onMutate: async () => scheduleSync(mount),
+          });
+
+          mounts.set(mountPath, mount);
+          log(`マウント: /${mountPath}`);
+          scheduleSync(mount);
+        }
+
+        /**
+         * マウントを外す。cleanup は「サーバーは応答しているのにルートが消えた」＝
+         * 意図的な detach のときだけ true にする。接続断では呼んではならない。
+         */
+        async function unmountRoot(mountPath, opts) {
+          const mount = mounts.get(mountPath);
+          if (!mount) return;
+          const cleanup = !!(opts && opts.cleanup);
+          clearTimeout(mount.timer);
+
+          // 後始末の前に状態を読む。読めたかどうかで「消してよいか」が決まる。
+          let state = null;
+          if (cleanup) {
+            try {
+              state = await MetaOS.fs.getSyncState(mountPath);
+            } catch (e) {
+              log(`[detach] ${mountPath}: 状態を読めませんでした（${e.message}）`);
+            }
+          }
+
+          // 順序が命。provider を残したまま削除すると、削除がホストへ伝播し、
+          // スタブは実体化されてから消える（＝ホストの実ファイルを道連れにする）。
+          try {
+            await MetaOS.fs.unregisterSyncProvider(mountPath);
+          } catch (e) {}
+          mounts.delete(mountPath);
+          log(`アンマウント: /${mountPath}`);
+
+          if (cleanup) await cleanupDetached(mount, state);
+        }
+
+        /**
+         * detach された残骸の処分。
+         * 残骸を放置すると、同名ルートを別ディレクトリへ attach したときに
+         * 「ローカルに新規」と誤解され、古い残骸が新しいディレクトリへ送信される。
+         * ただし、VFS にしか無いバイト列を持つ実体が1件でもあるなら消さない。退避して名前だけ空ける。
+         */
+        async function cleanupDetached(mount, state) {
+          const { mountPath, conn, root } = mount;
+          if (!state) {
+            log(`[detach] ${mountPath} は状態不明のため残置しました。`);
+            return;
+          }
+          const files = Object.entries(state).filter(([, i]) => i && i.kind !== 'directory');
+          const materialized = files.filter(([, i]) => !isStub(i));
+          try {
+            if (!materialized.length) {
+              // すべてスタブ。VFS 側にしか無い中身は1件も無いので、消しても何も失われない。
+              await MetaOS.fs.delete(mountPath, { permanent: true });
+              log(`[detach] ${mountPath} を削除しました（スタブ ${files.length} 件）。`);
+            } else {
+              const stamp = new Date()
+                .toLocaleDateString('sv-SE')
+                .replace(/-/g, '');
+              let dest = `${mountPath}.detached-${stamp}`;
+              for (let i = 2; await MetaOS.fs.exists(dest); i++) dest = `${mountPath}.detached-${stamp}-${i}`;
+              await MetaOS.fs.rename(mountPath, dest);
+
+              // 退避先に残ったスタブは取得経路を失った「死んだスタブ」で、
+              // ファイルに見えるのに永久に開けない。紛らわしいので捨てる。
+              // provider は解除済みなので、この削除はホストへ伝播しない。
+              let ghosts = 0;
+              for (const [full, info] of files) {
+                if (!isStub(info)) continue;
+                const moved = `${dest}/${full.substring(mountPath.length + 1)}`;
+                try {
+                  await MetaOS.fs.delete(moved, { permanent: true });
+                  ghosts++;
+                } catch (e) {}
+              }
+
+              const msg =
+                `[Local Bridge] ${mountPath} が取り外されました。実体 ${materialized.length} 件が VFS 側にあるため、` +
+                `削除せず /${dest} へ退避しました（開けなくなるスタブ ${ghosts} 件は除去）。`;
+              log(msg);
+              try {
+                MetaOS.host.notify(msg, 'Local Bridge');
+              } catch (e) {}
+              try {
+                MetaOS.ai.log(msg, 'warning');
+              } catch (e) {}
+            }
+            try {
+              await MetaOS.fs.delete(anchorPath(conn, root), { permanent: true });
+            } catch (e) {}
+          } catch (e) {
+            log(`[detach] ${mountPath} の後始末に失敗: ${e.message}`);
+          }
+        }
+
+        function warnOnce(conn, key, msg) {
+          conn.warned = conn.warned || new Set();
+          if (conn.warned.has(key)) return;
+          conn.warned.add(key);
+          log(msg);
+          try {
+            MetaOS.host.notify(msg, 'Local Bridge');
+          } catch (e) {}
+          try {
+            MetaOS.ai.log('[Local Bridge] ' + msg, 'warning');
+          } catch (e) {}
+        }
+
+        const dupWarned = new Set();
+
+        /**
+         * 同じ機械へ2本以上繋がっていないかを見る。
+         * ssh -L を挟むと、直結もトンネルも 127.0.0.1:<port> に見えるため URL では気づけない。
+         * 同じディレクトリを2つの provider が同期すると、互いの書き込みを削除と誤読して壊れる。
+         */
+        function checkDuplicateMachines() {
+          const byId = new Map();
+          for (const c of connections) {
+            const id = c.identity && c.identity.machineId;
+            if (!id) continue;
+            byId.set(id, (byId.get(id) || []).concat([c]));
+          }
+          for (const [id, list] of byId) {
+            if (list.length < 2 || dupWarned.has(id)) continue;
+            dupWarned.add(id);
+            const msg =
+              `同じ機械に ${list.length} 本の接続が繋がっています（` +
+              list.map((c) => `${c.name || '(名前未確定)'}=${c.serverUrl}`).join(' / ') +
+              `）。同じディレクトリを二重にマウントしていると壊れます。`;
+            log(msg);
+            try {
+              MetaOS.host.notify(msg, 'Local Bridge');
+            } catch (e) {}
+            try {
+              MetaOS.ai.log('[Local Bridge] ' + msg, 'warning', { trigger_llm: true });
+            } catch (e) {}
+          }
+        }
+
+        /**
+         * サーバーの名乗りを取り込み、接続名を確定させる。
+         * 名前が決まらないうちはマウントしない（マウントパスに名前が入るため）。
+         */
+        async function applyIdentity(conn, status) {
+          conn.identity = {
+            hostname: status.hostname || null,
+            user: status.user || null,
+            platform: status.platform || null,
+            machineId: status.machineId || null,
+          };
+          conn.serverVersion = status.version || null;
+
+          const mid = conn.identity.machineId;
+          if (mid) {
+            if (conn.cfg.machineId && conn.cfg.machineId !== mid) {
+              warnOnce(
+                conn,
+                'machine-changed',
+                `${conn.serverUrl} の先が別の機械に変わりました（設定 ${conn.cfg.machineId} / 今回 ${mid}）。` +
+                  `マウント名は ${conn.name} のままです。同期は同一性照合で止まります。`,
+              );
+            } else if (!conn.cfg.machineId) {
+              conn.cfg.machineId = mid;
+              await saveConfig();
+            }
+          }
+
+          if (!conn.name) {
+            if (!conn.identity.hostname) {
+              warnOnce(
+                conn,
+                'no-name',
+                `${conn.serverUrl} のサーバーはホスト名を名乗りません（v3.1 より前）。` +
+                  `設定に name を書くか、サーバーを更新してください。マウントは保留します。`,
+              );
+              return false;
+            }
+            let name = sanitizeName(conn.identity.hostname);
+            // 別の機械が同じホスト名を名乗ることはある。その場合だけ machineId で分ける。
+            const clash = connections.find(
+              (c) => c !== conn && c.name === name && (c.identity && c.identity.machineId) !== mid,
+            );
+            if (clash && mid) name = `${name}-${mid.slice(0, 6)}`;
+            conn.name = name;
+            conn.cfg.name = name;
+            await saveConfig();
+            log(`接続名を確定: ${name} (${conn.serverUrl})`);
+          }
+
+          checkDuplicateMachines();
+          return true;
+        }
+
+        // サーバー側のルート増減に追随する（itera attach / detach を反映）。
+        // 接続できないときは何もしない。切断ではアンマウントも削除もしない。
+        async function refreshConn(conn) {
+          let status;
+          try {
+            status = await getJson(api(conn, '/api/status'));
+          } catch (e) {
+            return null;
+          }
+          if (!(await applyIdentity(conn, status))) return status;
+
+          const roots = status.roots || [];
+          const wanted = new Set(roots.map((r) => `${MOUNT_BASE}/${conn.name}/${r.name}`));
+          for (const r of roots) {
+            await mountRoot(conn, r);
+            const m = mounts.get(`${MOUNT_BASE}/${conn.name}/${r.name}`);
+            if (!m) continue;
+            // ホスト側の変更に気づく唯一の経路。rev は中身が変わったときだけ増える。
+            // rev を返さない旧サーバー相手には、毎回調停して取りこぼしを防ぐ。
+            const rev = r.rev === undefined ? Date.now() : r.rev;
+            if (m.rev !== rev) {
+              m.rev = rev;
+              scheduleSync(m);
+            }
+          }
+          for (const mountPath of Array.from(mounts.keys())) {
+            const m = mounts.get(mountPath);
+            // サーバーは応答している。それでもルートが無い＝意図的な detach。
+            if (m.conn === conn && !wanted.has(mountPath)) await unmountRoot(mountPath, { cleanup: true });
+          }
+          return status;
+        }
+
+        // WebSocket による push は廃止した。サーバーは購読を貯めるだけで一度も送信しておらず、
+        // さらに素の uvicorn には WebSocket ライブラリが無く upgrade 自体が失敗していた
+        // （5秒ごとの再接続がホスト側のログを埋めていた）。
+        // ホスト側の変更検知は /api/status の rev をポーリングして行う。
+
+        // ---------- 接続の解決 ----------
+        const connLabel = (c) => c.name || `(名前未確定: ${c.serverUrl})`;
+
+        function resolveConn(name) {
+          const ready = connections.filter((c) => c.name);
+          if (name) {
+            const c = connections.find((x) => x.name === name);
+            if (!c) throw new Error(`接続 '${name}' はありません（${connections.map(connLabel).join(', ') || 'なし'}）`);
+            return c;
+          }
+          if (ready.length === 1) return ready[0];
+          if (!ready.length) {
+            throw new Error(`接続がまだ確立していません（${connections.map(connLabel).join(', ') || '設定なし'}）`);
+          }
+          throw new Error(`接続が複数あります。connection 属性で指定してください（${ready.map((c) => c.name).join(', ')}）`);
+        }
+
+        function resolveRoot(conn, root) {
+          if (root) return root;
+          const owned = Array.from(mounts.values()).filter((m) => m.conn === conn);
+          if (owned.length === 1) return owned[0].root;
+          throw new Error(`ルートが複数あります。root 属性で指定してください（${owned.map((m) => m.root).join(', ') || 'なし'}）`);
+        }
+
+        // 同期を止めたマウントに対して VFS 側を触る操作を通さない。
+        // 相手が変わっている疑いがある状態で実体化やスタブ化をすると、取り違えが確定する。
+        function ensureLive(conn, root) {
+          const m = mounts.get(`${MOUNT_BASE}/${conn.name}/${root}`);
+          if (m && m.halted) throw new Error(`このマウントは同期を停止しています。${m.halted}`);
+          return m;
+        }
+
+        // ---------- LPML ツール ----------
+        const DEFS = {
+          bash_exec: `<define_tag name="bash_exec">
+Executes a shell command on a connected local machine (Itera Local Bridge).
+Attributes:
+  - connection (optional): Connection name. Omit if only one is configured.
+  - root (optional): Root name. Omit if the connection has only one root.
+  - cwd (optional): Directory relative to the root (default: root itself). NOT persisted between calls.
+  - scope (optional): "root" (default) or "host". Use "host" to run outside the registered roots.
+  - timeout (optional): Seconds (default 60, max 600).
+Content:
+  The shell command to execute.
+Note: The effective working directory is always reported back in the result.
+</define_tag>`,
+          local_search: `<define_tag name="local_search">
+Searches file contents on the host machine. Works even when the VFS side is still a stub.
+Attributes:
+  - query (required): Text or regex to search for.
+  - connection (optional) / root (optional): Target selection.
+  - regex (optional): "true" to treat query as a regular expression.
+  - include (optional): Comma separated extensions (e.g. ".py,.md").
+  - limit (optional): Max matches (default 40).
+</define_tag>`,
+          local_fetch: `<define_tag name="local_fetch">
+Materializes stubs: downloads real bytes from the host into the VFS.
+Attributes:
+  - path (required): Path relative to the root. A directory materializes everything under it.
+  - connection (optional) / root (optional): Target selection.
+  - limit (optional): Max files to materialize (default 200).
+</define_tag>`,
+          local_release: `<define_tag name="local_release">
+Turns materialized files back into stubs to free VFS space.
+Only runs when the host copy is confirmed present with a matching hash; aborts if that cannot be determined.
+Attributes:
+  - path (required): Path relative to the root. A directory releases everything under it.
+  - connection (optional) / root (optional): Target selection.
+</define_tag>`,
+        };
+
+        function fmtExec(data) {
+          return [
+            `[exit ${data.exitCode}] ${data.durationMs}ms`,
+            `[cwd] ${data.cwd}`,
+            '--- STDOUT ---',
+            data.stdout || '(empty)',
+            '--- STDERR ---',
+            data.stderr || '(empty)',
+          ].join('\n');
+        }
+
+        MetaOS.tools.register({
+          name: 'bash_exec',
+          description: 'Executes a shell command on a connected local machine.',
+          definition: DEFS.bash_exec,
+          handler: async (p) => {
+            try {
+              const conn = resolveConn(p.connection);
+              const scope = p.scope === 'host' ? 'host' : 'root';
+              const root = scope === 'host' ? null : resolveRoot(conn, p.root);
+              const command = (p.content || '').trim();
+              if (!command) return 'コマンドが空です。';
+
+              if ((conn.execMode || 'ask') === 'ask') {
+                const res = await MetaOS.host.showMessageBox({
+                  title: 'ローカル実行の確認',
+                  message: `${conn.name}${root ? ' / ' + root : ' (host)'} でコマンドを実行します。`,
+                  detail: `${command}\n\ncwd: ${p.cwd || (scope === 'host' ? 'ホームディレクトリ' : 'ルート直下')}`,
+                  type: 'question',
+                  buttons: [
+                    { label: '実行しない', value: false, style: 'normal', isCancel: true },
+                    { label: '実行する', value: true, style: 'primary', isDefault: true },
+                  ],
+                });
+                if (!res || res.action !== true) return '[未実行] 山内さんが実行を許可しませんでした。';
+              }
+
+              const data = await getJson(api(conn, '/api/exec'), {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ root, cwd: p.cwd || '.', command, scope, timeout: parseInt(p.timeout) || 60 }),
+              });
+              return fmtExec(data);
+            } catch (e) {
+              return `[エラー] ${e.message}`;
+            }
+          },
+        });
+
+        MetaOS.tools.register({
+          name: 'local_search',
+          description: 'Searches file contents on the host machine (works on stubs).',
+          definition: DEFS.local_search,
+          handler: async (p) => {
+            try {
+              const conn = resolveConn(p.connection);
+              const root = resolveRoot(conn, p.root);
+              const data = await getJson(api(conn, `/api/${root}/search`), {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  query: p.query,
+                  regex: p.regex === 'true',
+                  include: p.include || '',
+                  limit: parseInt(p.limit) || 40,
+                }),
+              });
+              if (!data.count) return `一致なし（${conn.name}/${root}, engine=${data.engine}）`;
+              const lines = data.matches.map((m) => `${m.path}:${m.line}: ${m.text}`);
+              return `${data.count} 件（${conn.name}/${root}, engine=${data.engine}）\n` + lines.join('\n');
+            } catch (e) {
+              return `[エラー] ${e.message}`;
+            }
+          },
+        });
+
+        // スタブか実体かの判定。
+        // hash の有無では判定できない。createStub にホスト側のハッシュを渡しているため、
+        // スタブでも hash は非 null になる（実測で確認済み）。
+        // 実体化済みのエントリは syncState キー自体が消える。
+        const isStub = (info) => !!info && info.syncState === 'stub';
+
+        MetaOS.tools.register({
+          name: 'local_fetch',
+          description: 'Materializes stubs from the host machine.',
+          definition: DEFS.local_fetch,
+          handler: async (p) => {
+            try {
+              const conn = resolveConn(p.connection);
+              const root = resolveRoot(conn, p.root);
+              ensureLive(conn, root);
+              const mountPath = `${MOUNT_BASE}/${conn.name}/${root}`;
+              const limit = parseInt(p.limit) || 200;
+              const target = `${mountPath}/${p.path}`.replace(/\/+$/, '');
+              const state = await MetaOS.fs.getSyncState(mountPath);
+              const targets = Object.entries(state).filter(
+                ([full, info]) => info.kind !== 'directory' && (full === target || full.startsWith(target + '/')),
+              );
+              if (!targets.length) return `対象がありません: ${p.path}`;
+              let done = 0, already = 0, failed = 0;
+              for (const [full, info] of targets.slice(0, limit)) {
+                if (!isStub(info)) { already++; continue; }
+                try {
+                  await MetaOS.fs.read(full, { encoding: 'binary' }); // 読むと onFetchContent が走る
+                  done++;
+                } catch (e) {
+                  failed++;
+                }
+              }
+              return `実体化: ${done} 件 / 既に実体: ${already} 件 / 失敗: ${failed} 件（対象 ${targets.length} 件、上限 ${limit}）`;
+            } catch (e) {
+              return `[エラー] ${e.message}`;
+            }
+          },
+        });
+
+        MetaOS.tools.register({
+          name: 'local_release',
+          description: 'Turns materialized files back into stubs (verified against the host first).',
+          definition: DEFS.local_release,
+          handler: async (p) => {
+            try {
+              const conn = resolveConn(p.connection);
+              const root = resolveRoot(conn, p.root);
+              ensureLive(conn, root);
+              const mountPath = `${MOUNT_BASE}/${conn.name}/${root}`;
+              const target = `${mountPath}/${p.path}`.replace(/\/+$/, '');
+              const state = await MetaOS.fs.getSyncState(mountPath);
+              const targets = Object.entries(state).filter(
+                ([full, info]) =>
+                  info.kind !== 'directory' && !isStub(info) && (full === target || full.startsWith(target + '/')),
+              );
+              if (!targets.length) return `スタブ化できる実体がありません: ${p.path}`;
+
+              const rels = targets.map(([full]) => full.substring(mountPath.length + 1));
+
+              // ここで失敗したら「判定不能」。バイト列を捨てる前に必ず中断する。
+              let verify;
+              try {
+                verify = await getJson(api(conn, `/api/${root}/verify`), {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ paths: rels }),
+                });
+              } catch (e) {
+                return `[中断] ホスト側の確認が取れませんでした（${e.message}）。実体は残しています。`;
+              }
+
+              let released = 0;
+              const skipped = [];
+              for (const [full, info] of targets) {
+                const rel = full.substring(mountPath.length + 1);
+                const v = verify.results?.[rel];
+                if (!v || !v.present) { skipped.push(`${rel}: ホストに実体が無い`); continue; }
+                if (v.hash !== info.hash) { skipped.push(`${rel}: ハッシュ不一致`); continue; }
+                try {
+                  await MetaOS.fs.createStub(full, { size: v.size, updatedAt: info.updatedAt, hash: v.hash });
+                  released++;
+                } catch (e) {
+                  skipped.push(`${rel}: ${e.message}`);
+                }
+              }
+              let out = `スタブ化: ${released} 件 / 見送り: ${skipped.length} 件（対象 ${targets.length} 件）`;
+              if (skipped.length) out += '\n見送りの理由:\n' + skipped.slice(0, 20).map((s) => '  - ' + s).join('\n');
+              return out;
+            } catch (e) {
+              return `[エラー] ${e.message}`;
+            }
+          },
+        });
+
+        for (const def of Object.values(DEFS)) {
+          MetaOS.ai.log(def, 'tool_available');
+        }
+
+        // ---------- 起動 ----------
+        await ensureDirRecursive(ANCHOR_DIR, null);
+
+        const summary = [];
+        for (const conn of connections) {
+          const status = await refreshConn(conn);
+          if (!status) {
+            summary.push(`${connLabel(conn)}: 未接続 (${conn.serverUrl}) — ${ROOT_POLL_MS / 1000}秒ごとに再確認します`);
+          } else {
+            const id = conn.identity || {};
+            const who = id.hostname ? `${id.hostname} / ${id.user || '?'}` : '名乗りなし（v3.1 未満のサーバー）';
+            summary.push(
+              `${connLabel(conn)}: v${status.version} [${who}] ルート ${(status.roots || []).length} 件 / 実行 ${conn.execMode}`,
+            );
+          }
+          // 起動時に繋がらなくてもポーリングは必ず仕掛ける。
+          // ここを status の有無で分岐させると、サーバーを後から起動した場合に
+          // 永久に繋がらないままになる（実際にこれで踏んだ）。
+          setInterval(() => refreshConn(conn), ROOT_POLL_MS);
+        }
+
+        MetaOS.ai.log(
+          'Local Bridge v3.2 起動\n' + (summary.join('\n') || '（有効な接続がありません）'),
+          'system',
+        );
+      })();
+    </script>
+  </body>
+</html>

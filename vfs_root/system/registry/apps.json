@@ -42,11 +42,11 @@
     "description": "API usage and cost dashboard"
   },
   {
-    "id": "local_sync",
-    "name": "Local Sync",
-    "icon": "🔄",
-    "path": "system/apps/sync_app.html",
-    "description": "Sync VFS with local machine"
+    "id": "local_bridge_settings",
+    "name": "Local Bridge",
+    "icon": "🖥️",
+    "path": "system/apps/local_bridge_settings.html",
+    "description": "ローカル機との接続・ルート・配布の管理"
   },
   {
     "id": "gdrive_sync",
