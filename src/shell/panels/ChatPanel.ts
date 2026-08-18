@@ -318,25 +318,41 @@ export class ChatPanel {
     this.currentStreamEl = div.querySelector('.msg-content') as HTMLElement;
 
     if (this.currentStreamContent) {
-      if (this.renderer) {
-        this.currentStreamEl.innerHTML = this.renderer.formatStream(this.currentStreamContent, { streaming: true });
-        this.currentStreamEl.classList.remove('whitespace-pre-wrap');
-      } else {
+      if (!this._renderLpmlInto(this.currentStreamEl, this.currentStreamContent, { streaming: true })) {
         this.currentStreamEl.textContent = this.currentStreamContent;
       }
     }
+  }
+
+  /**
+   * LPML のタグ箱を描く唯一の入口。
+   *
+   * タグ箱は寸法も書体も持たず、祖先から継承する（LpmlRenderer 側の設計）。
+   * つまり見た目は「どのレイヤの中に描かれたか」で決まる。
+   * MODEL と SYSTEM は機構レイヤ（CLS_MECH）の中なので問題にならないが、
+   * 添付のあるユーザーターンは会話レイヤ（CLS_USER ＝ chat-body）の中に
+   * タグ箱が出るため、MODEL 枠より大きな sans で描かれていた。
+   *
+   * 呼び出し側ごとにクラスを足して回ると、描画経路が増えたときに同じ事故が再発する。
+   * ここを通す限り、タグ箱は必ず機構レイヤの寸法・書体になる。
+   *
+   * @returns レンダラが無く描けなかったときだけ false（呼び出し側で素のテキストに落とす）
+   */
+  private _renderLpmlInto(el: HTMLElement, text: string, opts: { streaming?: boolean } = {}): boolean {
+    if (!this.renderer || !this.renderer.formatStream) return false;
+    el.classList.add('chat-system-message');
+    el.classList.remove('whitespace-pre-wrap');
+    el.innerHTML = this.renderer.formatStream(text, opts);
+    return true;
   }
 
   updateStreaming(chunk: string) {
     if (!this.currentStreamEl) return;
     this.currentStreamContent += chunk;
 
-    if (this.renderer && this.renderer.formatStream) {
-      // streaming:true … 生成中はまだ成果物枠が存在しないため、report/ask を開いたまま見せる。
-      // 確定後は成果物枠が出るので _appendTurn 側では畳む。
-      this.currentStreamEl.innerHTML = this.renderer.formatStream(this.currentStreamContent, { streaming: true });
-      this.currentStreamEl.classList.remove('whitespace-pre-wrap');
-    } else {
+    // streaming:true … 生成中はまだ成果物枠が存在しないため、report/ask を開いたまま見せる。
+    // 確定後は成果物枠が出るので _appendTurn 側では畳む。
+    if (!this._renderLpmlInto(this.currentStreamEl, this.currentStreamContent, { streaming: true })) {
       this.currentStreamEl.textContent = this.currentStreamContent;
     }
     this._scrollToBottom();
@@ -422,8 +438,7 @@ export class ChatPanel {
 
     if (typeof turn.content === 'string') {
       if (role === 'model' || (isSystem && turn.content.includes('<'))) {
-        if (this.renderer) body.innerHTML = this.renderer.formatStream(turn.content);
-        else body.textContent = turn.content;
+        if (!this._renderLpmlInto(body, turn.content)) body.textContent = turn.content;
       } else {
         body.className += ' whitespace-pre-wrap';
         body.innerHTML = this._formatSystemMessage(turn.content);
@@ -459,9 +474,11 @@ export class ChatPanel {
     contentArray.forEach((item) => {
       if (item.text) {
         const div = document.createElement('div');
-        if ((role === 'model' || item.text.trim().startsWith('<')) && this.renderer) {
-          div.innerHTML = this.renderer.formatStream(item.text);
-        } else {
+        // 添付があるとユーザーターンの content が配列になり、この経路を通る。
+        // その場合タグ箱は会話レイヤ（chat-body）の中に出るため、
+        // _renderLpmlInto が機構レイヤを名乗らせて MODEL 枠と同じ寸法に揃える。
+        const isLpml = role === 'model' || item.text.trim().startsWith('<');
+        if (!isLpml || !this._renderLpmlInto(div, item.text)) {
           div.className = 'whitespace-pre-wrap';
           div.innerHTML = this._formatSystemMessage(item.text);
         }
