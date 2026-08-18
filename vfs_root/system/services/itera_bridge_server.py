@@ -35,7 +35,7 @@ import time
 import uuid
 from pathlib import Path
 
-VERSION = "3.3.0"
+VERSION = "3.4.0"
 CONFIG_DIR = Path.home() / ".itera"
 ROOTS_FILE = CONFIG_DIR / "roots.json"
 MACHINE_FILE = CONFIG_DIR / "machine.json"
@@ -257,6 +257,8 @@ class Bridge:
         self.state = load_state()
         self.scanners = {}
         self.exec_enabled = exec_enabled
+        # 変更検知。serve のときだけ入る（CLI では None のまま）。
+        self.watcher = None
         for name, path in self.state["roots"].items():
             self.scanners[name] = RootScanner(name, path, self.state["ignorePatterns"])
 
@@ -273,6 +275,10 @@ class Bridge:
             self.state["roots"][name] = str(p)
             save_state(self.state)
             self.scanners[name] = RootScanner(name, p, self.state["ignorePatterns"])
+        # **起動後に増えたルートにも監視を張る。** これを忘れると、そのルートは
+        # 60 秒ごとの保険走査でしか変更に気づかない（実測 42〜57 秒）。
+        if self.watcher:
+            self.watcher.watch(name)
         return name
 
     def remove_root(self, name):
@@ -282,6 +288,8 @@ class Bridge:
             del self.state["roots"][name]
             save_state(self.state)
             self.scanners.pop(name, None)
+        if self.watcher:
+            self.watcher.unwatch(name)
 
     def scanner(self, name):
         s = self.scanners.get(name)
@@ -306,6 +314,9 @@ class Bridge:
                 "files": len(s.meta) if s else 0,
                 "lastScan": s.last_scan if s else 0,
                 "rev": s.rev if s else 0,
+                # 監視が張れているか。**黙って効いていない**のがいちばん困るので必ず出す。
+                "watching": bool(self.watcher and self.watcher.is_watching(name)),
+                "watchError": self.watcher.error_of(name) if self.watcher else "変更検知は未起動です",
             })
         return out
 
@@ -565,28 +576,86 @@ def _run_search(scanner, query, use_regex, include, limit):
     return matches
 
 
+class RootWatcher:
+    """ホスト側の変更検知。
+
+    **ルートは起動後にも増える。** v3.3.0 までは起動時に存在したルートにしか監視を
+    張っておらず、`attach` で足したルートは 60 秒ごとの保険走査でしか気づかなかった。
+    しかも遅いだけで動いてはいるので、壊れていることに気づけない
+    （実測: 書き込みから rev 更新まで 42〜57 秒）。
+
+    そこで (1) ルートの増減に追従し、(2) **監視が張れているかを外から見えるようにする**。
+    watchdog が無い環境や inotify の上限に当たった環境でも、定期走査で動き続ける。
+    """
+
+    def __init__(self, bridge):
+        self.bridge = bridge
+        self.observer = None
+        self.watches = {}
+        self.errors = {}
+        self.error = None
+        try:
+            from watchdog.observers import Observer
+            from watchdog.events import FileSystemEventHandler
+        except ImportError:
+            self.error = "watchdog が入っていないため、変更検知は定期走査だけになります"
+            return
+
+        class Handler(FileSystemEventHandler):
+            def __init__(self, scanner):
+                self.scanner = scanner
+
+            def on_any_event(self, event):
+                self.scanner.touch()
+
+        self._handler_cls = Handler
+        self.observer = Observer()
+        self.observer.daemon = True
+        self.observer.start()
+
+    def watch(self, name):
+        """ルート1つに監視を張る。二重には張らない。"""
+        if not self.observer or name in self.watches:
+            return
+        scanner = self.bridge.scanners.get(name)
+        if scanner is None or not scanner.path.is_dir():
+            return
+        try:
+            self.watches[name] = self.observer.schedule(
+                self._handler_cls(scanner), str(scanner.path), recursive=True
+            )
+            self.errors.pop(name, None)
+        except OSError as e:
+            # inotify の上限などで張れないことがある。**握りつぶさず理由を残す**
+            # （定期走査があるので同期そのものは続く）。
+            self.errors[name] = f"監視を張れませんでした: {e}"
+
+    def unwatch(self, name):
+        w = self.watches.pop(name, None)
+        self.errors.pop(name, None)
+        if w and self.observer:
+            try:
+                self.observer.unschedule(w)
+            except Exception:
+                pass
+
+    def watch_all(self):
+        for name in list(self.bridge.scanners.keys()):
+            self.watch(name)
+
+    def is_watching(self, name):
+        return name in self.watches
+
+    def error_of(self, name):
+        return self.errors.get(name) or self.error
+
+
 def start_watchers(bridge):
-    """変更検知。watchdog があれば使い、無ければ定期走査だけで動く。"""
-    try:
-        from watchdog.observers import Observer
-        from watchdog.events import FileSystemEventHandler
-    except ImportError:
-        return None
-
-    class Handler(FileSystemEventHandler):
-        def __init__(self, scanner):
-            self.scanner = scanner
-
-        def on_any_event(self, event):
-            self.scanner.touch()
-
-    observer = Observer()
-    for scanner in bridge.scanners.values():
-        if scanner.path.is_dir():
-            observer.schedule(Handler(scanner), str(scanner.path), recursive=True)
-    observer.daemon = True
-    observer.start()
-    return observer
+    """変更検知を起動し、いまあるルートすべてに監視を張る。"""
+    watcher = RootWatcher(bridge)
+    bridge.watcher = watcher
+    watcher.watch_all()
+    return watcher
 
 
 def scan_loop(bridge, quiet_sec=1.5, safety_sec=60.0):
@@ -666,6 +735,9 @@ def main():
         print(f"[itera] 名乗り: {ident['hostname']} ({ident['user']}@{ident['platform']})")
         print(f"[itera] machineId: {ident['machineId']}")
         print(f"[itera] ルート: {[r['name'] for r in bridge.describe()] or '（なし。itera attach で追加）'}")
+        for r in bridge.describe():
+            state = "監視あり" if r["watching"] else f"監視なし（{r['watchError'] or '理由不明'}）"
+            print(f"[itera]   {r['name']}: {state}")
         print(f"[itera] シェル実行: {'有効' if bridge.exec_enabled else '無効 (--exec off)'}")
         uvicorn.run(build_app(bridge), host=host, port=port, log_level="warning")
         return
