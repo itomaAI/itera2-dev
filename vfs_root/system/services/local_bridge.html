@@ -19,9 +19,21 @@
         const ANCHOR_DIR = 'data/apps/local_bridge/anchors';
         const LEGACY_ANCHOR_DIR = 'system/temp/local_bridge';
         const MOUNT_BASE = 'local';
-        // ホスト側の変更に気づく唯一の経路なので短めにする。
-        // 変更が無ければ /api/status を1本叩くだけで、調停は rev が動いたときしか走らない。
+        // ホスト側の変更に気づく経路。
+        // v3.5 以降のサーバーは long-poll に対応し、変化があるまで応答を保留する。
+        // ROOT_POLL_MS は「旧サーバー相手の間隔」と「切断時の再確認の間隔」として残す。
         const ROOT_POLL_MS = 5000;
+        // 保留の上限。長すぎると詰まったときの復帰が遅れ、短すぎると往復が増える。
+        const LONG_POLL_SEC = 25;
+        // long-poll のつもりが即座に返り続ける相手（想定外のサーバー）でも
+        // 秒間4回を超えて叩かないための歯止め。
+        const MIN_LOOP_MS = 250;
+        // VFS 側の連続した書き込みをまとめるための待ち。
+        const SYNC_DEBOUNCE_MS = 800;
+        // ホスト由来（rev の変化）の待ち。ホスト側で既に 1.5 秒まとめられているので、
+        // ここで重ねて待つ必要はない。ただし直前に VFS 側の書き込みがあったときは
+        // SYNC_DEBOUNCE_MS に戻す（衝突の窓を自分から広げない）。
+        const REMOTE_SYNC_DEBOUNCE_MS = 150;
         const ANCHOR_VERSION = 2;
 
         const DEFAULT_CONFIG = {
@@ -475,12 +487,13 @@
           await saveAnchor(conn, root, mount.rootPath, next);
         }
 
-        function scheduleSync(mount) {
+        function scheduleSync(mount, delayMs) {
           if (mount.halted) return;
+          const delay = typeof delayMs === 'number' ? delayMs : SYNC_DEBOUNCE_MS;
           clearTimeout(mount.timer);
           mount.timer = setTimeout(async () => {
             if (mount.halted) return;
-            if (mount.syncing) return scheduleSync(mount);
+            if (mount.syncing) return scheduleSync(mount, delay);
             mount.syncing = true;
             try {
               await reconcile(mount);
@@ -489,7 +502,7 @@
             } finally {
               mount.syncing = false;
             }
-          }, 800);
+          }, delay);
         }
 
         // ---------- マウント管理 ----------
@@ -527,7 +540,11 @@
                 return false;
               }
             },
-            onMutate: async () => scheduleSync(mount),
+            onMutate: async () => {
+              // 直後にホスト由来の同期が来ても、書き込みの最中に踏み込まないための目印。
+              mount.lastMutateAt = Date.now();
+              scheduleSync(mount);
+            },
           });
 
           mounts.set(mountPath, mount);
@@ -723,13 +740,20 @@
 
         // サーバー側のルート増減に追随する（itera attach / detach を反映）。
         // 接続できないときは何もしない。切断ではアンマウントも削除もしない。
-        async function refreshConn(conn) {
+        async function refreshConn(conn, opts) {
+          const waitSec = (opts && opts.waitSec) || 0;
+          // 待てるのは「前回受け取った版」を持っているときだけ。
+          // 版が無い初回に待たせても、起動が遅れるだけで得るものが無い。
+          const query = waitSec && conn.revToken ? `?wait=${waitSec}&since=${encodeURIComponent(conn.revToken)}` : '';
           let status;
           try {
-            status = await getJson(api(conn, '/api/status'));
+            status = await getJson(api(conn, '/api/status' + query));
           } catch (e) {
             return null;
           }
+          // 旧サーバー（v3.4 以前）は longPoll を名乗らない。名乗らない相手には待機を頼まない。
+          conn.longPoll = status.longPoll === true;
+          conn.revToken = typeof status.revToken === 'string' ? status.revToken : null;
           if (!(await applyIdentity(conn, status))) return status;
 
           const roots = status.roots || [];
@@ -743,7 +767,8 @@
             const rev = r.rev === undefined ? Date.now() : r.rev;
             if (m.rev !== rev) {
               m.rev = rev;
-              scheduleSync(m);
+              const busy = Date.now() - (m.lastMutateAt || 0) < SYNC_DEBOUNCE_MS;
+              scheduleSync(m, busy ? SYNC_DEBOUNCE_MS : REMOTE_SYNC_DEBOUNCE_MS);
             }
           }
           for (const mountPath of Array.from(mounts.keys())) {
@@ -752,6 +777,26 @@
             if (m.conn === conn && !wanted.has(mountPath)) await unmountRoot(mountPath, { cleanup: true });
           }
           return status;
+        }
+
+        // ホスト側の変更に気づく巡回。
+        //   v3.5 以降 : /api/status が変化まで応答を保留する → 変わった瞬間に次の調停へ進む
+        //   v3.4 以前 : wait を無視して即返すので、ROOT_POLL_MS の間隔で回す
+        // 未接続のときも必ず回し続ける（サーバーを後から起動しても復帰できるようにする）。
+        async function startPollLoop(conn) {
+          for (;;) {
+            const started = Date.now();
+            let status = null;
+            try {
+              status = await refreshConn(conn, { waitSec: conn.longPoll ? LONG_POLL_SEC : 0 });
+            } catch (e) {
+              log(`巡回に失敗 (${connLabel(conn)}): ${e.message}`);
+            }
+            const spent = Date.now() - started;
+            // 保留してもらえた場合だけ即座に次を投げる。それ以外は間隔をあける。
+            const gap = status && conn.longPoll ? MIN_LOOP_MS - spent : ROOT_POLL_MS;
+            if (gap > 0) await new Promise((r) => setTimeout(r, gap));
+          }
         }
 
         // WebSocket による push は廃止した。サーバーは購読を貯めるだけで一度も送信しておらず、
@@ -1113,13 +1158,16 @@ Attributes:
               `${connLabel(conn)}: v${status.version} [${who}] ルート ${(status.roots || []).length} 件 / 実行 ${conn.execMode}`,
             );
           }
-          // 起動時に繋がらなくてもポーリングは必ず仕掛ける。
+          // 起動時に繋がらなくても巡回は必ず仕掛ける。
           // ここを status の有無で分岐させると、サーバーを後から起動した場合に
           // 永久に繋がらないままになる（実際にこれで踏んだ）。
-          setInterval(() => refreshConn(conn), ROOT_POLL_MS);
+          startPollLoop(conn);
         }
 
-        MetaOS.ai.log('Local Bridge v3.2 起動\n' + (summary.join('\n') || '（有効な接続がありません）'), 'system');
+        MetaOS.ai.log(
+          'Local Bridge (daemon v3.5) 起動\n' + (summary.join('\n') || '（有効な接続がありません）'),
+          'system',
+        );
       })();
     </script>
   </body>
