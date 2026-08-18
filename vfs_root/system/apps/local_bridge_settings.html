@@ -4,9 +4,12 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Local Bridge</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="../system/core/ui.js"></script>
-    <script src="../system/core/std.js"></script>
+    <!-- 絶対パスで読む。このファイルは apps/ と system/apps/ の両方に置かれるため、
+         相対パスだと配信後に system/system/core/... を指して全滅する（実際に踏んだ）。
+         Tailwind も CDN ではなく同梱版を使う（テーマの定義がこちらに入っている）。 -->
+    <script src="/system/core/tw.js"></script>
+    <script src="/system/core/ui.js"></script>
+    <script src="/system/core/std.js"></script>
   </head>
   <body class="bg-app text-text-main h-screen flex flex-col overflow-hidden">
     <header class="flex items-center justify-between px-5 py-3 border-b border-border-main shrink-0">
