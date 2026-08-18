@@ -60,7 +60,16 @@ export class TreeView {
     for (const node of nodes) {
       if (node.name === '.keep') continue;
 
-      const li = this._createNodeElement(node.id, node.name, node.path, node.kind, node.meta, indentLevel);
+      const li = this._createNodeElement(
+        node.id,
+        node.name,
+        node.path,
+        node.kind,
+        node.meta,
+        indentLevel,
+        !!node.isVirtual,
+        !!node.isMountPoint,
+      );
       parentElement.appendChild(li);
 
       if (node.kind === 'directory' && node.children && node.children.length > 0) {
@@ -116,7 +125,15 @@ export class TreeView {
           this._handleNodeAttached(mutation);
         }
       } else if (mutation.type === 'MUTATE') {
-        this._handleNodeMutated(mutation);
+        // マウントの登録・解除は ProviderManager が node=null のダミー MUTATE で知らせてくる。
+        // 部分木まるごと見た目が変わるので、ここだけは全再描画にする。
+        // （_handleNodeMutated は node が無いと即 return するため、この合図は
+        //   これまで誰にも拾われておらず、印は再読込するまで変わらなかった）
+        if (mutation.changedProperties && mutation.changedProperties.includes('isMountPoint')) {
+          needsFullRender = true;
+        } else {
+          this._handleNodeMutated(mutation);
+        }
       }
     }
 
@@ -173,15 +190,17 @@ export class TreeView {
       const stubIndicator = isStub
         ? '<span class="ml-1 text-primary text-[0.625rem]" title="Cloud Only">☁️</span>'
         : '';
-      let icon =
-        mutation.node.kind === 'directory' ? (this.expandedPaths.has(path) ? '📂' : '📁') : this._getFileIcon(name);
-
-      if (path === 'trash') icon = '🗑️';
-      if (path === 'system') icon = '⚙️';
+      // 同期プロバイダの印は差分更新の入力（VfsNode）には入っていない。
+      // 描いた時に DOM へ残してあるので、そこから引き継ぐ。
+      // ここを落とすと「配下のファイルが1つ同期されるたびに親の印が消える」ことになる。
+      const isVirtual = targetDiv.dataset.virtual === '1';
+      const isMountPoint = targetDiv.dataset.mount === '1';
+      const icon = this._getIcon(path, mutation.node.kind, name, isMountPoint);
+      const virtualIndicator = this._getVirtualIndicator(mutation.node.kind, isVirtual, isMountPoint);
 
       targetDiv.innerHTML = `
         <span class="mr-2 opacity-80 text-xs pointer-events-none flex-shrink-0">${icon}</span>
-        <span class="truncate pointer-events-none flex-1${isStub ? ' text-text-muted' : ''}">${name}${stubIndicator}</span>
+        <span class="truncate pointer-events-none flex-1${isStub ? ' text-text-muted' : ''}">${name}${virtualIndicator}${stubIndicator}</span>
         <button class="menu-btn w-6 h-6 flex items-center justify-center text-text-muted hover:text-text-main hover:bg-hover rounded ml-1 transition flex-shrink-0 opacity-100 md:opacity-0 group-hover:opacity-100">
           ⋮
         </button>
@@ -236,6 +255,8 @@ export class TreeView {
     kind: 'file' | 'directory',
     meta: any,
     indentLevel: number,
+    isVirtual: boolean = false,
+    isMountPoint: boolean = false,
   ): HTMLElement {
     const li = document.createElement('li');
     li.id = `vfs-node-${id}`;
@@ -254,6 +275,12 @@ export class TreeView {
     div.dataset.kind = kind;
     div.dataset.name = name;
 
+    // 【重要】同期プロバイダの印は DOM 側に持たせる。
+    // 差分更新と開閉トグルは TreeNode を持たず、DOM だけを見て描き直すため、
+    // ここに残しておかないと再描画のたびに印が消える。
+    if (isVirtual) div.dataset.virtual = '1';
+    if (isMountPoint) div.dataset.mount = '1';
+
     const sizeKB = meta ? (meta.size / 1024).toFixed(1) + ' KB' : '0 KB';
     const updated = meta ? new Date(meta.updatedAt || meta.updated_at).toLocaleString() : '';
     div.title = `Size: ${sizeKB}\nUpdated: ${updated}`;
@@ -267,17 +294,15 @@ export class TreeView {
       div.addEventListener('drop', (e) => this._handleDrop(e, path, div));
     }
 
-    const isExpanded = this.expandedPaths.has(path);
-    let icon = kind === 'directory' ? (isExpanded ? '📂' : '📁') : this._getFileIcon(name);
-    if (path === 'trash') icon = '🗑️';
-    if (path === 'system') icon = '⚙️';
+    const icon = this._getIcon(path, kind, name, isMountPoint);
 
     const isStub = meta && meta.syncState === 'stub';
     const stubIndicator = isStub ? '<span class="ml-1 text-primary text-[0.625rem]" title="Cloud Only">☁️</span>' : '';
+    const virtualIndicator = this._getVirtualIndicator(kind, isVirtual, isMountPoint);
 
     div.innerHTML = `
       <span class="mr-2 opacity-80 text-xs pointer-events-none flex-shrink-0">${icon}</span>
-      <span class="truncate pointer-events-none flex-1${isStub ? ' text-text-muted' : ''}">${name}${stubIndicator}</span>
+      <span class="truncate pointer-events-none flex-1${isStub ? ' text-text-muted' : ''}">${name}${virtualIndicator}${stubIndicator}</span>
       <button class="menu-btn w-6 h-6 flex items-center justify-center text-text-muted hover:text-text-main hover:bg-hover rounded ml-1 transition flex-shrink-0 opacity-100 md:opacity-0 group-hover:opacity-100">
         ⋮
       </button>
@@ -307,11 +332,41 @@ export class TreeView {
     if (kind === 'directory') {
       const childUl = document.createElement('ul');
       childUl.id = `vfs-children-${id}`;
-      childUl.className = `tree-children ${isExpanded ? 'block' : 'hidden'}`;
+      childUl.className = `tree-children ${this.expandedPaths.has(path) ? 'block' : 'hidden'}`;
       li.appendChild(childUl);
     }
 
     return li;
+  }
+
+  /**
+   * 表示アイコンの決定を1箇所に集約する。
+   *
+   * 以前は初期描画・差分更新・開閉トグルの3経路が同じ規則をそれぞれ持っており、
+   * trash / system の特例まで3回書かれていた。どれか1つを直し忘れると、
+   * 「開くと印が消える」「同期後に印が戻らない」といった形で食い違う。
+   */
+  private _getIcon(path: string, kind: string, name: string, isMountPoint: boolean): string {
+    if (path === 'trash') return '🗑️';
+    if (path === 'system') return '⚙️';
+    if (kind !== 'directory') return this._getFileIcon(name);
+    // マウント地点はドライブの入口そのものなので、フォルダではなく雲を出す。
+    // trash / system と同じ「特別な根」の扱いである。
+    if (isMountPoint) return '☁️';
+    return this.expandedPaths.has(path) ? '📂' : '📁';
+  }
+
+  /**
+   * マウント配下のディレクトリに付ける印。
+   *
+   * 開閉（📂/📁）は木を読むうえで最も重要な手掛かりなので潰さず、
+   * 「実体がここに無い」ことは別の channel（☁️）で示す。
+   * スタブのファイルが既に同じ印を使っているので、記法も揃える。
+   * マウント地点自身はアイコンが既に ☁️ なので二重には付けない。
+   */
+  private _getVirtualIndicator(kind: string, isVirtual: boolean, isMountPoint: boolean): string {
+    if (kind !== 'directory' || !isVirtual || isMountPoint) return '';
+    return '<span class="ml-1 text-primary text-[0.625rem]" title="Synced folder (Sync Provider)">☁️</span>';
   }
 
   private _getFileIcon(filename: string): string {
@@ -399,13 +454,10 @@ export class TreeView {
         ul.classList.toggle('hidden');
         const iconSpan = (e.currentTarget as HTMLElement).querySelector('span:first-child');
         if (iconSpan) {
-          if (path === 'trash') {
-            iconSpan.textContent = '🗑️';
-          } else if (path === 'system') {
-            iconSpan.textContent = '⚙️';
-          } else {
-            iconSpan.textContent = this.expandedPaths.has(path) ? '📂' : '📁';
-          }
+          // 開閉のたびにアイコンを決め直すので、規則は _getIcon に一本化する。
+          // ここに規則を書き写すと、マウント地点を開いた瞬間に印が消える。
+          const target = e.currentTarget as HTMLElement;
+          iconSpan.textContent = this._getIcon(path, kind, target.dataset.name || '', target.dataset.mount === '1');
         }
       }
     } else {

@@ -229,15 +229,26 @@ export class VfsService {
     const filtered = this._filterTreeByPermission(principal, fullTree);
 
     if (this.providerManager) {
-      const attachMountPoints = (nodes: TreeNode[]) => {
+      // マウントポイント自身の印（isMountPoint）に加えて、
+      // 「同期プロバイダの管轄下にあるか」（isVirtual）を全ノードに配る。
+      //
+      // 印を配下すべてに付けるのは、利用者から見て
+      // 「この階層より下は VFS の中だけの存在ではない」ことが常に分かるようにするため。
+      // マウント地点にだけ印を付けると、深い階層を開いている間は手掛かりが消える。
+      //
+      // マウントは前置一致なので、親が管轄下なら子も必ず管轄下である。
+      // その性質を使って親から伝播させ、ノードごとの検索を省く。
+      const attachMountInfo = (nodes: TreeNode[], parentIsVirtual: boolean) => {
         for (const node of nodes) {
           if (this.providerManager!.isMountPoint(node.path)) {
             node.isMountPoint = true;
           }
-          if (node.children) attachMountPoints(node.children);
+          const isVirtual = parentIsVirtual || this.providerManager!.findProviderForPath(node.path) !== null;
+          if (isVirtual) node.isVirtual = true;
+          if (node.children) attachMountInfo(node.children, isVirtual);
         }
       };
-      attachMountPoints(filtered);
+      attachMountInfo(filtered, false);
     }
 
     return filtered;

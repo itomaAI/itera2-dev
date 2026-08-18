@@ -138,7 +138,10 @@ export interface TreeNode {
   kind: 'file' | 'directory';
   meta: VfsNodeMeta;
   children?: TreeNode[];
+  /** このノード自身が Sync Provider のマウント地点である */
   isMountPoint?: boolean;
+  /** Sync Provider の管轄下にある（マウント地点とその配下すべて） */
+  isVirtual?: boolean;
 }
 
 export interface SyncStateItem {
