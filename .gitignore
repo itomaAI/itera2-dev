@@ -27,3 +27,9 @@ public/vendor
 # Python (tests/)
 __pycache__/
 *.pyc
+
+# 自動生成物（vfs_root/ から scripts/build_defaults.js が作る）
+# コミットすると、vfs_root を変えた PR で再生成を忘れたときに
+# 「古いコードが入っているように見える」状態になる（実際に403行ずれていた）。
+# predev / prebuild が必ず作り直すので、追跡しない。
+src/config/default_files.ts
