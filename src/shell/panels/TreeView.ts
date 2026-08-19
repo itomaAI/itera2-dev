@@ -464,6 +464,12 @@ export class TreeView {
     this.lastClickedPath = path;
     this._updateSelectionUI();
 
+    // ★ 'select' は種類を問わず発火する。
+    //   ディレクトリのクリックは開閉するだけで 'open' を出さないため、
+    //   「どれが選ばれたか」を知りたい側（ファイル選択ダイアログ）が受け取る術が無かった。
+    //   'open' の意味は変えない（Explorer はディレクトリを開こうとしてはいけない）。
+    if (this.events['select']) this.events['select'](path, kind);
+
     if (kind === 'directory') {
       const li = (e.currentTarget as HTMLElement).parentElement;
       if (!li) return;

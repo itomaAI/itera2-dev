@@ -8,10 +8,33 @@ import type { Principal } from '../../core/vfs/types';
 import { TreeView } from '../panels/TreeView';
 import { LABEL_KICKER } from '../styles/typography';
 
+/** 何を選ばせるか。既定は 'file'（従来どおり） */
+export type PickerMode = 'file' | 'directory' | 'any';
+
 export interface FilePickerOptions {
   title?: string;
   filters?: string[];
   defaultPath?: string;
+  mode?: PickerMode;
+}
+
+/**
+ * その項目を選べるか。
+ *
+ * 拡張子フィルタは**ファイルにだけ**掛ける。ディレクトリに掛けると、
+ * 名前に点を含むフォルダ（例: `v1.2`）だけが選べるという妙な挙動になる。
+ */
+export function isSelectableForPicker(
+  kind: 'file' | 'directory',
+  mode: PickerMode,
+  path: string,
+  filters: string[],
+): boolean {
+  if (kind === 'directory') return mode === 'directory' || mode === 'any';
+  if (mode === 'directory') return false;
+  if (filters.length === 0) return true;
+  const ext = '.' + (path.split('.').pop() || '').toLowerCase();
+  return filters.some((f) => ext.endsWith(f.toLowerCase()));
 }
 
 export class FilePickerModal {
@@ -27,6 +50,7 @@ export class FilePickerModal {
   private isOpen = false;
   private currentResolve: ((value: string | null) => void) | null = null;
   private currentFilters: string[] = [];
+  private currentMode: PickerMode = 'file';
   private selectedPath: string | null = null;
 
   constructor(vfs: VfsService, getActivePrincipal: () => Principal) {
@@ -119,7 +143,9 @@ export class FilePickerModal {
     // TreeViewのインスタンス化 (ContextMenuは不要なので null を渡す)
     this.treeView = new TreeView(this.treeContainer, null);
 
-    this.treeView.on('open', (path: string) => {
+    // ディレクトリはクリックしても 'open' を出さない（開閉するだけ）ため、
+    // 種類を問わず発火する 'select' で受ける。ファイルもこれで拾える。
+    this.treeView.on('select', (path: string) => {
       this._handleSelect(path);
     });
   }
@@ -127,15 +153,15 @@ export class FilePickerModal {
   private _handleSelect(path: string) {
     try {
       const stat = this.vfs.stat(this.getActivePrincipal(), path);
-      if (stat.kind === 'directory') return;
+      const kind: 'file' | 'directory' = stat.kind === 'directory' ? 'directory' : 'file';
 
-      // 拡張子フィルターのチェック
-      if (this.currentFilters.length > 0) {
-        const ext = '.' + path.split('.').pop()?.toLowerCase();
-        if (!this.currentFilters.some((f) => ext.endsWith(f.toLowerCase()))) {
+      if (!isSelectableForPicker(kind, this.currentMode, path, this.currentFilters)) {
+        // 種類違い（フォルダを選ぼうとした等）は黙って無視する。
+        // 拡張子で弾いたときだけは、なぜ選べないのか分からないので知らせる。
+        if (kind === 'file' && this.currentFilters.length > 0) {
           if (window.AppUI) window.AppUI.notify('Invalid file type selected.', 'warning');
-          return;
         }
+        return;
       }
 
       this.selectedPath = path;
@@ -157,9 +183,11 @@ export class FilePickerModal {
 
     this.selectedPath = null;
     this.currentFilters = options?.filters || [];
+    this.currentMode = options?.mode || 'file';
+    const noun = this.currentMode === 'directory' ? 'folder' : this.currentMode === 'any' ? 'item' : 'file';
 
     if (this.selectedPathDisplay) {
-      this.selectedPathDisplay.textContent = 'No file selected';
+      this.selectedPathDisplay.textContent = `No ${noun} selected`;
       this.selectedPathDisplay.classList.remove('text-primary', 'font-bold');
       this.selectedPathDisplay.classList.add('text-text-muted');
     }
@@ -168,10 +196,22 @@ export class FilePickerModal {
     const titleEl = document.getElementById('file-picker-title');
     const filtersEl = document.getElementById('file-picker-filters');
 
-    if (titleEl) titleEl.textContent = options?.title || 'Select a File';
+    if (titleEl) {
+      const fallback =
+        this.currentMode === 'directory'
+          ? 'Select a Folder'
+          : this.currentMode === 'any'
+            ? 'Select an Item'
+            : 'Select a File';
+      titleEl.textContent = options?.title || fallback;
+    }
     if (filtersEl) {
       filtersEl.textContent =
-        this.currentFilters.length > 0 ? 'Allowed: ' + this.currentFilters.join(', ') : 'All Files';
+        this.currentMode === 'directory'
+          ? 'Folders only'
+          : this.currentFilters.length > 0
+            ? 'Allowed: ' + this.currentFilters.join(', ')
+            : 'All Files';
     }
 
     // ツリーの最新状態を描画
