@@ -16,7 +16,36 @@ import type { VfsEventBus } from '../../core/vfs/VfsEventBus';
 import type { ConfigManager } from '../../core/sys/ConfigManager';
 import { VfsEventFormatter } from '../../core/vfs/VfsEventFormatter';
 
+/**
+ * ターン終了時に待機表示をどうするか。── T-0028
+ *
+ * Engine の流れ:
+ *   turn_start(model) → stream → turn_end(model) → [ツールがあれば _dispatchActions（await されない）]
+ *   → finally で isRunning=false → 各ツール結果が turn_end(system) を出す → 最後に loop_stop
+ *
+ * ★ 以前は turn_end で「isRunning が false なら消す」としていた。
+ *   ツール実行は isRunning=false になった**後**に走るため、最初のツール結果が届いた時点で
+ *   待機表示が消えていた。つまり "Processing..." は文言以前に、そもそも出る余地が無かった。
+ *
+ * モデルのターンが終わった直後は 'processing' に切り替える。
+ * ツールが無い場合、Engine は同じ同期ブロック内で loop_stop を出す（間に描画が挟まらない）ため、
+ * "Processing..." が画面に見えることはない。
+ *
+ * toolPhase は「消してよいか」の判断にだけ使う。取りこぼすと待機表示が残り続けるので、
+ * loop_stop では必ず false に戻すこと（Engine は loop_stop を必ず出す契約になっている）。
+ */
+export type IndicatorAction = 'processing' | 'hide' | 'keep';
+
+export function decideIndicatorOnTurnEnd(role: string, isRunning: boolean, toolPhase: boolean): IndicatorAction {
+  if (role === 'model') return 'processing';
+  if (!isRunning && !toolPhase) return 'hide';
+  return 'keep';
+}
+
 export class EventOrchestrator {
+  /** モデル発話後〜loop_stop までの「ツール実行中」帯にいるか（表示判断にのみ使う） */
+  private toolPhase = false;
+
   private desktop: DesktopEnvironment;
   private vfs: VfsService;
   private history: HistoryManager;
@@ -363,7 +392,8 @@ export class EventOrchestrator {
 
     this.engine.on('turn_start', (data: any) => {
       if (data.role === 'model') {
-        chat.setProcessing(true);
+        this.toolPhase = false;
+        chat.setProcessing(true, 'thinking');
         chat.startStreaming(data.turnId);
       }
     });
@@ -381,11 +411,19 @@ export class EventOrchestrator {
       if (turn) {
         chat.appendTurn(turn);
       }
-      if (!this.engine.isRunning) chat.setProcessing(false);
+      // 表示の切り替えのみ。Engine の挙動には触れない。
+      const action = decideIndicatorOnTurnEnd(role, this.engine.isRunning, this.toolPhase);
+      if (action === 'processing') {
+        this.toolPhase = true;
+        chat.setProcessing(true, 'processing');
+      } else if (action === 'hide') {
+        chat.setProcessing(false);
+      }
     });
 
     this.engine.on('loop_stop', (data: any) => {
       if (chat.currentStreamEl) chat.finalizeStreaming();
+      this.toolPhase = false;
       chat.setProcessing(false);
       if (data && data.reason === 'error') {
         console.error('[EventOrchestrator] Loop stopped due to error:', data.error);

@@ -39,6 +39,9 @@ const CLS_USER = `${BOX_FRAME} chat-body bg-panel text-text-main border-border-m
 const CLS_MECH = `${BOX_FRAME} chat-system-message bg-overlay/5 text-text-muted border-border-main/60 mx-8`;
 const CLS_ARTIFACT = `${BOX_FRAME} chat-body bg-panel text-text-main border-border-main border-l-[3px] border-l-speech/60 mr-4 shadow-sm`;
 
+/** 待機表示の文言。'thinking' = モデル出力中 / 'processing' = ツール実行中 */
+export type ProcessingMode = 'thinking' | 'processing';
+
 const DOM_IDS = {
   HISTORY: 'chat-history',
   INPUT: 'chat-input',
@@ -48,6 +51,7 @@ const DOM_IDS = {
   PREVIEW_AREA: 'file-preview-area',
   FILE_UPLOAD: 'chat-file-upload',
   AI_TYPING: 'ai-typing',
+  AI_TYPING_LABEL: 'ai-typing-label',
   RESIZER: 'chat-resizer',
   PANEL: 'chat-panel',
   RESIZE_OVERLAY: 'resize-overlay',
@@ -270,7 +274,7 @@ export class ChatPanel {
     });
   }
 
-  setProcessing(processing: boolean) {
+  setProcessing(processing: boolean, mode: ProcessingMode = 'thinking') {
     if (this.els.BTN_STOP) {
       this.els.BTN_STOP.classList.toggle('hidden', !processing);
     }
@@ -280,6 +284,13 @@ export class ChatPanel {
       // 以前はこの上書きによってそれが毎回「Processing...」に置き換えられ、
       // 静的マークアップが事実上死んでいた。表示/非表示の切り替えだけを行う。
       this.els.AI_TYPING.classList.toggle('hidden', !processing);
+    }
+    // 文言だけを差し替える。
+    // ★ 札を専用の要素（#ai-typing-label）に分けてあるので、上書きしても
+    //   点滅する ● のマークアップは壊れない。これが無かったため、
+    //   「innerHTML を触らない」＝「常に Thinking... のまま」になっていた（T-0028）。
+    if (processing && this.els.AI_TYPING_LABEL) {
+      this.els.AI_TYPING_LABEL.textContent = mode === 'processing' ? 'Processing...' : 'Thinking...';
     }
   }
 
