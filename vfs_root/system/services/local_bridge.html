@@ -332,6 +332,47 @@
           return true;
         }
 
+        /**
+         * リモート一覧から消えた項目（墓石なし）をどう扱うか。── T-0027
+         *
+         * 「一覧に無い」＝「削除された」ではない。サーバーは読めなかったファイルを
+         * 一覧に載せない（itera_bridge_server.py の走査）。欠落と削除は区別できないので、
+         * **VFS 側に未送信の変更が無いときだけ**消してよい。
+         *
+         *   'delete'    … VFS 側は前回の同期から動いていない。消してよい。
+         *                 判断を誤っても実体はサーバーにあり、次の走査で戻る。
+         *   'revive'    … VFS 側に未送信の変更がある。消さずにホストへ復活させる。
+         *   'directory' … ループ内では消さない。最後に深い方から、空のものだけ消す。
+         *   'none'      … この分岐の対象ではない。
+         */
+        function classifyVanished(l, a, same) {
+          if (!l || !a) return 'none';
+          if (l.kind === 'directory' || a.kind === 'directory') return 'directory';
+          return same(l, a) ? 'delete' : 'revive';
+        }
+
+        /**
+         * リモート一覧が信用できないほど不自然か。
+         * 走査に失敗したサーバーは「空」に見える。空を鵜呑みにすると全消しになる。
+         */
+        function isDegenerateListing(remoteCount, anchorCount) {
+          return remoteCount === 0 && anchorCount > 0;
+        }
+
+        // 「消えたのに片付けられない」ものを一度だけ知らせる。黙って残すのが元の欠陥（T-0027）。
+        const vanishNotified = new Set();
+        function notifyVanishOnce(key, msg) {
+          log(msg);
+          if (vanishNotified.has(key)) return;
+          vanishNotified.add(key);
+          try {
+            MetaOS.host.notify(msg, 'Local Bridge');
+          } catch (e) {}
+          try {
+            MetaOS.ai.log(msg, 'warning');
+          } catch (e) {}
+        }
+
         // ---------- 調停（3-way マージ） ----------
         async function reconcile(mount) {
           const { conn, root, mountPath } = mount;
@@ -356,6 +397,20 @@
 
           const anchor = loaded.entries;
           const next = { ...anchor };
+
+          // ★ 走査に失敗したサーバーは「空」に見える。空を鵜呑みにすると全消しになる。
+          //   一覧の欠落と削除は区別できないので、疑わしいときは何も消さずに止める。
+          const anchorCount = Object.keys(anchor).length;
+          if (isDegenerateListing(Object.keys(remote).length, anchorCount)) {
+            return halt(
+              mount,
+              `リモート一覧が空です（アンカーには ${anchorCount} 件）。` +
+                `走査の失敗と区別できないため、何も消さずに停止しました。`,
+            );
+          }
+
+          // 消えたディレクトリはループ内では消さない（理由はループ後の掃除を参照）。
+          const vanishedDirs = [];
 
           const knownDirs = new Set([mountPath]);
           for (const [p, info] of Object.entries(local)) {
@@ -410,6 +465,60 @@
                   headers: a.hash ? { 'X-Expected-Hash': a.hash } : {},
                 });
                 if (res.ok) delete next[rel];
+                continue;
+              }
+
+              // 2b. リモートから消えた（墓石が無い）── T-0027
+              //
+              // 墓石（isDeleted）はサーバーの DELETE API を通したときだけ作られる。
+              // シェルの `mv` や `rm` は API を通らないので墓石が残らず、次の走査で
+              // リモート一覧から黙って消えるだけになる。その結果この項目は
+              // 「リモートに無い（!r）・VFS にある（l）・アンカーにある（a）」となる。
+              //
+              // ★ ここが無かった。分岐1〜8のどれにも当たらず素通りし、next は { ...anchor } で
+              //   作られるため古いアンカーが生き残り、VFS の項目も消えない。次の巡回でも同じ
+              //   判定になるので、移動元が**永久に**残る（実際に約180MBの幽霊が溜まっていた）。
+              //   T-0013 と同じ「漏れた組み合わせが黙って素通りする」型の欠陥。
+              //
+              // ただし「一覧に無い」＝「削除された」と即断してはならない。サーバーは
+              // **読めなかったファイルを一覧に載せない**（itera_bridge_server.py の走査。
+              // 「黙って消さないため記録もしない」）。欠落と削除は区別できない。
+              // そこで、消してよいのは「VFS 側に未送信の変更が無い」ときだけに限る。
+              if (l && !r && a) {
+                const verdict = classifyVanished(l, a, same);
+
+                if (verdict === 'directory') {
+                  vanishedDirs.push({ rel, full });
+                  continue;
+                }
+
+                if (verdict === 'delete') {
+                  // VFS 側は前回の同期から動いていない。実体はサーバーにあり、
+                  // 仮に判断を誤っても次の走査でスタブとして戻るので、消してよい。
+                  try {
+                    await MetaOS.fs.delete(full, { permanent: true });
+                    delete next[rel];
+                    vanishNotified.delete(full);
+                  } catch (e) {
+                    // ★ 消せなかったときにアンカーから外すと、次の巡回で分岐4（ローカル新規）へ
+                    //   流れ、実体の無いファイルを読もうとして延々と失敗する。アンカーは残して再試行する。
+                    notifyVanishOnce(
+                      full,
+                      `[Local Bridge] /${full} はホスト側に存在しませんが、VFS から削除できませんでした。\n` +
+                        `理由: ${e.message}`,
+                    );
+                  }
+                } else {
+                  // VFS 側に未送信の変更がある。ホスト側が消えたからといって、
+                  // まだ送っていない変更を消してはならない。
+                  // アンカーから外すと次の巡回で分岐4に流れ、サーバーへ復活する。
+                  delete next[rel];
+                  notifyVanishOnce(
+                    full,
+                    `[Local Bridge] /${full} はホスト側から消えていますが、VFS 側に未送信の変更があります。\n` +
+                      `消さずにホストへ復活させます。不要であれば VFS 側で削除してください。`,
+                  );
+                }
                 continue;
               }
 
@@ -481,6 +590,24 @@
               }
             } catch (e) {
               log(`項目の調停に失敗 ${conn.name}/${root}/${rel}: ${e.message}`);
+            }
+          }
+
+          // 消えたディレクトリの掃除。
+          //
+          // ループ内で消さないのは、親を再帰削除すると「未送信の変更があるので残した子」を
+          // 巻き添えにするため。深い方から順に、**空になったものだけ**を消す。
+          // 空でないものはアンカーを残す（次の巡回で再試行され、子が片付けば消える）。
+          vanishedDirs.sort((x, y) => y.rel.split('/').length - x.rel.split('/').length);
+          for (const d of vanishedDirs) {
+            try {
+              const remain = await MetaOS.fs.list(d.full);
+              if (remain && remain.length > 0) continue;
+              await MetaOS.fs.delete(d.full, { permanent: true });
+              delete next[d.rel];
+              vanishNotified.delete(d.full);
+            } catch (e) {
+              log(`ディレクトリの掃除に失敗 ${d.full}: ${e.message}`);
             }
           }
 
