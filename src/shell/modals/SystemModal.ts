@@ -9,6 +9,12 @@ import type { ContentStore } from '../../core/vfs/ContentStore';
 import { VfsFsck } from '../../core/vfs/VfsFsck';
 import { SYSTEM_PRINCIPAL } from '../../core/vfs/types';
 import JSZip from 'jszip';
+import {
+  BACKUP_MANIFEST_FILENAME,
+  BackupExclusionRecorder,
+  classifyForBackup,
+  normalizeMountPaths,
+} from '../../core/vfs/backupExclusion';
 
 const DOM_IDS = {
   MODAL: 'system-modal',
@@ -115,23 +121,39 @@ export class SystemModal {
         detail: true,
       }) as any[];
 
+      // 同期プロバイダが管理する領域（ルートマウントを除く）とスタブは含めない。
+      // 理由と方針は src/core/vfs/backupExclusion.ts の冒頭に書いてある。
+      const mounts = this.vfs.getProviderManager()?.listMounts() ?? [];
+      const mountPaths = normalizeMountPaths(mounts);
+      const recorder = new BackupExclusionRecorder(mounts);
+
       let errorCount = 0;
 
       for (const stat of files) {
-        if (stat.kind === 'file' && !stat.path.startsWith('trash/')) {
-          try {
-            const blob = await this.vfs.readBlob(SYSTEM_PRINCIPAL, stat.path);
-            zip.file(stat.path, blob);
-          } catch (err: any) {
-            errorCount++;
-            const errorBlob = new Blob(
-              [`[Itera OS] Failed to read file content (may be an unresolved stub).\nError: ${err.message}`],
-              { type: 'text/plain' },
-            );
-            zip.file(stat.path, errorBlob);
-          }
+        if (stat.kind !== 'file') continue;
+
+        const verdict = classifyForBackup({ path: stat.path, syncState: stat.syncState }, mountPaths);
+        if (verdict.excluded) {
+          recorder.recordExcluded(stat.path, stat.size || 0, verdict);
+          continue;
+        }
+
+        try {
+          const blob = await this.vfs.readBlob(SYSTEM_PRINCIPAL, stat.path);
+          zip.file(stat.path, blob);
+          recorder.recordIncluded(blob.size);
+        } catch (err: any) {
+          errorCount++;
+          const errorBlob = new Blob([`[Itera OS] Failed to read file content.\nError: ${err.message}`], {
+            type: 'text/plain',
+          });
+          zip.file(stat.path, errorBlob);
         }
       }
+
+      // 何をなぜ外したかを ZIP 自身に残す。復元した人が「local/ が無い」理由を追えるように。
+      const manifest = recorder.toManifest();
+      zip.file(BACKUP_MANIFEST_FILENAME, JSON.stringify(manifest, null, 2));
 
       const zipBlob = await zip.generateAsync({ type: 'blob' });
       const url = URL.createObjectURL(zipBlob);
@@ -144,11 +166,15 @@ export class SystemModal {
       document.body.removeChild(a);
       setTimeout(() => URL.revokeObjectURL(url), 100);
 
+      const skipped = manifest.totals.excludedFiles;
+      const skippedNote =
+        skipped > 0 ? ` Skipped ${skipped} provider-managed files (see ${BACKUP_MANIFEST_FILENAME}).` : '';
+
       if (errorCount > 0) {
         if (window.AppUI)
-          window.AppUI.notify(`Backup Exported, but ${errorCount} files failed to read (unresolved stubs).`, 'warning');
+          window.AppUI.notify(`Backup Exported, but ${errorCount} files failed to read.${skippedNote}`, 'warning');
       } else {
-        if (window.AppUI) window.AppUI.notify('Backup Exported', 'success');
+        if (window.AppUI) window.AppUI.notify(`Backup Exported.${skippedNote}`, 'success');
       }
     } catch (e: any) {
       if (window.AppUI) window.AppUI.notify(`Export failed: ${e.message}`, 'error');
@@ -199,6 +225,8 @@ export class SystemModal {
       const promises: Promise<void>[] = [];
       zip.forEach((relativePath: string, zipEntry: any) => {
         if (zipEntry.dir || relativePath.startsWith('__MACOSX') || relativePath.includes('.DS_Store')) return;
+        // バックアップの説明書き。VFS へ戻す対象ではない。
+        if (relativePath.replace(/^\.?\/+/, '') === BACKUP_MANIFEST_FILENAME) return;
 
         promises.push(
           (async () => {
