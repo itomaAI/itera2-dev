@@ -86,7 +86,7 @@
           .replace(/>/g, '&gt;');
       const short = (id) => (id ? String(id).slice(0, 8) : '—');
 
-      let state = { config: null, conns: [], mounts: [], daemon: false };
+      let state = { config: null, conns: [], mounts: [], daemon: false, details: {}, busy: false };
 
       // 設定は「読んで・変えて・書く」を毎回やり直す。
       // 開いたときの内容を持ち回って書き戻すと、デーモンが書き込む name / machineId を
@@ -212,6 +212,9 @@
       };
 
       async function refresh() {
+        // スタブ化の最中に再描画すると、進捗ごと作り直してしまう。
+        // 15 秒ごとの自動更新もここで止める。
+        if (state.busy) return;
         DOM('alerts').innerHTML = '';
         let cfg;
         try {
@@ -282,7 +285,12 @@
 
           const roots = [];
           if (c.ok && Array.isArray(st.roots)) {
-            for (const r of st.roots) roots.push(await rootDetail(c, r));
+            for (const r of st.roots) {
+              const d = await rootDetail(c, r);
+              // ボタンから件数・容量を引けるようにしておく（確認ダイアログで見せる）。
+              state.details[`${name}/${d.name}`] = d;
+              roots.push(d);
+            }
           }
 
           const rootRows = roots.length
@@ -302,11 +310,12 @@
                     <td class="py-2 pr-3 text-text-muted"><code class="text-[0.6875rem]">${esc(d.hostPath || '')}</code></td>
                     <td class="py-2 pr-3">${mountCell}</td>
                     <td class="py-2 pr-3 text-text-muted text-[0.6875rem] whitespace-nowrap" title="ホストが把握している件数。ディレクトリを含むため、右の合計とは一致しません。">${d.files} 件</td>
-                    <td class="py-2 text-text-muted text-[0.6875rem] whitespace-nowrap">${counts}</td>
+                    <td class="py-2 pr-3 text-text-muted text-[0.6875rem] whitespace-nowrap">${counts}</td>
+                    <td class="py-2 text-right">${releaseButton(name, d)}</td>
                   </tr>`;
                 })
                 .join('')
-            : `<tr><td colspan="5" class="py-3 text-text-muted text-sm">${
+            : `<tr><td colspan="6" class="py-3 text-text-muted text-sm">${
                 c.ok ? 'ルートがありません（ホストで <code>itera attach &lt;DIR&gt;</code>）' : esc(c.error || '')
               }</td></tr>`;
 
@@ -343,7 +352,7 @@
               <table class="w-full text-sm px-4">
                 <thead class="text-[0.6875rem] text-text-muted">
                   <tr><th class="text-left py-2 pl-4">ルート</th><th class="text-left">ホスト側の実パス</th>
-                      <th class="text-left">マウント先</th><th class="text-left">件数</th><th class="text-left">VFS の状態</th></tr>
+                      <th class="text-left">マウント先</th><th class="text-left">件数</th><th class="text-left">VFS の状態</th><th></th></tr>
                 </thead>
                 <tbody class="[&_td:first-child]:pl-4">${rootRows}</tbody>
               </table>
@@ -495,6 +504,132 @@ python3 itera_bridge_server.py detach foo</pre>
           setTimeout(refresh, 1500);
         } catch (e) {
           alertBox('デーモンを起動できませんでした: ' + e.message, 'error');
+        }
+      }
+
+      // ---------- すべてスタブに戻す ----------
+      //
+      // 「ホスト側に実体があり、ハッシュが一致する」ことを確かめてから捨てる判定は
+      // デーモンにある。ここに同じ判定を書き写すと片方だけ直って乖離するので、
+      // 依頼して結果を受け取るだけにする。
+      //
+      // broadcast は**送信者自身にも届く**（2026-08-20 に実測）。origin で自分の放送を弾く。
+      const IPC_ORIGIN = `bridge_settings_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+      const REPLY_TIMEOUT_MS = 120000;
+      const waiting = new Map();
+
+      if (window.MetaOS && MetaOS.system && MetaOS.system.on) {
+        MetaOS.system.on('local_bridge:progress', (m) => {
+          const w = m && waiting.get(m.id);
+          if (w) w.progress(m);
+        });
+        MetaOS.system.on('local_bridge:result', (m) => {
+          const w = m && waiting.get(m.id);
+          if (!w) return;
+          waiting.delete(m.id);
+          w.done(m);
+        });
+      }
+
+      function requestRelease(connName, rootName, onProgress) {
+        return new Promise((resolve, reject) => {
+          const id = `${IPC_ORIGIN}_${Math.random().toString(36).slice(2)}`;
+          // 応答が来ないことを「終わった」と読み替えない。
+          // 進捗が届くたびに待ち時間を延ばす（大きなルートは時間がかかる）。
+          const arm = () =>
+            setTimeout(() => {
+              waiting.delete(id);
+              reject(
+                new Error(
+                  'デーモンから応答がありません。停止しているか、この機能を持たない版かもしれません。' +
+                    'VFS は変わっていないはずですが、画面を更新して確かめてください。',
+                ),
+              );
+            }, REPLY_TIMEOUT_MS);
+          let timer = arm();
+          waiting.set(id, {
+            progress: (m) => {
+              clearTimeout(timer);
+              timer = arm();
+              onProgress(m);
+            },
+            done: (m) => {
+              clearTimeout(timer);
+              resolve(m);
+            },
+          });
+          MetaOS.system.broadcast('local_bridge:request', {
+            id,
+            origin: IPC_ORIGIN,
+            action: 'release',
+            connection: connName,
+            root: rootName,
+            path: '',
+          });
+        });
+      }
+
+      function releaseButton(connName, d) {
+        if (!state.daemon || !d.mounted || !d.materialized) return '';
+        return `<button onclick="releaseAll('${esc(connName)}','${esc(d.name)}')"
+                  class="px-2 py-1 rounded border border-border-main text-xs hover:bg-hover whitespace-nowrap"
+                  title="ホスト側に同じ内容があることを1件ずつ確かめてから、VFS の実体を捨てます">すべてスタブに戻す</button>`;
+      }
+
+      async function releaseAll(connName, rootName) {
+        const d = state.details[`${connName}/${rootName}`];
+        if (!d) return;
+
+        const res = await MetaOS.host.showMessageBox({
+          title: 'すべてスタブに戻す',
+          message: `${connName} / ${rootName} の実体 ${d.materialized} 件（${fmtBytes(d.bytes)}${
+            d.bytesPartial ? ' 以上' : ''
+          }）をスタブに戻しますか。`,
+          detail:
+            'ホスト側に同じ内容（ハッシュ一致）があることを1件ずつ確かめてから、VFS の中身だけを捨てます。\n' +
+            '・ホストに無いもの、内容が食い違うものは見送ります（消しません）\n' +
+            '・確認が取れないときは中断します\n' +
+            '・スタブになったファイルは、開いたときに自動で取り直します',
+          type: 'question',
+          buttons: [
+            { label: 'やめる', value: false, style: 'normal', isCancel: true },
+            { label: 'スタブに戻す', value: true, style: 'danger', isDefault: true },
+          ],
+        });
+        if (!res || res.action !== true) return;
+
+        state.busy = true;
+        MetaOS.host.showLoading(`確認しています… 0 / ${d.materialized}`);
+        try {
+          const m = await requestRelease(connName, rootName, (p) => {
+            MetaOS.host.showLoading(`スタブ化 ${p.released} 件 / 確認 ${p.done} / ${p.total}`);
+          });
+          state.busy = false;
+          MetaOS.host.hideLoading();
+          await refresh();
+          if (!m.ok) {
+            alertBox(
+              `中断しました: ${m.error}` + (m.released ? `（中断前に ${m.released} 件をスタブ化しています）` : ''),
+              'error',
+            );
+            return;
+          }
+          const head = `スタブ化 ${m.released} 件 / 見送り ${m.skippedTotal} 件（対象 ${m.total} 件、${fmtBytes(
+            m.bytes,
+          )} を解放）`;
+          if (m.skippedTotal) {
+            alertBox(
+              head + ' — 見送り: ' + m.skipped.slice(0, 5).join(' / ') + (m.skippedTotal > 5 ? ' ほか' : ''),
+              'warn',
+            );
+          } else {
+            alertBox(head, 'info');
+          }
+        } catch (e) {
+          state.busy = false;
+          MetaOS.host.hideLoading();
+          alertBox(e.message, 'error');
+          await refresh();
         }
       }
 
