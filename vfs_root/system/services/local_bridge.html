@@ -1199,6 +1199,93 @@ Attributes:
           },
         });
 
+        // ---------- 検証付きスタブ化（ここだけが createStub を呼ぶ） ----------
+        //
+        // ツール（local_release）も設定アプリからの依頼も、必ずこの関数を通す。
+        // 「捨てる前にホストと照合する」という判定を 2 か所に書くと、
+        // 片方だけ直って乖離する。安全に関わる判定は 1 つに保つ。
+        //
+        // 分割するのは、ルート全体（数千件）を 1 回の verify に載せると
+        // ホストが全件のハッシュを計算し終えるまで何も返らず、進捗も出せないため。
+        const VERIFY_CHUNK = 200;
+
+        async function releaseVerified(conn, root, relPath, onProgress) {
+          ensureLive(conn, root);
+          const mountPath = `${MOUNT_BASE}/${conn.name}/${root}`;
+          const target = `${mountPath}/${relPath || ''}`.replace(/\/+$/, '');
+          const state = await MetaOS.fs.getSyncState(mountPath);
+          const targets = Object.entries(state).filter(
+            ([full, info]) =>
+              info.kind !== 'directory' && !isStub(info) && (full === target || full.startsWith(target + '/')),
+          );
+
+          const result = { total: targets.length, released: 0, bytes: 0, skipped: [] };
+          if (!targets.length) return result;
+
+          for (let i = 0; i < targets.length; i += VERIFY_CHUNK) {
+            const chunk = targets.slice(i, i + VERIFY_CHUNK);
+            const rels = chunk.map(([full]) => full.substring(mountPath.length + 1));
+
+            // ここで失敗したら「判定不能」。バイト列を捨てる前に必ず中断する。
+            // 途中まで進んでいることがあるので、その分を持たせて投げる（無かったことにしない）。
+            let verify;
+            try {
+              verify = await getJson(api(conn, `/api/${root}/verify`), {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ paths: rels }),
+              });
+            } catch (e) {
+              const err = new Error(`[中断] ホスト側の確認が取れませんでした（${e.message}）。実体は残しています。`);
+              err.partial = result;
+              throw err;
+            }
+
+            for (const [full, info] of chunk) {
+              const rel = full.substring(mountPath.length + 1);
+              const v = verify.results?.[rel];
+              if (!v || !v.present) {
+                result.skipped.push(`${rel}: ホストに実体が無い`);
+                continue;
+              }
+              if (v.hash !== info.hash) {
+                result.skipped.push(`${rel}: ハッシュ不一致`);
+                continue;
+              }
+              try {
+                await MetaOS.fs.createStub(full, { size: v.size, updatedAt: info.updatedAt, hash: v.hash });
+                result.released++;
+                result.bytes += v.size || 0;
+              } catch (e) {
+                result.skipped.push(`${rel}: ${e.message}`);
+              }
+            }
+
+            if (onProgress) {
+              onProgress({
+                done: Math.min(i + VERIFY_CHUNK, targets.length),
+                total: targets.length,
+                released: result.released,
+                skipped: result.skipped.length,
+                bytes: result.bytes,
+              });
+            }
+          }
+          return result;
+        }
+
+        function releaseSummary(r) {
+          let out = `スタブ化: ${r.released} 件 / 見送り: ${r.skipped.length} 件（対象 ${r.total} 件、解放 ${r.bytes} バイト）`;
+          if (r.skipped.length)
+            out +=
+              '\n見送りの理由:\n' +
+              r.skipped
+                .slice(0, 20)
+                .map((s) => '  - ' + s)
+                .join('\n');
+          return out;
+        }
+
         MetaOS.tools.register({
           name: 'local_release',
           description: 'Turns materialized files back into stubs (verified against the host first).',
@@ -1207,63 +1294,49 @@ Attributes:
             try {
               const conn = resolveConn(p.connection);
               const root = resolveRoot(conn, p.root);
-              ensureLive(conn, root);
-              const mountPath = `${MOUNT_BASE}/${conn.name}/${root}`;
-              const target = `${mountPath}/${p.path}`.replace(/\/+$/, '');
-              const state = await MetaOS.fs.getSyncState(mountPath);
-              const targets = Object.entries(state).filter(
-                ([full, info]) =>
-                  info.kind !== 'directory' && !isStub(info) && (full === target || full.startsWith(target + '/')),
-              );
-              if (!targets.length) return `スタブ化できる実体がありません: ${p.path}`;
-
-              const rels = targets.map(([full]) => full.substring(mountPath.length + 1));
-
-              // ここで失敗したら「判定不能」。バイト列を捨てる前に必ず中断する。
-              let verify;
-              try {
-                verify = await getJson(api(conn, `/api/${root}/verify`), {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ paths: rels }),
-                });
-              } catch (e) {
-                return `[中断] ホスト側の確認が取れませんでした（${e.message}）。実体は残しています。`;
-              }
-
-              let released = 0;
-              const skipped = [];
-              for (const [full, info] of targets) {
-                const rel = full.substring(mountPath.length + 1);
-                const v = verify.results?.[rel];
-                if (!v || !v.present) {
-                  skipped.push(`${rel}: ホストに実体が無い`);
-                  continue;
-                }
-                if (v.hash !== info.hash) {
-                  skipped.push(`${rel}: ハッシュ不一致`);
-                  continue;
-                }
-                try {
-                  await MetaOS.fs.createStub(full, { size: v.size, updatedAt: info.updatedAt, hash: v.hash });
-                  released++;
-                } catch (e) {
-                  skipped.push(`${rel}: ${e.message}`);
-                }
-              }
-              let out = `スタブ化: ${released} 件 / 見送り: ${skipped.length} 件（対象 ${targets.length} 件）`;
-              if (skipped.length)
-                out +=
-                  '\n見送りの理由:\n' +
-                  skipped
-                    .slice(0, 20)
-                    .map((s) => '  - ' + s)
-                    .join('\n');
-              return out;
+              const r = await releaseVerified(conn, root, p.path);
+              if (!r.total) return `スタブ化できる実体がありません: ${p.path}`;
+              return releaseSummary(r);
             } catch (e) {
-              return `[エラー] ${e.message}`;
+              const head = e.message.startsWith('[') ? e.message : `[エラー] ${e.message}`;
+              return e.partial && e.partial.released
+                ? `${head}\n（中断前に ${e.partial.released} 件をスタブ化しています）`
+                : head;
             }
           },
+        });
+
+        // ---------- 設定アプリからの依頼（IPC） ----------
+        //
+        // broadcast は**送信者自身にも届く**（2026-08-20 に実測）。origin を見て自分の放送を
+        // 弾かないと、自分の依頼に自分で答えることになる。
+        const IPC_ORIGIN = `local_bridge_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+
+        MetaOS.system.on('local_bridge:request', async (msg) => {
+          if (!msg || !msg.id || msg.origin === IPC_ORIGIN) return;
+          const reply = (type, payload) =>
+            MetaOS.system.broadcast(`local_bridge:${type}`, { id: msg.id, origin: IPC_ORIGIN, ...payload });
+          try {
+            if (msg.action !== 'release') throw new Error(`不明な依頼: ${msg.action}`);
+            const conn = resolveConn(msg.connection);
+            const root = resolveRoot(conn, msg.root);
+            const r = await releaseVerified(conn, root, msg.path || '', (p) => reply('progress', p));
+            reply('result', {
+              ok: true,
+              total: r.total,
+              released: r.released,
+              bytes: r.bytes,
+              skippedTotal: r.skipped.length,
+              skipped: r.skipped.slice(0, 50),
+            });
+          } catch (e) {
+            reply('result', {
+              ok: false,
+              error: e.message,
+              released: e.partial ? e.partial.released : 0,
+              bytes: e.partial ? e.partial.bytes : 0,
+            });
+          }
         });
 
         for (const def of Object.values(DEFS)) {
@@ -1292,7 +1365,7 @@ Attributes:
         }
 
         MetaOS.ai.log(
-          'Local Bridge (daemon v3.5) 起動\n' + (summary.join('\n') || '（有効な接続がありません）'),
+          'Local Bridge (daemon v3.6) 起動\n' + (summary.join('\n') || '（有効な接続がありません）'),
           'system',
         );
       })();
