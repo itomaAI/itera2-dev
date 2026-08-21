@@ -1,5 +1,5 @@
 /**
- * src/core/vfs/localBridgeConflict.test.ts
+ * tests/guest/localBridgeConflict.test.ts
  * Local Bridge の衝突判定（T-0013）
  *
  * 対象は `vfs_root/system/services/local_bridge.html`（ゲスト実装）。
@@ -20,7 +20,7 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
-const SOURCE_PATH = resolve(__dirname, '../../../vfs_root/system/services/local_bridge.html');
+const SOURCE_PATH = resolve(__dirname, '../../vfs_root/system/services/local_bridge.html');
 
 function loadIsConflict() {
   const src = readFileSync(SOURCE_PATH, 'utf-8');

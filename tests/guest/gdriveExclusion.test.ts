@@ -1,5 +1,5 @@
 /**
- * src/core/vfs/gdriveExclusion.test.ts
+ * tests/guest/gdriveExclusion.test.ts
  * gdrive_sync の除外判定（T-0014）
  *
  * 対象は VFS 側のゲスト実装 `vfs_root/system/services/gdrive_sync.html` である。
@@ -18,7 +18,7 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
-const SOURCE_PATH = resolve(__dirname, '../../../vfs_root/system/services/gdrive_sync.html');
+const SOURCE_PATH = resolve(__dirname, '../../vfs_root/system/services/gdrive_sync.html');
 
 /** ソースから断片を切り出す。取り出せなければ**失敗させる**（黙って素通りさせない）。 */
 function extract(source: string, pattern: RegExp, label: string): string {

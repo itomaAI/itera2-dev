@@ -22,6 +22,6 @@ jobs:
       - name: Type check
         run: npx tsc --noEmit
       - name: Format check
-        run: npx prettier --check "src/**/*.{ts,tsx}" "vfs_root/**/*.{html,js,ts,tsx}" "*.{js,ts,html}"
+        run: npx prettier --check "src/**/*.{ts,tsx}" "tests/**/*.{ts,tsx}" "vfs_root/**/*.{html,js,ts,tsx}" "*.{js,ts,html}"
       - name: Test
         run: npm test

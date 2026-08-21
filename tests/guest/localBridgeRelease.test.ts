@@ -1,5 +1,5 @@
 /**
- * src/core/vfs/localBridgeRelease.test.ts
+ * tests/guest/localBridgeRelease.test.ts
  * Local Bridge の検証付きスタブ化（T-0037）
  *
  * 対象は `vfs_root/system/services/local_bridge.html`（ゲスト実装）。
@@ -19,7 +19,7 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
-const SOURCE_PATH = resolve(__dirname, '../../../vfs_root/system/services/local_bridge.html');
+const SOURCE_PATH = resolve(__dirname, '../../vfs_root/system/services/local_bridge.html');
 
 /** ソースから断片を切り出す。取り出せなければ**失敗させる**（黙って素通りさせない）。 */
 function extract(src: string, re: RegExp, label: string): string {
