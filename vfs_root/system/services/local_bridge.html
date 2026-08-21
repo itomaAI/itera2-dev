@@ -135,7 +135,37 @@
           return false;
         }
 
-        const COMPILED_IGNORE = compileIgnorePatterns(config.ignorePatterns);
+        /**
+         * 無視パターンは「全体の既定 ∪ 接続ごと ∪ ルートごと」の**和**で効く（T-0059）。
+         *
+         *   config.ignorePatterns                … 全体の既定
+         *   conn.ignorePatterns                  … 接続ごと
+         *   conn.roots?.[root]?.ignorePatterns   … ルートごと
+         *
+         * 上書きにしなかったのは、接続ごとの設定が全体の既定を黙って弱める書き方を
+         * 生まないため。緩めたいときは全体の既定から外す。
+         */
+        function ignorePatternsFor(conn, root) {
+          const out = [...(config.ignorePatterns || [])];
+          if (conn && Array.isArray(conn.ignorePatterns)) out.push(...conn.ignorePatterns);
+          const perRoot = conn && conn.roots && conn.roots[root];
+          if (perRoot && Array.isArray(perRoot.ignorePatterns)) out.push(...perRoot.ignorePatterns);
+          return out;
+        }
+
+        // 走査1回で数万件を照合するので、コンパイル結果は使い回す。
+        // ただし**パターンそのものを鍵にする** —— 設定を読み直したときに古い規則が残らない。
+        const ignoreCache = new Map();
+        function compiledIgnoreFor(conn, root) {
+          const patterns = ignorePatternsFor(conn, root);
+          const key = patterns.join('\n');
+          const id = `${(conn && conn.name) || ''}/${root}`;
+          const hit = ignoreCache.get(id);
+          if (hit && hit.key === key) return hit.compiled;
+          const compiled = compileIgnorePatterns(patterns);
+          ignoreCache.set(id, { key, compiled });
+          return compiled;
+        }
 
         // ---------- 補助 ----------
         const api = (conn, path) => `${conn.serverUrl}${path}`;
@@ -397,6 +427,7 @@
 
           const anchor = loaded.entries;
           const next = { ...anchor };
+          const compiledIgnore = compiledIgnoreFor(conn, root);
 
           // ★ 走査に失敗したサーバーは「空」に見える。空を鵜呑みにすると全消しになる。
           //   一覧の欠落と削除は区別できないので、疑わしいときは何も消さずに止める。
@@ -432,7 +463,7 @@
           let n = 0;
           for (const rel of sorted) {
             if (!rel) continue;
-            if (isIgnoredCompiled(rel, COMPILED_IGNORE)) continue;
+            if (isIgnoredCompiled(rel, compiledIgnore)) continue;
             if (++n % 50 === 0) await new Promise((r) => setTimeout(r, 0));
 
             try {
@@ -630,6 +661,166 @@
               mount.syncing = false;
             }
           }, delay);
+        }
+
+        /**
+         * 調停と掃除を同時に走らせない。
+         * 進行中の調停は `{ ...anchor }` から作った `next` を最後に書き戻すので、
+         * その途中で掃除がアンカーを書き換えると**掃除の結果が黙って打ち消される**。
+         * 新しい錠前は作らず、既存の直列化（mount.syncing）に相乗りする。
+         */
+        async function withSyncPaused(mount, fn) {
+          const deadline = Date.now() + 60000;
+          while (mount.syncing) {
+            if (Date.now() > deadline) throw new Error('調停が終わらないため中止しました。');
+            await new Promise((r) => setTimeout(r, 200));
+          }
+          clearTimeout(mount.timer);
+          mount.syncing = true;
+          try {
+            return await fn();
+          } finally {
+            mount.syncing = false;
+            scheduleSync(mount, SYNC_DEBOUNCE_MS);
+          }
+        }
+
+        /**
+         * 無視対象になった「既存の」項目を索引から落とす（T-0059）。
+         *
+         * 無視は走査の入口で `continue` するだけなので、**あとから足したパターンは
+         * 既に作られたスタブに効かない**。索引を軽くするにはこの掃除が要る。
+         *
+         * 安全の規則は増やさない。調停の分岐2b と同じ考えに揃え、さらに狭める:
+         *   **消すのはスタブだけ。** 実体化済みのファイルは、ホストと同じ内容でも触らない
+         *   （捨てたいなら `local_release` がある。あちらは一致を1件ずつ確かめる）。
+         *
+         * ホスト側は一切変更しない。消えるのは VFS のノードとアンカーの項目だけで、
+         * パターンを外せば次の走査でスタブとして戻る。
+         */
+        async function ignoreCleanup(mount, opts) {
+          const { conn, root, mountPath } = mount;
+          const dryRun = !!(opts && opts.dryRun);
+          const onProgress = (opts && opts.onProgress) || (() => {});
+
+          const compiled = compiledIgnoreFor(conn, root);
+          const empty = {
+            total: 0,
+            removed: 0,
+            stubs: 0,
+            dirs: 0,
+            anchorOnly: 0,
+            keptTotal: 0,
+            kept: [],
+            failed: [],
+            dryRun,
+          };
+          if (!compiled.length) return empty;
+
+          const state = await MetaOS.fs.getSyncState(mountPath);
+          const prefix = `${mountPath}/`;
+
+          const stubs = [];
+          const dirs = [];
+          const kept = [];
+          for (const [full, info] of Object.entries(state)) {
+            if (!full.startsWith(prefix)) continue;
+            const rel = full.substring(prefix.length);
+            if (!rel || !isIgnoredCompiled(rel, compiled)) continue;
+            if (info && info.kind === 'directory') dirs.push({ rel, full });
+            else if (isStub(info)) stubs.push({ rel, full });
+            else kept.push(rel);
+          }
+
+          // 深い方から消す。親を先に消すと、実体化済みの子を巻き込む。
+          const deepFirst = (a, b) => b.rel.split('/').length - a.rel.split('/').length || (a.rel < b.rel ? 1 : -1);
+          stubs.sort(deepFirst);
+          dirs.sort(deepFirst);
+
+          const loaded = await loadAnchor(conn, root);
+          if (loaded.broken) throw new Error('アンカーが壊れているため掃除を中止しました。');
+          const entries = { ...loaded.entries };
+
+          // 無視に当たるのに VFS に居ない項目（アンカーにだけ残っている残骸）を数える。
+          const anchorOnlyRels = Object.keys(entries).filter(
+            (rel) => isIgnoredCompiled(rel, compiled) && !state[`${prefix}${rel}`],
+          );
+
+          const total = stubs.length + dirs.length + anchorOnlyRels.length;
+          if (dryRun) {
+            return {
+              total,
+              removed: 0,
+              stubs: stubs.length,
+              dirs: dirs.length,
+              anchorOnly: anchorOnlyRels.length,
+              keptTotal: kept.length,
+              kept: kept.slice(0, 50),
+              failed: [],
+              dryRun: true,
+            };
+          }
+
+          const failed = [];
+          const survivors = kept.slice();
+          let removed = 0;
+          let n = 0;
+
+          for (const item of stubs) {
+            try {
+              await MetaOS.fs.delete(item.full, { permanent: true });
+              delete entries[item.rel];
+              removed++;
+            } catch (e) {
+              failed.push(`${item.rel}: ${e.message}`);
+              survivors.push(item.rel);
+            }
+            if (++n % 50 === 0) {
+              onProgress({ done: n, total });
+              await new Promise((r) => setTimeout(r, 0));
+            }
+          }
+
+          // ディレクトリは、残った項目が下に無いときだけ消す。
+          // （深い順なので、子が残ったことは親から見える）
+          for (const d of dirs) {
+            if (survivors.some((s) => s === d.rel || s.startsWith(`${d.rel}/`))) {
+              survivors.push(d.rel);
+              continue;
+            }
+            try {
+              await MetaOS.fs.delete(d.full, { permanent: true });
+              delete entries[d.rel];
+              removed++;
+            } catch (e) {
+              failed.push(`${d.rel}: ${e.message}`);
+              survivors.push(d.rel);
+            }
+            if (++n % 50 === 0) {
+              onProgress({ done: n, total });
+              await new Promise((r) => setTimeout(r, 0));
+            }
+          }
+
+          for (const rel of anchorOnlyRels) {
+            delete entries[rel];
+            removed++;
+          }
+
+          await saveAnchor(conn, root, mount.rootPath, entries);
+          onProgress({ done: total, total });
+
+          return {
+            total,
+            removed,
+            stubs: stubs.length,
+            dirs: dirs.length,
+            anchorOnly: anchorOnlyRels.length,
+            keptTotal: kept.length,
+            kept: kept.slice(0, 50),
+            failed: failed.slice(0, 50),
+            dryRun: false,
+          };
         }
 
         // ---------- マウント管理 ----------
@@ -1317,6 +1508,18 @@ Attributes:
           const reply = (type, payload) =>
             MetaOS.system.broadcast(`local_bridge:${type}`, { id: msg.id, origin: IPC_ORIGIN, ...payload });
           try {
+            if (msg.action === 'ignore_cleanup') {
+              const conn = resolveConn(msg.connection);
+              const root = resolveRoot(conn, msg.root);
+              const mountPath = `${MOUNT_BASE}/${conn.name}/${root}`;
+              const mount = mounts.get(mountPath);
+              if (!mount) throw new Error(`マウントされていません: ${mountPath}`);
+              const r = await withSyncPaused(mount, () =>
+                ignoreCleanup(mount, { dryRun: !!msg.dryRun, onProgress: (p) => reply('progress', p) }),
+              );
+              reply('result', { ok: true, ...r });
+              return;
+            }
             if (msg.action !== 'release') throw new Error(`不明な依頼: ${msg.action}`);
             const conn = resolveConn(msg.connection);
             const root = resolveRoot(conn, msg.root);

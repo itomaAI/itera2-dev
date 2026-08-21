@@ -64,6 +64,7 @@
     <div class="flex-1 overflow-y-auto min-h-0">
       <div id="alerts" class="px-5 pt-4 space-y-2"></div>
       <div id="conns" class="p-5 space-y-4"></div>
+      <div id="ignore" class="px-5 pb-4"></div>
       <div id="dist" class="px-5 pb-8"></div>
     </div>
 
@@ -270,6 +271,7 @@
 
         await render();
         renderDist();
+        renderIgnore();
       }
 
       async function render() {
@@ -532,6 +534,10 @@ python3 itera_bridge_server.py detach foo</pre>
       }
 
       function requestRelease(connName, rootName, onProgress) {
+        return requestDaemon('release', { connection: connName, root: rootName, path: '' }, onProgress);
+      }
+
+      function requestDaemon(action, payload, onProgress) {
         return new Promise((resolve, reject) => {
           const id = `${IPC_ORIGIN}_${Math.random().toString(36).slice(2)}`;
           // 応答が来ないことを「終わった」と読み替えない。
@@ -558,14 +564,7 @@ python3 itera_bridge_server.py detach foo</pre>
               resolve(m);
             },
           });
-          MetaOS.system.broadcast('local_bridge:request', {
-            id,
-            origin: IPC_ORIGIN,
-            action: 'release',
-            connection: connName,
-            root: rootName,
-            path: '',
-          });
+          MetaOS.system.broadcast('local_bridge:request', { id, origin: IPC_ORIGIN, action, ...payload });
         });
       }
 
@@ -622,6 +621,232 @@ python3 itera_bridge_server.py detach foo</pre>
               head + ' — 見送り: ' + m.skipped.slice(0, 5).join(' / ') + (m.skippedTotal > 5 ? ' ほか' : ''),
               'warn',
             );
+          } else {
+            alertBox(head, 'info');
+          }
+        } catch (e) {
+          state.busy = false;
+          MetaOS.host.hideLoading();
+          alertBox(e.message, 'error');
+          await refresh();
+        }
+      }
+
+      // ---------- 無視するファイル（T-0059） ----------
+      //
+      // 効き方は「全体の既定 ∪ 接続ごと ∪ ルートごと」の**和**。
+      // 掃除で消えるのは **VFS の索引（スタブ）とアンカーの項目だけ**で、
+      // 実体化済みのファイルとホスト側のファイルには触れない。
+      const ignoreLines = (arr) => (Array.isArray(arr) ? arr : []).join('\n');
+      const parseIgnore = (text) =>
+        String(text || '')
+          .split('\n')
+          .map((s) => s.trim())
+          .filter(Boolean);
+
+      // 名前をそのまま onclick に埋めると引用符で壊れる。番号で引く。
+      let ignoreTargets = [];
+
+      function ignoreBox(i, label, value, hint, extra) {
+        return `
+          <div class="border border-border-main rounded-lg p-3 space-y-2">
+            <div class="flex items-center justify-between gap-2">
+              <div class="text-sm font-bold">${esc(label)}</div>
+              <button
+                onclick="saveIgnore(${i})"
+                class="px-2 py-1 rounded border border-border-main text-xs hover:bg-hover whitespace-nowrap"
+              >
+                保存
+              </button>
+            </div>
+            <textarea
+              id="ig_${i}"
+              rows="3"
+              spellcheck="false"
+              class="w-full bg-surface border border-border-main rounded p-2 text-xs font-mono"
+              placeholder="1行に1つ。例: data / *.png / output/tmp"
+            >${esc(value)}</textarea>
+            <div class="text-[0.6875rem] text-text-muted">${hint}</div>
+            ${extra || ''}
+            <div id="ig_msg_${i}" class="text-[0.6875rem] text-text-muted"></div>
+          </div>`;
+      }
+
+      function renderIgnore() {
+        const cfg = state.config || {};
+        ignoreTargets = [];
+        const parts = [];
+
+        ignoreTargets.push({ scope: 'global' });
+        parts.push(
+          ignoreBox(
+            0,
+            'すべての接続に効く既定',
+            ignoreLines(cfg.ignorePatterns),
+            '「/」を含むパターンはルートからの相対パス全体に、含まないものはパスの各段に照合します（例: <code>data</code> は途中の data ディレクトリにも当たります）。',
+          ),
+        );
+
+        for (const c of cfg.connections || []) {
+          const name = c.name;
+          if (!name) continue;
+          const prefix = `${MOUNT_BASE}/${name}/`;
+          const roots = state.mounts.filter((m) => m.startsWith(prefix)).map((m) => m.substring(prefix.length));
+
+          const ci = ignoreTargets.length;
+          ignoreTargets.push({ scope: 'conn', conn: name });
+          parts.push(
+            ignoreBox(
+              ci,
+              `${name} — この接続のすべてのルート`,
+              ignoreLines(c.ignorePatterns),
+              '上の既定に足されます。',
+            ),
+          );
+
+          for (const r of roots) {
+            const ri = ignoreTargets.length;
+            ignoreTargets.push({ scope: 'root', conn: name, root: r });
+            const cur = ((c.roots || {})[r] || {}).ignorePatterns;
+            const buttons = state.daemon
+              ? `<div class="flex flex-wrap gap-2">
+                   <button
+                     onclick="countIgnored(${ri})"
+                     class="px-2 py-1 rounded border border-border-main text-xs hover:bg-hover whitespace-nowrap"
+                     title="いま動いているデーモンの設定で数えます"
+                   >
+                     対象を数える
+                   </button>
+                   <button
+                     onclick="cleanupIgnored(${ri})"
+                     class="px-2 py-1 rounded border border-error/40 text-error text-xs hover:bg-hover whitespace-nowrap"
+                     title="無視対象になった既存のスタブを索引から消します。ホスト側は変更しません"
+                   >
+                     無視対象のスタブを掃除
+                   </button>
+                 </div>`
+              : '<div class="text-[0.6875rem] text-text-muted">デーモンが停止しているため、数えることも掃除もできません。</div>';
+            parts.push(
+              ignoreBox(
+                ri,
+                `${name} / ${r}`,
+                ignoreLines(cur),
+                'このルートだけに足されます。数える・掃除するのは<b>保存してデーモンを再起動したあと</b>の設定です。',
+                buttons,
+              ),
+            );
+          }
+        }
+
+        DOM('ignore').innerHTML = `
+          <section class="border border-border-main rounded-xl p-4 space-y-3">
+            <div>
+              <h2 class="font-bold">無視するファイル</h2>
+              <p class="text-[0.6875rem] text-text-muted mt-1">
+                当てはまるものはスタブを作りません（索引が軽くなります）。
+                <b>あとから足したパターンは、既にできているスタブには効きません。</b>
+                そのために「掃除」があります。掃除で消えるのは VFS の索引だけで、
+                <b>ホスト側のファイルと、実体化済みのファイルは消しません。</b>
+              </p>
+            </div>
+            <div class="space-y-3">${parts.join('')}</div>
+          </section>`;
+      }
+
+      async function saveIgnore(i) {
+        const t = ignoreTargets[i];
+        const el = DOM(`ig_${i}`);
+        if (!t || !el) return;
+        const patterns = parseIgnore(el.value);
+        const ok = await mutateConfig((cfg) => {
+          if (t.scope === 'global') {
+            cfg.ignorePatterns = patterns;
+            return cfg;
+          }
+          const c = (cfg.connections || []).find((x) => x.name === t.conn);
+          if (!c) {
+            alertBox(`接続が見つかりません: ${t.conn}`, 'error');
+            return null;
+          }
+          if (t.scope === 'conn') {
+            c.ignorePatterns = patterns;
+          } else {
+            c.roots = c.roots || {};
+            c.roots[t.root] = { ...(c.roots[t.root] || {}), ignorePatterns: patterns };
+          }
+          return cfg;
+        });
+        if (ok) notifyRestartNeeded();
+      }
+
+      async function askIgnoreCount(t) {
+        const m = await requestDaemon('ignore_cleanup', { connection: t.conn, root: t.root, dryRun: true }, () => {});
+        if (!m.ok) throw new Error(m.error);
+        return m;
+      }
+
+      async function countIgnored(i) {
+        const t = ignoreTargets[i];
+        const msg = DOM(`ig_msg_${i}`);
+        if (!t || !msg) return;
+        msg.textContent = '数えています…';
+        try {
+          const m = await askIgnoreCount(t);
+          msg.textContent =
+            `対象 ${m.total} 件（スタブ ${m.stubs} / ディレクトリ ${m.dirs} / アンカーだけに残るもの ${m.anchorOnly}）` +
+            ` — 実体化済みで触らないもの ${m.keptTotal} 件`;
+        } catch (e) {
+          msg.textContent = `数えられませんでした: ${e.message}`;
+        }
+      }
+
+      async function cleanupIgnored(i) {
+        const t = ignoreTargets[i];
+        if (!t) return;
+
+        let pre;
+        try {
+          pre = await askIgnoreCount(t);
+        } catch (e) {
+          alertBox(`対象を数えられませんでした: ${e.message}`, 'error');
+          return;
+        }
+        if (!pre.total) {
+          alertBox(`${t.conn} / ${t.root} に掃除の対象はありません。`, 'info');
+          return;
+        }
+
+        const res = await MetaOS.host.showMessageBox({
+          title: '無視対象のスタブを掃除',
+          message: `${t.conn} / ${t.root} の ${pre.total} 件を VFS の索引から消しますか。`,
+          detail:
+            '消えるのは VFS の索引（スタブ）とアンカーの項目だけです。ホスト側のファイルは変更しません。\n' +
+            `・実体化済みのファイル ${pre.keptTotal} 件は消しません\n` +
+            '・パターンを外せば、次の走査でスタブとして戻ります',
+          type: 'question',
+          buttons: [
+            { label: 'やめる', value: false, style: 'normal', isCancel: true },
+            { label: '掃除する', value: true, style: 'danger', isDefault: true },
+          ],
+        });
+        if (!res || res.action !== true) return;
+
+        state.busy = true;
+        MetaOS.host.showLoading(`掃除しています… 0 / ${pre.total}`);
+        try {
+          const m = await requestDaemon('ignore_cleanup', { connection: t.conn, root: t.root, dryRun: false }, (p) =>
+            MetaOS.host.showLoading(`掃除しています… ${p.done} / ${p.total}`),
+          );
+          state.busy = false;
+          MetaOS.host.hideLoading();
+          await refresh();
+          if (!m.ok) {
+            alertBox(`掃除できませんでした: ${m.error}`, 'error');
+            return;
+          }
+          const head = `${m.removed} 件を索引から消しました（対象 ${m.total} 件、実体化済みで残したもの ${m.keptTotal} 件）。`;
+          if (m.failed && m.failed.length) {
+            alertBox(`${head} 消せなかったもの: ${m.failed.slice(0, 3).join(' / ')}`, 'warn');
           } else {
             alertBox(head, 'info');
           }
