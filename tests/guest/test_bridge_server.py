@@ -1,6 +1,6 @@
 """Local Bridge サーバーの試験（long-poll と版の表現）。
 
-実行: python3 -m pytest tests/test_bridge_server.py -q
+実行: python3 -m pytest tests/guest/test_bridge_server.py -q
 
 注意: Bridge は ~/.itera/roots.json を読み書きする。実運用の登録を壊さないよう、
       すべての試験で CONFIG_DIR / ROOTS_FILE / MACHINE_FILE を一時ディレクトリへ差し替える。
@@ -16,7 +16,7 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-REPO = Path(__file__).resolve().parents[1]
+REPO = Path(__file__).resolve().parents[2]
 SERVER_PY = REPO / "vfs_root" / "system" / "services" / "itera_bridge_server.py"
 
 

@@ -1,5 +1,5 @@
 /**
- * src/core/vfs/localBridgeVanished.test.ts
+ * tests/guest/localBridgeVanished.test.ts
  * Local Bridge: リモートから消えた項目の扱い（T-0027）
  *
  * 対象は `vfs_root/system/services/local_bridge.html`（ゲスト実装）。
@@ -23,7 +23,7 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
-const SOURCE_PATH = resolve(__dirname, '../../../vfs_root/system/services/local_bridge.html');
+const SOURCE_PATH = resolve(__dirname, '../../vfs_root/system/services/local_bridge.html');
 
 function extract(pattern: RegExp, name: string): string {
   const src = readFileSync(SOURCE_PATH, 'utf-8');
