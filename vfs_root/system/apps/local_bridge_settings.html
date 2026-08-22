@@ -68,6 +68,9 @@
       <div id="dist" class="px-5 pb-8"></div>
     </div>
 
+    <!-- 無視するファイルの編集画面（T-0072）。本文に常時展開しないための置き場。 -->
+    <div id="igmodal"></div>
+
     <script>
       const CONFIG_PATH = 'system/config/local_bridge.json';
       const ANCHOR_DIR = 'data/apps/local_bridge/anchors';
@@ -313,7 +316,11 @@
                     <td class="py-2 pr-3">${mountCell}</td>
                     <td class="py-2 pr-3 text-text-muted text-[0.6875rem] whitespace-nowrap" title="ホストが把握している件数。ディレクトリを含むため、右の合計とは一致しません。">${d.files} 件</td>
                     <td class="py-2 pr-3 text-text-muted text-[0.6875rem] whitespace-nowrap">${counts}</td>
-                    <td class="py-2 text-right">${releaseButton(name, d)}</td>
+                    <td class="py-2 text-right">
+                      <div class="flex justify-end gap-2">
+                        ${name ? ignoreButton('root', name, d.name) : ''}${releaseButton(name, d)}
+                      </div>
+                    </td>
                   </tr>`;
                 })
                 .join('')
@@ -342,6 +349,7 @@
                     <option value="ask" ${(c.cfg.execMode || 'ask') === 'ask' ? 'selected' : ''}>都度確認</option>
                     <option value="auto" ${c.cfg.execMode === 'auto' ? 'selected' : ''}>自動</option>
                   </select>
+                  ${name ? ignoreButton('conn', name, null) : ''}
                   <button onclick="toggleEnabled('${esc(c.url)}')"
                           class="px-2 py-1 rounded border border-border-main text-xs hover:bg-hover">
                     ${c.cfg.enabled === false ? '有効化' : '無効化'}
@@ -632,11 +640,17 @@ python3 itera_bridge_server.py detach foo</pre>
         }
       }
 
-      // ---------- 無視するファイル（T-0059） ----------
+      // ---------- 無視するファイル（T-0059／置き方は T-0072） ----------
       //
       // 効き方は「全体の既定 ∪ 接続ごと ∪ ルートごと」の**和**。
       // 掃除で消えるのは **VFS の索引（スタブ）とアンカーの項目だけ**で、
       // 実体化済みのファイルとホスト側のファイルには触れない。
+      //
+      // ★ 画面に常時展開しない（T-0072）。階層のぶんだけテキスト欄を並べると、
+      //   接続とルートが増えるたびに画面が縦に伸びる（実際に 8 個並んで本文を押し下げていた）。
+      //   入口は**行のボタン**にし、**開いた階層だけ**を編集する。
+      //   上位の階層は読み取りで見せて、そこから開き直せるようにする ——
+      //   和で効く以上、「自分の欄が空なのに無視される」理由が見えないと使えないため。
       const ignoreLines = (arr) => (Array.isArray(arr) ? arr : []).join('\n');
       const parseIgnore = (text) =>
         String(text || '')
@@ -644,118 +658,183 @@ python3 itera_bridge_server.py detach foo</pre>
           .map((s) => s.trim())
           .filter(Boolean);
 
-      // 名前をそのまま onclick に埋めると引用符で壊れる。番号で引く。
+      // 名前をそのまま onclick に埋めると引用符で壊れる（esc は " を落とさない）。番号で引く。
+      // 同じ対象は同じ番号に畳む。再描画は 15 秒ごとに走るので、畳まないと際限なく増える。
       let ignoreTargets = [];
+      const ignoreKey = (t) => `${t.scope}\u0000${t.conn || ''}\u0000${t.root || ''}`;
+      function ignoreTargetIndex(t) {
+        const key = ignoreKey(t);
+        const hit = ignoreTargets.findIndex((x) => ignoreKey(x) === key);
+        if (hit >= 0) return hit;
+        ignoreTargets.push(t);
+        return ignoreTargets.length - 1;
+      }
 
-      function ignoreBox(i, label, value, hint, extra) {
-        return `
-          <div class="border border-border-main rounded-lg p-3 space-y-2">
-            <div class="flex items-center justify-between gap-2">
-              <div class="text-sm font-bold">${esc(label)}</div>
-              <button
-                onclick="saveIgnore(${i})"
-                class="px-2 py-1 rounded border border-border-main text-xs hover:bg-hover whitespace-nowrap"
-              >
-                保存
-              </button>
-            </div>
-            <textarea
-              id="ig_${i}"
-              rows="3"
-              spellcheck="false"
-              class="w-full bg-surface border border-border-main rounded p-2 text-xs font-mono"
-              placeholder="1行に1つ。例: data / *.png / output/tmp"
-            >${esc(value)}</textarea>
-            <div class="text-[0.6875rem] text-text-muted">${hint}</div>
-            ${extra || ''}
-            <div id="ig_msg_${i}" class="text-[0.6875rem] text-text-muted"></div>
-          </div>`;
+      function ignoreButton(scope, conn, root) {
+        const i = ignoreTargetIndex({ scope, conn, root });
+        return `<button onclick="openIgnore(${i})"
+                  class="px-2 py-1 rounded border border-border-main text-xs hover:bg-hover whitespace-nowrap"
+                  title="このルートで無視するファイルを編集します（上位の設定も見られます）">無視…</button>`;
+      }
+
+      function ignoreScopeLabel(t) {
+        if (t.scope === 'global') return 'すべての接続に効く既定';
+        if (t.scope === 'conn') return `${t.conn} — この接続のすべてのルート`;
+        return `${t.conn} / ${t.root}`;
+      }
+
+      function ignoreCurrent(t) {
+        const cfg = state.config || {};
+        if (t.scope === 'global') return cfg.ignorePatterns || [];
+        const c = (cfg.connections || []).find((x) => x.name === t.conn) || {};
+        if (t.scope === 'conn') return c.ignorePatterns || [];
+        return ((c.roots || {})[t.root] || {}).ignorePatterns || [];
+      }
+
+      // 上位の階層（読み取り）。和で効くので、どこから来たパターンなのかを示す。
+      function ignoreInherited(t) {
+        const rows = [];
+        if (t.scope !== 'global') {
+          const g = { scope: 'global' };
+          rows.push({ label: ignoreScopeLabel(g), list: ignoreCurrent(g), idx: ignoreTargetIndex(g) });
+        }
+        if (t.scope === 'root') {
+          const c = { scope: 'conn', conn: t.conn };
+          rows.push({ label: ignoreScopeLabel(c), list: ignoreCurrent(c), idx: ignoreTargetIndex(c) });
+        }
+        return rows;
       }
 
       function renderIgnore() {
         const cfg = state.config || {};
-        ignoreTargets = [];
-        const parts = [];
-
-        ignoreTargets.push({ scope: 'global' });
-        parts.push(
-          ignoreBox(
-            0,
-            'すべての接続に効く既定',
-            ignoreLines(cfg.ignorePatterns),
-            '「/」を含むパターンはルートからの相対パス全体に、含まないものはパスの各段に照合します（例: <code>data</code> は途中の data ディレクトリにも当たります）。',
-          ),
-        );
-
-        for (const c of cfg.connections || []) {
-          const name = c.name;
-          if (!name) continue;
-          const prefix = `${MOUNT_BASE}/${name}/`;
-          const roots = state.mounts.filter((m) => m.startsWith(prefix)).map((m) => m.substring(prefix.length));
-
-          const ci = ignoreTargets.length;
-          ignoreTargets.push({ scope: 'conn', conn: name });
-          parts.push(
-            ignoreBox(
-              ci,
-              `${name} — この接続のすべてのルート`,
-              ignoreLines(c.ignorePatterns),
-              '上の既定に足されます。',
-            ),
-          );
-
-          for (const r of roots) {
-            const ri = ignoreTargets.length;
-            ignoreTargets.push({ scope: 'root', conn: name, root: r });
-            const cur = ((c.roots || {})[r] || {}).ignorePatterns;
-            const buttons = state.daemon
-              ? `<div class="flex flex-wrap gap-2">
-                   <button
-                     onclick="countIgnored(${ri})"
-                     class="px-2 py-1 rounded border border-border-main text-xs hover:bg-hover whitespace-nowrap"
-                     title="いま動いているデーモンの設定で数えます"
-                   >
-                     対象を数える
-                   </button>
-                   <button
-                     onclick="cleanupIgnored(${ri})"
-                     class="px-2 py-1 rounded border border-error/40 text-error text-xs hover:bg-hover whitespace-nowrap"
-                     title="無視対象になった既存のスタブを索引から消します。ホスト側は変更しません"
-                   >
-                     無視対象のスタブを掃除
-                   </button>
-                 </div>`
-              : '<div class="text-[0.6875rem] text-text-muted">デーモンが停止しているため、数えることも掃除もできません。</div>';
-            parts.push(
-              ignoreBox(
-                ri,
-                `${name} / ${r}`,
-                ignoreLines(cur),
-                'このルートだけに足されます。数える・掃除するのは<b>保存してデーモンを再起動したあと</b>の設定です。',
-                buttons,
-              ),
-            );
-          }
-        }
-
+        const gi = ignoreTargetIndex({ scope: 'global' });
+        const n = (cfg.ignorePatterns || []).length;
         DOM('ignore').innerHTML = `
-          <section class="border border-border-main rounded-xl p-4 space-y-3">
-            <div>
+          <section class="border border-border-main rounded-xl p-4 flex flex-wrap items-center justify-between gap-3">
+            <div class="min-w-0">
               <h2 class="font-bold">無視するファイル</h2>
               <p class="text-[0.6875rem] text-text-muted mt-1">
                 当てはまるものはスタブを作りません（索引が軽くなります）。
-                <b>あとから足したパターンは、既にできているスタブには効きません。</b>
-                そのために「掃除」があります。掃除で消えるのは VFS の索引だけで、
-                <b>ホスト側のファイルと、実体化済みのファイルは消しません。</b>
+                ルートごとの指定は<b>上の表の「無視…」</b>から開きます。
+                いま共通の既定は <b>${n} 個</b>です。
               </p>
             </div>
-            <div class="space-y-3">${parts.join('')}</div>
+            <button onclick="openIgnore(${gi})"
+                    class="px-3 py-2 rounded-lg border border-border-main text-sm hover:bg-hover whitespace-nowrap">
+              共通の既定を編集…
+            </button>
           </section>`;
       }
 
-      async function saveIgnore(i) {
+      // ---------- 無視するファイルの編集画面 ----------
+      //
+      // 開いている間は自分では作り直さない。15 秒ごとの refresh で作り直すと、
+      // 入力中の文字が消える。作り直すのは「開いたとき」と「保存したあと」だけ。
+      let igScope = null;
+
+      function openIgnore(i) {
         const t = ignoreTargets[i];
-        const el = DOM(`ig_${i}`);
+        if (!t) return;
+        igScope = t;
+        renderIgnoreModal();
+      }
+
+      function closeIgnore() {
+        igScope = null;
+        DOM('igmodal').innerHTML = '';
+      }
+
+      function renderIgnoreModal() {
+        const t = igScope;
+        if (!t) {
+          DOM('igmodal').innerHTML = '';
+          return;
+        }
+
+        const inherited = ignoreInherited(t)
+          .map(
+            (r) => `
+              <div class="flex items-baseline gap-2 py-1 border-t border-border-main/60 first:border-t-0">
+                <div class="text-[0.6875rem] text-text-muted w-40 shrink-0 truncate">${esc(r.label)}</div>
+                <div class="flex-1 min-w-0 text-[0.6875rem] font-mono truncate">${
+                  r.list.length ? esc(r.list.join('  ')) : '<span class="text-text-muted">（なし）</span>'
+                }</div>
+                <button onclick="openIgnore(${r.idx})"
+                        class="text-[0.6875rem] underline text-text-muted hover:text-text-main whitespace-nowrap">開く</button>
+              </div>`,
+          )
+          .join('');
+
+        const tools =
+          t.scope !== 'root'
+            ? ''
+            : state.daemon
+              ? `<div class="flex flex-wrap gap-2">
+                   <button onclick="countIgnored()"
+                     class="px-2 py-1 rounded border border-border-main text-xs hover:bg-hover whitespace-nowrap"
+                     title="いま動いているデーモンの設定で数えます">対象を数える</button>
+                   <button onclick="cleanupIgnored()"
+                     class="px-2 py-1 rounded border border-error/40 text-error text-xs hover:bg-hover whitespace-nowrap"
+                     title="無視対象になった既存のスタブを索引から消します。ホスト側は変更しません">無視対象のスタブを掃除</button>
+                 </div>`
+              : '<div class="text-[0.6875rem] text-text-muted">デーモンが停止しているため、数えることも掃除もできません。</div>';
+
+        const hint =
+          t.scope === 'global'
+            ? '「/」を含むパターンはルートからの相対パス全体に、含まないものはパスの各段に照合します（例: <code>data</code> は途中の data ディレクトリにも当たります）。'
+            : t.scope === 'conn'
+              ? 'この接続のすべてのルートに足されます。'
+              : 'このルートだけに足されます。数える・掃除するのは<b>保存してデーモンを再起動したあと</b>の設定です。';
+
+        DOM('igmodal').innerHTML = `
+          <div class="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <div class="absolute inset-0 bg-black/40" onclick="closeIgnore()"></div>
+            <div class="relative w-full max-w-2xl max-h-full overflow-y-auto bg-app border border-border-main rounded-xl p-4 space-y-3">
+              <div class="flex items-start justify-between gap-3">
+                <div class="min-w-0">
+                  <h2 class="font-bold truncate">無視するファイル — ${esc(ignoreScopeLabel(t))}</h2>
+                  <p class="text-[0.6875rem] text-text-muted mt-1">
+                    当てはまるものはスタブを作りません。
+                    <b>あとから足したパターンは、既にできているスタブには効きません</b>（そのために「掃除」があります）。
+                    掃除で消えるのは VFS の索引だけで、<b>ホスト側のファイルと、実体化済みのファイルは消しません。</b>
+                  </p>
+                </div>
+                <button onclick="closeIgnore()"
+                        class="px-2 py-1 rounded border border-border-main text-xs hover:bg-hover whitespace-nowrap">閉じる</button>
+              </div>
+
+              ${
+                inherited
+                  ? `<div class="border border-border-main rounded-lg p-3">
+                       <div class="text-[0.6875rem] text-text-muted mb-1">ここにも効いている（上位の設定・読み取り）</div>
+                       ${inherited}
+                     </div>`
+                  : ''
+              }
+
+              <div class="space-y-2">
+                <div class="text-sm font-bold">${esc(ignoreScopeLabel(t))}</div>
+                <textarea id="ig_edit" rows="8" spellcheck="false"
+                  class="w-full bg-surface border border-border-main rounded p-2 text-xs font-mono"
+                  placeholder="1行に1つ。例: data / *.png / output/tmp">${esc(ignoreLines(ignoreCurrent(t)))}</textarea>
+                <div class="text-[0.6875rem] text-text-muted">${hint}</div>
+                ${tools}
+                <div id="ig_msg" class="text-[0.6875rem] text-text-muted"></div>
+              </div>
+
+              <div class="flex justify-end gap-2 pt-1">
+                <button onclick="closeIgnore()"
+                        class="px-3 py-2 rounded-lg border border-border-main text-sm hover:bg-hover">閉じる</button>
+                <button onclick="saveIgnore()"
+                        class="px-3 py-2 rounded-lg bg-primary text-text-inverted text-sm font-bold hover:bg-primary/90">保存</button>
+              </div>
+            </div>
+          </div>`;
+      }
+
+      async function saveIgnore() {
+        const t = igScope;
+        const el = DOM('ig_edit');
         if (!t || !el) return;
         const patterns = parseIgnore(el.value);
         const ok = await mutateConfig((cfg) => {
@@ -776,7 +855,12 @@ python3 itera_bridge_server.py detach foo</pre>
           }
           return cfg;
         });
-        if (ok) notifyRestartNeeded();
+        if (!ok) return;
+        notifyRestartNeeded();
+        // 保存された値で作り直す。画面に残った文字列ではなく、設定を読み直したものを見せる。
+        renderIgnoreModal();
+        const msg = DOM('ig_msg');
+        if (msg) msg.textContent = `保存しました（${patterns.length} 個）。デーモンを再起動すると効きます。`;
       }
 
       async function askIgnoreCount(t) {
@@ -785,10 +869,10 @@ python3 itera_bridge_server.py detach foo</pre>
         return m;
       }
 
-      async function countIgnored(i) {
-        const t = ignoreTargets[i];
-        const msg = DOM(`ig_msg_${i}`);
-        if (!t || !msg) return;
+      async function countIgnored() {
+        const t = igScope;
+        const msg = DOM('ig_msg');
+        if (!t || t.scope !== 'root' || !msg) return;
         msg.textContent = '数えています…';
         try {
           const m = await askIgnoreCount(t);
@@ -800,9 +884,9 @@ python3 itera_bridge_server.py detach foo</pre>
         }
       }
 
-      async function cleanupIgnored(i) {
-        const t = ignoreTargets[i];
-        if (!t) return;
+      async function cleanupIgnored() {
+        const t = igScope;
+        if (!t || t.scope !== 'root') return;
 
         let pre;
         try {
@@ -845,6 +929,8 @@ python3 itera_bridge_server.py detach foo</pre>
             return;
           }
           const head = `${m.removed} 件を索引から消しました（対象 ${m.total} 件、実体化済みで残したもの ${m.keptTotal} 件）。`;
+          const msg = DOM('ig_msg');
+          if (msg) msg.textContent = head;
           if (m.failed && m.failed.length) {
             alertBox(`${head} 消せなかったもの: ${m.failed.slice(0, 3).join(' / ')}`, 'warn');
           } else {
