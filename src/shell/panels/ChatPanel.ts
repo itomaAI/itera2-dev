@@ -23,6 +23,15 @@ import { LABEL_STREAM } from '../styles/typography';
  * テーマによって「手前／奥」が反転する（light 243<249 / dark 55,65,81>31,41,55）。
  * 「手前」は bg-panel（両テーマで地色より明るい）、「沈み」は bg-overlay のαで作る。
  */
+/**
+ * 「下端に貼り付いている」とみなす許容幅（px）。
+ *
+ * これより上にいるなら、利用者は**過去を読んでいる**とみなして自動スクロールを止める。
+ * 小さくしすぎると 1px の端数で追従が外れ、大きくしすぎると
+ * 「少し遡って読んでいる」状態を拾えずに引き戻してしまう。
+ */
+const STICK_THRESHOLD_PX = 100;
+
 const BOX_BASE = 'relative group mb-2 transition';
 const BOX_FRAME = 'p-3 rounded-lg border';
 
@@ -308,8 +317,10 @@ export class ChatPanel {
     this.currentStreamContent = '';
     this.currentStreamEl = null;
 
+    // 生成の開始も「新しい出力」なので、過去を読んでいる間は引き戻さない。
+    const wasAtBottom = this._isAtBottom();
     this._createStreamElement(turnId);
-    this._scrollToBottom(true);
+    this._scrollToBottom(false, wasAtBottom);
   }
 
   private _createStreamElement(turnId?: string) {
@@ -359,6 +370,8 @@ export class ChatPanel {
 
   updateStreaming(chunk: string) {
     if (!this.currentStreamEl) return;
+    // 書き込む前に測る。書いたあとでは、伸びた分がそのまま「下端からの距離」になる。
+    const wasAtBottom = this._isAtBottom();
     this.currentStreamContent += chunk;
 
     // streaming:true … 生成中はまだ成果物枠が存在しないため、report/ask を開いたまま見せる。
@@ -366,10 +379,11 @@ export class ChatPanel {
     if (!this._renderLpmlInto(this.currentStreamEl, this.currentStreamContent, { streaming: true })) {
       this.currentStreamEl.textContent = this.currentStreamContent;
     }
-    this._scrollToBottom();
+    this._scrollToBottom(false, wasAtBottom);
   }
 
   finalizeStreaming() {
+    const wasAtBottom = this._isAtBottom();
     if (this.currentStreamEl && this.currentStreamEl.parentElement) {
       const parent = this.currentStreamEl.parentElement;
       if (!parent.id || !parent.id.startsWith('turn-')) {
@@ -378,19 +392,36 @@ export class ChatPanel {
     }
     this.currentStreamEl = null;
     this.currentStreamContent = '';
-    this._scrollToBottom(true);
+    this._scrollToBottom(false, wasAtBottom);
   }
 
   // ==========================================
   // History Rendering
   // ==========================================
 
+  /**
+   * ターンを 1 つ足す。
+   *
+   * **自分が書いたものは必ず見せる**（`role === 'user'`）—— 送信は利用者の操作であり、
+   * その結果が画面の外にあるのは驚きになる。過去を読んでいる最中に送ったとしても、
+   * 送った本人は最新へ戻る意思を示している。
+   *
+   * それ以外（AI・システムの出力）は**足す前の位置に従う**。
+   * 下端にいれば追従し、遡って読んでいる間は動かさない。
+   */
   appendTurn(turn: Turn) {
     if (!turn) return;
+    const wasAtBottom = this._isAtBottom();
+    const isOwnMessage = turn.role === 'user';
     this._appendTurn(turn);
-    this._scrollToBottom(true);
+    this._scrollToBottom(isOwnMessage, wasAtBottom);
   }
 
+  /**
+   * 履歴を作り直す（起動時・ターン削除・セッション消去の 3 か所からしか呼ばれない）。
+   * どれも画面を組み直す操作で、`innerHTML` を空にした時点で位置は失われるため、
+   * ここだけは最下部へ送ってよい。
+   */
   renderHistory(history: Turn[]) {
     if (!this.els.HISTORY) return;
     this.els.HISTORY.innerHTML = '';
@@ -398,12 +429,30 @@ export class ChatPanel {
     this._scrollToBottom(true);
   }
 
-  private _scrollToBottom(force = false) {
+  /**
+   * いま下端に貼り付いているか。
+   *
+   * ★ 必ず DOM を足す**前**に呼ぶこと。
+   *   足したあとに測ると、追加された高さがそのまま「下端からの距離」になるため、
+   *   貼り付いていたのに「過去を読んでいる」と判定され、**追従が黙って止まる**。
+   *   長いチャンク（コード塊など）で追従が途切れて見えるのは、これが理由である。
+   */
+  private _isAtBottom(): boolean {
+    const el = this.els.HISTORY;
+    if (!el) return true;
+    return el.scrollHeight - el.scrollTop <= el.clientHeight + STICK_THRESHOLD_PX;
+  }
+
+  /**
+   * 最下部へ送る。
+   *
+   * @param force        利用者自身の操作の結果なら true（自分が送ったものは必ず見せる）
+   * @param wasAtBottom  **足す前に**測った位置。false なら過去を読んでいるので動かさない
+   */
+  private _scrollToBottom(force = false, wasAtBottom = true) {
     const el = this.els.HISTORY;
     if (!el) return;
-    const threshold = 100;
-    const isAtBottom = el.scrollHeight - el.scrollTop <= el.clientHeight + threshold;
-    if (force || isAtBottom) {
+    if (force || wasAtBottom) {
       el.scrollTop = el.scrollHeight;
     }
   }
