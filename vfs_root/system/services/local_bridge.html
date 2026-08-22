@@ -310,12 +310,21 @@
          * 衝突の解消。方針は「どちらも消さない」（2026-08-18 山内さん判断）。
          *
          *   1. VFS 側の内容を <名前>.conflict-<時刻> としてホストへ退避する
-         *   2. 元のパスはホスト側を正として揃える（git やツールはホスト側で動くため）
-         *   3. 必ず知らせる
+         *   2. 退避ファイルの節点を VFS 側にも作る（★下記）
+         *   3. 元のパスはホスト側を正として揃える（git やツールはホスト側で動くため）
+         *   4. 必ず知らせる
          *
          * ★ 退避に失敗したら**何もしない**。上書きすれば消える側ができてしまう。
          *   その場合この項目は止まったままだが、止まっていることは通知する。
          *   黙って止まるのが元の欠陥であり、そこへ戻してはならない。
+         *
+         * ★★ アンカーに載せるなら、VFS 側にも節点を作る。★★（T-0069 / 2026-08-22）
+         *   退避ファイルを next（＝次のアンカー）にだけ書いて VFS に節点を作らずにいると、
+         *   次の巡回で「アンカーにある・リモートにある・VFS に無い」となり、
+         *   isLocallyDeleted() が「利用者が VFS 側で消した」と読んで**ホストの退避を消す**。
+         *   実測（0.1 秒刻みで観測）: 退避は作られた **1.97 秒後**にデーモン自身の DELETE で消えていた。
+         *   それでいて通知は「どちらも失われていません」と言っていた。
+         *   番人が「守った」と報告して実際には守っていないのは、番人が無いことより悪い。
          *
          * @returns {Promise<boolean>} 解消できたか（false なら保留＝どちらも触っていない）
          */
@@ -336,6 +345,7 @@
 
           const stamp = new Date().toISOString().replace(/[:.]/g, '-');
           const backupRel = `${rel}.conflict-${stamp}`;
+          const backupFull = `${mountPath}/${backupRel}`;
 
           let saved = null;
           try {
@@ -352,14 +362,50 @@
 
           await MetaOS.fs.createStub(full, { size: r.size, updatedAt: r.updatedAt, hash: r.hash });
           next[rel] = { kind: 'file', size: r.size, updatedAt: r.updatedAt, hash: r.hash };
-          if (saved) next[backupRel] = { kind: 'file', size: saved.size, updatedAt: saved.updatedAt, hash: saved.hash };
+
+          // 退避ファイルは「ホストに置いた」だけでは守れない。VFS 側にも節点を作って初めて、
+          // 次の巡回で「利用者が消した」と読まれなくなる（上の ★★ を参照）。
+          // 節点を作れなかったときは**アンカーにも載せない**。載せない側に倒しておけば、
+          // 次の巡回で分岐3（リモートに新規）が拾って、正しくスタブを作り直す。
+          let backupTracked = false;
+          if (saved) {
+            try {
+              await MetaOS.fs.createStub(backupFull, {
+                size: saved.size,
+                updatedAt: saved.updatedAt,
+                hash: saved.hash,
+              });
+              backupTracked = true;
+            } catch (e) {
+              log(`退避 ${backupRel} の節点を VFS に作れませんでした（次の巡回で拾い直します）: ${e.message}`);
+            }
+          }
+          if (backupTracked) {
+            next[backupRel] = { kind: 'file', size: saved.size, updatedAt: saved.updatedAt, hash: saved.hash };
+          }
           conflictNotified.delete(key);
 
+          // 言えるのは「サーバーが受領を返した」ところまで。確かめていないことを書かない。
           notifyOnce(
             `[Local Bridge] /${mountPath}/${rel} は両側が変更されていました。\n` +
-              `ホスト側を採用し、VFS 側の内容は ${backupRel} として保存しました。どちらも失われていません。`,
+              `ホスト側を採用し、VFS 側の内容はホストへ ${backupRel} として退避しました` +
+              `（サーバーの受領: ${saved ? saved.size : '?'} バイト）。`,
           );
           return true;
+        }
+
+        /**
+         * 「利用者が VFS 側で消した」と読んでよいか。── 分岐2
+         *
+         * ★ ここはホストの実体を消す唯一の推論である。**不在**（VFS に節点が無い）から
+         *   **出来事**（利用者が消した）を導いているので、前提が崩れると人のファイルが消える。
+         *   前提は「アンカーに載っている項目には、必ず VFS 側の節点がある」こと。
+         *   2026-08-22（T-0069）、衝突の退避を next にだけ載せて節点を作らなかったため、
+         *   この推論が退避ファイルを「消された」と読み、**デーモンが自分の退避を消していた**。
+         *   したがってアンカーへ項目を足す側は、必ず VFS 側にも節点を作ること。
+         */
+        function isLocallyDeleted(l, r, a, same) {
+          return !l && !!r && !!a && same(r, a);
         }
 
         /**
@@ -490,7 +536,7 @@
               }
 
               // 2. ローカルで削除された → リモートへ反映
-              if (!l && r && a && same(r, a)) {
+              if (isLocallyDeleted(l, r, a, same)) {
                 const res = await fetch(api(conn, `/api/${root}/file/${rel}`), {
                   method: 'DELETE',
                   headers: a.hash ? { 'X-Expected-Hash': a.hash } : {},
@@ -1568,7 +1614,7 @@ Attributes:
         }
 
         MetaOS.ai.log(
-          'Local Bridge (daemon v3.6) 起動\n' + (summary.join('\n') || '（有効な接続がありません）'),
+          'Local Bridge (daemon v3.8) 起動\n' + (summary.join('\n') || '（有効な接続がありません）'),
           'system',
         );
       })();
