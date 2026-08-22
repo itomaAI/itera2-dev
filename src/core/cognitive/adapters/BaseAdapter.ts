@@ -5,6 +5,15 @@
 
 import type { SystemLogger } from '../../state/SystemLogger';
 
+/**
+ * ストリームが無音のまま許す時間（ミリ秒）。
+ *
+ * これを超えたら通信が死んだとみなして中断する。**推論（reasoning）の最中は
+ * 上流から何も届かないことがある**ため、短すぎると「考えているだけのモデル」を殺してしまう。
+ * 15 秒では足りなかった（2026-08-22 / T-0073）。
+ */
+export const STREAM_IDLE_TIMEOUT_MS = 30000;
+
 export interface LlmConfig {
   temperature?: number;
   maxOutputTokens?: number;
@@ -69,6 +78,7 @@ export abstract class BaseLLMAdapter {
   }
 
   protected async *monitorStream(reader: ReadableStreamDefaultReader<Uint8Array>, signal?: AbortSignal) {
+    const idleLimitMs = STREAM_IDLE_TIMEOUT_MS;
     let idleTimeout: ReturnType<typeof setTimeout>;
     let isIdleTimeout = false;
 
@@ -82,7 +92,7 @@ export abstract class BaseLLMAdapter {
       idleTimeout = setTimeout(() => {
         isIdleTimeout = true;
         reader.cancel(new Error('Stream Idle Timeout')).catch(() => {});
-      }, 15000);
+      }, idleLimitMs);
     };
 
     resetIdleTimeout();
@@ -93,7 +103,7 @@ export abstract class BaseLLMAdapter {
         const { done, value } = await reader.read();
 
         if (isIdleTimeout) {
-          throw new Error('Stream Idle Timeout: No response from API for 15 seconds.');
+          throw new Error(`Stream Idle Timeout: No response from API for ${idleLimitMs / 1000} seconds.`);
         }
 
         resetIdleTimeout();

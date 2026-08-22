@@ -383,6 +383,11 @@ export class OpenAIProjector extends BaseProjector {
     if (typeof turn.content === 'string') {
       let text = turn.content;
       if (turn.role === 'user') text = wrapUserInput(text);
+      // 空白だけの発話は「無かったこと」にする（T-0074）。
+      // 通信が切れると中身の無い model ターンが履歴に残ることがあり、
+      // 空のテキストブロックを送ると Anthropic は履歴全体を拒む。
+      // 呼び出し側は「空の配列＝そのターンを送らない」として扱う。
+      if (text.trim() === '') return [];
       return [{ type: 'text', text: text }];
     }
 
@@ -563,6 +568,9 @@ export class AnthropicProjector extends BaseProjector {
     if (typeof turn.content === 'string') {
       let text = turn.content;
       if (turn.role === 'user') text = wrapUserInput(text);
+      // 空白だけの発話は「無かったこと」にする（T-0074）。
+      // Anthropic は空のテキストブロックを含む履歴を 400 で拒む。
+      if (text.trim() === '') return [];
       return [{ type: 'text', text: text }];
     }
 
