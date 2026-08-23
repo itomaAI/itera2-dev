@@ -82,6 +82,15 @@
       </div>
     </div>
 
+    <!-- この道具の役割（Loom と混ざらないように） -->
+    <p id="role-note" class="text-xs text-text-muted mb-3 px-1 shrink-0"></p>
+
+    <!-- 読めなかったファイルを黙って捨てない -->
+    <div
+      id="load-error"
+      class="hidden shrink-0 mb-3 px-4 py-2 rounded-lg border border-error/40 bg-error/10 text-error text-xs font-medium"
+    ></div>
+
     <!-- Filters -->
     <div class="flex gap-1 mb-4 border-b border-border-main/50 px-2 shrink-0">
       <button
@@ -199,26 +208,79 @@
     <script>
       let currentFilter = 'all';
       let allTasks = [];
+      const State = { loadErrors: [], showCompleted: false };
+
+      // toISOString() は UTC。JST では 0〜9 時のあいだ **前日**になり、
+      // 「今日」と「期限切れ」の分かれ目が 1 日ずれる（2026-08-24 / T-0193 で実際にずれていた）。
+      const localDate = (d = new Date()) => new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString();
+      const todayStr = () => localDate().slice(0, 10);
+      const currentMonthKey = () => localDate().slice(0, 7);
+
+      // 題は AI も書く（日誌からの起票など）。エスケープせずに innerHTML へ入れない。
+      const esc = (v) =>
+        String(v == null ? '' : v)
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;');
+
+      let LOCALE = 'en-US';
+      const T = {
+        'ja-JP': {
+          overdue: '期限切れ',
+          today: '今日',
+          upcoming: 'これから',
+          noDate: '期日なし',
+          completed: '完了',
+          empty: 'タスクはありません。',
+          role: 'ここはあなた一人の仕事のための場所です（AI と一緒に進める仕事は Loom で）。',
+          unreadable: (n) => `${n} 件のファイルが読めませんでした（タスクが欠けて見えます）: `,
+          showCompleted: '完了したものを表示',
+          hideCompleted: '完了したものを隠す',
+        },
+        'en-US': {
+          overdue: 'Overdue',
+          today: 'Today',
+          upcoming: 'Upcoming',
+          noDate: 'No Date',
+          completed: 'Completed',
+          empty: 'No tasks found.',
+          role: 'Your own tasks live here (work you do together with the AI belongs in Loom).',
+          unreadable: (n) => `${n} file(s) could not be read (tasks may be missing): `,
+          showCompleted: 'Show completed',
+          hideCompleted: 'Hide completed',
+        },
+      };
+      const t = (k) => (T[LOCALE] || T['en-US'])[k];
 
       const DOM = (id) => document.getElementById(id);
 
       const TaskAPI = {
         async getTasks() {
           if (!window.MetaOS) return [];
+          State.loadErrors = [];
+          let files = [];
           try {
-            const files = await MetaOS.fs.list('data/tasks');
-            const all = [];
-            for (const f of files.filter((x) => x.endsWith('.json'))) {
-              all.push(...(await App.FS.readJson(f, [])));
-            }
-            return all;
+            files = await MetaOS.fs.list('data/apps/tasks');
           } catch (e) {
-            return [];
+            return []; // まだ 1 件も無い
           }
+          const all = [];
+          for (const f of files.filter((x) => String(x).endsWith('.json'))) {
+            const path = String(f).includes('/') ? String(f) : `data/apps/tasks/${f}`;
+            try {
+              const arr = JSON.parse(await MetaOS.fs.read(path));
+              if (!Array.isArray(arr)) throw new Error('配列ではありません');
+              all.push(...arr);
+            } catch (e) {
+              // 捨てると「タスクが無い」に見える。数えて画面に出す。
+              State.loadErrors.push(`${path}（${e.message}）`);
+            }
+          }
+          return all;
         },
         async addTask(title, dueDate = '', priority = 'medium') {
-          const monthKey = new Date().toISOString().slice(0, 7);
-          const path = `data/tasks/${monthKey}.json`;
+          const monthKey = currentMonthKey();
+          const path = `data/apps/tasks/${monthKey}.json`;
           const tasks = await App.FS.readJson(path, []);
           const newTask = {
             id: Date.now().toString(),
@@ -236,7 +298,7 @@
         async _update(id, fn) {
           if (!window.MetaOS) return false;
           try {
-            const files = await MetaOS.fs.list('data/tasks');
+            const files = await MetaOS.fs.list('data/apps/tasks');
             for (const f of files.filter((x) => x.endsWith('.json'))) {
               let tasks = await App.FS.readJson(f, []);
               const idx = tasks.findIndex((t) => t.id === id);
@@ -278,11 +340,11 @@
       };
 
       const GroupUI = {
-        overdue: { label: 'Overdue', icon: '🔥', color: 'text-error' },
-        today: { label: 'Today', icon: '🌟', color: 'text-text-muted' },
-        upcoming: { label: 'Upcoming', icon: '📌', color: 'text-text-muted' },
-        noDate: { label: 'No Date', icon: '📌', color: 'text-text-muted' },
-        completed: { label: 'Completed', icon: '✔️', color: 'text-text-muted' },
+        overdue: { icon: '🔥', color: 'text-error' },
+        today: { icon: '🌟', color: 'text-text-muted' },
+        upcoming: { icon: '📌', color: 'text-text-muted' },
+        noDate: { icon: '📌', color: 'text-text-muted' },
+        completed: { icon: '✔️', color: 'text-text-muted' },
       };
 
       const renderTaskCard = (task, todayStr) => {
@@ -301,10 +363,10 @@
                         ${isDone ? '<svg class="w-3 h-3 text-text-inverted" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"></path></svg>' : ''}
                     </button>
                     <div class="flex-1 min-w-0 cursor-pointer" onclick="openTaskModal('${task.id}')">
-                        <div class="text-sm font-medium truncate ${isDone ? 'line-through text-text-muted' : 'text-text-main'}">${task.title}</div>
+                        <div class="text-sm font-medium truncate ${isDone ? 'line-through text-text-muted' : 'text-text-main'}">${esc(task.title)}</div>
                         <div class="flex items-center gap-2 mt-1">
-                            <span class="text-[10px] px-1.5 py-0.5 rounded border ${pColors[task.priority] || pColors.medium} uppercase font-bold tracking-wider">${task.priority || 'med'}</span>
-                            ${hasDate ? `<span class="text-[10px] ${isOverdue ? 'text-error font-bold' : 'text-text-muted'} font-mono flex items-center gap-1"><svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>${task.dueDate}</span>` : ''}
+                            <span class="text-[10px] px-1.5 py-0.5 rounded border ${pColors[task.priority] || pColors.medium} uppercase font-bold tracking-wider">${esc(task.priority || 'med')}</span>
+                            ${hasDate ? `<span class="text-[10px] ${isOverdue ? 'text-error font-bold' : 'text-text-muted'} font-mono flex items-center gap-1"><svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>${esc(task.dueDate)}</span>` : ''}
                         </div>
                     </div>
                     <button onclick="del('${task.id}')" class="p-2 text-text-muted hover:text-error opacity-0 group-hover:opacity-100 transition hover:scale-110">
@@ -317,25 +379,33 @@
         const list = DOM('task-list');
         try {
           allTasks = await TaskAPI.getTasks();
+          const err = DOM('load-error');
+          if (State.loadErrors.length) {
+            err.textContent = t('unreadable')(State.loadErrors.length) + State.loadErrors.join(' / ');
+            err.classList.remove('hidden');
+          } else {
+            err.classList.add('hidden');
+          }
+          // ここで t を影にしない（t() は言語の引き当て）
           const tasks = allTasks.filter(
-            (t) =>
+            (x) =>
               currentFilter === 'all' ||
-              (currentFilter === 'pending' && t.status !== 'completed') ||
-              (currentFilter === 'completed' && t.status === 'completed'),
+              (currentFilter === 'pending' && x.status !== 'completed') ||
+              (currentFilter === 'completed' && x.status === 'completed'),
           );
 
           if (!tasks.length)
-            return (list.innerHTML = `<div class="text-center text-text-muted text-sm py-10 italic">No tasks found.<br>Get things done!</div>`);
+            return (list.innerHTML = `<div class="text-center text-text-muted text-sm py-10 italic">${t('empty')}</div>`);
 
-          const todayStr = new Date().toISOString().slice(0, 10);
-          const getGroupKey = (t) =>
-            t.status === 'completed'
+          const today = todayStr();
+          const getGroupKey = (x) =>
+            x.status === 'completed'
               ? 'completed'
-              : !t.dueDate
+              : !x.dueDate
                 ? 'noDate'
-                : t.dueDate < todayStr
+                : x.dueDate < today
                   ? 'overdue'
-                  : t.dueDate === todayStr
+                  : x.dueDate === today
                     ? 'today'
                     : 'upcoming';
 
@@ -355,7 +425,8 @@
               const bPri = pMap[b.priority] || 2;
               if (aPri !== bPri) return bPri - aPri;
 
-              return b.id - a.id;
+              // id は数値とは限らない（AI が付けた文字列の id が実在する）。引き算だと NaN になる。
+              return String(b.id).localeCompare(String(a.id));
             })
             .reduce(
               (acc, t) => {
@@ -365,19 +436,27 @@
               { overdue: [], today: [], upcoming: [], noDate: [], completed: [] },
             );
 
+          // 完了は既定で畳む。数か月ぶんの完了が積み上がると、いま効く 3 群が下へ押し出される。
           list.innerHTML = Object.entries(groups)
             .filter(([, arr]) => arr.length)
-            .map(
-              ([key, arr]) => `
+            .map(([key, arr]) => {
+              const folded = key === 'completed' && !State.showCompleted;
+              const toggle =
+                key === 'completed'
+                  ? `<button onclick="toggleCompleted()" class="ml-2 text-[10px] font-medium text-text-muted hover:text-primary underline decoration-dotted normal-case">${
+                      folded ? t('showCompleted') : t('hideCompleted')
+                    }</button>`
+                  : '';
+              return `
                     <div class="mt-4 mb-2">
                         <h3 class="text-[11px] font-bold uppercase tracking-widest ${GroupUI[key].color} flex items-center gap-1.5 px-1 border-b border-border-main/50 pb-1">
-                            <span>${GroupUI[key].icon}</span> ${GroupUI[key].label}
+                            <span>${GroupUI[key].icon}</span> ${t(key)}${toggle}
                             <span class="ml-auto bg-card px-2 py-0.5 rounded-full text-[9px] border border-border-main">${arr.length}</span>
                         </h3>
                     </div>
-                    ${arr.map((t) => renderTaskCard(t, todayStr)).join('')}
-                `,
-            )
+                    ${folded ? '' : arr.map((x) => renderTaskCard(x, today)).join('')}
+                `;
+            })
             .join('');
         } catch (e) {
           list.innerHTML = `<div class="text-error p-4">Error: ${e.message}</div>`;
@@ -493,15 +572,48 @@
       if (window.MetaOS && MetaOS.system && MetaOS.system.on) {
         MetaOS.system.on('vfs_mutation', (mutation) => {
           // If tasks DB changes, refresh list
-          if (mutation.path.startsWith('data/tasks/')) {
+          if (mutation.path.startsWith('data/apps/tasks/')) {
             console.log('Task DB mutated, reloading...');
             render();
           }
         });
       }
 
+      function toggleCompleted() {
+        State.showCompleted = !State.showCompleted;
+        render();
+      }
+
+      // 置き場を data/tasks/ から data/apps/tasks/ へ移した。
+      // 既にある環境のタスクを置き去りにしないため、**新しい側に無い月だけ**を一度引き取る。
+      async function adoptLegacyTasks() {
+        let old = [];
+        try {
+          old = await MetaOS.fs.list('data/tasks');
+        } catch (e) {
+          return;
+        }
+        for (const f of old.filter((x) => String(x).endsWith('.json'))) {
+          const name = String(f).split('/').pop();
+          const dest = `data/apps/tasks/${name}`;
+          try {
+            if (await MetaOS.fs.exists(dest)) continue;
+            const src = String(f).includes('/') ? String(f) : `data/tasks/${name}`;
+            await MetaOS.fs.write(dest, await MetaOS.fs.read(src));
+          } catch (e) {}
+        }
+      }
+
       // Init
-      render();
+      (async () => {
+        try {
+          const prefs = await App.Config.get('preferences');
+          if (/^(ja|japanese)/i.test(String(prefs.language || ''))) LOCALE = 'ja-JP';
+        } catch (e) {}
+        DOM('role-note').textContent = t('role');
+        await adoptLegacyTasks();
+        render();
+      })();
     </script>
   </body>
 </html>

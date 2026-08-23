@@ -299,7 +299,7 @@
           // Fetch Tasks Locally
           let allTasks = [];
           try {
-            const files = await MetaOS.fs.list('data/tasks');
+            const files = await MetaOS.fs.list('data/apps/tasks');
             for (const f of files.filter((x) => x.endsWith('.json'))) {
               allTasks.push(...(await App.FS.readJson(f, [])));
             }
@@ -365,7 +365,7 @@
           close: () => DOM('edit-modal').classList.add('hidden'),
           _updateTaskFile: async (id, fn) => {
             try {
-              const files = await MetaOS.fs.list('data/tasks');
+              const files = await MetaOS.fs.list('data/apps/tasks');
               for (const f of files.filter((x) => x.endsWith('.json'))) {
                 let tasks = await App.FS.readJson(f, []);
                 const idx = tasks.findIndex((t) => t.id === id);
