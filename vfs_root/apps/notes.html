@@ -5,8 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Notes</title>
     <script src="/system/core/tw.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-    <!-- MathJax -->
+    <!-- 描画は同梱のものだけを使う。回線が無くても同じように出る（2026-08-24 / T-0191） -->
+    <script src="/apps/lib/md.js"></script>
+    <!-- MathJax は数式が出てきたときだけ、あとから読み込む -->
     <script>
       window.MathJax = {
         tex: {
@@ -18,62 +19,27 @@
         svg: { fontCache: 'global' },
       };
     </script>
-    <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
     <script src="/system/core/ui.js"></script>
     <script src="/system/core/std.js"></script>
     <style>
-      .prose h1,
-      .prose h2,
-      .prose h3 {
+      /* 描画のクラスは apps/lib/md.js が付ける（テーマ変数と Tailwind に寄せてある）。
+         ここに置くのは、クラスでは書きにくいものだけ。 */
+      .prose {
         color: rgb(var(--c-text-main));
-        font-weight: 700;
-        margin-top: 1.5em;
-        margin-bottom: 0.5em;
       }
-      .prose h1 {
-        font-size: 1.75em;
-        border-bottom: 1px solid rgb(var(--c-border-main));
-        padding-bottom: 0.3em;
+      .prose table {
+        min-width: 100%;
       }
-      .prose p {
-        margin-bottom: 1em;
-        line-height: 1.7;
-        color: rgb(var(--c-text-main));
-        opacity: 0.9;
+      /* コード塊の中では、行の中のコードの装飾を効かせない（二重に見えるため） */
+      .prose pre code {
+        background: none;
+        padding: 0;
+        color: inherit;
       }
-      .prose ul {
-        list-style: disc;
-        padding-left: 1.5em;
-        color: rgb(var(--c-text-muted));
-      }
-      .prose ol {
-        list-style: decimal;
-        padding-left: 1.5em;
-        color: rgb(var(--c-text-muted));
-      }
-      .prose code {
-        background: rgb(var(--c-bg-hover));
-        padding: 0.2em 0.4em;
-        border-radius: 0.25em;
-        font-family: monospace;
-        color: rgb(var(--c-accent-primary));
-      }
-      .prose pre {
-        background: rgb(var(--c-bg-app));
-        padding: 1em;
-        border-radius: 0.5em;
-        overflow: auto;
-        border: 1px solid rgb(var(--c-border-main));
-      }
-      .prose blockquote {
-        border-left: 4px solid rgb(var(--c-border-highlight));
-        padding-left: 1em;
-        color: rgb(var(--c-text-muted));
-        font-style: italic;
-      }
-      .prose a {
-        color: rgb(var(--c-accent-primary));
-        text-decoration: underline;
+      .prose mjx-container {
+        overflow-x: auto;
+        overflow-y: hidden;
+        max-width: 100%;
       }
     </style>
   </head>
@@ -241,7 +207,11 @@
 
       <div id="content-view" class="hidden flex-1 relative overflow-hidden">
         <div id="markdown-viewer" class="absolute inset-0 overflow-y-auto p-4 md:p-8 scroll-smooth">
-          <article id="markdown-body" class="prose max-w-3xl mx-auto pb-20"></article>
+          <div class="max-w-6xl mx-auto flex gap-8 items-start">
+            <article id="markdown-body" class="prose flex-1 min-w-0 max-w-3xl pb-20"></article>
+            <!-- 長い文書のための目次。見出しが 3 つ未満なら出さない -->
+            <nav id="outline" class="hidden sticky top-0 w-48 shrink-0 xl:block"></nav>
+          </div>
         </div>
         <div id="markdown-editor-container" class="hidden absolute inset-0 bg-app">
           <textarea
@@ -466,35 +436,106 @@
         }
       }
 
+      /**
+       * 数式を退避する。
+       * ★ コード（``` と `…`）の中は数式として扱わない。
+       *   以前は $…$ を無条件に拾っていたため、シェルの $PATH や $(…) が数式に化けた（2026-08-24 / T-0191）。
+       */
+      function protectMath(src) {
+        const slots = [];
+        const keep = (m) => `\u0001${slots.push(m) - 1}\u0001`;
+        const codes = [];
+        let s = String(src)
+          .replace(/```[\s\S]*?```/g, (m) => `\u0002${codes.push(m) - 1}\u0002`)
+          .replace(/`[^`\n]*`/g, (m) => `\u0002${codes.push(m) - 1}\u0002`);
+        s = s.replace(/\$\$[\s\S]+?\$\$/g, keep).replace(/\$[^$\n]+?\$/g, keep);
+        s = s.replace(/\u0002(\d+)\u0002/g, (m, k) => codes[k]);
+        return { text: s, slots };
+      }
+
+      /** MathJax は使うときだけ読み込む。読めなくても本文の描画は止めない。 */
+      let mathLoading = null;
+      function ensureMathJax() {
+        if (window.MathJax && window.MathJax.typesetPromise) return Promise.resolve(true);
+        if (mathLoading) return mathLoading;
+        mathLoading = new Promise((resolve) => {
+          const s = document.createElement('script');
+          s.src = '/vendor/mathjax/tex-mml-chtml.js';
+          s.async = true;
+          s.onload = () => resolve(true);
+          s.onerror = () => resolve(false);
+          document.head.appendChild(s);
+        });
+        return mathLoading;
+      }
+
       function renderMarkdown(content) {
         const body = document.getElementById('markdown-body');
         try {
-          const mathBlocks = [];
-          const protectedContent = content
-            .replace(/\$\$([\s\S]+?)\$\$/g, (m) => {
-              mathBlocks.push(m);
-              return `MATHBLOCK${mathBlocks.length - 1}END`;
-            })
-            .replace(/\$([^$]+?)\$/g, (m) => {
-              mathBlocks.push(m);
-              return `MATHINLINE${mathBlocks.length - 1}END`;
-            });
-
-          let html = marked.parse(protectedContent);
-
-          html = html
-            .replace(/MATHBLOCK(\d+)END/g, (m, id) => mathBlocks[parseInt(id)])
-            .replace(/MATHINLINE(\d+)END/g, (m, id) => mathBlocks[parseInt(id)]);
-
+          const { text, slots } = protectMath(content);
+          let html = MD.render(text, {});
+          html = html.replace(/\u0001(\d+)\u0001/g, (m, k) => MD.escape(slots[k]));
           body.innerHTML = html;
-
-          if (window.MathJax) {
-            MathJax.typesetPromise([body]).then(() => {});
+          renderOutline(content);
+          if (slots.length) {
+            ensureMathJax().then((ok) => {
+              if (ok && window.MathJax && window.MathJax.typesetPromise) {
+                window.MathJax.typesetPromise([body]).catch(() => {});
+              }
+            });
           }
         } catch (e) {
-          body.innerHTML = `<div class="text-error">Markdown render error</div>`;
+          body.innerHTML = `<div class="text-error p-3 border border-error/40 rounded bg-error/10">描画に失敗しました: ${MD.escape(e && e.message)}</div>`;
         }
       }
+
+      /** 見出しの一覧（長い文書で位置を掴むため）。3 つ未満のときは出さない。 */
+      function renderOutline(content) {
+        const el = document.getElementById('outline');
+        if (!el) return;
+        const hs = MD.headings(content).filter((h) => h.level <= 3);
+        if (hs.length < 3) {
+          el.innerHTML = '';
+          el.classList.add('hidden');
+          return;
+        }
+        el.classList.remove('hidden');
+        el.innerHTML =
+          '<div class="text-[10px] font-bold uppercase tracking-widest text-text-muted mb-2">Outline</div>' +
+          hs
+            .map(
+              (h) =>
+                `<button onclick="jumpTo('${h.id}')" class="block w-full text-left text-xs py-1 truncate text-text-muted hover:text-primary transition" style="padding-left:${(h.level - 1) * 10}px" title="${MD.escape(h.text)}">${MD.escape(h.text)}</button>`,
+            )
+            .join('');
+      }
+      window.jumpTo = (id) => {
+        const t = document.getElementById(id);
+        if (t) t.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      };
+
+      /**
+       * 文書の中のリンク。
+       * ★ VFS の中を指すリンク（./doc.md など）は、このアプリで開く。
+       *   以前は素の <a href="doc.md"> になっていて、押しても何も起きなかった。
+       */
+      document.addEventListener('click', (e) => {
+        const a = e.target.closest && e.target.closest('[data-md-link]');
+        if (!a) return;
+        e.preventDefault();
+        const href = a.getAttribute('data-md-link');
+        const dir = (currentPath || '').split('/').slice(0, -1).join('/');
+        const parts = (href.startsWith('/') ? href.slice(1) : (dir ? dir + '/' : '') + href).split('/');
+        const stack = [];
+        for (const p of parts) {
+          if (p === '.' || p === '') continue;
+          if (p === '..') stack.pop();
+          else stack.push(p);
+        }
+        const target = stack.join('/');
+        if (/\.(md|txt)$/i.test(target)) openNote(target);
+        else MetaOS.host.openEditor(target).catch(() => {});
+      });
 
       const setStatus = (msg, state = '') => {
         const el = document.getElementById('status-indicator');
