@@ -155,6 +155,8 @@
       let showClosed = false;
       let showTasks = true;
       const collapsed = new Set();
+      // 読めなかった／id が無くて捨てたファイル。捨てたことを黙っていると、板から静かに 1 枚消える。
+      let loadSkips = [];
       let lastTreeScrollId = null;
 
       const DOM = (id) => document.getElementById(id);
@@ -806,18 +808,26 @@
           try {
             files = await MetaOS.fs.list(DIR);
           } catch (e) {
+            loadSkips = [];
             return [];
           }
           const out = [];
+          const skips = [];
           for (const f of files.filter((x) => x.endsWith('.md'))) {
             try {
               const n = parseNode(await MetaOS.fs.read(f));
               n.path = f;
               n.baseBody = n.body;
               n.baseMeta = { ...n.meta };
+              // ★ 捨てるときは必ず記録する。黙って捨てると、板から 1 枚消えたことに誰も気づけない
+              //   （2026-08-24 / T-0013）。
               if (n.meta.id) out.push(n);
-            } catch (e) {}
+              else skips.push({ path: f, why: 'front matter に id がありません' });
+            } catch (e) {
+              skips.push({ path: f, why: errMsg(e) });
+            }
           }
+          loadSkips = skips;
           out.sort(byIdAsc);
           return out;
         },
@@ -951,6 +961,7 @@
           test: (n) => !isProject(n) && !!n.meta.scheduled && n.meta.scheduled <= todayStr() && !isClosed(n),
         },
         closed: { label: '閉じた', test: (n) => isClosed(n) },
+        census: { label: '全景', test: () => true },
       };
 
       function renderViews() {
@@ -1083,7 +1094,13 @@
         };
         for (const r of projectRoots()) walkP(r, 0);
         // 系譜から辿り着けないもの（親が壊れている等）は捨てずに出す。
-        for (const n of nodes) if (!seen.has(n.meta.id) && isProject(n) && (showClosed || !isClosed(n))) walkP(n, 0);
+        // ★ 以前ここはプロジェクトしか拾わなかった。**親を失ったタスクは一度も描かれず**、
+        //   しかも救済ループが無いことに気づく手段も無かった（2026-08-24 / T-0013）。
+        for (const n of nodes) {
+          if (seen.has(n.meta.id)) continue;
+          if (!showClosed && isClosed(n)) continue;
+          (isProject(n) ? walkP : walkT)(n, 0);
+        }
         el.innerHTML =
           out.join('') ||
           `<div class="text-center text-text-muted text-xs py-10 italic">プロジェクトがありません。「＋ プロジェクト」で始めてください。</div>`;
@@ -1094,9 +1111,181 @@
         }
       }
 
+      /**
+       * 板の全景を数える。
+       * ★ 「1 枚を読む」画面しか無いと、全体の食い違いに気づけない。
+       *   移行のとき「92 枚あるのに画面には 86 行しか無い」に気づけたのは、
+       *   照合する相手（総数）を持っていたからだった（2026-08-23 / T-0006・T-0011）。
+       *   その相手を、使い捨ての道具ではなく板の中に置く。
+       */
+      function censusOf(list) {
+        const ids = new Set(list.map((n) => n.meta.id));
+        const kidsOf = new Map();
+        for (const n of list) {
+          const p = n.meta.parent;
+          if (!p) continue;
+          if (!kidsOf.has(p)) kidsOf.set(p, []);
+          kidsOf.get(p).push(n);
+        }
+        const proj = list.filter(isProject);
+        const task = list.filter((n) => !isProject(n));
+        const count = (arr, key) => {
+          const m = {};
+          for (const n of arr) {
+            const k = n.meta[key] || '(無し)';
+            m[k] = (m[k] || 0) + 1;
+          }
+          return m;
+        };
+        const dup = {};
+        for (const n of list) dup[n.meta.id] = (dup[n.meta.id] || 0) + 1;
+        const descCount = (id, seen = new Set()) => {
+          let c = 0;
+          for (const k of kidsOf.get(id) || []) {
+            if (seen.has(k.meta.id)) continue;
+            seen.add(k.meta.id);
+            c += 1 + descCount(k.meta.id, seen);
+          }
+          return c;
+        };
+        const ball = { ai: 0, user: 0, none: 0 };
+        for (const t of task) {
+          const b = T_STATUS[t.meta.status]?.ball;
+          ball[b === 'ai' ? 'ai' : b === 'user' ? 'user' : 'none']++;
+        }
+        return {
+          total: list.length,
+          projects: proj.length,
+          tasks: task.length,
+          pStatus: count(proj, 'status'),
+          tStatus: count(task, 'status'),
+          ball,
+          // 親を指しているのに、その親が板に無い（系譜から切れている）
+          orphans: list.filter((n) => n.meta.parent && !ids.has(n.meta.parent)),
+          // 記法にない辺（T→P はタスクの下にプロジェクトを吊るすことになる）
+          badEdges: list.filter((n) => {
+            if (!isProject(n) || !n.meta.parent) return false;
+            const p = list.find((x) => x.meta.id === n.meta.parent);
+            return p && !isProject(p);
+          }),
+          dupIds: Object.entries(dup)
+            .filter(([, c]) => c > 1)
+            .map(([id, c]) => ({ id, c })),
+          roots: proj
+            .filter((p) => !p.meta.parent || !ids.has(p.meta.parent))
+            .map((r) => ({ id: r.meta.id, title: r.meta.title, status: r.meta.status, desc: descCount(r.meta.id) })),
+          topParents: Array.from(kidsOf.entries())
+            .filter(([id]) => ids.has(id))
+            .map(([id, ks]) => ({ id, n: ks.length }))
+            .sort((a, b) => b.n - a.n)
+            .slice(0, 6),
+        };
+      }
+
+      /**
+       * 全部開いた状態で描いて、それでも画面に出ない札を拾う。
+       * ★ これが空でないことは、それ自体が警告である（ファイルは在るのに画面に無い）。
+       */
+      function unreachable(list) {
+        const target = list || nodes;
+        const saved = { nodes, showClosed, showTasks, selectedId, col: Array.from(collapsed) };
+        try {
+          nodes = target;
+          showClosed = true;
+          showTasks = true;
+          selectedId = null;
+          collapsed.clear();
+          const el = document.createElement('div');
+          renderTree(el);
+          const drawn = new Set(Array.from(el.querySelectorAll('[id^="row-"]')).map((r) => r.id.slice(4)));
+          return target.filter((n) => !drawn.has(n.meta.id));
+        } finally {
+          nodes = saved.nodes;
+          showClosed = saved.showClosed;
+          showTasks = saved.showTasks;
+          selectedId = saved.selectedId;
+          collapsed.clear();
+          for (const id of saved.col) collapsed.add(id);
+        }
+      }
+
+      function renderCensus(el) {
+        const c = censusOf(nodes);
+        const miss = unreachable();
+        const files = c.total + loadSkips.length;
+        const chip = (label, n, cls = 'border-border-main') =>
+          `<span class="text-[0.625rem] px-1.5 py-0.5 rounded border ${cls}">${esc(label)} <span class="font-mono font-bold">${n}</span></span>`;
+        const block = (label, inner) =>
+          `<div class="mb-4"><div class="text-[0.625rem] font-bold text-text-muted uppercase tracking-wider mb-1.5">${esc(label)}</div><div class="flex flex-wrap gap-1.5">${inner}</div></div>`;
+        const alarm = (title, lines) =>
+          lines.length
+            ? `<div class="mb-3 p-3 rounded-lg border border-error/40 bg-error/10 text-error text-xs leading-relaxed">
+                 <div class="font-bold mb-1">⚠ ${esc(title)}（${lines.length}）</div>${lines.map((s) => esc(s)).join('<br>')}
+               </div>`
+            : '';
+        const statusChips = (m, def) =>
+          Object.entries(m)
+            .map(([k, n]) => chip((def[k] && def[k].label) || k, n))
+            .join('');
+
+        const alarms =
+          alarm(
+            '読めなかったファイル（板から消えている）',
+            loadSkips.map((s) => `${s.path} … ${s.why}`),
+          ) +
+          alarm(
+            'ファイルは在るのに画面に出ない札',
+            miss.map((n) => `${n.meta.id}「${n.meta.title}」（親 ${n.meta.parent || '無し'}）`),
+          ) +
+          alarm(
+            'id が重複している',
+            c.dupIds.map((d) => `${d.id} … ${d.c} 枚`),
+          ) +
+          alarm(
+            '親が板に無い（系譜から切れている）',
+            c.orphans.map((n) => `${n.meta.id}「${n.meta.title}」→ ${n.meta.parent}`),
+          ) +
+          alarm(
+            '記法にない辺（タスクの下のプロジェクト）',
+            c.badEdges.map((n) => `${n.meta.id} → ${n.meta.parent}`),
+          );
+
+        const ok = !alarms
+          ? `<div class="mb-3 p-3 rounded-lg border border-success/40 bg-success/10 text-success text-xs">
+               ✓ ファイル ${files} 枚がすべて読め、すべて画面から辿り着けます。
+             </div>`
+          : '';
+
+        el.innerHTML = `
+          <div class="text-xs">
+            ${ok}${alarms}
+            ${block('照合', chip('ファイル', files) + chip('読めた', c.total) + chip('読めない', loadSkips.length, loadSkips.length ? 'border-error/40 text-error' : 'border-border-main') + chip('画面に出ない', miss.length, miss.length ? 'border-error/40 text-error' : 'border-border-main'))}
+            ${block('枚数', chip('プロジェクト', c.projects) + chip('タスク', c.tasks))}
+            ${block('手番', chip('Itera', c.ball.ai, 'border-primary/40 text-primary') + chip('あなた', c.ball.user, 'border-warning/40 text-warning') + chip('無し', c.ball.none))}
+            ${block('プロジェクトの状態', statusChips(c.pStatus, P_STATUS))}
+            ${block('タスクの状態', statusChips(c.tStatus, T_STATUS))}
+            <div class="mb-4">
+              <div class="text-[0.625rem] font-bold text-text-muted uppercase tracking-wider mb-1.5">根（子孫の数）</div>
+              ${c.roots
+                .map(
+                  (
+                    r,
+                  ) => `<button onclick="select('${esc(r.id)}')" class="w-full text-left p-2 mb-1 rounded-lg border border-border-main bg-panel/50 hover:border-primary/40 transition flex items-center gap-2">
+                <span class="font-mono text-[0.625rem] text-text-muted">${esc(r.id)}</span>
+                <span class="flex-1 truncate">${esc(r.title)}</span>
+                <span class="font-mono text-[0.625rem] text-text-muted">${r.desc}</span>
+              </button>`,
+                )
+                .join('')}
+            </div>
+            ${block('子の多い親', c.topParents.map((p) => chip(p.id, p.n)).join(''))}
+          </div>`;
+      }
+
       function renderList() {
         const el = DOM('list');
         if (view === 'tree') return renderTree(el);
+        if (view === 'census') return renderCensus(el);
         const items = nodes.filter(VIEWS[view].test);
         el.innerHTML = items.length
           ? items.map((n) => nodeCard(n, 0)).join('')
@@ -2614,6 +2803,53 @@
           '親が壊れた枝も捨てずに出す',
           orRows.some((r) => r.id === 'P-9007'),
           orRows,
+        );
+
+        // 親を失ったタスクも描く（救済ループがプロジェクトしか拾っていなかった。T-0013）
+        const lostTask = renderRows([mk('P-9008', 'project', 'live', ''), mk('T-9040', 'task', 'todo', 'P-0000')]);
+        ok(
+          '親を失ったタスクも捨てずに出す',
+          lostTask.some((r) => r.id === 'T-9040'),
+          lostTask,
+        );
+
+        // ---- 全景（censusOf）----
+        const board = [
+          mk('P-9100', 'project', 'live', ''),
+          mk('P-9101', 'project', 'live', 'P-9100'),
+          mk('T-9100', 'task', 'todo', 'P-9101'),
+          mk('T-9101', 'task', 'done', 'T-9100'),
+          mk('T-9102', 'task', 'todo', 'P-0000'), // 親が板に無い
+        ];
+        const cs = censusOf(board);
+        ok('全景: 枚数を数える', cs.total === 5 && cs.projects === 2 && cs.tasks === 3, cs);
+        ok(
+          '全景: 系譜から切れた札を拾う',
+          cs.orphans.length === 1 && cs.orphans[0].meta.id === 'T-9102',
+          cs.orphans.map((n) => n.meta.id),
+        );
+        ok(
+          '全景: 根と子孫の数',
+          cs.roots.length === 1 && cs.roots[0].id === 'P-9100' && cs.roots[0].desc === 3,
+          cs.roots,
+        );
+        ok('全景: 手番を数える', cs.ball.ai === 2 && cs.ball.none === 1, cs.ball);
+        const dupBoard = censusOf(board.concat([mk('T-9100', 'task', 'todo', 'P-9101')]));
+        ok(
+          '全景: id の重複を見つける',
+          dupBoard.dupIds.length === 1 && dupBoard.dupIds[0].id === 'T-9100',
+          dupBoard.dupIds,
+        );
+        const badBoard = censusOf([mk('T-9200', 'task', 'todo', ''), mk('P-9200', 'project', 'live', 'T-9200')]);
+        ok(
+          '全景: 記法にない辺（T→P）を見つける',
+          badBoard.badEdges.length === 1 && badBoard.badEdges[0].meta.id === 'P-9200',
+          badBoard.badEdges,
+        );
+        ok(
+          '全景: 画面に出ない札は無い（この偽の板では）',
+          unreachable(board).length === 0,
+          unreachable(board).map((n) => n.meta.id),
         );
 
         const pass = R.filter((r) => r.pass).length;
