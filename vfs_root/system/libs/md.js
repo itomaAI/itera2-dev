@@ -1,5 +1,5 @@
 /**
- * apps/lib/md.js — ゲスト空間で共有するマークダウン描画。
+ * system/libs/md.js — ゲスト空間で共有するマークダウン描画。
  *
  * 方針:
  *  - **外部に依存しない。** CDN も node_modules も使わない（回線が無い場所でも同じように出る）。
@@ -9,6 +9,9 @@
  *
  * 由来: apps/loom.html の mdRender（2026-08-23）。Loom 固有の出来事・総括の描画は持ち込まず、
  * 一般のマークダウンとして要る部分だけを取り出した（2026-08-24 / T-0191）。
+ *
+ * 置き場: system/libs/ … OS が配る共有ライブラリ（std.js / ui.js / tw.js と同じ層）。
+ * 読み込みは絶対パスで <script src="/system/libs/md.js"></script>。
  */
 (function (global) {
   'use strict';
