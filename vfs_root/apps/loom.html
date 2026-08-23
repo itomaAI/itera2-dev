@@ -2503,6 +2503,119 @@
           nodes = savedNodes;
         }
 
+        // ---- 描画（renderTree）----
+        // ★ Loom で見つかった穴は、これまで**すべて「静かに札が消える」型**だった（T-0003 / T-0011）。
+        //   解析だけを試験しても捕まらない。偽の板を組み立てて renderTree に食わせ、
+        //   **実際に描かれた行を数える**（2026-08-24 / T-0012）。
+        const renderRows = (fake, opts = {}) => {
+          const saved = {
+            nodes,
+            selectedId,
+            showClosed,
+            showTasks,
+            col: Array.from(collapsed),
+          };
+          try {
+            nodes = fake;
+            selectedId = null; // 浮いた要素なのでスクロールさせない
+            showClosed = !!opts.showClosed;
+            showTasks = opts.showTasks !== false;
+            collapsed.clear();
+            for (const id of opts.collapsed || []) collapsed.add(id);
+            const el = document.createElement('div');
+            renderTree(el);
+            return Array.from(el.querySelectorAll('[id^="row-"]')).map((r) => ({
+              id: r.id.slice(4),
+              depth: Math.round((parseInt(r.style.marginLeft, 10) || 0) / 14),
+            }));
+          } finally {
+            nodes = saved.nodes;
+            selectedId = saved.selectedId;
+            showClosed = saved.showClosed;
+            showTasks = saved.showTasks;
+            collapsed.clear();
+            for (const id of saved.col) collapsed.add(id);
+          }
+        };
+        const mk = (id, kind, status, parent, title) => ({
+          meta: { id, kind, title: title || id, status, parent: parent || '' },
+          body: '',
+        });
+
+        // 深い枝（T-0011 ①：4 段目以降が黙って出なかった）
+        const deep = [
+          mk('P-9001', 'project', 'live', ''),
+          mk('T-9001', 'task', 'doing', 'P-9001'),
+          mk('T-9002', 'task', 'doing', 'T-9001'),
+          mk('T-9003', 'task', 'doing', 'T-9002'),
+          mk('T-9004', 'task', 'doing', 'T-9003'),
+        ];
+        const deepRows = renderRows(deep);
+        ok(
+          '深い枝も最後まで描く',
+          deepRows.length === 5 && deepRows[4].id === 'T-9004' && deepRows[4].depth === 4,
+          deepRows,
+        );
+        ok(
+          '同じ札を二度描かない',
+          new Set(deepRows.map((r) => r.id)).size === deepRows.length,
+          deepRows.map((r) => r.id),
+        );
+
+        // 閉じた親の下の開いた子（T-0011 ②：親ごと消えていた）
+        const cpRows = renderRows([
+          mk('P-9002', 'project', 'live', ''),
+          mk('T-9010', 'task', 'done', 'P-9002'),
+          mk('T-9011', 'task', 'todo', 'T-9010'),
+        ]);
+        ok(
+          '閉じた親の下の開いた子は消えない',
+          cpRows.some((r) => r.id === 'T-9011'),
+          cpRows,
+        );
+
+        // ただし開いた子孫が無ければ隠す（上を直しすぎていないか）
+        const acRows = renderRows([
+          mk('P-9002', 'project', 'live', ''),
+          mk('T-9012', 'task', 'done', 'P-9002'),
+          mk('T-9013', 'task', 'done', 'T-9012'),
+        ]);
+        ok('開いた子孫が無い閉じた枝は出さない', acRows.length === 1 && acRows[0].id === 'P-9002', acRows);
+
+        // 畳んだ枝の子孫を根として描き直さない（T-0003：畳むと増えていた）
+        const foldRows = renderRows(
+          [
+            mk('P-9003', 'project', 'live', ''),
+            mk('P-9004', 'project', 'live', 'P-9003'),
+            mk('T-9020', 'task', 'todo', 'P-9004'),
+          ],
+          { collapsed: ['P-9003'] },
+        );
+        ok('畳んだ枝の子孫は根として描き直さない', foldRows.length === 1 && foldRows[0].id === 'P-9003', foldRows);
+
+        // 畳んだタスクも同じ（2026-08-24 に足したつまみ）
+        const ftRows = renderRows(
+          [
+            mk('P-9005', 'project', 'live', ''),
+            mk('T-9030', 'task', 'doing', 'P-9005'),
+            mk('T-9031', 'task', 'todo', 'T-9030'),
+          ],
+          { collapsed: ['T-9030'] },
+        );
+        ok(
+          '畳んだタスクの子は出さない（親は出る）',
+          ftRows.length === 2 && !ftRows.some((r) => r.id === 'T-9031'),
+          ftRows,
+        );
+
+        // 系譜から辿り着けない札を捨てない（救済ループ）
+        const orRows = renderRows([mk('P-9006', 'project', 'live', ''), mk('P-9007', 'project', 'live', 'P-0000')]);
+        ok(
+          '親が壊れた枝も捨てずに出す',
+          orRows.some((r) => r.id === 'P-9007'),
+          orRows,
+        );
+
         const pass = R.filter((r) => r.pass).length;
         return {
           pass,
