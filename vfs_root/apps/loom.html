@@ -11,21 +11,41 @@
   <body class="bg-app text-text-main h-screen flex flex-col overflow-hidden">
     <header class="flex items-center justify-between px-5 py-3 border-b border-border-main shrink-0">
       <div class="flex items-center gap-3">
-        <button onclick="AppUI.home()" class="p-2 -ml-2 rounded-full hover:bg-hover text-text-muted hover:text-text-main transition">
+        <button
+          onclick="AppUI.home()"
+          class="p-2 -ml-2 rounded-full hover:bg-hover text-text-muted hover:text-text-main transition"
+        >
           <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M10 19l-7-7m0 0l7-7m-7 7h18"
+            ></path>
           </svg>
         </button>
         <h1 class="text-xl font-bold tracking-tight">Loom</h1>
         <span class="text-[0.6875rem] text-text-muted hidden sm:inline">プロジェクトの系譜と、その下の仕事</span>
       </div>
       <div class="flex items-center gap-2">
-        <button onclick="refresh()" class="p-2 rounded hover:bg-hover text-text-muted hover:text-primary transition" title="再読込">
+        <button
+          onclick="refresh()"
+          class="p-2 rounded hover:bg-hover text-text-muted hover:text-primary transition"
+          title="再読込"
+        >
           <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+            ></path>
           </svg>
         </button>
-        <button onclick="newProject()" class="px-3 py-2 rounded-lg bg-primary text-text-inverted text-sm font-bold hover:bg-primary/90 shadow transition">
+        <button
+          onclick="newProject()"
+          class="px-3 py-2 rounded-lg bg-primary text-text-inverted text-sm font-bold hover:bg-primary/90 shadow transition"
+        >
           ＋ プロジェクト
         </button>
       </div>
@@ -63,39 +83,58 @@
       // ---------- 器の型 ----------
       // プロジェクトは終わらない（凍結・継承・放棄はある）。手番を持たない。
       const P_STATUS = {
-        live:       { label: '生きている', cls: 'text-primary border-primary/40 bg-primary/10' },
-        frozen:     { label: '凍結',       cls: 'text-text-muted border-border-main' },
-        superseded: { label: '継承済み',   cls: 'text-text-muted border-border-main' },
-        abandoned:  { label: '放棄',       cls: 'text-text-muted border-border-main' },
+        live: { label: '生きている', cls: 'text-primary border-primary/40 bg-primary/10' },
+        frozen: { label: '凍結', cls: 'text-text-muted border-border-main' },
+        superseded: { label: '継承済み', cls: 'text-text-muted border-border-main' },
+        abandoned: { label: '放棄', cls: 'text-text-muted border-border-main' },
       };
       // タスクは終わる。手番（ball）は status から導く派生値で、保存しない。
       const T_STATUS = {
-        inbox:   { label: '下書き',   ball: 'user', cls: 'text-text-muted border-border-main' },
-        todo:    { label: '依頼済み', ball: 'ai',   cls: 'text-primary border-primary/40 bg-primary/10' },
-        doing:   { label: '作業中',   ball: 'ai',   cls: 'text-primary border-primary/40 bg-primary/10' },
-        paused:  { label: '中断中',   ball: 'user', cls: 'text-warning border-warning/40 bg-warning/10' },
+        inbox: { label: '下書き', ball: 'user', cls: 'text-text-muted border-border-main' },
+        todo: { label: '依頼済み', ball: 'ai', cls: 'text-primary border-primary/40 bg-primary/10' },
+        doing: { label: '作業中', ball: 'ai', cls: 'text-primary border-primary/40 bg-primary/10' },
+        paused: { label: '中断中', ball: 'user', cls: 'text-warning border-warning/40 bg-warning/10' },
         blocked: { label: '質問待ち', ball: 'user', cls: 'text-error border-error/40 bg-error/10' },
-        review:  { label: '確認待ち', ball: 'user', cls: 'text-warning border-warning/40 bg-warning/10' },
-        done:    { label: '完了',     ball: null,   cls: 'text-success border-success/40 bg-success/10' },
-        dropped: { label: '中止',     ball: null,   cls: 'text-text-muted border-border-main' },
+        review: { label: '確認待ち', ball: 'user', cls: 'text-warning border-warning/40 bg-warning/10' },
+        done: { label: '完了', ball: null, cls: 'text-success border-success/40 bg-success/10' },
+        dropped: { label: '中止', ball: null, cls: 'text-text-muted border-border-main' },
       };
 
       const SECTIONS_P = ['意図', '文脈', '履歴', '成果物'];
       const SECTIONS_T = ['依頼', '計画', '追加要望', '進捗', '確認事項', '成果物'];
 
       const isProject = (n) => n && n.meta.kind === 'project';
-      const statusDef = (n) => (isProject(n) ? P_STATUS[n.meta.status] || P_STATUS.live : T_STATUS[n.meta.status] || T_STATUS.inbox);
+      const statusDef = (n) =>
+        isProject(n) ? P_STATUS[n.meta.status] || P_STATUS.live : T_STATUS[n.meta.status] || T_STATUS.inbox;
       // 「閉じた」= もう手番が無い。プロジェクトは live 以外、タスクは done/dropped。
-      const isClosed = (n) => (isProject(n) ? n.meta.status !== 'live' : n.meta.status === 'done' || n.meta.status === 'dropped');
+      const isClosed = (n) =>
+        isProject(n) ? n.meta.status !== 'live' : n.meta.status === 'done' || n.meta.status === 'dropped';
       const logSection = (n) => (isProject(n) ? '履歴' : '進捗');
       const recapName = (n) => (isProject(n) ? '総括' : 'レポート');
 
       // 出来事の動詞。行頭が「- 日時 動詞:」なら出来事として描く。
       const EVENTS = ['分岐', '継承', '起票', '分解', '完了', '転記', '中止', '再生成', '追随'];
-      const EVENT_ICON = { 分岐: '⑂', 継承: '⇥', 起票: '＋', 分解: '⋔', 完了: '✓', 転記: '↑', 中止: '✕', 再生成: '↻', 追随: '→' };
+      const EVENT_ICON = {
+        分岐: '⑂',
+        継承: '⇥',
+        起票: '＋',
+        分解: '⋔',
+        完了: '✓',
+        転記: '↑',
+        中止: '✕',
+        再生成: '↻',
+        追随: '→',
+      };
       const EVENT_CLS = {
-        分岐: 'text-primary', 継承: 'text-warning', 起票: 'text-primary', 分解: 'text-primary',
-        完了: 'text-success', 転記: 'text-success', 中止: 'text-text-muted', 再生成: 'text-warning', 追随: 'text-warning',
+        分岐: 'text-primary',
+        継承: 'text-warning',
+        起票: 'text-primary',
+        分解: 'text-primary',
+        完了: 'text-success',
+        転記: 'text-success',
+        中止: 'text-text-muted',
+        再生成: 'text-warning',
+        追随: 'text-warning',
       };
 
       let nodes = [];
@@ -119,7 +158,11 @@
       let lastTreeScrollId = null;
 
       const DOM = (id) => document.getElementById(id);
-      const esc = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      const esc = (s) =>
+        String(s == null ? '' : s)
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;');
 
       // ============================================================
       // 解析 — ここは純粋関数だけにする（selfTest() で試験する）
@@ -135,14 +178,32 @@
           let v = line.slice(i + 1).trim();
           if (v === 'true') v = true;
           else if (v === 'false') v = false;
-          else if (v.startsWith('[')) { try { v = JSON.parse(v); } catch (e) { v = []; } }
+          else if (v.startsWith('[')) {
+            try {
+              v = JSON.parse(v);
+            } catch (e) {
+              v = [];
+            }
+          }
           meta[k] = v;
         });
         return { meta, body: m[2] };
       }
 
       function serializeNode(meta, body) {
-        const order = ['id', 'kind', 'title', 'status', 'priority', 'scheduled', 'created', 'updated', 'parent', 'supersedes', 'refs'];
+        const order = [
+          'id',
+          'kind',
+          'title',
+          'status',
+          'priority',
+          'scheduled',
+          'created',
+          'updated',
+          'parent',
+          'supersedes',
+          'refs',
+        ];
         const keys = order.filter((k) => meta[k] !== undefined && meta[k] !== '');
         const fm = keys.map((k) => `${k}: ${Array.isArray(meta[k]) ? JSON.stringify(meta[k]) : meta[k]}`);
         return `---\n${fm.join('\n')}\n---\n\n${String(body).trim()}\n`;
@@ -184,7 +245,11 @@
         let end = head + 1;
         while (end < lines.length && !/^## /.test(lines[end])) end++;
         const tail = lines.slice(end);
-        return lines.slice(0, head + 1).concat('', String(text).trim(), '').concat(tail).join('\n');
+        return lines
+          .slice(0, head + 1)
+          .concat('', String(text).trim(), '')
+          .concat(tail)
+          .join('\n');
       }
 
       // 計画のチェックボックス。[ ]=未着手 [~]=作業中 [x]=完了
@@ -192,7 +257,9 @@
         const r = sectionRange(body, '計画');
         if (!r) return null;
         const lines = String(body).split('\n').slice(r[0], r[1]);
-        let done = 0, doing = 0, total = 0;
+        let done = 0,
+          doing = 0,
+          total = 0;
         for (const l of lines) {
           const m = l.match(/^\s*- \[( |x|X|~)\]/);
           if (!m) continue;
@@ -227,7 +294,9 @@
             out.push(cur);
             continue;
           }
-          const mk = l.match(/^####\s+(生成|追随|再生成)\s+(\d{4}-\d{2}-\d{2} \d{2}:\d{2})\s*(?:[（(]([^）)]*)[）)])?\s*$/);
+          const mk = l.match(
+            /^####\s+(生成|追随|再生成)\s+(\d{4}-\d{2}-\d{2} \d{2}:\d{2})\s*(?:[（(]([^）)]*)[）)])?\s*$/,
+          );
           if (mk && cur) {
             const note = mk[3] || '';
             const upto = (note.match(/(\d{4}-\d{2}-\d{2} \d{2}:\d{2})\s*まで/) || [])[1] || '';
@@ -258,9 +327,20 @@
         const out = [];
         let cur = null;
         for (const l of lines) {
-          const h = l.match(new RegExp('^###\\s+' + name + '\\s+(\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2})\\s*(?:[（(]\\s*((?:P|T)-\\d{4})\\s*[）)])?'));
-          if (h) { cur = { at: h[1], from: h[2] || '', lines: [] }; out.push(cur); continue; }
-          if (/^###\s/.test(l)) { cur = null; continue; }
+          const h = l.match(
+            new RegExp(
+              '^###\\s+' + name + '\\s+(\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2})\\s*(?:[（(]\\s*((?:P|T)-\\d{4})\\s*[）)])?',
+            ),
+          );
+          if (h) {
+            cur = { at: h[1], from: h[2] || '', lines: [] };
+            out.push(cur);
+            continue;
+          }
+          if (/^###\s/.test(l)) {
+            cur = null;
+            continue;
+          }
           if (cur) cur.lines.push(l);
         }
         for (const c of out) c.text = c.lines.join('\n').trim();
@@ -339,7 +419,12 @@
         const ids = [id].concat(isProject(n) ? predecessors(id).map((p) => p.meta.id) : []);
         const seen = new Set();
         const out = [];
-        for (const i of ids) for (const c of directChildren(i)) if (!seen.has(c.meta.id)) { seen.add(c.meta.id); out.push(c); }
+        for (const i of ids)
+          for (const c of directChildren(i))
+            if (!seen.has(c.meta.id)) {
+              seen.add(c.meta.id);
+              out.push(c);
+            }
         return out.sort(byIdAsc);
       }
 
@@ -365,7 +450,12 @@
       function owningProject(n) {
         if (!n) return null;
         let p = isProject(n) ? n : null;
-        if (!p) for (const a of ancestorsOf(n.meta.id).slice().reverse()) if (isProject(a)) { p = a; break; }
+        if (!p)
+          for (const a of ancestorsOf(n.meta.id).slice().reverse())
+            if (isProject(a)) {
+              p = a;
+              break;
+            }
         if (!p) return null;
         const seen = new Set();
         let cur = p;
@@ -391,13 +481,14 @@
       function resolveTitles(s) {
         return String(s).replace(/((?:P|T)-\d{4})(\s*「[^」]*」)?/g, (m, id, written) => {
           const t = byId(id);
-          return t ? `${id}「${t.meta.title}」` : (written ? `${id}${written}` : id);
+          return t ? `${id}「${t.meta.title}」` : written ? `${id}${written}` : id;
         });
       }
 
       const tasksOf = (id) => childrenOf(id).filter((c) => !isProject(c));
       const subProjectsOf = (id) => childrenOf(id).filter(isProject);
-      const projectRoots = () => nodes.filter((n) => isProject(n) && (!n.meta.parent || !byId(n.meta.parent))).sort(byIdAsc);
+      const projectRoots = () =>
+        nodes.filter((n) => isProject(n) && (!n.meta.parent || !byId(n.meta.parent))).sort(byIdAsc);
 
       /** 源が伸びているか（追随が要るか）。畳んだ辺だけが古びる。 */
       function staleSources(n) {
@@ -406,7 +497,10 @@
         for (const c of parseContext(n.body)) {
           if (c.external) continue; // 外の文書は Loom の履歴を持たないので、伸びたかを機械では言えない
           const src = byId(c.source);
-          if (!src) { out.push({ ...c, missing: true }); continue; }
+          if (!src) {
+            out.push({ ...c, missing: true });
+            continue;
+          }
           const head = lastLogAt(src);
           if (head && (!c.watermark || c.watermark < head)) out.push({ ...c, head });
         }
@@ -428,11 +522,20 @@
             .replace(/(^|[^*\w])\*([^*\n]+)\*(?![*\w])/g, '$1<em>$2</em>')
             .replace(/~~([^~]+)~~/g, '<del class="text-text-muted">$1</del>');
           // リンクは http/https だけ。他のスキームを <a> にすると javascript: を踏める。
-          h = h.replace(/\[([^\]]*)\]\((https?:\/\/[^\s)]+)\)/g,
-            (m, t, u) => `<a href="${attrq(u)}" target="_blank" rel="noopener" class="text-primary hover:underline">${t || u}</a>`);
-          h = h.replace(/(^|[\s(])(https?:\/\/[^\s<)]+)/g,
-            (m, pre, u) => `${pre}<a href="${attrq(u)}" target="_blank" rel="noopener" class="text-primary hover:underline">${u}</a>`);
-          return h.replace(/\u0000(\d+)\u0000/g, (m, k) => `<code class="px-1 rounded bg-hover font-mono text-[0.8em]">${codes[k]}</code>`);
+          h = h.replace(
+            /\[([^\]]*)\]\((https?:\/\/[^\s)]+)\)/g,
+            (m, t, u) =>
+              `<a href="${attrq(u)}" target="_blank" rel="noopener" class="text-primary hover:underline">${t || u}</a>`,
+          );
+          h = h.replace(
+            /(^|[\s(])(https?:\/\/[^\s<)]+)/g,
+            (m, pre, u) =>
+              `${pre}<a href="${attrq(u)}" target="_blank" rel="noopener" class="text-primary hover:underline">${u}</a>`,
+          );
+          return h.replace(
+            /\u0000(\d+)\u0000/g,
+            (m, k) => `<code class="px-1 rounded bg-hover font-mono text-[0.8em]">${codes[k]}</code>`,
+          );
         };
 
         const SLOT_CLS = {
@@ -446,20 +549,24 @@
           let cur = { head: null, lines: [] };
           ls.forEach((l) => {
             const m = l.match(/^\*\*(.+?)\*\*\s*$/);
-            if (m) { segs.push(cur); cur = { head: m[1].trim(), lines: [] }; }
-            else cur.lines.push(l);
+            if (m) {
+              segs.push(cur);
+              cur = { head: m[1].trim(), lines: [] };
+            } else cur.lines.push(l);
           });
           segs.push(cur);
-          return segs.map((s) => {
-            const raw = s.lines.join('\n');
-            const inner = raw.trim() ? mdRender(raw, null) : '';
-            if (!s.head && !inner) return '';
-            const cls = SLOT_CLS[s.head] || 'text-text-muted border-border-main';
-            const head = s.head
-              ? `<div class="mt-2 mb-1 first:mt-0"><span class="px-1.5 py-0.5 rounded border text-[0.6875rem] font-bold ${cls}">${inline(s.head)}</span></div>`
-              : '';
-            return `${head}${inner ? `<div class="pl-2">${inner}</div>` : ''}`;
-          }).join('');
+          return segs
+            .map((s) => {
+              const raw = s.lines.join('\n');
+              const inner = raw.trim() ? mdRender(raw, null) : '';
+              if (!s.head && !inner) return '';
+              const cls = SLOT_CLS[s.head] || 'text-text-muted border-border-main';
+              const head = s.head
+                ? `<div class="mt-2 mb-1 first:mt-0"><span class="px-1.5 py-0.5 rounded border text-[0.6875rem] font-bold ${cls}">${inline(s.head)}</span></div>`
+                : '';
+              return `${head}${inner ? `<div class="pl-2">${inner}</div>` : ''}`;
+            })
+            .join('');
         };
 
         const withTitles = resolveTitles;
@@ -476,36 +583,63 @@
           if (/^\s*```/.test(line)) {
             const buf = [];
             let j = i + 1;
-            while (j < lines.length && !/^\s*```\s*$/.test(lines[j])) buf.push(lines[j]), j++;
-            out.push(`<pre class="my-2 p-3 rounded-lg bg-panel border border-border-main overflow-x-auto"><code class="font-mono text-[0.75rem] leading-relaxed whitespace-pre">${esc(buf.join('\n'))}</code></pre>`);
+            while (j < lines.length && !/^\s*```\s*$/.test(lines[j])) (buf.push(lines[j]), j++);
+            out.push(
+              `<pre class="my-2 p-3 rounded-lg bg-panel border border-border-main overflow-x-auto"><code class="font-mono text-[0.75rem] leading-relaxed whitespace-pre">${esc(buf.join('\n'))}</code></pre>`,
+            );
             i = j + 1;
             continue;
           }
 
           if (/^\s*\|.*\|\s*$/.test(line) && i + 1 < lines.length && /^\s*\|[\s:|-]+\|\s*$/.test(lines[i + 1])) {
-            const cells = (l) => l.trim().replace(/^\|/, '').replace(/\|$/, '').split('|').map((c) => c.trim());
-            const align = cells(lines[i + 1]).map((c) => (/^:.*:$/.test(c) ? 'center' : /:$/.test(c) ? 'right' : 'left'));
+            const cells = (l) =>
+              l
+                .trim()
+                .replace(/^\|/, '')
+                .replace(/\|$/, '')
+                .split('|')
+                .map((c) => c.trim());
+            const align = cells(lines[i + 1]).map((c) =>
+              /^:.*:$/.test(c) ? 'center' : /:$/.test(c) ? 'right' : 'left',
+            );
             const head = cells(line);
             let j = i + 2;
             const rows = [];
-            while (j < lines.length && /^\s*\|.*\|\s*$/.test(lines[j])) rows.push(cells(lines[j])), j++;
-            const th = head.map((c, k) => `<th class="px-2 py-1 border border-border-main bg-hover font-bold" style="text-align:${align[k] || 'left'}">${inline(c)}</th>`).join('');
-            const tb = rows.map((r) => `<tr>${r.map((c, k) => `<td class="px-2 py-1 border border-border-main align-top" style="text-align:${align[k] || 'left'}">${inline(c)}</td>`).join('')}</tr>`).join('');
-            out.push(`<div class="my-2 overflow-x-auto"><table class="text-xs border-collapse"><thead><tr>${th}</tr></thead><tbody>${tb}</tbody></table></div>`);
+            while (j < lines.length && /^\s*\|.*\|\s*$/.test(lines[j])) (rows.push(cells(lines[j])), j++);
+            const th = head
+              .map(
+                (c, k) =>
+                  `<th class="px-2 py-1 border border-border-main bg-hover font-bold" style="text-align:${align[k] || 'left'}">${inline(c)}</th>`,
+              )
+              .join('');
+            const tb = rows
+              .map(
+                (r) =>
+                  `<tr>${r.map((c, k) => `<td class="px-2 py-1 border border-border-main align-top" style="text-align:${align[k] || 'left'}">${inline(c)}</td>`).join('')}</tr>`,
+              )
+              .join('');
+            out.push(
+              `<div class="my-2 overflow-x-auto"><table class="text-xs border-collapse"><thead><tr>${th}</tr></thead><tbody>${tb}</tbody></table></div>`,
+            );
             i = j;
             continue;
           }
 
           // 出来事。枠の終端は「次の日時つきの行、または次の見出し」。
           // 字下げに頼らない ── 手で書くと全行の字下げが最も落ちやすい。
-          const ev = line.match(new RegExp('^\\s*- (\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}) (' + EVENTS.join('|') + ')[:：]?\\s*(.*)$'));
+          const ev = line.match(
+            new RegExp('^\\s*- (\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}) (' + EVENTS.join('|') + ')[:：]?\\s*(.*)$'),
+          );
           if (ev) {
             const kind = ev[2];
             const cls = EVENT_CLS[kind] || 'text-text-muted';
             const bd = cls.replace('text-', 'border-') + '/50';
             const buf = [];
             let j = i + 1;
-            while (j < lines.length && !isEntry(lines[j]) && !isHead(lines[j])) { buf.push(lines[j]); j++; }
+            while (j < lines.length && !isEntry(lines[j]) && !isHead(lines[j])) {
+              buf.push(lines[j]);
+              j++;
+            }
             while (buf.length && !buf[buf.length - 1].trim()) buf.pop();
             const widths = buf.filter((l) => l.trim()).map((l) => (l.match(/^\s*/) || [''])[0].length);
             const pad = widths.length ? Math.min.apply(null, widths) : 0;
@@ -519,7 +653,8 @@
                    <span>${inline(withTitles(ev[3]))}</span>
                  </div>
                  ${evBody ? `<div class="mt-1 ml-1 pl-3 border-l border-border-main">${evBody}</div>` : ''}
-               </div>`);
+               </div>`,
+            );
             i = j;
             continue;
           }
@@ -562,32 +697,49 @@
             const mark = inRange
               ? `<button onclick="cyclePlan(${i})" class="${iconCls} hover:scale-125 transition" title="クリックで 未着手→作業中→完了">${icon}</button>`
               : `<span class="${iconCls}">${icon}</span>`;
-            out.push(`<div class="flex gap-2 py-0.5" style="padding-left:${cb[1].length * 8}px">${mark}<span class="${textCls}">${inline(cb[3])}</span></div>`);
+            out.push(
+              `<div class="flex gap-2 py-0.5" style="padding-left:${cb[1].length * 8}px">${mark}<span class="${textCls}">${inline(cb[3])}</span></div>`,
+            );
             i++;
             continue;
           }
 
-          if (/^\s*(---+|\*\*\*+)\s*$/.test(line)) { out.push('<hr class="my-3 border-border-main">'); i++; continue; }
+          if (/^\s*(---+|\*\*\*+)\s*$/.test(line)) {
+            out.push('<hr class="my-3 border-border-main">');
+            i++;
+            continue;
+          }
 
           if (/^\s*>/.test(line)) {
-            out.push(`<div class="my-0.5 pl-3 border-l-2 border-primary/40 text-text-muted">${inline(line.replace(/^\s*> ?/, ''))}</div>`);
+            out.push(
+              `<div class="my-0.5 pl-3 border-l-2 border-primary/40 text-text-muted">${inline(line.replace(/^\s*> ?/, ''))}</div>`,
+            );
             i++;
             continue;
           }
 
           const ol = line.match(/^(\s*)(\d+)\. (.*)$/);
           if (ol) {
-            out.push(`<div class="flex gap-2 py-0.5" style="padding-left:${ol[1].length * 8}px"><span class="text-text-muted font-mono shrink-0">${ol[2]}.</span><span>${inline(ol[3])}</span></div>`);
+            out.push(
+              `<div class="flex gap-2 py-0.5" style="padding-left:${ol[1].length * 8}px"><span class="text-text-muted font-mono shrink-0">${ol[2]}.</span><span>${inline(ol[3])}</span></div>`,
+            );
             i++;
             continue;
           }
 
-          if (/^## /.test(line)) out.push(`<h3 class="text-sm font-bold text-primary mt-5 mb-2 pb-1 border-b border-border-main">${inline(line.slice(3))}</h3>`);
-          else if (/^#### /.test(line)) out.push(`<h5 class="text-xs font-bold text-text-muted mt-2 mb-1">${inline(line.slice(5))}</h5>`);
-          else if (/^### /.test(line)) out.push(`<h4 class="text-sm font-bold mt-3 mb-1">${inline(line.slice(4))}</h4>`);
+          if (/^## /.test(line))
+            out.push(
+              `<h3 class="text-sm font-bold text-primary mt-5 mb-2 pb-1 border-b border-border-main">${inline(line.slice(3))}</h3>`,
+            );
+          else if (/^#### /.test(line))
+            out.push(`<h5 class="text-xs font-bold text-text-muted mt-2 mb-1">${inline(line.slice(5))}</h5>`);
+          else if (/^### /.test(line))
+            out.push(`<h4 class="text-sm font-bold mt-3 mb-1">${inline(line.slice(4))}</h4>`);
           else if (/^\s*- /.test(line)) {
             const indent = (line.match(/^\s*/) || [''])[0].length;
-            out.push(`<div class="flex gap-2 py-0.5" style="padding-left:${indent * 8}px"><span class="text-text-muted shrink-0">・</span><span>${inline(withTitles(line.replace(/^\s*- /, '')))}</span></div>`);
+            out.push(
+              `<div class="flex gap-2 py-0.5" style="padding-left:${indent * 8}px"><span class="text-text-muted shrink-0">・</span><span>${inline(withTitles(line.replace(/^\s*- /, '')))}</span></div>`,
+            );
           } else if (line.trim() === '') out.push('<div class="h-2"></div>');
           else out.push(`<div class="py-0.5 leading-relaxed">${inline(line)}</div>`);
           i++;
@@ -607,15 +759,23 @@
       async function mutate(id, fn) {
         const path = fileOf(id);
         let raw;
-        try { raw = await MetaOS.fs.read(path); }
-        catch (e) { AppUI.notify('ファイルを読めませんでした: ' + errMsg(e), 'error'); return null; }
+        try {
+          raw = await MetaOS.fs.read(path);
+        } catch (e) {
+          AppUI.notify('ファイルを読めませんでした: ' + errMsg(e), 'error');
+          return null;
+        }
         const fresh = parseNode(raw);
         fresh.path = path;
         if (fn(fresh) === false) return null;
         fresh.meta.updated = nowIso();
         const text = serializeNode(fresh.meta, fresh.body);
-        try { await MetaOS.fs.write(path, text, { overwrite: true, silent: true }); }
-        catch (e) { AppUI.notify('保存に失敗しました: ' + errMsg(e), 'error'); return null; }
+        try {
+          await MetaOS.fs.write(path, text, { overwrite: true, silent: true });
+        } catch (e) {
+          AppUI.notify('保存に失敗しました: ' + errMsg(e), 'error');
+          return null;
+        }
         fresh.text = text;
         return fresh;
       }
@@ -632,7 +792,11 @@
       const Store = {
         async list() {
           let files = [];
-          try { files = await MetaOS.fs.list(DIR); } catch (e) { return []; }
+          try {
+            files = await MetaOS.fs.list(DIR);
+          } catch (e) {
+            return [];
+          }
           const out = [];
           for (const f of files.filter((x) => x.endsWith('.md'))) {
             try {
@@ -648,7 +812,10 @@
         },
         async saveMetaOnly(t) {
           if (!t) return null;
-          return await mutate(t.meta.id, (fresh) => { applyMetaDiff(t, fresh); return true; });
+          return await mutate(t.meta.id, (fresh) => {
+            applyMetaDiff(t, fresh);
+            return true;
+          });
         },
         async saveBodyChecked(t) {
           if (!t) return null;
@@ -657,7 +824,10 @@
           // baseBody は refresh() のたびに最新へ張り替わるので、編集中の競合判定には使えない。
           const base = editBase && editBase.id === t.meta.id ? editBase.body : t.baseBody;
           const r = await mutate(t.meta.id, (fresh) => {
-            if (norm(fresh.body) !== norm(base)) { stale = true; return false; }
+            if (norm(fresh.body) !== norm(base)) {
+              stale = true;
+              return false;
+            }
             fresh.body = t.body;
             applyMetaDiff(t, fresh);
             return true;
@@ -673,11 +843,18 @@
           });
         },
         async create(meta, body) {
-          await MetaOS.fs.write(fileOf(meta.id), serializeNode({ ...meta, updated: nowIso() }, body), { overwrite: true, silent: true });
+          await MetaOS.fs.write(fileOf(meta.id), serializeNode({ ...meta, updated: nowIso() }, body), {
+            overwrite: true,
+            silent: true,
+          });
         },
         async remove(id) {
-          try { await MetaOS.fs.delete(fileOf(id)); }
-          catch (e) { AppUI.notify('削除に失敗しました: ' + errMsg(e), 'error'); throw e; }
+          try {
+            await MetaOS.fs.delete(fileOf(id));
+          } catch (e) {
+            AppUI.notify('削除に失敗しました: ' + errMsg(e), 'error');
+            throw e;
+          }
         },
         // id はプロジェクトとタスクで別の番号帯にする。本文中の参照だけで型が読めるようにするため。
         nextId(kind) {
@@ -730,7 +907,9 @@
         try {
           if (MetaOS.ai && MetaOS.ai.task) await MetaOS.ai.task(body, null, { silent: false });
           else await App.AI.logEvent(body, 'loom', true);
-        } catch (e) { await App.AI.logEvent(body, 'loom', true); }
+        } catch (e) {
+          await App.AI.logEvent(body, 'loom', true);
+        }
       }
 
       // ============================================================
@@ -738,22 +917,28 @@
       // ============================================================
       const VIEWS = {
         tree: { label: '系譜' },
-        ai:   { label: 'Iteraの番', test: (n) => !isProject(n) && T_STATUS[n.meta.status]?.ball === 'ai' },
+        ai: { label: 'Iteraの番', test: (n) => !isProject(n) && T_STATUS[n.meta.status]?.ball === 'ai' },
         user: { label: 'あなたの番', test: (n) => !isProject(n) && T_STATUS[n.meta.status]?.ball === 'user' },
-        today:{ label: '今日', test: (n) => !isProject(n) && !!n.meta.scheduled && n.meta.scheduled <= todayStr() && !isClosed(n) },
-        closed:{ label: '閉じた', test: (n) => isClosed(n) },
+        today: {
+          label: '今日',
+          test: (n) => !isProject(n) && !!n.meta.scheduled && n.meta.scheduled <= todayStr() && !isClosed(n),
+        },
+        closed: { label: '閉じた', test: (n) => isClosed(n) },
       };
 
       function renderViews() {
-        const btns = Object.entries(VIEWS).map(([k, v]) => {
-          const n = v.test ? nodes.filter(v.test).length : nodes.filter(isProject).filter((p) => !isClosed(p)).length;
-          const on = k === view;
-          return `<button onclick="setView('${k}')" class="px-2.5 py-1 rounded-full text-xs font-medium transition ${on ? 'bg-primary text-text-inverted' : 'text-text-muted hover:bg-hover'}">${v.label}<span class="ml-1 opacity-70">${n}</span></button>`;
-        }).join('');
-        const extra = view === 'tree'
-          ? `<button onclick="toggleTasks()" class="px-2.5 py-1 rounded-full text-xs transition ${showTasks ? 'bg-hover' : 'text-text-muted hover:bg-hover'}" title="プロジェクトの下にタスクを出す">タスク</button>
+        const btns = Object.entries(VIEWS)
+          .map(([k, v]) => {
+            const n = v.test ? nodes.filter(v.test).length : nodes.filter(isProject).filter((p) => !isClosed(p)).length;
+            const on = k === view;
+            return `<button onclick="setView('${k}')" class="px-2.5 py-1 rounded-full text-xs font-medium transition ${on ? 'bg-primary text-text-inverted' : 'text-text-muted hover:bg-hover'}">${v.label}<span class="ml-1 opacity-70">${n}</span></button>`;
+          })
+          .join('');
+        const extra =
+          view === 'tree'
+            ? `<button onclick="toggleTasks()" class="px-2.5 py-1 rounded-full text-xs transition ${showTasks ? 'bg-hover' : 'text-text-muted hover:bg-hover'}" title="プロジェクトの下にタスクを出す">タスク</button>
              <button onclick="toggleClosed()" class="px-2.5 py-1 rounded-full text-xs transition ${showClosed ? 'bg-hover' : 'text-text-muted hover:bg-hover'}" title="凍結・継承済み・完了も出す">閉じたもの</button>`
-          : '';
+            : '';
         DOM('views').innerHTML = btns + extra;
       }
 
@@ -765,7 +950,13 @@
         const kids = proj ? childrenOf(n.meta.id).length : 0;
         const stale = proj ? staleSources(n).length : 0;
         const pend = pendingRecaps(n).length;
-        const pri = proj ? '' : n.meta.priority === 'high' ? '<span class="text-error font-bold">●</span> ' : n.meta.priority === 'low' ? '<span class="text-text-muted">○</span> ' : '<span class="text-warning">●</span> ';
+        const pri = proj
+          ? ''
+          : n.meta.priority === 'high'
+            ? '<span class="text-error font-bold">●</span> '
+            : n.meta.priority === 'low'
+              ? '<span class="text-text-muted">○</span> '
+              : '<span class="text-warning">●</span> ';
         const plan = proj ? null : planStats(n.body);
         return `<button onclick="select('${n.meta.id}')" style="margin-left:${indent}px;width:calc(100% - ${indent}px)"
           class="text-left p-2.5 mb-1.5 rounded-lg border transition ${on ? 'bg-panel border-primary' : 'bg-panel/50 border-border-main hover:border-primary/40'} ${isClosed(n) ? 'opacity-60' : ''} ${proj ? 'border-l-4 border-l-primary/60' : ''}">
@@ -778,9 +969,13 @@
             <span class="text-[0.625rem] text-text-muted font-mono ml-auto">${esc(n.meta.id)}</span>
           </div>
           <div class="text-xs ${proj ? 'font-bold' : 'font-medium'} leading-snug ${isClosed(n) ? 'line-through text-text-muted' : ''}">${pri}${esc(n.meta.title)}</div>
-          ${plan ? `<div class="flex items-center gap-1.5 mt-1.5">
+          ${
+            plan
+              ? `<div class="flex items-center gap-1.5 mt-1.5">
             <div class="flex-1 h-1 rounded-full bg-hover overflow-hidden"><div class="h-full bg-success transition-all" style="width:${Math.round((plan.done / plan.total) * 100)}%"></div></div>
-            <span class="text-[0.625rem] font-mono text-text-muted">${plan.done}/${plan.total}</span></div>` : ''}
+            <span class="text-[0.625rem] font-mono text-text-muted">${plan.done}/${plan.total}</span></div>`
+              : ''
+          }
         </button>`;
       }
 
@@ -817,7 +1012,10 @@
         const walkT = (t, depth) => {
           if (seen.has(t.meta.id)) return;
           seen.add(t.meta.id);
-          if (!showClosed && isClosed(t) && !hasOpenDesc(t)) { coverAll(t); return; }
+          if (!showClosed && isClosed(t) && !hasOpenDesc(t)) {
+            coverAll(t);
+            return;
+          }
           // 分解されたタスクも畳めるようにする（プロジェクトと同じつまみ。2026-08-24 / T-0011）。
           // ★ 畳んだら coverAll で子孫を「辿り着いた」ことにする —— T-0003 と同じ穴を空けないため。
           const kidCount = childrenOf(t.meta.id).length;
@@ -825,28 +1023,43 @@
           const knob = kidCount
             ? `<button onclick="toggleNode('${t.meta.id}')" class="shrink-0 w-4 pt-3 text-text-muted hover:text-primary transition">${isCol ? '▸' : '▾'}</button>`
             : '<span class="shrink-0 w-4"></span>';
-          out.push(`<div id="row-${esc(t.meta.id)}" class="flex items-start gap-1" style="margin-left:${depth * 14}px">${knob}<div class="flex-1 min-w-0">${nodeCard(t, 0)}</div></div>`);
-          if (isCol) { coverAll(t); return; }
+          out.push(
+            `<div id="row-${esc(t.meta.id)}" class="flex items-start gap-1" style="margin-left:${depth * 14}px">${knob}<div class="flex-1 min-w-0">${nodeCard(t, 0)}</div></div>`,
+          );
+          if (isCol) {
+            coverAll(t);
+            return;
+          }
           for (const sub of childrenOf(t.meta.id)) walkT(sub, depth + 1);
         };
         const walkP = (p, depth) => {
           if (seen.has(p.meta.id)) return;
           seen.add(p.meta.id);
-          if (!showClosed && isClosed(p) && !hasOpenDesc(p)) { coverAll(p); return; }
+          if (!showClosed && isClosed(p) && !hasOpenDesc(p)) {
+            coverAll(p);
+            return;
+          }
           const kidCount = childrenOf(p.meta.id).length;
           const isCol = collapsed.has(p.meta.id);
           const knob = kidCount
             ? `<button onclick="toggleNode('${p.meta.id}')" class="shrink-0 w-4 pt-3 text-text-muted hover:text-primary transition">${isCol ? '▸' : '▾'}</button>`
             : '<span class="shrink-0 w-4"></span>';
-          out.push(`<div id="row-${esc(p.meta.id)}" class="flex items-start gap-1" style="margin-left:${depth * 14}px">${knob}<div class="flex-1 min-w-0">${nodeCard(p, 0)}</div></div>`);
-          if (isCol) { coverAll(p); return; }
+          out.push(
+            `<div id="row-${esc(p.meta.id)}" class="flex items-start gap-1" style="margin-left:${depth * 14}px">${knob}<div class="flex-1 min-w-0">${nodeCard(p, 0)}</div></div>`,
+          );
+          if (isCol) {
+            coverAll(p);
+            return;
+          }
           for (const sp of subProjectsOf(p.meta.id)) walkP(sp, depth + 1);
           if (showTasks) for (const t of tasksOf(p.meta.id)) walkT(t, depth + 1);
         };
         for (const r of projectRoots()) walkP(r, 0);
         // 系譜から辿り着けないもの（親が壊れている等）は捨てずに出す。
         for (const n of nodes) if (!seen.has(n.meta.id) && isProject(n) && (showClosed || !isClosed(n))) walkP(n, 0);
-        el.innerHTML = out.join('') || `<div class="text-center text-text-muted text-xs py-10 italic">プロジェクトがありません。「＋ プロジェクト」で始めてください。</div>`;
+        el.innerHTML =
+          out.join('') ||
+          `<div class="text-center text-text-muted text-xs py-10 italic">プロジェクトがありません。「＋ プロジェクト」で始めてください。</div>`;
         if (selectedId && selectedId !== lastTreeScrollId) {
           const row = el.querySelector(`#row-${CSS.escape(String(selectedId))}`);
           if (row) row.scrollIntoView({ block: 'center' });
@@ -868,7 +1081,10 @@
       let noticeKind = 'error';
       function noticeBanner() {
         if (!noticeText) return '';
-        const cls = noticeKind === 'error' ? 'border-error/40 bg-error/10 text-error' : 'border-warning/40 bg-warning/10 text-warning';
+        const cls =
+          noticeKind === 'error'
+            ? 'border-error/40 bg-error/10 text-error'
+            : 'border-warning/40 bg-warning/10 text-warning';
         return `<div data-notice class="mb-4 p-3 rounded-lg border ${cls} text-xs flex items-start gap-2">
           <span class="font-bold shrink-0">⚠</span>
           <span class="flex-1 leading-relaxed">${esc(noticeText)}</span>
@@ -876,12 +1092,19 @@
         </div>`;
       }
       function warnConflict() {
-        noticeText = 'この札は他の書き手（Itera）が更新したため、本文の保存を中止しました。編集中の文章をコピーしてから再読込してください。';
+        noticeText =
+          'この札は他の書き手（Itera）が更新したため、本文の保存を中止しました。編集中の文章をコピーしてから再読込してください。';
         noticeKind = 'error';
         renderDetail();
       }
-      function clearNotice() { noticeText = ''; }
-      window.reloadNow = async () => { clearNotice(); editing = false; await refresh(); };
+      function clearNotice() {
+        noticeText = '';
+      }
+      window.reloadNow = async () => {
+        clearNotice();
+        editing = false;
+        await refresh();
+      };
 
       // ---------- 打ちかけの入力を守る（Handoff T-0076） ----------
       const DRAFT_FIELDS = ['f-title', 'f-status', 'f-priority', 'f-scheduled', 'f-quick', 'f-body'];
@@ -918,7 +1141,11 @@
           const node = DOM(d.focus);
           if (node) {
             node.focus();
-            if (d.sel && typeof node.setSelectionRange === 'function') { try { node.setSelectionRange(d.sel.start, d.sel.end); } catch (e) {} }
+            if (d.sel && typeof node.setSelectionRange === 'function') {
+              try {
+                node.setSelectionRange(d.sel.start, d.sel.end);
+              } catch (e) {}
+            }
           }
         }
       }
@@ -953,7 +1180,10 @@
       }
 
       let showClosedWork = false;
-      window.toggleClosedWork = () => { showClosedWork = !showClosedWork; renderDetail(); };
+      window.toggleClosedWork = () => {
+        showClosedWork = !showClosedWork;
+        renderDetail();
+      };
 
       /**
        * 仕事（タスク）の区画。
@@ -989,7 +1219,12 @@
       function genealogyBlock(n) {
         const anc = ancestorsOf(n.meta.id);
         const trail = anc.length
-          ? anc.map((a) => `<button onclick="select('${esc(a.meta.id)}')" class="hover:text-primary hover:underline">${esc(a.meta.title)}</button>`).join('<span class="text-text-muted"> › </span>')
+          ? anc
+              .map(
+                (a) =>
+                  `<button onclick="select('${esc(a.meta.id)}')" class="hover:text-primary hover:underline">${esc(a.meta.title)}</button>`,
+              )
+              .join('<span class="text-text-muted"> › </span>')
           : '<span class="text-text-muted italic">根</span>';
         const preds = predecessors(n.meta.id);
         const succ = successorOf(n.meta.id);
@@ -1024,26 +1259,31 @@
             </div>
           </div>`;
         }
-        const rows = ctx.map((c) => {
-          const src = c.external ? null : byId(c.source);
-          const head = src ? lastLogAt(src) : '';
-          const stale = head && (!c.watermark || c.watermark < head);
-          const label = c.external
-            ? `<span class="text-[0.6875rem] px-2 py-1 rounded bg-hover inline-flex items-center gap-1.5 max-w-full">
+        const rows = ctx
+          .map((c) => {
+            const src = c.external ? null : byId(c.source);
+            const head = src ? lastLogAt(src) : '';
+            const stale = head && (!c.watermark || c.watermark < head);
+            const label = c.external
+              ? `<span class="text-[0.6875rem] px-2 py-1 rounded bg-hover inline-flex items-center gap-1.5 max-w-full">
                  <span class="text-text-muted shrink-0">外</span>
                  <button onclick="openRef('${esc(c.source)}')" class="truncate max-w-[18rem] text-left font-mono hover:text-primary">${esc(c.source)}</button>
                  ${c.title ? `<span class="opacity-60 shrink-0 truncate max-w-[10rem]">${esc(c.title)}</span>` : ''}</span>`
-            : chip(c.source);
-          return `<div class="flex items-center gap-2 flex-wrap py-1 border-t border-border-main first:border-0">
+              : chip(c.source);
+            return `<div class="flex items-center gap-2 flex-wrap py-1 border-t border-border-main first:border-0">
             ${label}
             <span class="font-mono text-[0.625rem] text-text-muted">${c.watermark ? esc(c.watermark) + ' まで' : '取り込み点なし'}</span>
-            ${c.external
-              ? '<span class="text-[0.625rem] text-text-muted" title="外の文書は Loom の履歴を持たないので、伸びたかを機械では言えません">古びは自分で見る</span>'
-              : stale ? `<span class="text-[0.625rem] text-warning font-bold">→ 源は ${esc(head)} まで伸びています</span>`
-              : '<span class="text-[0.625rem] text-success">最新</span>'}
+            ${
+              c.external
+                ? '<span class="text-[0.625rem] text-text-muted" title="外の文書は Loom の履歴を持たないので、伸びたかを機械では言えません">古びは自分で見る</span>'
+                : stale
+                  ? `<span class="text-[0.625rem] text-warning font-bold">→ 源は ${esc(head)} まで伸びています</span>`
+                  : '<span class="text-[0.625rem] text-success">最新</span>'
+            }
             ${stale ? `<button onclick="askFold('追随','${esc(c.source)}')" class="ml-auto text-[0.6875rem] px-2 py-1 rounded bg-warning text-text-inverted font-bold hover:opacity-90 transition">追随を頼む</button>` : ''}
           </div>`;
-        }).join('');
+          })
+          .join('');
         return `<div class="mb-4 p-3 rounded-lg bg-panel border border-border-main text-xs">
           <div class="flex items-center gap-2 mb-1">
             <span class="text-[0.6875rem] font-bold text-text-muted">文脈の取り込み点</span>
@@ -1058,7 +1298,8 @@
         const proj = isProject(n);
         const pend = pendingRecaps(n).length;
         const parent = byId(n.meta.parent);
-        const btn = (fn, label, cls, title) => `<button onclick="${fn}" class="text-[0.6875rem] px-2.5 py-1 rounded ${cls} font-bold transition" title="${esc(title || '')}">${label}</button>`;
+        const btn = (fn, label, cls, title) =>
+          `<button onclick="${fn}" class="text-[0.6875rem] px-2.5 py-1 rounded ${cls} font-bold transition" title="${esc(title || '')}">${label}</button>`;
         if (proj) {
           return `<div class="mb-4 flex flex-wrap items-center gap-2">
             ${btn('fork()', '分岐 ⑂', 'bg-primary text-text-inverted hover:bg-primary/90', '子プロジェクトを切る。意図はあなたが置く')}
@@ -1091,15 +1332,27 @@
         }
         const proj = isProject(n);
         const st = statusDef(n);
-        const opts = Object.entries(proj ? P_STATUS : T_STATUS).map(([k, v]) => `<option value="${k}" ${n.meta.status === k ? 'selected' : ''}>${v.label}</option>`).join('');
+        const opts = Object.entries(proj ? P_STATUS : T_STATUS)
+          .map(([k, v]) => `<option value="${k}" ${n.meta.status === k ? 'selected' : ''}>${v.label}</option>`)
+          .join('');
         const refs = Array.isArray(n.meta.refs) ? n.meta.refs : [];
         const stats = proj ? null : planStats(n.body);
-        const ballLabel = proj ? 'プロジェクト（手番を持たない）'
-          : n.meta.status === 'paused' ? 'Itera は中断中（あなたの番）'
-          : st.ball === 'ai' ? 'Itera が動く番' : st.ball === 'user' ? 'あなたが動く番' : '完了';
-        const ballCls = proj ? 'bg-primary/10 text-primary border-primary/30'
-          : st.ball === 'ai' ? 'bg-primary/10 text-primary border-primary/30'
-          : st.ball === 'user' ? 'bg-warning/10 text-warning border-warning/30' : 'bg-success/10 text-success border-success/30';
+        const ballLabel = proj
+          ? 'プロジェクト（手番を持たない）'
+          : n.meta.status === 'paused'
+            ? 'Itera は中断中（あなたの番）'
+            : st.ball === 'ai'
+              ? 'Itera が動く番'
+              : st.ball === 'user'
+                ? 'あなたが動く番'
+                : '完了';
+        const ballCls = proj
+          ? 'bg-primary/10 text-primary border-primary/30'
+          : st.ball === 'ai'
+            ? 'bg-primary/10 text-primary border-primary/30'
+            : st.ball === 'user'
+              ? 'bg-warning/10 text-warning border-warning/30'
+              : 'bg-success/10 text-success border-success/30';
 
         el.innerHTML = `
         <div class="max-w-3xl mx-auto p-6">
@@ -1121,22 +1374,30 @@
           ${opsBlock(n)}
           ${worksBlock(n)}
 
-          ${stats ? `<div class="flex items-center gap-2 mb-4 p-3 rounded-lg bg-panel border border-border-main">
+          ${
+            stats
+              ? `<div class="flex items-center gap-2 mb-4 p-3 rounded-lg bg-panel border border-border-main">
                <span class="text-[0.6875rem] font-bold text-text-muted shrink-0">計画</span>
                <div class="flex-1 h-1.5 rounded-full bg-hover overflow-hidden"><div class="h-full bg-success transition-all" style="width:${Math.round((stats.done / stats.total) * 100)}%"></div></div>
                <span class="text-xs font-mono">${stats.done} / ${stats.total} 完了${stats.doing ? ` ・ ${stats.doing} 作業中` : ''}</span>
-             </div>` : ''}
+             </div>`
+              : ''
+          }
 
           <div class="flex flex-wrap items-center gap-3 mb-4 text-xs">
             <label class="flex items-center gap-1.5">状態
               <select id="f-status" class="bg-card border border-border-main rounded px-2 py-1">${opts}</select>
             </label>
-            ${proj ? '' : `<label class="flex items-center gap-1.5">優先度
+            ${
+              proj
+                ? ''
+                : `<label class="flex items-center gap-1.5">優先度
               <select id="f-priority" class="bg-card border border-border-main rounded px-2 py-1">${['high', 'normal', 'low'].map((p) => `<option value="${p}" ${n.meta.priority === p ? 'selected' : ''}>${p}</option>`).join('')}</select>
             </label>
             <label class="flex items-center gap-1.5">いつやる
               <input type="date" id="f-scheduled" value="${esc(n.meta.scheduled || '')}" class="bg-card border border-border-main rounded px-2 py-1" />
-            </label>`}
+            </label>`
+            }
             <button onclick="saveMeta()" class="px-2.5 py-1 rounded bg-hover hover:bg-primary hover:text-text-inverted transition font-medium">保存</button>
           </div>
 
@@ -1156,21 +1417,25 @@
             ${editing ? '<button onclick="saveBody()" class="text-xs px-2.5 py-1 rounded bg-success text-text-inverted font-bold">本文を保存</button>' : ''}
           </div>
 
-          ${editing
-            ? `<textarea id="f-body" class="w-full h-[420px] bg-card border border-border-main rounded-lg p-4 font-mono text-xs leading-relaxed focus:border-primary focus:outline-none resize-y">${esc(n.body)}</textarea>`
-            : `<div class="bg-panel border border-border-main rounded-lg p-5 text-sm">${mdRender(n.body, sectionRange(n.body, '計画'))}</div>`}
+          ${
+            editing
+              ? `<textarea id="f-body" class="w-full h-[420px] bg-card border border-border-main rounded-lg p-4 font-mono text-xs leading-relaxed focus:border-primary focus:outline-none resize-y">${esc(n.body)}</textarea>`
+              : `<div class="bg-panel border border-border-main rounded-lg p-5 text-sm">${mdRender(n.body, sectionRange(n.body, '計画'))}</div>`
+          }
 
           <div class="mt-5 p-4 rounded-lg bg-panel border border-border-main">
             <div class="text-[0.6875rem] font-bold text-text-muted mb-2">追記</div>
             <textarea id="f-quick" rows="3" placeholder="追記する内容を書く…" class="w-full bg-card border border-border-main rounded p-2 text-xs focus:border-primary focus:outline-none resize-none mb-2"></textarea>
             <div class="flex flex-wrap gap-2">
-              ${proj
-                ? `<button onclick="quick('履歴', true)" class="text-xs px-3 py-1.5 rounded bg-hover hover:bg-primary hover:text-text-inverted transition font-medium">履歴に書いて Itera に伝える</button>
+              ${
+                proj
+                  ? `<button onclick="quick('履歴', true)" class="text-xs px-3 py-1.5 rounded bg-hover hover:bg-primary hover:text-text-inverted transition font-medium">履歴に書いて Itera に伝える</button>
                    <button onclick="quick('履歴', false)" class="text-xs px-3 py-1.5 rounded bg-hover transition">履歴に書くだけ</button>
                    <button onclick="quick('意図', false)" class="text-xs px-3 py-1.5 rounded bg-hover transition" title="意図はほぼ不変。足すのは慎重に">意図に足す</button>`
-                : `<button onclick="quick('追加要望', true)" class="text-xs px-3 py-1.5 rounded bg-hover hover:bg-primary hover:text-text-inverted transition font-medium">要望・修正を追加して伝える</button>
+                  : `<button onclick="quick('追加要望', true)" class="text-xs px-3 py-1.5 rounded bg-hover hover:bg-primary hover:text-text-inverted transition font-medium">要望・修正を追加して伝える</button>
                    <button onclick="quick('確認事項', true)" class="text-xs px-3 py-1.5 rounded bg-hover hover:bg-primary hover:text-text-inverted transition font-medium">質問に回答する</button>
-                   <button onclick="quick('追加要望', false)" class="text-xs px-3 py-1.5 rounded bg-hover transition">メモだけ</button>`}
+                   <button onclick="quick('追加要望', false)" class="text-xs px-3 py-1.5 rounded bg-hover transition">メモだけ</button>`
+              }
             </div>
           </div>
 
@@ -1182,12 +1447,18 @@
         lastRenderedId = n.meta.id;
       }
 
-      function renderAll() { renderViews(); renderList(); renderDetail(); }
+      function renderAll() {
+        renderViews();
+        renderList();
+        renderDetail();
+      }
 
       // ============================================================
       // 操作
       // ============================================================
-      function rawCurrent() { return nodes.find((x) => x.meta.id === selectedId); }
+      function rawCurrent() {
+        return nodes.find((x) => x.meta.id === selectedId);
+      }
 
       function flushEditor(t) {
         if (!t) return t;
@@ -1203,7 +1474,9 @@
         if (editing && body) t.body = body.value;
         return t;
       }
-      function current() { return flushEditor(rawCurrent()); }
+      function current() {
+        return flushEditor(rawCurrent());
+      }
 
       async function commitIfEditing() {
         if (!editing) return true;
@@ -1221,30 +1494,64 @@
       function newBody(kind) {
         if (kind === 'project') {
           return [
-            '## 意図', '', '（なぜこの枝が在るのか。**あなたが置く。**ほぼ不変。これが圧縮の鍵になる。',
-            '　満たされて消えるものは意図ではない。それはタスクの依頼）', '',
-            '## 文脈', '', '（外の世界のうち、この枝に効くもの。Itera が畳む。源ごとに ### を立てる）', '',
-            '## 履歴', '',
-            '## 成果物', '',
+            '## 意図',
+            '',
+            '（なぜこの枝が在るのか。**あなたが置く。**ほぼ不変。これが圧縮の鍵になる。',
+            '　満たされて消えるものは意図ではない。それはタスクの依頼）',
+            '',
+            '## 文脈',
+            '',
+            '（外の世界のうち、この枝に効くもの。Itera が畳む。源ごとに ### を立てる）',
+            '',
+            '## 履歴',
+            '',
+            '## 成果物',
+            '',
           ].join('\n');
         }
         return [
-          '## 依頼', '', '（何が満たされたら終わりか）', '',
-          '## 計画', '', '（Itera が着手時に分解して書く。☐ をクリックすると 未着手→作業中→完了）', '',
-          '## 追加要望', '',
-          '## 進捗', '',
-          '## 確認事項', '',
-          '## 成果物', '',
+          '## 依頼',
+          '',
+          '（何が満たされたら終わりか）',
+          '',
+          '## 計画',
+          '',
+          '（Itera が着手時に分解して書く。☐ をクリックすると 未着手→作業中→完了）',
+          '',
+          '## 追加要望',
+          '',
+          '## 進捗',
+          '',
+          '## 確認事項',
+          '',
+          '## 成果物',
+          '',
         ].join('\n');
       }
 
-      window.setView = (k) => { view = k; lastTreeScrollId = null; renderAll(); };
-      window.toggleClosed = () => { showClosed = !showClosed; renderAll(); };
-      window.toggleTasks = () => { showTasks = !showTasks; renderAll(); };
-      window.toggleNode = (id) => { collapsed.has(id) ? collapsed.delete(id) : collapsed.add(id); renderList(); };
+      window.setView = (k) => {
+        view = k;
+        lastTreeScrollId = null;
+        renderAll();
+      };
+      window.toggleClosed = () => {
+        showClosed = !showClosed;
+        renderAll();
+      };
+      window.toggleTasks = () => {
+        showTasks = !showTasks;
+        renderAll();
+      };
+      window.toggleNode = (id) => {
+        collapsed.has(id) ? collapsed.delete(id) : collapsed.add(id);
+        renderList();
+      };
       window.select = async (id) => {
         if (!(await commitIfEditing())) return;
-        selectedId = id; editing = false; clearNotice(); await refresh();
+        selectedId = id;
+        editing = false;
+        clearNotice();
+        await refresh();
       };
       window.toggleEdit = async () => {
         if (!(await commitIfEditing())) return;
@@ -1262,50 +1569,93 @@
        */
       function focusTitle() {
         const el = DOM('f-title');
-        if (el) { el.focus(); el.select(); }
+        if (el) {
+          el.focus();
+          el.select();
+        }
       }
 
       window.newProject = async () => {
         const id = Store.nextId('project');
-        await Store.create({ id, kind: 'project', title: '(無題のプロジェクト)', status: 'live', created: nowIso(), refs: [] }, newBody('project'));
-        selectedId = id; editing = true; view = 'tree';
+        await Store.create(
+          { id, kind: 'project', title: '(無題のプロジェクト)', status: 'live', created: nowIso(), refs: [] },
+          newBody('project'),
+        );
+        selectedId = id;
+        editing = true;
+        view = 'tree';
         await refresh();
         focusTitle();
       };
 
       // 分岐。承認は要らない ── 切れないと、要らない事実が親に溜まる。
       window.fork = async () => {
-        const p = rawCurrent(); if (!p || !isProject(p)) return;
+        const p = rawCurrent();
+        if (!p || !isProject(p)) return;
         if (!(await commitIfEditing())) return;
         const id = Store.nextId('project');
-        await Store.create({ id, kind: 'project', title: '(無題の枝)', status: 'live', created: nowIso(), parent: p.meta.id, refs: [] }, newBody('project'));
+        await Store.create(
+          { id, kind: 'project', title: '(無題の枝)', status: 'live', created: nowIso(), parent: p.meta.id, refs: [] },
+          newBody('project'),
+        );
         await Store.append(p.meta.id, '履歴', `- ${stamp()} 分岐: ${id}「(無題の枝)」`);
         await Store.append(id, '履歴', `- ${stamp()} 分岐: ${p.meta.id}「${p.meta.title}」から切り出し`);
-        selectedId = id; editing = true;
+        selectedId = id;
+        editing = true;
         await refresh();
         focusTitle();
       };
 
       // 起票。タスクは所属プロジェクトの下に立つ。T→P の辺は無いので、親は必ずプロジェクト。
       window.openTask = async () => {
-        const p = rawCurrent(); if (!p || !isProject(p)) return;
+        const p = rawCurrent();
+        if (!p || !isProject(p)) return;
         if (!(await commitIfEditing())) return;
         const id = Store.nextId('task');
-        await Store.create({ id, kind: 'task', title: '(無題のタスク)', status: 'inbox', priority: 'normal', scheduled: '', created: nowIso(), parent: p.meta.id, refs: [] }, newBody('task'));
+        await Store.create(
+          {
+            id,
+            kind: 'task',
+            title: '(無題のタスク)',
+            status: 'inbox',
+            priority: 'normal',
+            scheduled: '',
+            created: nowIso(),
+            parent: p.meta.id,
+            refs: [],
+          },
+          newBody('task'),
+        );
         await Store.append(p.meta.id, '履歴', `- ${stamp()} 起票: ${id}「(無題のタスク)」`);
-        selectedId = id; editing = true;
+        selectedId = id;
+        editing = true;
         await refresh();
         focusTitle();
       };
 
       // 分解。親がタスクのときの「起票」の別名。
       window.decompose = async () => {
-        const t = rawCurrent(); if (!t || isProject(t)) return;
+        const t = rawCurrent();
+        if (!t || isProject(t)) return;
         if (!(await commitIfEditing())) return;
         const id = Store.nextId('task');
-        await Store.create({ id, kind: 'task', title: '(無題のサブタスク)', status: 'inbox', priority: t.meta.priority || 'normal', scheduled: '', created: nowIso(), parent: t.meta.id, refs: [] }, newBody('task'));
+        await Store.create(
+          {
+            id,
+            kind: 'task',
+            title: '(無題のサブタスク)',
+            status: 'inbox',
+            priority: t.meta.priority || 'normal',
+            scheduled: '',
+            created: nowIso(),
+            parent: t.meta.id,
+            refs: [],
+          },
+          newBody('task'),
+        );
         await Store.append(t.meta.id, '進捗', `- ${stamp()} 分解: ${id}「(無題のサブタスク)」`);
-        selectedId = id; editing = true;
+        selectedId = id;
+        editing = true;
         await refresh();
         focusTitle();
       };
@@ -1316,7 +1666,8 @@
        * 書き換えると「その子がどちらの世代の下で生まれたか」が消える。
        */
       window.supersede = async () => {
-        const p = rawCurrent(); if (!p || !isProject(p)) return;
+        const p = rawCurrent();
+        if (!p || !isProject(p)) return;
         const res = await AppUI.showMessageBox({
           title: 'フェーズを切る（継承）',
           message: `${p.meta.id}「${p.meta.title}」を凍結し、後継のプロジェクトを作ります。子はそのまま後継が引き継ぎます（辺は書き換えません）。前任は消えません。`,
@@ -1329,40 +1680,68 @@
         if (!res || res.action !== true) return;
         if (!(await commitIfEditing())) return;
         const id = Store.nextId('project');
-        await Store.create({
-          id, kind: 'project', title: p.meta.title + '（第2期）', status: 'live', created: nowIso(),
-          parent: p.meta.parent || '', supersedes: p.meta.id, refs: Array.isArray(p.meta.refs) ? p.meta.refs : [],
-        }, newBody('project'));
+        await Store.create(
+          {
+            id,
+            kind: 'project',
+            title: p.meta.title + '（第2期）',
+            status: 'live',
+            created: nowIso(),
+            parent: p.meta.parent || '',
+            supersedes: p.meta.id,
+            refs: Array.isArray(p.meta.refs) ? p.meta.refs : [],
+          },
+          newBody('project'),
+        );
         await Store.append(id, '履歴', `- ${stamp()} 継承: ${p.meta.id}「${p.meta.title}」を継いだ`);
-        await Store.append(p.meta.id, '履歴', `- ${stamp()} 継承: ${id}へ継いだ（凍結）`, (fresh) => { fresh.meta.status = 'superseded'; });
-        selectedId = id; editing = true;
+        await Store.append(p.meta.id, '履歴', `- ${stamp()} 継承: ${id}へ継いだ（凍結）`, (fresh) => {
+          fresh.meta.status = 'superseded';
+        });
+        selectedId = id;
+        editing = true;
         await refresh();
-        await notifyAI(`Loom: ${p.meta.id}「${p.meta.title}」から ${id} へ継承しました。後継の ## 意図 は山内さんが書きます。` +
-          `そのうえで、前任の履歴を全部読み、意図に照らして畳んだものを後継の ## 文脈 に書いてください（文脈生成）。`);
+        await notifyAI(
+          `Loom: ${p.meta.id}「${p.meta.title}」から ${id} へ継承しました。後継の ## 意図 は山内さんが書きます。` +
+            `そのうえで、前任の履歴を全部読み、意図に照らして畳んだものを後継の ## 文脈 に書いてください（文脈生成）。`,
+        );
       };
 
       /** 転記（上げる）。**畳まない。**子の総括をそのまま親の履歴へ載せる。 */
       window.pushUp = async () => {
-        const n = rawCurrent(); if (!n) return;
+        const n = rawCurrent();
+        if (!n) return;
         if (!(await commitIfEditing())) return;
         const pid = n.meta.parent;
-        if (!pid || !byId(pid)) { AppUI.notify('親がありません', 'warning'); return; }
+        if (!pid || !byId(pid)) {
+          AppUI.notify('親がありません', 'warning');
+          return;
+        }
         const rs = pendingRecaps(n);
-        if (!rs.length) { AppUI.notify(`まだ渡していない${recapName(n)}がありません`, 'warning'); return; }
-        const block = [`- ${stamp()} 転記: ${n.meta.id}「${n.meta.title}」より（${rs[0].at} 以降の${recapName(n)} ${rs.length} 件）`]
+        if (!rs.length) {
+          AppUI.notify(`まだ渡していない${recapName(n)}がありません`, 'warning');
+          return;
+        }
+        const block = [
+          `- ${stamp()} 転記: ${n.meta.id}「${n.meta.title}」より（${rs[0].at} 以降の${recapName(n)} ${rs.length} 件）`,
+        ]
           .concat(rs.map((r) => `\n### ${recapName(n)} ${r.at}（${n.meta.id}）\n${r.text}`))
           .join('\n');
         const f = await Store.append(pid, isProject(byId(pid)) ? '履歴' : '進捗', block);
         if (!f) return;
         // 「どこまで渡したか」を書く。時刻ではなく総括の位置で残すこと（時計のずれで壊れないように）。
-        await Store.append(n.meta.id, logSection(n), `- ${stamp()} 転記: ${pid}「${byId(pid).meta.title}」へ（${rs[rs.length - 1].at} まで／${rs.length} 件）`);
+        await Store.append(
+          n.meta.id,
+          logSection(n),
+          `- ${stamp()} 転記: ${pid}「${byId(pid).meta.title}」へ（${rs[rs.length - 1].at} まで／${rs.length} 件）`,
+        );
         AppUI.notify(`${pid} へ ${rs.length} 件を転記しました`, 'info', 2500);
         await refresh();
       };
 
       /** 終結（合流）。転記して役目を終える。**一緒になるのは、この最後の一回だけ。** */
       window.closeMerge = async () => {
-        const n = rawCurrent(); if (!n || !isProject(n)) return;
+        const n = rawCurrent();
+        if (!n || !isProject(n)) return;
         const rs = pendingRecaps(n);
         const res = await AppUI.showMessageBox({
           title: '終結（合流）',
@@ -1388,7 +1767,8 @@
        * 全部をプロジェクトへ上げない ── これが履歴の粒度を決める唯一のつまみ。
        */
       window.complete = async () => {
-        const t = rawCurrent(); if (!t || isProject(t)) return;
+        const t = rawCurrent();
+        if (!t || isProject(t)) return;
         if (!(await commitIfEditing())) return;
         const rs = parseRecaps(t.body, '進捗', 'レポート');
         const artifacts = sectionText(t.body, '成果物');
@@ -1398,7 +1778,8 @@
         if (!rs.length) {
           const go = await AppUI.showMessageBox({
             title: 'レポートがありません',
-            message: 'レポート（決定・却下・未解決）がまだ書かれていません。書かずに閉じますか？（Itera に頼むこともできます）',
+            message:
+              'レポート（決定・却下・未解決）がまだ書かれていません。書かずに閉じますか？（Itera に頼むこともできます）',
             type: 'warning',
             buttons: [
               { label: 'やめる', value: false, style: 'normal', isCancel: true },
@@ -1418,17 +1799,30 @@
         }
         // 上位タスクへは 1 行だけ
         if (parentIsTask) {
-          const one = artifacts.split('\n').filter((l) => l.trim()).slice(0, 1).join('').replace(/^- /, '');
-          await Store.append(parent.meta.id, '進捗', `- ${stamp()} 完了: ${t.meta.id}「${t.meta.title}」${one ? ' ／ 成果物: ' + one : ''}`);
+          const one = artifacts
+            .split('\n')
+            .filter((l) => l.trim())
+            .slice(0, 1)
+            .join('')
+            .replace(/^- /, '');
+          await Store.append(
+            parent.meta.id,
+            '進捗',
+            `- ${stamp()} 完了: ${t.meta.id}「${t.meta.title}」${one ? ' ／ 成果物: ' + one : ''}`,
+          );
         }
-        await mutate(t.meta.id, (fresh) => { fresh.meta.status = 'review'; return true; });
+        await mutate(t.meta.id, (fresh) => {
+          fresh.meta.status = 'review';
+          return true;
+        });
         AppUI.notify('完了しました（確認待ちにしました）', 'info', 2500);
         await refresh();
       };
 
       /** 畳むのは Itera の仕事。ここは依頼を送るだけで、機械で要約文を作らない。 */
       window.askFold = async (kind, source) => {
-        const n = rawCurrent(); if (!n) return;
+        const n = rawCurrent();
+        if (!n) return;
         const map = {
           文脈生成: `${n.meta.id}「${n.meta.title}」の ## 文脈 を作ってください。親（および必要なら傍系）の履歴を**全部**読み、この札の ## 意図 に照らして畳みます。書式は記法 §5（源ごとに ### 、取り込み点は #### に「… まで」）。`,
           追随: `${n.meta.id}「${n.meta.title}」の ## 文脈 が古びています。源 ${source || ''} の、取り込み点より後の差分だけを畳んで **追記**してください（#### 追随 <日時>（<源> を <日時> まで））。既存の記述は消さないこと。`,
@@ -1441,7 +1835,8 @@
       };
 
       window.dropNode = async () => {
-        const n = current(); if (!n) return;
+        const n = current();
+        if (!n) return;
         const res = await AppUI.showMessageBox({
           title: isProject(n) ? 'この枝を放棄する' : 'このタスクを中止する',
           message: `${n.meta.id}「${n.meta.title}」を${isProject(n) ? '放棄' : '中止'}にしますか？削除はしません。理由を${recapName(n)}に書いてください。`,
@@ -1459,7 +1854,8 @@
       };
 
       window.removeNode = async () => {
-        const n = current(); if (!n) return;
+        const n = current();
+        if (!n) return;
         const kids = childrenOf(n.meta.id);
         const res = await AppUI.showMessageBox({
           title: '削除',
@@ -1476,10 +1872,22 @@
         await refresh();
       };
 
-      window.saveMeta = async () => { const n = current(); if (!n) return; if (!(await commitAll(n))) return; await refresh(); };
-      window.setStatus = async (s) => { const n = current(); if (!n) return; n.meta.status = s; if (!(await commitAll(n))) return; await refresh(); };
+      window.saveMeta = async () => {
+        const n = current();
+        if (!n) return;
+        if (!(await commitAll(n))) return;
+        await refresh();
+      };
+      window.setStatus = async (s) => {
+        const n = current();
+        if (!n) return;
+        n.meta.status = s;
+        if (!(await commitAll(n))) return;
+        await refresh();
+      };
       window.saveBody = async () => {
-        const n = current(); if (!n) return;
+        const n = current();
+        if (!n) return;
         n.body = DOM('f-body').value;
         const r = await Store.saveBodyChecked(n);
         if (!r) return; // 競合時は編集画面を閉じない（入力を捨てないため）
@@ -1488,31 +1896,50 @@
       };
 
       window.cyclePlan = async (i) => {
-        const t = rawCurrent(); if (!t) return;
+        const t = rawCurrent();
+        if (!t) return;
         const target = String(t.body).split('\n')[i];
         if (target === undefined) return;
         let miss = false;
         await mutate(t.meta.id, (fresh) => {
           const lines = String(fresh.body).split('\n');
           const hits = [];
-          lines.forEach((l, n) => { if (l === target) hits.push(n); });
-          if (hits.length !== 1) { miss = true; return false; }
+          lines.forEach((l, n) => {
+            if (l === target) hits.push(n);
+          });
+          if (hits.length !== 1) {
+            miss = true;
+            return false;
+          }
           const m = lines[hits[0]].match(/^(\s*- \[)( |x|X|~)(\] .*)$/);
-          if (!m) { miss = true; return false; }
+          if (!m) {
+            miss = true;
+            return false;
+          }
           const cur = m[2].toLowerCase();
           lines[hits[0]] = m[1] + (cur === ' ' ? '~' : cur === '~' ? 'x' : ' ') + m[3];
           fresh.body = lines.join('\n');
           return true;
         });
-        if (miss) { noticeText = 'この項目が見つかりませんでした（外部で書き換えられた可能性があります）。'; noticeKind = 'error'; }
+        if (miss) {
+          noticeText = 'この項目が見つかりませんでした（外部で書き換えられた可能性があります）。';
+          noticeKind = 'error';
+        }
         await refresh();
       };
 
-      const quickNote = () => { const b = DOM('f-quick'); return b ? b.value.trim() : ''; };
-      const clearQuick = () => { const b = DOM('f-quick'); if (b) b.value = ''; };
+      const quickNote = () => {
+        const b = DOM('f-quick');
+        return b ? b.value.trim() : '';
+      };
+      const clearQuick = () => {
+        const b = DOM('f-quick');
+        if (b) b.value = '';
+      };
 
       window.quick = async (section, notify) => {
-        const n = rawCurrent(); if (!n) return;
+        const n = rawCurrent();
+        if (!n) return;
         const text = quickNote();
         if (!text) return;
         if (!(await commitIfEditing())) return;
@@ -1522,23 +1949,30 @@
         });
         if (!f) return;
         clearQuick();
-        if (notify) await notifyAI(`Loom ${f.meta.id}「${f.meta.title}」に山内さんから追記がありました（## ${section}）。${readHint(f, line)}`);
+        if (notify)
+          await notifyAI(
+            `Loom ${f.meta.id}「${f.meta.title}」に山内さんから追記がありました（## ${section}）。${readHint(f, line)}`,
+          );
         await refresh();
       };
 
       window.send = async () => {
-        const t = current(); if (!t) return;
+        const t = current();
+        if (!t) return;
         t.meta.status = 'todo';
         const f = await commitAll(t);
         if (!f) return;
         const own = owningProject(t);
-        await notifyAI(`Loom: 新しい依頼 ${f.meta.id}「${f.meta.title}」${own ? `（所属: ${own.meta.id}「${own.meta.title}」）` : ''}。${readHint(f)}` +
-          `所属プロジェクトの 意図・文脈・履歴 を読んでから、## 計画 に分解を書いて着手してください。`);
+        await notifyAI(
+          `Loom: 新しい依頼 ${f.meta.id}「${f.meta.title}」${own ? `（所属: ${own.meta.id}「${own.meta.title}」）` : ''}。${readHint(f)}` +
+            `所属プロジェクトの 意図・文脈・履歴 を読んでから、## 計画 に分解を書いて着手してください。`,
+        );
         await refresh();
       };
 
       window.handToAI = async () => {
-        const t = rawCurrent(); if (!t) return;
+        const t = rawCurrent();
+        if (!t) return;
         if (!(await commitIfEditing())) return;
         const note = quickNote();
         const line = note ? `- ${stamp()} 山内: ${note.replace(/\n/g, ' ')}` : null;
@@ -1549,15 +1983,20 @@
         });
         if (!f) return;
         clearQuick();
-        await notifyAI(`Loom ${f.meta.id}「${f.meta.title}」の手番が山内さんから Itera に渡されました。` + (line ? `一言が添えられています。${readHint(f, line)}` : readHint(f)));
+        await notifyAI(
+          `Loom ${f.meta.id}「${f.meta.title}」の手番が山内さんから Itera に渡されました。` +
+            (line ? `一言が添えられています。${readHint(f, line)}` : readHint(f)),
+        );
         await refresh();
       };
 
       window.handBackToUser = async () => {
-        const t = rawCurrent(); if (!t) return;
+        const t = rawCurrent();
+        if (!t) return;
         if (!(await commitIfEditing())) return;
         const note = quickNote();
-        const line = `- ${stamp()} 山内: 手番を引き取り、作業の中止を指示。${note ? note.replace(/\n/g, ' ') : ''}`.trim();
+        const line =
+          `- ${stamp()} 山内: 手番を引き取り、作業の中止を指示。${note ? note.replace(/\n/g, ' ') : ''}`.trim();
         const f = await mutate(t.meta.id, (fresh) => {
           fresh.body = appendToSection(fresh.body, '進捗', line);
           fresh.meta.status = 'paused';
@@ -1565,13 +2004,16 @@
         });
         if (!f) return;
         clearQuick();
-        try { if (MetaOS.ai && MetaOS.ai.stop) await MetaOS.ai.stop(); } catch (e) {}
+        try {
+          if (MetaOS.ai && MetaOS.ai.stop) await MetaOS.ai.stop();
+        } catch (e) {}
         AppUI.notify('手番を引き取り、Itera を止めました', 'info', 2500);
         await refresh();
       };
 
       window.interruptAI = async () => {
-        const t = rawCurrent(); if (!t) return;
+        const t = rawCurrent();
+        if (!t) return;
         if (!(await commitIfEditing())) return;
         const note = quickNote();
         const line = `- ${stamp()} 山内: 中断を指示。${note ? note.replace(/\n/g, ' ') : ''}`.trim();
@@ -1582,32 +2024,58 @@
         });
         if (!f) return;
         clearQuick();
-        await notifyAI(`Loom ${f.meta.id}「${f.meta.title}」について、山内さんから中断の指示です。新しい作業を始めず、ここまでと次の一手を ## 進捗 に書いてから止めてください。${readHint(f, line)}`);
+        await notifyAI(
+          `Loom ${f.meta.id}「${f.meta.title}」について、山内さんから中断の指示です。新しい作業を始めず、ここまでと次の一手を ## 進捗 に書いてから止めてください。${readHint(f, line)}`,
+        );
         await refresh();
       };
 
-      const isDirPath = async (p) => { try { const s = await MetaOS.fs.stat(p); return !!s && s.kind === 'directory'; } catch (e) { return false; } };
+      const isDirPath = async (p) => {
+        try {
+          const s = await MetaOS.fs.stat(p);
+          return !!s && s.kind === 'directory';
+        } catch (e) {
+          return false;
+        }
+      };
       window.addRef = async (dir) => {
-        const n = current(); if (!n) return;
+        const n = current();
+        if (!n) return;
         let p = null;
-        try { p = await MetaOS.host.showOpenDialog({ title: dir ? '参照するフォルダ' : '参照するファイル', mode: dir ? 'directory' : 'file' }); } catch (e) {}
+        try {
+          p = await MetaOS.host.showOpenDialog({
+            title: dir ? '参照するフォルダ' : '参照するファイル',
+            mode: dir ? 'directory' : 'file',
+          });
+        } catch (e) {}
         if (!p) return;
-        if (dir && !(await isDirPath(p))) { AppUI.notify('フォルダではありません', 'warning'); return; }
+        if (dir && !(await isDirPath(p))) {
+          AppUI.notify('フォルダではありません', 'warning');
+          return;
+        }
         const cur = Array.isArray(n.meta.refs) ? n.meta.refs : [];
-        if (cur.includes(p)) { AppUI.notify('すでに追加されています', 'warning'); return; }
+        if (cur.includes(p)) {
+          AppUI.notify('すでに追加されています', 'warning');
+          return;
+        }
         n.meta.refs = [...cur, p];
         if (!(await commitAll(n))) return;
         await refresh();
       };
       window.removeRef = async (i) => {
-        const n = current(); if (!n) return;
+        const n = current();
+        if (!n) return;
         const c = Array.isArray(n.meta.refs) ? [...n.meta.refs] : [];
         c.splice(i, 1);
         n.meta.refs = c;
         if (!(await commitAll(n))) return;
         await refresh();
       };
-      window.openRef = async (p) => { try { await MetaOS.host.openEditor(p); } catch (e) {} };
+      window.openRef = async (p) => {
+        try {
+          await MetaOS.host.openEditor(p);
+        } catch (e) {}
+      };
 
       window.refresh = async () => {
         nodes = await Store.list();
@@ -1637,7 +2105,9 @@
             map[name] = `${x.version}:${x.hash}`;
           }
           return map;
-        } catch (e) { return watchSig; }
+        } catch (e) {
+          return watchSig;
+        }
       }
       function changedNames(before, after) {
         if (!before || !after) return [];
@@ -1648,17 +2118,26 @@
       }
       async function watchTick() {
         const sig = await dirSig();
-        if (!sig || !watchSig) { watchSig = sig || watchSig; return; }
+        if (!sig || !watchSig) {
+          watchSig = sig || watchSig;
+          return;
+        }
         const changed = changedNames(watchSig, sig);
         if (!changed.length) return;
         watchSig = sig;
         const mine = selectedId ? changed.includes(`${selectedId}.md`) : false;
-        if (!mine) { nodes = await Store.list(); renderList(); renderViews(); return; }
+        if (!mine) {
+          nodes = await Store.list();
+          renderList();
+          renderViews();
+          return;
+        }
         if (hasUnsavedInput()) {
           const t = rawCurrent();
           const box = DOM('f-body');
           if (t && box && editing) t.body = box.value;
-          noticeText = '編集中に、他の書き手（Itera）がこの札を更新しました。あなたの入力はそのまま残しています（取り込んでいません）。保存するか、控えを取ってから「再読込」を押してください。';
+          noticeText =
+            '編集中に、他の書き手（Itera）がこの札を更新しました。あなたの入力はそのまま残しています（取り込んでいません）。保存するか、控えを取ってから「再読込」を押してください。';
           noticeKind = 'error';
           showNoticeOnly(); // 掲示のために画面を作り直さない（作り直すと入力が消える）
           return;
@@ -1670,19 +2149,38 @@
         const el = DOM('detail');
         if (!el) return;
         const box = el.querySelector('.max-w-3xl');
-        if (!box) { renderDetail(); return; }
+        if (!box) {
+          renderDetail();
+          return;
+        }
         const active = document.activeElement;
         const keepId = active && active.id && DRAFT_FIELDS.includes(active.id) ? active.id : null;
-        const keepSel = keepId && typeof active.selectionStart === 'number' ? { start: active.selectionStart, end: active.selectionEnd } : null;
+        const keepSel =
+          keepId && typeof active.selectionStart === 'number'
+            ? { start: active.selectionStart, end: active.selectionEnd }
+            : null;
         const old = box.querySelector('[data-notice]');
         if (old) old.remove();
-        const cls = noticeKind === 'error' ? 'border-error/40 bg-error/10 text-error' : 'border-warning/40 bg-warning/10 text-warning';
-        box.insertAdjacentHTML('afterbegin', `<div data-notice class="mb-4 p-3 rounded-lg border ${cls} text-xs flex items-start gap-2">
+        const cls =
+          noticeKind === 'error'
+            ? 'border-error/40 bg-error/10 text-error'
+            : 'border-warning/40 bg-warning/10 text-warning';
+        box.insertAdjacentHTML(
+          'afterbegin',
+          `<div data-notice class="mb-4 p-3 rounded-lg border ${cls} text-xs flex items-start gap-2">
           <span class="font-bold shrink-0">⚠</span><span class="flex-1 leading-relaxed">${esc(noticeText)}</span>
-          <button onclick="reloadNow()" class="px-2 py-1 rounded bg-error text-text-inverted font-bold shrink-0 hover:opacity-90 transition">再読込</button></div>`);
+          <button onclick="reloadNow()" class="px-2 py-1 rounded bg-error text-text-inverted font-bold shrink-0 hover:opacity-90 transition">再読込</button></div>`,
+        );
         if (keepId) {
           const node = DOM(keepId);
-          if (node) { node.focus(); if (keepSel && node.setSelectionRange) { try { node.setSelectionRange(keepSel.start, keepSel.end); } catch (e) {} } }
+          if (node) {
+            node.focus();
+            if (keepSel && node.setSelectionRange) {
+              try {
+                node.setSelectionRange(keepSel.start, keepSel.end);
+              } catch (e) {}
+            }
+          }
         }
       }
 
@@ -1694,21 +2192,52 @@
         const ok = (name, cond, got) => R.push({ name, pass: !!cond, got: cond ? undefined : got });
 
         const raw = [
-          '---', 'id: P-0002', 'kind: project', 'title: テスト', 'status: live',
-          'parent: P-0001', 'supersedes: P-0009', 'refs: ["a.md","b.md"]', '---', '',
-          '## 意図', '', 'これは意図。', '',
-          '## 文脈', '',
-          '### P-0001「親の題」より', '',
-          '#### 生成 2026-08-21 10:00（P-0001 を 2026-08-21 09:30 まで）', '', '- 畳んだ中身', '',
-          '#### 追随 2026-08-23 17:00（2026-08-23 16:00 まで）', '', '- 差分', '',
-          '## 履歴', '',
+          '---',
+          'id: P-0002',
+          'kind: project',
+          'title: テスト',
+          'status: live',
+          'parent: P-0001',
+          'supersedes: P-0009',
+          'refs: ["a.md","b.md"]',
+          '---',
+          '',
+          '## 意図',
+          '',
+          'これは意図。',
+          '',
+          '## 文脈',
+          '',
+          '### P-0001「親の題」より',
+          '',
+          '#### 生成 2026-08-21 10:00（P-0001 を 2026-08-21 09:30 まで）',
+          '',
+          '- 畳んだ中身',
+          '',
+          '#### 追随 2026-08-23 17:00（2026-08-23 16:00 まで）',
+          '',
+          '- 差分',
+          '',
+          '## 履歴',
+          '',
           '- 2026-08-22 10:00 分岐: P-0003「子」',
-          '### 総括 2026-08-22 12:00', '', '**決定**', '- 決めた ／ 理由 ／ 対象: x.md', '',
+          '### 総括 2026-08-22 12:00',
+          '',
+          '**決定**',
+          '- 決めた ／ 理由 ／ 対象: x.md',
+          '',
           '- 2026-08-22 13:00 転記: P-0001「親の題」へ（1 件）',
-          '### 総括 2026-08-23 09:00', '', '**決定**', '- 二つ目', '',
+          '### 総括 2026-08-23 09:00',
+          '',
+          '**決定**',
+          '- 二つ目',
+          '',
           '- 2026-08-23 10:00 Itera: ただの追記',
           '',
-          '## 成果物', '', '- out.md', '',
+          '## 成果物',
+          '',
+          '- out.md',
+          '',
         ].join('\n');
 
         const n = parseNode(raw);
@@ -1723,95 +2252,197 @@
 
         // 源は id でも外の文書のパスでもよい。id は内部、それ以外は外部と見分ける。
         const extCtx = [
-          '## 文脈', '',
-          '### data/apps/handoff/tasks/T-0078.md「語彙」より', '',
-          '#### 生成 2026-08-23 19:00（2026-08-23 18:00 まで）', '', '- 畳んだ', '',
+          '## 文脈',
+          '',
+          '### data/apps/handoff/tasks/T-0078.md「語彙」より',
+          '',
+          '#### 生成 2026-08-23 19:00（2026-08-23 18:00 まで）',
+          '',
+          '- 畳んだ',
+          '',
         ].join('\n');
         const ec = parseContext(extCtx);
-        ok('外の文書も源にできる', ec.length === 1 && ec[0].external === true && ec[0].source === 'data/apps/handoff/tasks/T-0078.md', ec);
+        ok(
+          '外の文書も源にできる',
+          ec.length === 1 && ec[0].external === true && ec[0].source === 'data/apps/handoff/tasks/T-0078.md',
+          ec,
+        );
         ok('外の源でも取り込み点は読める', ec[0] && ec[0].watermark === '2026-08-23 18:00', ec[0] && ec[0].watermark);
-        ok('id の源は内部のまま', parseContext(n.body)[0] && parseContext(n.body)[0].external === false, parseContext(n.body)[0]);
+        ok(
+          'id の源は内部のまま',
+          parseContext(n.body)[0] && parseContext(n.body)[0].external === false,
+          parseContext(n.body)[0],
+        );
 
         const rs = parseRecaps(n.body, '履歴', '総括');
-        ok('総括を 2 つ読む', rs.length === 2, rs.map((r) => r.at));
+        ok(
+          '総括を 2 つ読む',
+          rs.length === 2,
+          rs.map((r) => r.at),
+        );
         ok('総括の中身が入る', rs[0] && /決めた/.test(rs[0].text), rs[0] && rs[0].text);
 
         const es = parseEntries(n.body, '履歴');
-        ok('出来事の動詞を見分ける', es.filter((e) => e.verb).length === 2, es.map((e) => e.verb));
-        ok('動詞でない追記は verb=null', es.some((e) => e.who === 'Itera' && !e.verb), es);
+        ok(
+          '出来事の動詞を見分ける',
+          es.filter((e) => e.verb).length === 2,
+          es.map((e) => e.verb),
+        );
+        ok(
+          '動詞でない追記は verb=null',
+          es.some((e) => e.who === 'Itera' && !e.verb),
+          es,
+        );
         ok('lastLogAt は最後の日時', es[es.length - 1].at === '2026-08-23 10:00', es[es.length - 1]);
 
         // 未送の総括＝最後の「転記: … へ」より後だけ
         const fake = { meta: { kind: 'project' }, body: n.body };
         const pend = pendingRecaps(fake);
-        ok('未送の総括は転記より後だけ', pend.length === 1 && pend[0].at === '2026-08-23 09:00', pend.map((p) => p.at));
+        ok(
+          '未送の総括は転記より後だけ',
+          pend.length === 1 && pend[0].at === '2026-08-23 09:00',
+          pend.map((p) => p.at),
+        );
 
         // 転記で運ばれてきた子の総括は、自分の総括として数えない（数えると根まで積み上がる）。
         const carried = [
-          '## 履歴', '',
-          '### 総括 2026-08-23 12:00', '', '- 自分の決定', '',
+          '## 履歴',
+          '',
+          '### 総括 2026-08-23 12:00',
+          '',
+          '- 自分の決定',
+          '',
           '- 2026-08-23 13:00 転記: P-0009「子」より（2026-08-23 11:00 以降の総括 1 件）',
-          '### 総括 2026-08-23 11:00（P-0009）', '', '- 子の決定', '',
+          '### 総括 2026-08-23 11:00（P-0009）',
+          '',
+          '- 子の決定',
+          '',
         ].join('\n');
         const carriedNode = { meta: { kind: 'project', id: 'P-0001' }, body: carried };
-        ok('転記で来た総括には出どころが付く',
-           parseRecaps(carried, '履歴', '総括').filter((r) => r.from === 'P-0009').length === 1,
-           parseRecaps(carried, '履歴', '総括').map((r) => r.at + '/' + r.from));
-        ok('未送に数えるのは自分の総括だけ',
-           pendingRecaps(carriedNode).length === 1 && pendingRecaps(carriedNode)[0].at === '2026-08-23 12:00',
-           pendingRecaps(carriedNode).map((r) => r.at + '/' + r.from));
+        ok(
+          '転記で来た総括には出どころが付く',
+          parseRecaps(carried, '履歴', '総括').filter((r) => r.from === 'P-0009').length === 1,
+          parseRecaps(carried, '履歴', '総括').map((r) => r.at + '/' + r.from),
+        );
+        ok(
+          '未送に数えるのは自分の総括だけ',
+          pendingRecaps(carriedNode).length === 1 && pendingRecaps(carriedNode)[0].at === '2026-08-23 12:00',
+          pendingRecaps(carriedNode).map((r) => r.at + '/' + r.from),
+        );
 
         // 転記の基準は壁時計ではなく「どこまで渡したか」。
         // 総括より前の時刻に転記した記録があっても、「… まで」に含まれていれば渡し済みとみなす。
         const skewed = [
-          '## 履歴', '',
-          '### 総括 2026-08-23 19:20', '', '**決定**', '- 未来に書いた総括', '',
+          '## 履歴',
+          '',
+          '### 総括 2026-08-23 19:20',
+          '',
+          '**決定**',
+          '- 未来に書いた総括',
+          '',
           '- 2026-08-23 18:40 転記: P-0001「親」へ（2026-08-23 19:20 まで／1 件）',
         ].join('\n');
-        ok('時計がずれても渡し済みと分かる', pendingRecaps({ meta: { kind: 'project' }, body: skewed }).length === 0,
-           pendingRecaps({ meta: { kind: 'project' }, body: skewed }).map((r) => r.at));
+        ok(
+          '時計がずれても渡し済みと分かる',
+          pendingRecaps({ meta: { kind: 'project' }, body: skewed }).length === 0,
+          pendingRecaps({ meta: { kind: 'project' }, body: skewed }).map((r) => r.at),
+        );
         const notYet = [
-          '## 履歴', '',
+          '## 履歴',
+          '',
           '- 2026-08-23 18:40 転記: P-0001「親」へ（2026-08-23 12:00 まで／1 件）',
-          '### 総括 2026-08-23 19:20', '', '**決定**', '- まだ渡していない', '',
+          '### 総括 2026-08-23 19:20',
+          '',
+          '**決定**',
+          '- まだ渡していない',
+          '',
         ].join('\n');
-        ok('「まで」より後の総括は未送のまま', pendingRecaps({ meta: { kind: 'project' }, body: notYet }).length === 1,
-           pendingRecaps({ meta: { kind: 'project' }, body: notYet }).map((r) => r.at));
+        ok(
+          '「まで」より後の総括は未送のまま',
+          pendingRecaps({ meta: { kind: 'project' }, body: notYet }).length === 1,
+          pendingRecaps({ meta: { kind: 'project' }, body: notYet }).map((r) => r.at),
+        );
 
         // 追記は末尾の空行を食わずに入る
         const appended = appendToSection(n.body, '履歴', '- 2026-08-23 11:00 Itera: 追記した');
-        ok('追記が節の末尾に入る', /追記した\n\n## 成果物/.test(appended) || /追記した\n## 成果物/.test(appended), appended.slice(-160));
+        ok(
+          '追記が節の末尾に入る',
+          /追記した\n\n## 成果物/.test(appended) || /追記した\n## 成果物/.test(appended),
+          appended.slice(-160),
+        );
 
         // 文脈だけは丸ごと置換してよい（写しだから）
-        const replaced = replaceSection(n.body, '文脈', '### P-0001「親の題」より\n\n#### 再生成 2026-08-23 18:00（2026-08-23 17:00 まで）\n\n- 畳み直した');
-        ok('文脈を置換しても他の節が残る', /## 履歴/.test(replaced) && /## 成果物/.test(replaced) && !/差分/.test(replaced), replaced.slice(0, 200));
+        const replaced = replaceSection(
+          n.body,
+          '文脈',
+          '### P-0001「親の題」より\n\n#### 再生成 2026-08-23 18:00（2026-08-23 17:00 まで）\n\n- 畳み直した',
+        );
+        ok(
+          '文脈を置換しても他の節が残る',
+          /## 履歴/.test(replaced) && /## 成果物/.test(replaced) && !/差分/.test(replaced),
+          replaced.slice(0, 200),
+        );
 
         // 直列化して読み直しても同じ
         const round = parseNode(serializeNode(n.meta, n.body));
-        ok('直列化して読み直せる', round.meta.id === 'P-0002' && sectionText(round.body, '意図') === 'これは意図。', round.meta);
+        ok(
+          '直列化して読み直せる',
+          round.meta.id === 'P-0002' && sectionText(round.body, '意図') === 'これは意図。',
+          round.meta,
+        );
 
         // 題の解決（出来事の行に焼き付いた仮の題を、現在の題で上書きする）
         const savedNodes = nodes;
         try {
           nodes = [{ meta: { id: 'T-0002', kind: 'task', title: '本当の題' } }];
-          ok('書かれた題を現在の題で上書きする', resolveTitles('- 起票: T-0002「(無題のタスク)」') === '- 起票: T-0002「本当の題」', resolveTitles('- 起票: T-0002「(無題のタスク)」'));
-          ok('題が無い参照にも題を補う', resolveTitles('T-0002 を見る') === 'T-0002「本当の題」 を見る', resolveTitles('T-0002 を見る'));
-          ok('見つからない札は書かれた題を残す', resolveTitles('T-9999「昔の題」') === 'T-9999「昔の題」', resolveTitles('T-9999「昔の題」'));
-          ok('見つからず題も無ければ id のまま', resolveTitles('T-9999 は消えた') === 'T-9999 は消えた', resolveTitles('T-9999 は消えた'));
-        } finally { nodes = savedNodes; }
+          ok(
+            '書かれた題を現在の題で上書きする',
+            resolveTitles('- 起票: T-0002「(無題のタスク)」') === '- 起票: T-0002「本当の題」',
+            resolveTitles('- 起票: T-0002「(無題のタスク)」'),
+          );
+          ok(
+            '題が無い参照にも題を補う',
+            resolveTitles('T-0002 を見る') === 'T-0002「本当の題」 を見る',
+            resolveTitles('T-0002 を見る'),
+          );
+          ok(
+            '見つからない札は書かれた題を残す',
+            resolveTitles('T-9999「昔の題」') === 'T-9999「昔の題」',
+            resolveTitles('T-9999「昔の題」'),
+          );
+          ok(
+            '見つからず題も無ければ id のまま',
+            resolveTitles('T-9999 は消えた') === 'T-9999 は消えた',
+            resolveTitles('T-9999 は消えた'),
+          );
+        } finally {
+          nodes = savedNodes;
+        }
 
         const pass = R.filter((r) => r.pass).length;
-        return { pass, fail: R.length - pass, results: R.filter((r) => !r.pass), all: R.map((r) => `${r.pass ? 'OK ' : 'NG '}${r.name}`) };
+        return {
+          pass,
+          fail: R.length - pass,
+          results: R.filter((r) => !r.pass),
+          all: R.map((r) => `${r.pass ? 'OK ' : 'NG '}${r.name}`),
+        };
       };
 
       (async () => {
-        try { await MetaOS.fs.mkdir(DIR); } catch (e) {}
+        try {
+          await MetaOS.fs.mkdir(DIR);
+        } catch (e) {}
         await refresh();
         if (!selectedId) {
           const first = projectRoots()[0];
-          if (first) { selectedId = first.meta.id; renderAll(); }
+          if (first) {
+            selectedId = first.meta.id;
+            renderAll();
+          }
         }
-        setInterval(() => { if (!document.hidden) watchTick(); }, 4000);
+        setInterval(() => {
+          if (!document.hidden) watchTick();
+        }, 4000);
       })();
     </script>
   </body>
