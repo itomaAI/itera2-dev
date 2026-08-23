@@ -341,6 +341,13 @@
             cur = null;
             continue;
           }
+          // ★ 枠は「次の見出し」だけでなく「次の日時つきの行」でも閉じる（記法 §0）。
+          //   閉じないと、レポートの下に書かれた進捗の追記まで塊に入り、
+          //   完了時にまとめて親の履歴へ運ばれる（2026-08-24 / T-0195）。
+          if (cur && /^\s*- \d{4}-\d{2}-\d{2} \d{2}:\d{2}(\s|$)/.test(l)) {
+            cur = null;
+            continue;
+          }
           if (cur) cur.lines.push(l);
         }
         for (const c of out) c.text = c.lines.join('\n').trim();
@@ -2328,6 +2335,36 @@
           '未送に数えるのは自分の総括だけ',
           pendingRecaps(carriedNode).length === 1 && pendingRecaps(carriedNode)[0].at === '2026-08-23 12:00',
           pendingRecaps(carriedNode).map((r) => r.at + '/' + r.from),
+        );
+
+        // 枠は「次の日時つきの行」で閉じる（T-0195）。
+        // レポートの下に進捗の追記が続く実際の並びで、レポートだけが取れること。
+        const framed = [
+          '## 進捗',
+          '',
+          '- 2026-08-24 00:10 Itera: 着手した',
+          '### レポート 2026-08-24 00:30',
+          '',
+          '**決定**',
+          '- これはレポートの中身',
+          '',
+          '- 2026-08-24 00:42 Itera: レポートの後に書いた追記',
+          '- 2026-08-24 00:50 Itera: さらに追記',
+        ].join('\n');
+        const fr = parseRecaps(framed, '進捗', 'レポート');
+        ok(
+          'レポートの枠は次の日時つきの行で閉じる',
+          fr.length === 1 && !/追記/.test(fr[0].text) && /レポートの中身/.test(fr[0].text),
+          fr.map((r) => r.text),
+        );
+        const tail = ['## 進捗', '', '### レポート 2026-08-24 01:00', '', '**決定**', '- 末尾のレポート', ''].join(
+          '\n',
+        );
+        ok(
+          '節の末尾までのレポートは全部取れる',
+          parseRecaps(tail, '進捗', 'レポート')[0] &&
+            /末尾のレポート/.test(parseRecaps(tail, '進捗', 'レポート')[0].text),
+          parseRecaps(tail, '進捗', 'レポート'),
         );
 
         // 転記の基準は壁時計ではなく「どこまで渡したか」。
