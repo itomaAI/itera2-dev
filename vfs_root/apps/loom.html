@@ -192,21 +192,29 @@
         return { meta, body: m[2] };
       }
 
+      /**
+       * front matter を書き戻す。
+       * ★ 知らないキーを捨ててはいけない。以前は order に無いキーを落としており、
+       *   移送で付けた `origin`（80 枚）や `scheduled_note` が、**アプリで保存した瞬間に消えていた**
+       *   （2026-08-24 / T-0014）。記法に無いものを書く自由は残しつつ、
+       *   並び順だけを決める —— 知っているキーを順に、残りをその後ろに。
+       */
+      const FM_ORDER = [
+        'id',
+        'kind',
+        'title',
+        'status',
+        'priority',
+        'scheduled',
+        'created',
+        'updated',
+        'parent',
+        'supersedes',
+        'refs',
+      ];
       function serializeNode(meta, body) {
-        const order = [
-          'id',
-          'kind',
-          'title',
-          'status',
-          'priority',
-          'scheduled',
-          'created',
-          'updated',
-          'parent',
-          'supersedes',
-          'refs',
-        ];
-        const keys = order.filter((k) => meta[k] !== undefined && meta[k] !== '');
+        const live = (k) => meta[k] !== undefined && meta[k] !== '';
+        const keys = FM_ORDER.filter(live).concat(Object.keys(meta).filter((k) => !FM_ORDER.includes(k) && live(k)));
         const fm = keys.map((k) => `${k}: ${Array.isArray(meta[k]) ? JSON.stringify(meta[k]) : meta[k]}`);
         return `---\n${fm.join('\n')}\n---\n\n${String(body).trim()}\n`;
       }
@@ -1548,8 +1556,14 @@
         }
         const proj = isProject(n);
         const st = statusDef(n);
-        const opts = Object.entries(proj ? P_STATUS : T_STATUS)
-          .map(([k, v]) => `<option value="${k}" ${n.meta.status === k ? 'selected' : ''}>${v.label}</option>`)
+        // ★ 語彙の外にある値も選択肢に残す。残さないと選択肢の先頭が選ばれた状態になり、
+        //   「保存」を押しただけで**黙って別の値に変わる**（2026-08-24 / T-0014）。
+        const withCurrent = (list, cur) => (cur && !list.includes(cur) ? [cur].concat(list) : list);
+        const opts = withCurrent(Object.keys(proj ? P_STATUS : T_STATUS), n.meta.status)
+          .map((k) => {
+            const v = (proj ? P_STATUS : T_STATUS)[k];
+            return `<option value="${esc(k)}" ${n.meta.status === k ? 'selected' : ''}>${esc(v ? v.label : k + '（記法にない値）')}</option>`;
+          })
           .join('');
         const refs = Array.isArray(n.meta.refs) ? n.meta.refs : [];
         const stats = proj ? null : planStats(n.body);
@@ -1608,7 +1622,12 @@
               proj
                 ? ''
                 : `<label class="flex items-center gap-1.5">優先度
-              <select id="f-priority" class="bg-card border border-border-main rounded px-2 py-1">${['high', 'normal', 'low'].map((p) => `<option value="${p}" ${n.meta.priority === p ? 'selected' : ''}>${p}</option>`).join('')}</select>
+              <select id="f-priority" class="bg-card border border-border-main rounded px-2 py-1">${withCurrent(
+                ['high', 'normal', 'low'],
+                n.meta.priority,
+              )
+                .map((p) => `<option value="${esc(p)}" ${n.meta.priority === p ? 'selected' : ''}>${esc(p)}</option>`)
+                .join('')}</select>
             </label>
             <label class="flex items-center gap-1.5">いつやる
               <input type="date" id="f-scheduled" value="${esc(n.meta.scheduled || '')}" class="bg-card border border-border-main rounded px-2 py-1" />
@@ -2850,6 +2869,35 @@
           '全景: 画面に出ない札は無い（この偽の板では）',
           unreachable(board).length === 0,
           unreachable(board).map((n) => n.meta.id),
+        );
+
+        // 記法に無いキーを保存で落とさない（T-0014。origin が 80 枚にある）
+        const extra = serializeNode(
+          {
+            id: 'T-9300',
+            kind: 'task',
+            title: 'x',
+            status: 'todo',
+            origin: 'data/apps/handoff/tasks/T-0043.md',
+            scheduled_note: 'めも',
+          },
+          '## 依頼\n本文',
+        );
+        ok(
+          '知らない front matter のキーを落とさない',
+          /origin: data\/apps\/handoff\/tasks\/T-0043\.md/.test(extra) && /scheduled_note: めも/.test(extra),
+          extra,
+        );
+        const back = parseNode(extra);
+        ok(
+          '書いて読み直しても残る',
+          back.meta.origin === 'data/apps/handoff/tasks/T-0043.md' && back.meta.scheduled_note === 'めも',
+          back.meta,
+        );
+        ok(
+          '知っているキーは決めた順に並ぶ',
+          extra.indexOf('id:') < extra.indexOf('title:') && extra.indexOf('title:') < extra.indexOf('origin:'),
+          extra,
         );
 
         const pass = R.filter((r) => r.pass).length;

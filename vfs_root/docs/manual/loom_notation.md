@@ -1,4 +1,4 @@
-# Loom 記法 v0.1
+# Loom 記法 v0.2
 
 2026-08-23。**Loom のファイル形式の正**（`data/apps/loom/*.md`）。
 人向けの使い方は `docs/manual/loom.md`、AI 側の動き方は `memory/rules/loom.md`。
@@ -22,12 +22,15 @@
 | `kind` | ● | ● | `project` / `task` |
 | `title` | ● | ● | |
 | `status` | ● | ● | 下記 |
-| `created` | ● | ● | ISO8601（`+09:00` を付ける） |
+| `created` | ● | ● | ISO8601（**UTC**。アプリは `2026-08-24T00:50:00.000Z` の形で書く） |
 | `parent` | ● | ● | 親子辺。**P→P / P→T / T→T の 3 つだけ。T→P は無い** |
 | `supersedes` | ● | | 前後辺。継承したとき、後継が持つ |
 | `refs` | ● | ● | 参照ファイル。**タスクの refs は所属プロジェクトの refs の部分集合** |
 | `priority` | | ● | `high` / `normal` / `low` |
 | `scheduled` | | ● | `YYYY-MM-DD` |
+
+**記法に無いキーを書いてもよい。** アプリは知らないキーをそのまま書き戻す（順は既知のキーの後ろ）。
+ただし**アプリは知らないキーを読みも使いもしない**ので、意味を持たせるなら記法に載せること。
 
 **status**
 
