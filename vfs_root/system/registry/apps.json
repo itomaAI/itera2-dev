@@ -14,6 +14,13 @@
     ]
   },
   {
+    "id": "loom",
+    "name": "Loom",
+    "icon": "🧵",
+    "path": "apps/loom.html",
+    "description": "プロジェクトの系譜と、その下の仕事（あなたと AI の共同作業の板）"
+  },
+  {
     "id": "tasks",
     "name": "Tasks",
     "icon": "✅",

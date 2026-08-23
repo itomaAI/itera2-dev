@@ -33,6 +33,20 @@ This is the absolute physical layout of your universe.
 *   **`trash/`**
     *   Deleted items.
 
+## 📋 The Work Board (Loom)
+
+**This is where the long-running work lives. Check it at the start of every session.**
+
+*   Cards: `data/apps/loom/*.md` (one node per file — **the files are the single source of truth**;
+    the app does not need to be running).
+*   **How you work with it: `memory/rules/loom.md`. Read it before you touch a card.**
+*   Notation (the canonical spec): `docs/manual/loom_notation.md` — User guide: `docs/manual/loom.md`
+*   Pick up your turn with:
+    `<search query="^status: (todo|doing)" path="data/apps/loom" regex="true" context="0" />`
+    (`todo` / `doing` are yours; `inbox` / `blocked` / `review` / `paused` belong to the user.)
+*   Two containers: **projects** hold intent (a viewpoint that is never "done") and **knowledge**;
+    **tasks** hold a completion condition and **the work**. Knowledge placed on a task is lost when it closes.
+
 ## 🗂️ Active Context Links
 
 *(Agent: You should append links to relevant user profiles, ongoing project files, or important context documents here as you learn more about the user.)*

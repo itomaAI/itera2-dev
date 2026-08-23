@@ -67,6 +67,14 @@
 
         <div class="grid grid-cols-2 gap-3">
           <button
+            onclick="AppUI.go('apps/loom.html')"
+            class="relative flex flex-col items-center justify-center p-4 bg-card hover:bg-hover rounded-xl transition border border-transparent hover:border-primary/50 hover:shadow-md group overflow-hidden"
+          >
+            <div class="absolute inset-0 bg-primary/5 opacity-0 group-hover:opacity-100 transition duration-300"></div>
+            <span class="text-2xl mb-1 group-hover:scale-110 transition-transform">🧵</span>
+            <span class="text-xs font-bold text-text-main">Loom</span>
+          </button>
+          <button
             onclick="AppUI.go('apps/tasks.html')"
             class="relative flex flex-col items-center justify-center p-4 bg-card hover:bg-hover rounded-xl transition border border-transparent hover:border-primary/50 hover:shadow-md group overflow-hidden"
           >
