@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Loom</title>
-    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="/system/core/tw.js"></script>
     <script src="/system/core/ui.js"></script>
     <script src="/system/core/std.js"></script>
   </head>
@@ -343,7 +343,7 @@
           }
           // ★ 枠は「次の見出し」だけでなく「次の日時つきの行」でも閉じる（記法 §0）。
           //   閉じないと、レポートの下に書かれた進捗の追記まで塊に入り、
-          //   完了時にまとめて親の履歴へ運ばれる（2026-08-24 / T-0195）。
+          //   完了時にまとめて親の履歴へ運ばれる（2026-08-24 / T-0195。P-0009 の実データで発生）。
           if (cur && /^\s*- \d{4}-\d{2}-\d{2} \d{2}:\d{2}(\s|$)/.test(l)) {
             cur = null;
             continue;
@@ -578,6 +578,12 @@
 
         const withTitles = resolveTitles;
 
+        // ★ 以前はこの正規表現を「行ごとに」組み立てていた。1 枚 1500 行の札で 1500 回の
+        //   コンパイルになる（2026-08-24）。EVENTS は定数なので、描画ごとに 1 回でよい。
+        const EV_RE = new RegExp(
+          '^\\s*- (\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}) (' + EVENTS.join('|') + ')[:：]?\\s*(.*)$',
+        );
+
         const lines = String(src).split('\n');
         const out = [];
         let i = 0;
@@ -634,9 +640,7 @@
 
           // 出来事。枠の終端は「次の日時つきの行、または次の見出し」。
           // 字下げに頼らない ── 手で書くと全行の字下げが最も落ちやすい。
-          const ev = line.match(
-            new RegExp('^\\s*- (\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}) (' + EVENTS.join('|') + ')[:：]?\\s*(.*)$'),
-          );
+          const ev = line.match(EV_RE);
           if (ev) {
             const kind = ev[2];
             const cls = EVENT_CLS[kind] || 'text-text-muted';
@@ -816,6 +820,22 @@
           }
           out.sort(byIdAsc);
           return out;
+        },
+        /**
+         * 1 枚だけ読む。
+         * ★ 監視（4 秒ごと）で全件読み直すと、96 枚・約 600KB で 300ms 掛かる。
+         *   書き込みが続く間ずっと 4 秒ごとに走るので、画面が目に見えて重くなる（2026-08-24 実測）。
+         */
+        async readOne(file) {
+          try {
+            const n = parseNode(await MetaOS.fs.read(file));
+            n.path = file;
+            n.baseBody = n.body;
+            n.baseMeta = { ...n.meta };
+            return n.meta.id ? n : null;
+          } catch (e) {
+            return null;
+          }
         },
         async saveMetaOnly(t) {
           if (!t) return null;
@@ -1555,10 +1575,13 @@
       };
       window.select = async (id) => {
         if (!(await commitIfEditing())) return;
+        // ★ ここで全件読み直さない。札を選ぶだけなら手元の nodes で足りる（全件は 96 枚で約 300ms）。
+        //   外の変更は 4 秒ごとの監視が差分で取り込む（2026-08-24）。
         selectedId = id;
         editing = false;
+        editBase = null;
         clearNotice();
-        await refresh();
+        renderAll();
       };
       window.toggleEdit = async () => {
         if (!(await commitIfEditing())) return;
@@ -2134,7 +2157,7 @@
         watchSig = sig;
         const mine = selectedId ? changed.includes(`${selectedId}.md`) : false;
         if (!mine) {
-          nodes = await Store.list();
+          await applyChanged(changed);
           renderList();
           renderViews();
           return;
@@ -2149,8 +2172,31 @@
           showNoticeOnly(); // 掲示のために画面を作り直さない（作り直すと入力が消える）
           return;
         }
-        await refresh();
+        await applyChanged(changed);
+        if (selectedId && !byId(selectedId)) selectedId = null;
+        renderAll();
         AppUI.notify('外部の更新を取り込みました', 'info', 2000);
+      }
+      /**
+       * 変わった札だけを読み直して差し替える（監視から呼ぶ）。
+       * ★ 全件読み直しと違い、**消えた札は明示的に外す**必要がある。
+       *   `Store.list()` は「在るものを並べ直す」ので消滅が自然に反映されるが、こちらは差分なので。
+       */
+      async function applyChanged(names) {
+        for (const name of names) {
+          const base = String(name).split('/').pop();
+          if (!base.endsWith('.md')) continue;
+          const id = base.slice(0, -3);
+          const fresh = await Store.readOne(String(name).includes('/') ? String(name) : `${DIR}/${base}`);
+          const i = nodes.findIndex((n) => n.meta.id === id);
+          if (!fresh) {
+            if (i >= 0) nodes.splice(i, 1);
+            continue;
+          }
+          if (i >= 0) nodes[i] = fresh;
+          else nodes.push(fresh);
+        }
+        nodes.sort(byIdAsc);
       }
       function showNoticeOnly() {
         const el = DOM('detail');
@@ -2357,6 +2403,7 @@
           fr.length === 1 && !/追記/.test(fr[0].text) && /レポートの中身/.test(fr[0].text),
           fr.map((r) => r.text),
         );
+        // 見出しの無い塊（節の末尾まで）も従来どおり取れる
         const tail = ['## 進捗', '', '### レポート 2026-08-24 01:00', '', '**決定**', '- 末尾のレポート', ''].join(
           '\n',
         );
