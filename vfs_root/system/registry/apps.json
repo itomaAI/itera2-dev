@@ -11,35 +11,40 @@
         "extensions": ["md", "txt"],
         "mimeTypes": ["text/markdown", "text/plain"]
       }
-    ]
+    ],
+    "home": 2
   },
   {
     "id": "loom",
     "name": "Loom",
     "icon": "🧵",
     "path": "apps/loom.html",
-    "description": "プロジェクトの系譜と、その下の仕事（あなたと AI の共同作業の板）"
+    "description": "プロジェクトの系譜と、その下の仕事（あなたと AI の共同作業の板）",
+    "home": 1
   },
   {
     "id": "tasks",
     "name": "Tasks",
     "icon": "✅",
     "path": "apps/tasks.html",
-    "description": "Manage daily to-dos"
+    "description": "Manage daily to-dos",
+    "home": 3
   },
   {
     "id": "calendar",
     "name": "Calendar",
     "icon": "📅",
     "path": "apps/calendar.html",
-    "description": "Monthly calendar and events"
+    "description": "Monthly calendar and events",
+    "home": 4
   },
   {
     "id": "settings",
     "name": "Settings",
     "icon": "⚙️",
     "path": "system/apps/settings.html",
-    "description": "System configuration"
+    "description": "System configuration",
+    "home": 5
   },
   {
     "id": "billing",

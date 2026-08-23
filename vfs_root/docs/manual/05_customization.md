@@ -53,6 +53,26 @@ The list of apps shown in the **Library** (Launcher). If you build a new app, ad
 ]
 ```
 
+The Home screen builds its shortcut grid from this same list, so **an app appears on Home as soon as
+it is registered** — you never edit `home.html` to add one. Two optional keys control that grid:
+
+*   `"home": false` — keep the app out of the Home grid (it still shows in the Library).
+*   `"home": 1` — pin it to the front of the grid; smaller numbers come first.
+    Entries without the key keep their registry order and follow the pinned ones.
+
+```json
+[
+    {
+        "id": "tasks",
+        "name": "Tasks",
+        "icon": "✅",
+        "path": "apps/tasks.html",
+        "description": "Manage daily to-dos",
+        "home": 3
+    }
+]
+```
+
 ### `associations.json` (File Associations)
 Defines which app should automatically open when a user clicks a file in the Explorer.
 
