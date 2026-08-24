@@ -155,6 +155,91 @@
       let showClosed = false;
       let showTasks = true;
       const collapsed = new Set();
+
+      // ---------- 開閉状態を憶える（T-0202） ----------
+      // ★ 板のディレクトリ（DIR）には置かない。全景がファイル数と札の数を突き合わせるので、
+      //   別形式のファイルを混ぜると「読めなかったファイル」として警告に出る。
+      const UI_STATE = 'data/apps/loom_ui.json';
+      let uiLoaded = false;
+      let uiSaveTimer = null;
+
+      /**
+       * 表示上の親。**`meta.parent` とは違う。**
+       * 継承では前任の子が後継の下に出る（辺は書き換えず、描画側で合併している）。
+       * 「道を開く」で parent の鎖を辿ると、**畳んだままの後継**が残って札は見えないままになる。
+       * だから木の描画（childrenOf）と同じ解決をここでも使う。
+       */
+      function displayParentMap() {
+        const m = new Map();
+        for (const p of nodes) {
+          if (isProject(p) && successorOf(p.meta.id)) continue; // 前任は後継に吸収される
+          for (const c of childrenOf(p.meta.id)) if (!m.has(c.meta.id)) m.set(c.meta.id, p.meta.id);
+        }
+        return m;
+      }
+
+      /**
+       * 選んだ札までの道を開く。開いたら true。
+       * ★ これが無いと、畳んだ既定のせいで「選んだのに画面に出ない」が起きる。
+       *   行がそもそも描かれないので scrollIntoView も黙って何もしない。
+       *   起票・分岐の直後や、通知から開いたときに必ず踏む。
+       */
+      function openPathTo(id) {
+        if (!id) return false;
+        const m = displayParentMap();
+        const seen = new Set([id]);
+        let cur = id;
+        let changed = false;
+        for (let i = 0; i < 100; i++) {
+          const p = m.get(cur);
+          if (!p || seen.has(p)) break;
+          seen.add(p);
+          if (collapsed.delete(p)) changed = true;
+          cur = p;
+        }
+        return changed;
+      }
+
+      const hasKids = (n) => childrenOf(n.meta.id).length > 0;
+
+      /** 記録を読む。**札を読み終えた後に呼ぶ**（初回の既定が nodes に依るため）。 */
+      async function loadUiState() {
+        uiLoaded = true;
+        try {
+          if (await MetaOS.fs.exists(UI_STATE)) {
+            const j = JSON.parse(await MetaOS.fs.read(UI_STATE));
+            if (j && Array.isArray(j.collapsed)) {
+              collapsed.clear();
+              for (const id of j.collapsed) collapsed.add(id);
+              return;
+            }
+          }
+        } catch (e) {
+          // 壊れていても止めない（憶えていないだけで仕事はできる）が、**黙らない**。
+          // 静かに既定へ戻すと、利用者は「畳んだはずが毎回開いている」理由を知る手段が無い。
+          AppUI.notify('開閉状態の記録を読めませんでした。既定（すべて畳む）で始めます: ' + errMsg(e), 'warning', 4000);
+        }
+        // 記録が無い（初回）。**子を持つ札を畳む** —— 全部開いていて探せないのが依頼の出発点。
+        collapsed.clear();
+        for (const n of nodes) if (hasKids(n)) collapsed.add(n.meta.id);
+        saveUiState();
+      }
+
+      function saveUiState() {
+        if (!uiLoaded) return; // 読む前に書くと、記録を空で潰す
+        clearTimeout(uiSaveTimer);
+        uiSaveTimer = setTimeout(async () => {
+          try {
+            await MetaOS.fs.write(UI_STATE, JSON.stringify({ collapsed: [...collapsed] }), {
+              overwrite: true,
+              silent: true, // 開閉のたびに同期を鳴らさない
+            });
+          } catch (e) {
+            // ★ 黙って捨てない。捨てると「畳んだはずが次に開くと戻っている」が理由不明で続く。
+            AppUI.notify('開閉状態を保存できませんでした: ' + errMsg(e), 'warning', 4000);
+          }
+        }, 400);
+      }
       // 読めなかった／id が無くて捨てたファイル。捨てたことを黙っていると、板から静かに 1 枚消える。
       let loadSkips = [];
       let lastTreeScrollId = null;
@@ -336,26 +421,35 @@
         const lines = all.slice(r[0], r[1]);
         const out = [];
         let cur = null;
-        for (const l of lines) {
+        // ★ 枠の行範囲も持たせる（T-0200）。あとから**枠の中へ**差し込むのに要る。
+        //   start = 見出しの行、end = 枠に属する最後の行。どちらも body 全体での添字。
+        //   end の初期値は節の末尾（＝最後まで閉じられなかった枠のため）。
+        const close = (i) => {
+          if (cur) cur.end = r[0] + i - 1;
+          cur = null;
+        };
+        for (let i = 0; i < lines.length; i++) {
+          const l = lines[i];
           const h = l.match(
             new RegExp(
               '^###\\s+' + name + '\\s+(\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2})\\s*(?:[（(]\\s*((?:P|T)-\\d{4})\\s*[）)])?',
             ),
           );
           if (h) {
-            cur = { at: h[1], from: h[2] || '', lines: [] };
+            close(i);
+            cur = { at: h[1], from: h[2] || '', lines: [], start: r[0] + i, end: r[1] - 1 };
             out.push(cur);
             continue;
           }
           if (/^###\s/.test(l)) {
-            cur = null;
+            close(i);
             continue;
           }
           // ★ 枠は「次の見出し」だけでなく「次の日時つきの行」でも閉じる（記法 §0）。
           //   閉じないと、レポートの下に書かれた進捗の追記まで塊に入り、
           //   完了時にまとめて親の履歴へ運ばれる（2026-08-24 / T-0195。P-0009 の実データで発生）。
           if (cur && /^\s*- \d{4}-\d{2}-\d{2} \d{2}:\d{2}(\s|$)/.test(l)) {
-            cur = null;
+            close(i);
             continue;
           }
           if (cur) cur.lines.push(l);
@@ -914,6 +1008,46 @@
         },
       };
 
+      /**
+       * 運ぶ前に、その札をファイルから読み直す。
+       *
+       * ★ アプリの写しは、**画面に出ていない間は追随しない**。
+       *   外部変更の監視は `if (!document.hidden) watchTick()` で回しており、
+       *   前面に無いアプリの document は hidden になる（実測）。
+       *   その間に書かれた本文は写しに入らない。
+       *   古い写しのまま転記すると、**レポートも成果物も「無い」ことにされ、
+       *   1 行の「完了:」だけが親へ載る。しかも何も言わない**
+       *   （2026-08-24 / T-0196 で実際に起きた → T-0197）。
+       *
+       * 「無い」と「読めていない」を同じ既定値へ潰さない。読めなければ null を返し、
+       * 呼び出し側は運ぶのをやめる。
+       */
+      async function reloadNode(id) {
+        const fresh = await Store.readOne(fileOf(id));
+        if (!fresh) return null;
+        const i = nodes.findIndex((n) => n.meta.id === id);
+        if (i >= 0) nodes[i] = fresh;
+        else nodes.push(fresh);
+        return fresh;
+      }
+
+      /**
+       * 運ぶ直前に写しを最新にする。読めなければ理由を出して止める。
+       * 写しが古かったときは黙って通さない（気づけないと、同じ穴に何度でも落ちる）。
+       */
+      async function freshForTransfer(n) {
+        if (!n) return null;
+        const fresh = await reloadNode(n.meta.id);
+        if (!fresh) {
+          AppUI.notify(`${n.meta.id} を読み直せませんでした。運ぶのをやめます`, 'error', 4000);
+          return null;
+        }
+        if (fresh.body !== n.body) {
+          AppUI.notify('画面の写しが古かったので読み直しました', 'warning', 3000);
+        }
+        return fresh;
+      }
+
       // ============================================================
       // 通知（Itera へ）
       // ============================================================
@@ -972,6 +1106,20 @@
         census: { label: '全景', test: () => true },
       };
 
+      // すべて開く／すべて閉じる（T-0202）。畳んだ既定から戻れるようにするためのもの。
+      window.collapseAll = () => {
+        collapsed.clear();
+        for (const n of nodes) if (hasKids(n)) collapsed.add(n.meta.id);
+        openPathTo(selectedId); // 閉じた瞬間に、選んでいる札を見失わない
+        saveUiState();
+        renderAll();
+      };
+      window.expandAll = () => {
+        collapsed.clear();
+        saveUiState();
+        renderAll();
+      };
+
       function renderViews() {
         const btns = Object.entries(VIEWS)
           .map(([k, v]) => {
@@ -983,7 +1131,10 @@
         const extra =
           view === 'tree'
             ? `<button onclick="toggleTasks()" class="px-2.5 py-1 rounded-full text-xs transition ${showTasks ? 'bg-hover' : 'text-text-muted hover:bg-hover'}" title="プロジェクトの下にタスクを出す">タスク</button>
-             <button onclick="toggleClosed()" class="px-2.5 py-1 rounded-full text-xs transition ${showClosed ? 'bg-hover' : 'text-text-muted hover:bg-hover'}" title="凍結・継承済み・完了も出す">閉じたもの</button>`
+             <button onclick="toggleClosed()" class="px-2.5 py-1 rounded-full text-xs transition ${showClosed ? 'bg-hover' : 'text-text-muted hover:bg-hover'}" title="凍結・継承済み・完了も出す">閉じたもの</button>
+             <span class="mx-1 text-text-muted opacity-40">|</span>
+             <button onclick="collapseAll()" class="px-2.5 py-1 rounded-full text-xs text-text-muted hover:bg-hover transition" title="すべて畳む（選んでいる札までの道は開いたまま）">すべて閉じる</button>
+             <button onclick="expandAll()" class="px-2.5 py-1 rounded-full text-xs text-text-muted hover:bg-hover transition" title="すべて開く">すべて開く</button>`
             : '';
         DOM('views').innerHTML = btns + extra;
       }
@@ -1538,7 +1689,7 @@
         return `<div class="mb-4 flex flex-wrap items-center gap-2">
           ${btn('decompose()', '分解 ⋔', 'bg-hover hover:bg-primary hover:text-text-inverted', 'サブタスクに割る')}
           ${btn("askFold('レポート')", 'レポートを頼む', 'bg-hover hover:bg-success hover:text-text-inverted', '閉じる前に、Itera がレポートを書く')}
-          ${!isClosed(n) ? btn('complete()', '完了 ✓', 'bg-success text-text-inverted hover:opacity-90', 'レポートをプロジェクトの履歴へ、上位タスクへは 1 行') : ''}
+          ${!isClosed(n) ? btn('complete()', '確認へ回す ✓', 'bg-success text-text-inverted hover:opacity-90', 'レポートを確かめて確認待ちにする。親へ運ぶのは「確認したので完了にする」を押したとき') : ''}
           ${st.ball === 'user' ? btn('handToAI()', 'Itera に渡す →', 'bg-primary text-text-inverted hover:bg-primary/90', '') : ''}
           ${st.ball === 'ai' ? btn('interruptAI()', '中断', 'bg-warning text-text-inverted hover:opacity-90', 'ここまでと次の一手を書かせてから止める') + btn('handBackToUser()', '← 自分に戻す', 'bg-hover hover:bg-error hover:text-text-inverted', '') : ''}
         </div>`;
@@ -1671,11 +1822,16 @@
                    <button onclick="quick('確認事項', true)" class="text-xs px-3 py-1.5 rounded bg-hover hover:bg-primary hover:text-text-inverted transition font-medium">質問に回答する</button>
                    <button onclick="quick('追加要望', false)" class="text-xs px-3 py-1.5 rounded bg-hover transition">メモだけ</button>`
               }
+              ${
+                parseRecaps(n.body, logSection(n), recapName(n)).some((r) => !r.from || r.from === n.meta.id)
+                  ? `<button onclick="appendToRecap()" class="text-xs px-3 py-1.5 rounded bg-hover hover:bg-success hover:text-text-inverted transition font-medium" title="${esc(recapName(n))}の枠の中に書き足します。未解決が解決したときはここへ（枠の外に書くと親へ運ばれません）">${esc(recapName(n))}に追記（解決など）</button>`
+                  : ''
+              }
             </div>
           </div>
 
           ${!proj && n.meta.status === 'inbox' ? `<button onclick="send()" class="mt-5 w-full py-3 rounded-lg bg-primary text-text-inverted font-bold hover:bg-primary/90 shadow transition">この依頼を Itera に送る</button>` : ''}
-          ${!proj && n.meta.status === 'review' ? `<button onclick="setStatus('done')" class="mt-5 w-full py-3 rounded-lg bg-success text-text-inverted font-bold hover:opacity-90 shadow transition">確認したので完了にする</button>` : ''}
+          ${!proj && n.meta.status === 'review' ? `<button onclick="setStatus('done')" class="mt-5 w-full py-3 rounded-lg bg-success text-text-inverted font-bold hover:opacity-90 shadow transition" title="このときレポートと成果物が所属プロジェクトの履歴へ運ばれます（上位タスクへは 1 行）">確認したので完了にする（→ 親へ運ぶ）</button>` : ''}
         </div>`;
 
         if (prevId === n.meta.id) restoreDraft(draft);
@@ -1779,6 +1935,7 @@
       };
       window.toggleNode = (id) => {
         collapsed.has(id) ? collapsed.delete(id) : collapsed.add(id);
+        saveUiState();
         renderList();
       };
       window.select = async (id) => {
@@ -1789,6 +1946,9 @@
         editing = false;
         editBase = null;
         clearNotice();
+        // ★ 選んだ札までの道を開く。畳んだ既定と組み合わさると、
+        //   これが無い限り「選んだのに画面に出ない」が起きる（T-0202）。
+        if (openPathTo(id)) saveUiState();
         renderAll();
       };
       window.toggleEdit = async () => {
@@ -1946,9 +2106,12 @@
 
       /** 転記（上げる）。**畳まない。**子の総括をそのまま親の履歴へ載せる。 */
       window.pushUp = async () => {
-        const n = rawCurrent();
-        if (!n) return;
+        const n0 = rawCurrent();
+        if (!n0) return;
         if (!(await commitIfEditing())) return;
+        // ★ 運ぶ前に読み直す（理由は complete と同じ）。
+        const n = await freshForTransfer(n0);
+        if (!n) return;
         const pid = n.meta.parent;
         if (!pid || !byId(pid)) {
           AppUI.notify('親がありません', 'warning');
@@ -1978,8 +2141,13 @@
 
       /** 終結（合流）。転記して役目を終える。**一緒になるのは、この最後の一回だけ。** */
       window.closeMerge = async () => {
-        const n = rawCurrent();
-        if (!n || !isProject(n)) return;
+        const n0 = rawCurrent();
+        if (!n0 || !isProject(n0)) return;
+        if (!(await commitIfEditing())) return;
+        // ★ 確認ダイアログより前に読み直す。件数を古い写しから数えると、
+        //   利用者は「0 件」を見て納得したのに実際には未送の総括が置き去りになる。
+        const n = await freshForTransfer(n0);
+        if (!n) return;
         const rs = pendingRecaps(n);
         const res = await AppUI.showMessageBox({
           title: '終結（合流）',
@@ -2001,31 +2169,55 @@
       };
 
       /**
-       * 完了。レポートを **プロジェクトの履歴** へ、**上位タスクへは 1 行**。
-       * 全部をプロジェクトへ上げない ── これが履歴の粒度を決める唯一のつまみ。
+       * もう親へ運ばれたか。
+       *
+       * ★ 印を札の側に作らない。**証拠は親の履歴にある** ——
+       *   運ぶときに親へ `- <日時> 完了: <id>「…」` を書いており、これがそのまま印になる。
+       *   新しい印を導入すると、**旧仕様（完了で運んでいた頃）に閉じた札を拾えない**。
+       *   いま `review` に居る札は既に運ばれているので、確認した瞬間に二度目が載ってしまう。
        */
-      window.complete = async () => {
-        const t = rawCurrent();
-        if (!t || isProject(t)) return;
-        if (!(await commitIfEditing())) return;
+      function deliveredAlready(t) {
+        const hit = (p) =>
+          !!p &&
+          parseEntries(p.body, logSection(p)).some((e) => e.verb === '完了' && String(e.text).includes(t.meta.id));
+        return hit(owningProject(t)) || hit(byId(t.meta.parent));
+      }
+
+      /**
+       * 親へ運ぶ。レポート本体は **所属プロジェクトの履歴** へ、**上位タスクへは 1 行**。
+       * 全部をプロジェクトへ上げない ── これが履歴の粒度を決める唯一のつまみ。
+       *
+       * ★ 運ぶのは **`done` になる瞬間（＝山内さんの確認）**。完了ボタンでは運ばない（T-0203）。
+       *   確認より前に載せると、確認して直したことが親に届かない。
+       * ★ **ちょうど一度だけ。** 二度目は運ばずに `skipped` で返す。
+       */
+      async function deliverToParent(id, opts) {
+        const o = opts || {};
+        const t0 = byId(id);
+        if (!t0) return { ok: false, id, reason: `${id} は板にありません` };
+        if (isProject(t0)) return { ok: false, id, reason: 'プロジェクトはここでは運びません（転記 ↑ を使う）' };
+        // ★ 写しではなくファイルから（T-0196 → T-0197）。
+        const t = await freshForTransfer(t0);
+        if (!t) return { ok: false, id, reason: 'ファイルを読み直せませんでした' };
+        if (deliveredAlready(t))
+          return { ok: true, id: t.meta.id, skipped: true, reports: 0, to: null, reason: '既に運ばれています' };
+
         const rs = parseRecaps(t.body, '進捗', 'レポート');
         const artifacts = sectionText(t.body, '成果物');
         const parent = byId(t.meta.parent);
         const own = owningProject(t);
         const parentIsTask = parent && !isProject(parent);
-        if (!rs.length) {
-          const go = await AppUI.showMessageBox({
-            title: 'レポートがありません',
-            message:
-              'レポート（決定・却下・未解決）がまだ書かれていません。書かずに閉じますか？（Itera に頼むこともできます）',
-            type: 'warning',
-            buttons: [
-              { label: 'やめる', value: false, style: 'normal', isCancel: true },
-              { label: 'それでも閉じる', value: true, style: 'danger', isDefault: true },
-            ],
-          });
-          if (!go || go.action !== true) return;
-        }
+        if (!rs.length && !o.force)
+          return {
+            ok: false,
+            id: t.meta.id,
+            reports: 0,
+            artifacts: !!artifacts,
+            empty: true,
+            to: null,
+            reason: 'レポートがありません',
+          };
+
         const last = rs.length ? rs[rs.length - 1] : null;
         // プロジェクトの履歴へ：レポート本体
         if (own) {
@@ -2049,12 +2241,90 @@
             `- ${stamp()} 完了: ${t.meta.id}「${t.meta.title}」${one ? ' ／ 成果物: ' + one : ''}`,
           );
         }
+        return {
+          ok: true,
+          id: t.meta.id,
+          reports: rs.length,
+          artifacts: !!artifacts,
+          empty: !rs.length,
+          to: own ? own.meta.id : null,
+        };
+      }
+
+      /**
+       * 完了 —— **確認へ回すだけ。運ばない**（T-0203）。
+       *
+       * 親へ運ぶのは `done` になる瞬間（山内さんの「確認したので完了にする」）。
+       * ここで運ぶと、**確認の前に親へ載る**ので、確認して解決したことが親に反映されない。
+       *
+       * @param {string} [id] 対象の札。省略すると「画面で選択中の札」。
+       *   ★ 自律呼び出し（inject_js）で id を省くと、選択を取り違えて**別の札を閉じる**（T-0201）。
+       * @param {object} [opts] `{ force: true }` でレポートが無くても回す。
+       * @returns {{ok:boolean, id:string, reports:number, artifacts:boolean, empty:boolean, delivered:boolean, reason?:string}}
+       */
+      window.complete = async (id, opts) => {
+        const o = opts || {};
+        const t0 = id ? byId(id) : rawCurrent();
+        if (!t0) return { ok: false, id: id || null, reason: id ? `${id} は板にありません` : '札が選ばれていません' };
+        if (isProject(t0)) return { ok: false, id: t0.meta.id, reason: 'プロジェクトは完了にしません' };
+        // 編集中の本文を保存するのは「いま画面に出ている札」のときだけ。
+        // 別の札を id で閉じるときに commitIfEditing を通すと、
+        // 画面で編集中の**無関係な札**の本文を巻き込んで保存してしまう。
+        if (t0.meta.id === selectedId && !(await commitIfEditing()))
+          return { ok: false, id: t0.meta.id, reason: '編集中の本文を保存できませんでした' };
+        // ★ 写しではなくファイルから始める（T-0196 → T-0197）。
+        const t = await freshForTransfer(t0);
+        if (!t) return { ok: false, id: t0.meta.id, reason: 'ファイルを読み直せませんでした' };
+
+        const rs = parseRecaps(t.body, '進捗', 'レポート');
+        const artifacts = sectionText(t.body, '成果物');
+
+        if (!rs.length && !o.force) {
+          // ★ 呼ばれ方で分ける。
+          //   画面から押された（id 省略）なら、人がそこに居るので訊く。
+          //   id 指定＝自律呼び出しなら**訊かない** —— 相手の画面にダイアログを出して応答を待つと、
+          //   私の側は RPC が切れるまで固まる（2026-08-24 / T-0191 で実際に起きた）。
+          if (id)
+            return {
+              ok: false,
+              id: t.meta.id,
+              reports: 0,
+              artifacts: !!artifacts,
+              empty: true,
+              delivered: false,
+              reason: 'レポートがありません（確認へ回していません）',
+            };
+          const go = await AppUI.showMessageBox({
+            title: 'レポートがありません',
+            message:
+              'レポート（決定・却下・未解決）がまだ書かれていません。書かずに確認へ回しますか？（Itera に頼むこともできます）',
+            type: 'warning',
+            buttons: [
+              { label: 'やめる', value: false, style: 'normal', isCancel: true },
+              { label: 'それでも回す', value: true, style: 'danger', isDefault: true },
+            ],
+          });
+          if (!go || go.action !== true)
+            return { ok: false, id: t.meta.id, reports: 0, empty: true, delivered: false, reason: '取り消しました' };
+        }
         await mutate(t.meta.id, (fresh) => {
           fresh.meta.status = 'review';
           return true;
         });
-        AppUI.notify('完了しました（確認待ちにしました）', 'info', 2500);
+        AppUI.notify(
+          `${t.meta.id} を確認へ回しました（親へ運ぶのは確認のとき）` + (rs.length ? '' : ' ／ レポートなし'),
+          rs.length ? 'info' : 'warning',
+          2500,
+        );
         await refresh();
+        return {
+          ok: true,
+          id: t.meta.id,
+          reports: rs.length,
+          artifacts: !!artifacts,
+          empty: !rs.length,
+          delivered: false,
+        };
       };
 
       /** 畳むのは Itera の仕事。ここは依頼を送るだけで、機械で要約文を作らない。 */
@@ -2110,16 +2380,62 @@
         await refresh();
       };
 
+      /**
+       * `done` へ移す前に親へ運ぶ（T-0203）。運べなければ `done` にしない。
+       * ★ 画面からの操作なので、レポートが無ければ**訊く**（人がそこに居る）。
+       */
+      async function toDone(n) {
+        const r = await deliverToParent(n.meta.id);
+        if (!r.ok && r.empty) {
+          const go = await AppUI.showMessageBox({
+            title: 'レポートがありません',
+            message: `${n.meta.id}「${n.meta.title}」にレポート（決定・却下・未解決）がありません。このまま完了にすると、親には 1 行の「完了」だけが載ります。よろしいですか？`,
+            type: 'warning',
+            buttons: [
+              { label: 'やめる', value: false, style: 'normal', isCancel: true },
+              { label: 'それでも完了にする', value: true, style: 'danger', isDefault: true },
+            ],
+          });
+          if (!go || go.action !== true) return false;
+          const forced = await deliverToParent(n.meta.id, { force: true });
+          if (!forced.ok) {
+            AppUI.notify('親へ運べませんでした: ' + (forced.reason || ''), 'error');
+            return false;
+          }
+          return true;
+        }
+        if (!r.ok) {
+          AppUI.notify('親へ運べませんでした: ' + (r.reason || ''), 'error');
+          return false;
+        }
+        if (r.skipped) AppUI.notify('この札は既に親へ運ばれています（二重には載せません）', 'info', 2500);
+        else
+          AppUI.notify(
+            `親（${r.to || '—'}）へ運びました` + (r.reports ? `（レポート ${r.reports} 件）` : '（レポートなし）'),
+            'info',
+            2500,
+          );
+        return true;
+      }
+
       window.saveMeta = async () => {
+        // ★ 変更前の状態は current() より先に読む。current() は入力欄を同じ物へ流し込む。
+        const cur = rawCurrent();
+        const before = cur ? cur.meta.status : null;
         const n = current();
         if (!n) return;
+        // 状態の選択から done にした場合も運ぶ。経路を 1 つに絞ると、絞られなかった側が黙って抜ける。
+        if (!isProject(n) && n.meta.status === 'done' && before !== 'done' && !(await toDone(n))) return;
         if (!(await commitAll(n))) return;
         await refresh();
       };
       window.setStatus = async (s) => {
         const n = current();
         if (!n) return;
+        const before = n.meta.status;
         n.meta.status = s;
+        // ★ ここが「確認したので完了にする」。**運ぶのはこの瞬間**（T-0203）。
+        if (!isProject(n) && s === 'done' && before !== 'done' && !(await toDone(n))) return;
         if (!(await commitAll(n))) return;
         await refresh();
       };
@@ -2192,6 +2508,85 @@
             `Loom ${f.meta.id}「${f.meta.title}」に山内さんから追記がありました（## ${section}）。${readHint(f, line)}`,
           );
         await refresh();
+      };
+
+      /**
+       * レポート／総括の **枠の中へ** 追記する。
+       *
+       * ★ なぜ専用の処理が要るのか ——
+       *   ふつうの追記（`quick`）は `- <日時> 山内: …` の形で節の末尾に置く。
+       *   ところがレポートの枠は**次の日時つきの行で閉じる**（記法 §0 / T-0195）。
+       *   だから同じ形で書くと、**枠の外**に落ちる。枠の外は転記で運ばれない。
+       *   つまり「解決した」と書いたのに、**親には未解決のまま上がる** —— これがこの仕事の動機である。
+       *   よって書式を変える: `- **追記 <日時> 山内**: …`。
+       *   先頭が `- **` なので日時つきの行と誤読されず、枠が閉じない。
+       */
+      window.appendToRecap = async () => {
+        const n0 = rawCurrent();
+        if (!n0) return;
+        const text = quickNote();
+        if (!text) {
+          AppUI.notify('追記する内容を書いてください', 'warning');
+          return;
+        }
+        if (!(await commitIfEditing())) return;
+        const n = await freshForTransfer(n0);
+        if (!n) return;
+        const name = recapName(n);
+        const rs = parseRecaps(n.body, logSection(n), name).filter((r) => !r.from || r.from === n.meta.id);
+        if (!rs.length) {
+          AppUI.notify(`${name}がまだありません`, 'warning');
+          return;
+        }
+        // ★ もう親へ運ばれていたら、ここに書いても**親には届かない**（親の側は運ばれた時点の写し）。
+        //   黙って書くと「直したつもり」だけが残る。訊く。
+        // ★ 判定は `deliveredAlready`（＝親の履歴にある証拠）に一本化する。
+        //   以前は状態が review/done/dropped かで見ていたが、T-0203 で**運ぶのは done の瞬間**に変わり、
+        //   `review` は「まだ運ばれていない」を意味するようになった。
+        //   古い判定のままだと、**確認の場で解決を書き足すという本来の使い方でこそ警告が出る**
+        //   （T-0200 の機能が死ぬ）。判定を 2 か所に持つと、片方だけ直って必ずずれる。
+        const delivered = isProject(n)
+          ? !pendingRecaps(n).some((r) => r.at === rs[rs.length - 1].at)
+          : deliveredAlready(n);
+        if (delivered) {
+          const go = await AppUI.showMessageBox({
+            title: `この${name}はもう親へ運ばれています`,
+            message: `${rs[rs.length - 1].at} の${name}は既に親へ転記済みです。ここに追記しても親には反映されません（親の側は運ばれた時点の写しです）。それでも自分の札に書き残しますか？`,
+            type: 'warning',
+            buttons: [
+              { label: 'やめる', value: false, style: 'normal', isCancel: true },
+              { label: '書き残す', value: true, style: 'primary', isDefault: true },
+            ],
+          });
+          if (!go || go.action !== true) return;
+        }
+        const line = `- **追記 ${stamp()} 山内**: ${text.replace(/\n/g, ' ')}`;
+        let missed = false;
+        const f = await mutate(n.meta.id, (fresh) => {
+          // ★ 差し込む位置は「読み直した本文」で数え直す。写しで数えた添字を持ち込まない。
+          const rs2 = parseRecaps(fresh.body, logSection(fresh), recapName(fresh)).filter(
+            (r) => !r.from || r.from === fresh.meta.id,
+          );
+          if (!rs2.length) {
+            missed = true;
+            return false;
+          }
+          const t = rs2[rs2.length - 1];
+          const ls = fresh.body.split('\n');
+          let at = Math.min(t.end, ls.length - 1);
+          while (at > t.start && !ls[at].trim()) at--; // 枠末尾の空行より前へ入れる
+          ls.splice(at + 1, 0, line);
+          fresh.body = ls.join('\n');
+          return true;
+        });
+        if (missed) {
+          AppUI.notify(`${name}が見つかりませんでした（外部で書き換えられた可能性があります）`, 'error');
+          return;
+        }
+        if (!f) return;
+        clearQuick();
+        await refresh();
+        AppUI.notify(`${name}に追記しました`, 'info', 2000);
       };
 
       window.send = async () => {
@@ -2914,13 +3309,15 @@
           await MetaOS.fs.mkdir(DIR);
         } catch (e) {}
         await refresh();
+        // ★ 札を読み終えてから。初回の既定（子を持つ札を畳む）が nodes に依る（T-0202）。
+        await loadUiState();
         if (!selectedId) {
           const first = projectRoots()[0];
-          if (first) {
-            selectedId = first.meta.id;
-            renderAll();
-          }
+          if (first) selectedId = first.meta.id;
         }
+        // 畳んだ状態で始まるので、選んでいる札までの道を開いてから描く。
+        openPathTo(selectedId);
+        renderAll();
         setInterval(() => {
           if (!document.hidden) watchTick();
         }, 4000);
