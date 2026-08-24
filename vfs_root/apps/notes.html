@@ -173,6 +173,17 @@
           </div>
 
           <button
+            id="btn-outline"
+            onclick="toggleOutline()"
+            class="hidden text-text-muted hover:text-primary p-1.5 rounded transition"
+            title="目次"
+          >
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h10M4 18h13"></path>
+            </svg>
+          </button>
+
+          <button
             onclick="openInMonaco()"
             class="text-text-muted hover:text-primary p-1.5 rounded transition"
             title="Open in Code Editor (Host)"
@@ -207,10 +218,16 @@
 
       <div id="content-view" class="hidden flex-1 relative overflow-hidden">
         <div id="markdown-viewer" class="absolute inset-0 overflow-y-auto p-4 md:p-8 scroll-smooth">
-          <div class="max-w-6xl mx-auto flex gap-8 items-start">
+          <div class="max-w-6xl mx-auto flex flex-col xl:flex-row gap-4 xl:gap-8 items-stretch xl:items-start">
+            <!-- 長い文書のための目次。見出しが 3 つ未満なら出さない。
+                 ★ 広い画面では右の柱、狭い画面では本文の上の帯にする。
+                   柱のまま出すと 192px ぶん本文が痩せる（縦長の画面で読みにくい。2026-08-24 / T-0191）。
+                 ★ 出す・出さないは #btn-outline で選べる。既定は広い画面のときだけ。 -->
+            <nav
+              id="outline"
+              class="hidden order-first xl:order-last w-full xl:w-48 shrink-0 xl:sticky xl:top-0 max-h-40 xl:max-h-[calc(100vh-8rem)] overflow-y-auto rounded-lg border border-border-main bg-panel/50 p-2 xl:border-0 xl:bg-transparent xl:p-0"
+            ></nav>
             <article id="markdown-body" class="prose flex-1 min-w-0 max-w-3xl pb-20"></article>
-            <!-- 長い文書のための目次。見出しが 3 つ未満なら出さない -->
-            <nav id="outline" class="hidden sticky top-0 w-48 shrink-0 xl:block"></nav>
           </div>
         </div>
         <div id="markdown-editor-container" class="hidden absolute inset-0 bg-app">
@@ -489,17 +506,51 @@
         }
       }
 
+      /**
+       * 目次を出すかどうか。
+       * ★ 以前はここが el.classList.remove('hidden') だけで、
+       *   その hidden は xl:block と対になった**画面幅の門番**だった。外すと門番ごと消えるので、
+       *   狭い画面でも柱が出て本文が痩せていた（2026-08-24 / T-0191。山内さんの指摘）。
+       *   いまは「見出しが 3 つ以上あるか」と「利用者が出すと決めたか」の 2 つだけで決める。
+       * ★ 既定は広い画面のときだけ出す。一度でも押したら、その選択を覚える。
+       */
+      let outlineHasItems = false;
+      const outlineStored = () => localStorage.getItem('metaos_notes_outline');
+      let outlineOn =
+        outlineStored() === null ? window.matchMedia('(min-width: 1280px)').matches : outlineStored() === '1';
+
+      function applyOutline() {
+        const el = document.getElementById('outline');
+        const btn = document.getElementById('btn-outline');
+        if (!el) return;
+        el.classList.toggle('hidden', !(outlineHasItems && outlineOn));
+        if (btn) {
+          // 目次を持たない文書ではボタン自体を出さない（押しても何も起きないボタンを置かない）
+          btn.classList.toggle('hidden', !outlineHasItems);
+          btn.classList.toggle('text-primary', outlineOn);
+          btn.classList.toggle('text-text-muted', !outlineOn);
+          btn.title = outlineOn ? '目次を隠す' : '目次を出す';
+        }
+      }
+
+      window.toggleOutline = () => {
+        outlineOn = !outlineOn;
+        localStorage.setItem('metaos_notes_outline', outlineOn ? '1' : '0');
+        applyOutline();
+      };
+
       /** 見出しの一覧（長い文書で位置を掴むため）。3 つ未満のときは出さない。 */
       function renderOutline(content) {
         const el = document.getElementById('outline');
         if (!el) return;
         const hs = MD.headings(content).filter((h) => h.level <= 3);
-        if (hs.length < 3) {
+        outlineHasItems = hs.length >= 3;
+        if (!outlineHasItems) {
           el.innerHTML = '';
-          el.classList.add('hidden');
+          applyOutline();
           return;
         }
-        el.classList.remove('hidden');
+        applyOutline();
         el.innerHTML =
           '<div class="text-[10px] font-bold uppercase tracking-widest text-text-muted mb-2">Outline</div>' +
           hs
@@ -512,6 +563,11 @@
       window.jumpTo = (id) => {
         const t = document.getElementById(id);
         if (t) t.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        // 狭い画面では帯が本文の上に居座るので、飛んだら畳む（選択そのものは変えない）
+        if (!window.matchMedia('(min-width: 1280px)').matches) {
+          const el = document.getElementById('outline');
+          if (el) el.classList.add('hidden');
+        }
       };
 
       /**
