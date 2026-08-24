@@ -180,10 +180,17 @@
       </div>
     </div>
 
+    <!-- 読み込みに失敗したときは黙って空にしない（「予定なし」に見えてしまう） -->
+    <div
+      id="load-error"
+      class="hidden shrink-0 mb-3 px-4 py-2 rounded-lg border border-error/40 bg-error/10 text-error text-xs font-medium"
+    ></div>
+
     <!-- Calendar Grid -->
     <div class="flex-1 flex flex-col bg-panel border border-border-main rounded-xl overflow-hidden shadow-sm relative">
       <!-- Header Row -->
       <div
+        id="weekday-row"
         class="grid grid-cols-7 gap-px bg-border-main text-center py-2 text-xs font-bold text-text-muted uppercase tracking-wider bg-panel shrink-0"
       >
         <div>Sun</div>
@@ -199,16 +206,42 @@
     </div>
 
     <script>
+      // 題や備考は外（Google カレンダー）から来る。エスケープせずに innerHTML へ入れると、
+      // `<` を含む題ひとつで画面が壊れる（2026-08-24 / T-0192）。
+      const esc = (v) =>
+        String(v == null ? '' : v)
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;');
+
+      // 表示の言語。設定が日本語ならこちらに合わせる（既定は英語のまま）。
+      let LOCALE = 'en-US';
+
       // --- Domain API ---
       const CalendarAPI = {
         async getEvents(monthKey) {
-          const path = `data/events/${monthKey}.json`;
-          const events = await App.FS.readJson(path, []);
-          return events.sort((a, b) => a.date.localeCompare(b.date));
+          // 「ファイルが無い（その月は予定なし）」と「壊れていて読めない」を分ける。
+          // App.FS.readJson は両方を既定値に潰すので、ここでは使わない。
+          // 潰すと、壊れた月が「予定なし」に見え、それを根拠に判断してしまう。
+          const path = `data/apps/events/${monthKey}.json`;
+          let raw;
+          try {
+            raw = await MetaOS.fs.read(path);
+          } catch (e) {
+            return [];
+          }
+          let events;
+          try {
+            events = JSON.parse(raw);
+            if (!Array.isArray(events)) throw new Error('配列ではありません');
+          } catch (e) {
+            throw new Error(`${path} が読めません（${e.message}）`);
+          }
+          return events.sort((a, b) => String(a.date).localeCompare(String(b.date)));
         },
         async addEvent(title, date, time = '', note = '', endTime = '') {
           const monthKey = date.slice(0, 7);
-          const path = `data/events/${monthKey}.json`;
+          const path = `data/apps/events/${monthKey}.json`;
           const events = await App.FS.readJson(path, []);
           const newEvent = { id: Date.now().toString(), title: title.trim(), date, time, endTime, note };
           events.push(newEvent);
@@ -218,7 +251,7 @@
         },
         async deleteEvent(id, dateStr) {
           const monthKey = dateStr.slice(0, 7);
-          const path = `data/events/${monthKey}.json`;
+          const path = `data/apps/events/${monthKey}.json`;
           let events = await App.FS.readJson(path, []);
           const initialLen = events.length;
           const eventToDelete = events.find((e) => e.id === id);
@@ -231,9 +264,32 @@
           return false;
         },
         async updateEvent(id, updates) {
+          // 消して足し直すと **id が作り直される**。Google 由来の予定は id で突き合わせているので、
+          // 編集するたびに同期で二重になる。また allDay など知らないキーも落ちる。
+          // だから「その場で書き換える」。月をまたぐときだけ、旧月から外して新月へ移す。
           const { originalDate, date, title, time, endTime, note } = updates;
-          await this.deleteEvent(id, originalDate || date);
-          return await this.addEvent(title, date, time, note, endTime);
+          const fromKey = String(originalDate || date).slice(0, 7);
+          const toKey = String(date).slice(0, 7);
+          const fromPath = `data/apps/events/${fromKey}.json`;
+          const list = await App.FS.readJson(fromPath, []);
+          const i = list.findIndex((e) => e.id === id);
+          if (i < 0) return null;
+          const merged = { ...list[i], title: String(title).trim(), date, time, endTime, note };
+          // 時刻を入れたなら、それは終日ではない
+          if (merged.time) delete merged.allDay;
+          if (fromKey === toKey) {
+            list[i] = merged;
+            await App.FS.writeJson(fromPath, list);
+          } else {
+            list.splice(i, 1);
+            await App.FS.writeJson(fromPath, list);
+            const toPath = `data/apps/events/${toKey}.json`;
+            const dst = await App.FS.readJson(toPath, []);
+            dst.push(merged);
+            await App.FS.writeJson(toPath, dst);
+          }
+          App.AI.logEvent(`User updated a calendar event: "${merged.title}" on ${date}`, 'event_updated');
+          return merged;
         },
         async getCalendarItems(monthKey) {
           const events = await this.getEvents(monthKey);
@@ -242,7 +298,7 @@
           // Fetch tasks locally
           let allTasks = [];
           try {
-            const files = await MetaOS.fs.list('data/tasks');
+            const files = await MetaOS.fs.list('data/apps/tasks');
             for (const f of files.filter((x) => x.endsWith('.json'))) {
               allTasks.push(...(await App.FS.readJson(f, [])));
             }
@@ -271,13 +327,21 @@
         const monthKey = `${year}-${String(month + 1).padStart(2, '0')}`;
         const todayStr = new Date().toISOString().slice(0, 10);
 
-        DOM('month-label').textContent = State.currentDate.toLocaleDateString('en-US', {
+        DOM('month-label').textContent = State.currentDate.toLocaleDateString(LOCALE, {
           month: 'long',
           year: 'numeric',
         });
 
         // Fetch events and tasks for this month
-        State.events = await CalendarAPI.getCalendarItems(monthKey).catch(() => []);
+        const err = DOM('load-error');
+        try {
+          State.events = await CalendarAPI.getCalendarItems(monthKey);
+          err.classList.add('hidden');
+        } catch (e) {
+          State.events = [];
+          err.textContent = `この月の予定を読み込めませんでした: ${e.message}`;
+          err.classList.remove('hidden');
+        }
 
         const firstDay = new Date(year, month, 1).getDay();
         const daysInMonth = new Date(year, month + 1, 0).getDate();
@@ -293,19 +357,31 @@
           const dayEvents = State.events.filter((i) => i.date === dateStr);
 
           // Render badges
-          const badges = dayEvents
-            .sort((a, b) => (a.time || '').localeCompare(b.time || ''))
+          // セルの中でスクロールさせると、スクロールバーを隠しているので **在ることに気づけない**。
+          // 3 件までを出し、残りは数で見せる（開けば全部見える）。
+          const sorted = dayEvents.slice().sort((a, b) => (a.time || '').localeCompare(b.time || ''));
+          const SHOWN = 3;
+          let badges = sorted
+            .slice(0, SHOWN)
             .map((i) => {
               const isTask = i.type === 'task';
               const color = isTask
                 ? 'bg-success/15 text-success border-success/30'
                 : 'bg-primary/15 text-primary border-primary/30';
               const timeStr = i.time
-                ? `<span class="opacity-60 font-mono mr-1">${i.time}${i.endTime ? '-' + i.endTime : ''}</span>`
-                : '';
-              return `<div class="text-[9px] px-1.5 py-0.5 rounded border ${color} truncate mb-0.5 font-medium tracking-tight">${timeStr}${i.title}</div>`;
+                ? `<span class="opacity-60 font-mono mr-1">${esc(i.time)}${i.endTime ? '-' + esc(i.endTime) : ''}</span>`
+                : i.allDay
+                  ? `<span class="opacity-60 font-mono mr-1">${LOCALE === 'ja-JP' ? '終日' : 'ALL'}</span>`
+                  : '';
+              return `<div class="text-[9px] px-1.5 py-0.5 rounded border ${color} truncate mb-0.5 font-medium tracking-tight">${timeStr}${esc(i.title)}</div>`;
             })
             .join('');
+          if (sorted.length > SHOWN) {
+            const rest = sorted.length - SHOWN;
+            badges += `<div class="text-[9px] px-1.5 text-text-muted font-medium">${
+              LOCALE === 'ja-JP' ? `他 ${rest} 件` : `+${rest} more`
+            }</div>`;
+          }
 
           const isToday = dateStr === todayStr;
           const todayClass = isToday
@@ -340,12 +416,12 @@
         State.modalDate = dateStr;
         const targetDate = new Date(dateStr + 'T00:00:00'); // Prevent timezone shift
 
-        DOM('modal-date-display').textContent = targetDate.toLocaleDateString('en-US', {
+        DOM('modal-date-display').textContent = targetDate.toLocaleDateString(LOCALE, {
           month: 'long',
           day: 'numeric',
           year: 'numeric',
         });
-        DOM('modal-weekday-display').textContent = targetDate.toLocaleDateString('en-US', { weekday: 'long' });
+        DOM('modal-weekday-display').textContent = targetDate.toLocaleDateString(LOCALE, { weekday: 'long' });
         DOM('modal-target-date').value = dateStr;
 
         const dayEvents = State.events.filter((i) => i.date === dateStr);
@@ -384,11 +460,12 @@
             const cardColor = isTask
               ? 'bg-success/5 border-success/30'
               : 'bg-primary/5 border-primary/30 hover:bg-primary/10 hover:border-primary/50 cursor-pointer';
+            const allDayText = LOCALE === 'ja-JP' ? '終日' : 'ALL DAY';
             const timeText = event.time
               ? event.endTime
-                ? `${event.time}<br><span class="opacity-50">${event.endTime}</span>`
-                : event.time
-              : 'ALL DAY';
+                ? `${esc(event.time)}<br><span class="opacity-50">${esc(event.endTime)}</span>`
+                : esc(event.time)
+              : allDayText;
 
             return `
                     <div class="flex gap-4 group relative" ${!isTask ? `onclick="openEventForm('${event.id}')"` : `title="Tasks cannot be edited here."`}>
@@ -402,13 +479,13 @@
                         <div class="flex-1 pb-6 pt-1">
                             <div class="p-3 rounded-xl border ${cardColor} flex flex-col gap-1 shadow-sm transition">
                                 <div class="flex items-start justify-between gap-2">
-                                    <div class="text-sm font-bold text-text-main leading-tight">${event.title}</div>
+                                    <div class="text-sm font-bold text-text-main leading-tight">${esc(event.title)}</div>
                                     ${!isTask ? `<button onclick="event.stopPropagation(); deleteEvent('${event.id}')" class="text-text-muted hover:text-error opacity-0 group-hover:opacity-100 transition"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg></button>` : ''}
                                 </div>
                                 <div class="text-[10px] text-text-muted uppercase tracking-wider font-bold flex items-center gap-1">
                                     <span>${icon}</span> ${isTask ? 'Task Deadline' : event.note ? 'Notes' : 'Event'}
                                 </div>
-                                ${event.note ? `<div class="text-xs text-text-muted mt-1 bg-card/50 p-2 rounded border border-border-main/50 line-clamp-2">${event.note}</div>` : ''}
+                                ${event.note ? `<div class="text-xs text-text-muted mt-1 bg-card/50 p-2 rounded border border-border-main/50 line-clamp-2">${esc(event.note)}</div>` : ''}
                             </div>
                         </div>
                     </div>`;
@@ -516,9 +593,48 @@
         }
       }
 
+      // 置き場を data/events/ から data/apps/events/ へ移した（アプリのデータは data/apps/ に集める）。
+      // 既にある環境の予定を置き去りにしないため、**新しい側に無い月だけ**を一度引き取る。上書きはしない。
+      async function adoptLegacyEvents() {
+        let old = [];
+        try {
+          old = await MetaOS.fs.list('data/events');
+        } catch (e) {
+          return;
+        }
+        for (const f of old.filter((x) => String(x).endsWith('.json'))) {
+          const name = String(f).split('/').pop();
+          const dest = `data/apps/events/${name}`;
+          try {
+            if (await MetaOS.fs.exists(dest)) continue;
+            const src = String(f).includes('/') ? String(f) : `data/events/${name}`;
+            await MetaOS.fs.write(dest, await MetaOS.fs.read(src));
+          } catch (e) {}
+        }
+      }
+
+      const WEEKDAYS = {
+        'ja-JP': ['日', '月', '火', '水', '木', '金', '土'],
+        'en-US': ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'],
+      };
+
       // --- Boot ---
       (async () => {
+        try {
+          const prefs = await App.Config.get('preferences');
+          if (/^(ja|japanese)/i.test(String(prefs.language || ''))) LOCALE = 'ja-JP';
+        } catch (e) {}
+        DOM('weekday-row').innerHTML = (WEEKDAYS[LOCALE] || WEEKDAYS['en-US']).map((d) => `<div>${d}</div>`).join('');
+
+        await adoptLegacyEvents();
         await render();
+
+        // 予定は外からも増える（取り込み・AI の書き込み）。開いたままの画面が古びないようにする。
+        if (window.MetaOS && MetaOS.system && MetaOS.system.on) {
+          MetaOS.system.on('vfs_mutation', (m) => {
+            if (m && typeof m.path === 'string' && m.path.startsWith('data/apps/events/')) render();
+          });
+        }
 
         // V2: Soft Navigation (Resume) 対応
         if (window.MetaOS && MetaOS.system && MetaOS.system.on) {

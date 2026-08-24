@@ -65,40 +65,8 @@
           </button>
         </div>
 
-        <div class="grid grid-cols-2 gap-3">
-          <button
-            onclick="AppUI.go('apps/tasks.html')"
-            class="relative flex flex-col items-center justify-center p-4 bg-card hover:bg-hover rounded-xl transition border border-transparent hover:border-primary/50 hover:shadow-md group overflow-hidden"
-          >
-            <div class="absolute inset-0 bg-primary/5 opacity-0 group-hover:opacity-100 transition duration-300"></div>
-            <span class="text-2xl mb-1 group-hover:scale-110 transition-transform">✅</span>
-            <span class="text-xs font-bold text-text-main">Tasks</span>
-          </button>
-          <button
-            onclick="AppUI.go('apps/notes.html')"
-            class="relative flex flex-col items-center justify-center p-4 bg-card hover:bg-hover rounded-xl transition border border-transparent hover:border-primary/50 hover:shadow-md group overflow-hidden"
-          >
-            <div class="absolute inset-0 bg-primary/5 opacity-0 group-hover:opacity-100 transition duration-300"></div>
-            <span class="text-2xl mb-1 group-hover:scale-110 transition-transform">📝</span>
-            <span class="text-xs font-bold text-text-main">Notes</span>
-          </button>
-          <button
-            onclick="AppUI.go('apps/calendar.html')"
-            class="relative flex flex-col items-center justify-center p-4 bg-card hover:bg-hover rounded-xl transition border border-transparent hover:border-primary/50 hover:shadow-md group overflow-hidden"
-          >
-            <div class="absolute inset-0 bg-primary/5 opacity-0 group-hover:opacity-100 transition duration-300"></div>
-            <span class="text-2xl mb-1 group-hover:scale-110 transition-transform">📅</span>
-            <span class="text-xs font-bold text-text-main">Calendar</span>
-          </button>
-          <button
-            onclick="AppUI.go('system/apps/settings.html')"
-            class="relative flex flex-col items-center justify-center p-4 bg-card hover:bg-hover rounded-xl transition border border-transparent hover:border-primary/50 hover:shadow-md group overflow-hidden"
-          >
-            <div class="absolute inset-0 bg-primary/5 opacity-0 group-hover:opacity-100 transition duration-300"></div>
-            <span class="text-2xl mb-1 group-hover:scale-110 transition-transform">⚙️</span>
-            <span class="text-xs font-bold text-text-main">Settings</span>
-          </button>
-        </div>
+        <!-- ショートカットは system/registry/apps.json から組み立てる（T-0188）。ここに直書きしない -->
+        <div id="app-grid" class="grid grid-cols-2 gap-3"></div>
 
         <!-- Quick Actions Footer -->
         <div class="mt-auto pt-2 border-t border-border-main flex gap-2 justify-end">
@@ -331,7 +299,7 @@
           // Fetch Tasks Locally
           let allTasks = [];
           try {
-            const files = await MetaOS.fs.list('data/tasks');
+            const files = await MetaOS.fs.list('data/apps/tasks');
             for (const f of files.filter((x) => x.endsWith('.json'))) {
               allTasks.push(...(await App.FS.readJson(f, [])));
             }
@@ -397,7 +365,7 @@
           close: () => DOM('edit-modal').classList.add('hidden'),
           _updateTaskFile: async (id, fn) => {
             try {
-              const files = await MetaOS.fs.list('data/tasks');
+              const files = await MetaOS.fs.list('data/apps/tasks');
               for (const f of files.filter((x) => x.endsWith('.json'))) {
                 let tasks = await App.FS.readJson(f, []);
                 const idx = tasks.findIndex((t) => t.id === id);
@@ -451,6 +419,56 @@
           },
         };
 
+        // --- ショートカット（目録から組み立てる） ---
+        // ここに直書きすると、アプリを足すたびにホームを手で直すことになる（2026-08-24 / T-0188）。
+        // 目録（system/registry/apps.json）の各項目は、任意で home を持てる:
+        //   home: false  … ホームに出さない
+        //   home: <数値> … 先頭へ、その数の小さい順に並べる
+        //   書かなければ … 目録の順のまま、数値指定の後ろに出る
+        const escHtml = (v) =>
+          String(v == null ? '' : v)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;');
+
+        const renderShortcuts = async () => {
+          const el = document.getElementById('app-grid');
+          if (!el) return;
+          let apps;
+          try {
+            apps = JSON.parse(await MetaOS.fs.read('system/registry/apps.json'));
+            if (!Array.isArray(apps)) throw new Error('目録が配列ではありません');
+          } catch (e) {
+            // 既定の一覧を埋め込まない。無い物を在るように見せるより、読めないと言う方がよい。
+            el.innerHTML =
+              '<p class="col-span-2 text-xs text-text-muted leading-relaxed">目録（system/registry/apps.json）が読めませんでした。右上の Library から開けます。</p>';
+            return;
+          }
+          const rank = (a) => (typeof a.home === 'number' ? a.home : Number.MAX_SAFE_INTEGER);
+          const shown = apps
+            .filter((a) => a && a.path && a.home !== false)
+            .map((a, i) => ({ a, i }))
+            .sort((x, y) => rank(x.a) - rank(y.a) || x.i - y.i)
+            .map((x) => x.a);
+          el.innerHTML = '';
+          for (const app of shown) {
+            const b = document.createElement('button');
+            b.className =
+              'relative flex flex-col items-center justify-center p-4 bg-card hover:bg-hover rounded-xl transition border border-transparent hover:border-primary/50 hover:shadow-md group overflow-hidden';
+            b.title = app.description || app.name || app.id || '';
+            b.innerHTML =
+              '<div class="absolute inset-0 bg-primary/5 opacity-0 group-hover:opacity-100 transition duration-300"></div>' +
+              '<span class="text-2xl mb-1 group-hover:scale-110 transition-transform">' +
+              escHtml(app.icon || '📦') +
+              '</span>' +
+              '<span class="text-xs font-bold text-text-main text-center leading-tight">' +
+              escHtml(app.name || app.id) +
+              '</span>';
+            b.addEventListener('click', () => AppUI.go(app.path));
+            el.appendChild(b);
+          }
+        };
+
         // --- Boot Sequence ---
         const boot = async () => {
           if (!window.MetaOS) return setTimeout(boot, 50);
@@ -464,13 +482,18 @@
           fetchWeather();
           updateClock();
           refreshWidgets();
+          renderShortcuts();
 
           setInterval(updateClock, 1000);
           setInterval(fetchWeather, 18e5); // 30 mins
 
           // V2 API
           if (window.MetaOS && MetaOS.system.on) {
-            MetaOS.system.on('vfs_mutation', (m) => m.path.startsWith('data/') && refreshWidgets());
+            MetaOS.system.on('vfs_mutation', (m) => {
+              if (m.path.startsWith('data/')) refreshWidgets();
+              // 登録した時点でホームに出る（アプリを足しても、ここを書き換えなくてよい）
+              if (m.path === 'system/registry/apps.json') renderShortcuts();
+            });
           }
         };
 
