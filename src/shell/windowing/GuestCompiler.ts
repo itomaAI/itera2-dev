@@ -19,6 +19,31 @@ export class GuestCompiler {
 
   constructor() {}
 
+  /**
+   * 読み込めなかったパスの代わりに見せる Blob URL を作る。
+   *
+   * ★ ここで要求されたパスをそのまま返してはならない。
+   *   配信先が SPA リライト（未知の URL すべてに index.html を 200 で返す）を行っていると、
+   *   ブラウザは 404 の代わりに**親 OS の HTML** を受け取る。それが iframe の中で起動して
+   *   「OS の中で OS が動く」状態になり、画面が壊れる（ミャク楽 Agent で実際に起きた / T-0196）。
+   *   404 が 404 として返ってくることを当てにできないので、こちら側で閉じる。
+   */
+  private _createMissingUrl(absPath: string, reason: string, blobUrls: string[]): string {
+    const escaped = absPath.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    const html =
+      `<!doctype html><html lang="ja"><head><meta charset="utf-8"><title>${reason}</title></head>` +
+      `<body style="margin:0;height:100vh;display:flex;align-items:center;justify-content:center;` +
+      `background:#1e1e2e;color:#cdd6f4;font-family:system-ui,sans-serif;">` +
+      `<div style="text-align:center;padding:2rem;"><div style="font-size:2rem;">404</div>` +
+      `<p style="margin:.5rem 0 0;">${reason}</p>` +
+      `<p style="margin:.25rem 0 0;opacity:.7;font-size:.85rem;word-break:break-all;">${escaped}</p>` +
+      `</div></body></html>`;
+
+    const url = URL.createObjectURL(new Blob([html], { type: 'text/html' }));
+    blobUrls.push(url);
+    return url;
+  }
+
   private _parsePath(path: string): {
     basePath: string;
     search: string;
@@ -138,11 +163,14 @@ window.addEventListener('message', async (e) => {
 
     if (!vfs.exists(USER_PRINCIPAL, absPath)) {
       console.warn(`[GuestCompiler] File not found: ${absPath}`);
-      return requestPath;
+      return this._createMissingUrl(absPath, 'ファイルが見つかりません', blobUrls);
     }
 
     const stat = vfs.stat(USER_PRINCIPAL, absPath);
-    if (stat.kind !== 'file') return requestPath;
+    if (stat.kind !== 'file') {
+      console.warn(`[GuestCompiler] Not a file: ${absPath}`);
+      return this._createMissingUrl(absPath, 'ファイルではありません（ディレクトリ）', blobUrls);
+    }
 
     const mimeType = stat.mimeType || this.getMimeType(absPath);
     const isHtml = absPath.endsWith('.html');
