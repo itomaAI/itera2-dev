@@ -247,6 +247,30 @@
       let currentMode = 'view';
       let fileContent = '';
 
+      /**
+       * ★ 保存の根拠は「編集が起きたこと」であって、「編集欄と写しが違うこと」ではない。
+       *   以前は setMode('view') が textarea.value をそのまま書き戻していたため、
+       *   **一度も編集せずに「表示」を押すとファイルが空になった**（2026-08-24 / T-0199。
+       *   docs/manual/loom.md が実際に 0 バイトになった）。編集欄に本文が入るのは
+       *   「編集」を押したときだけなので、空の編集欄が「利用者が消した」と解釈されていた。
+       *   同じ経路で、A を編集したあと B を開いて「表示」を押すと、B に A の本文が入った。
+       * - editorPath … 編集欄がいまどの文書の本文を持っているか（読めなかった文書では null）
+       * - dirty      … その文書に対して実際に編集が起きたか
+       */
+      let editorPath = null;
+      let dirty = false;
+
+      /**
+       * 書き込んでよいか。DOM も I/O も触らないので、そのまま試験できる。
+       * 理由を捨てない ── 「保存しなかった」を黙って通すと、消えたときに何も残らない。
+       */
+      function savePolicy(s) {
+        if (!s.currentPath) return { save: false, why: 'no-document' };
+        if (s.editorPath !== s.currentPath) return { save: false, why: 'editor-not-loaded' };
+        if (!s.dirty) return { save: false, why: 'not-edited' };
+        return { save: true, why: 'edited' };
+      }
+
       function toggleSidebar() {
         const sidebar = document.getElementById('sidebar');
         const overlay = document.getElementById('sidebar-overlay');
@@ -405,6 +429,7 @@
           viewer.classList.add('hidden');
           editor.classList.remove('hidden');
           textarea.value = fileContent;
+          editorPath = currentPath;
           textarea.focus();
         } else {
           btnEdit.className = 'px-3 py-1.5 rounded-md text-text-muted hover:text-text-main transition';
@@ -412,7 +437,8 @@
           editor.classList.add('hidden');
           viewer.classList.remove('hidden');
 
-          if (textarea.value !== fileContent) {
+          // ★ ここで textarea を無条件に書き戻さない（T-0199）。編集が起きたときだけ保存する。
+          if (savePolicy({ currentPath, editorPath, dirty }).save) {
             fileContent = textarea.value;
             saveContent();
           }
@@ -422,6 +448,9 @@
 
       async function openNote(path) {
         currentPath = path;
+        // 読み終えるまでは、この文書に対する保存を成立させない（T-0199）
+        editorPath = null;
+        dirty = false;
         renderTree(allFiles);
 
         document.getElementById('empty-state').classList.add('hidden');
@@ -444,9 +473,11 @@
           renderMarkdown(fileContent);
           status.textContent = 'Synced';
 
-          if (currentMode === 'edit') {
-            document.getElementById('markdown-editor').value = fileContent;
-          }
+          // ★ 表示中でも編集欄を必ず揃える（T-0199）。揃えないと、次に「表示」を押したとき
+          //   前の文書の本文（あるいは空）がこの文書へ書き込まれる。
+          document.getElementById('markdown-editor').value = fileContent;
+          editorPath = path;
+          dirty = false;
         } catch (e) {
           body.innerHTML = `<div class="text-error p-4 border border-error/50 rounded bg-error/10">Failed to load: ${e.message}</div>`;
           status.textContent = 'Error';
@@ -608,11 +639,21 @@
       };
 
       const saveContent = async () => {
-        if (!currentPath) return;
+        const p = savePolicy({ currentPath, editorPath, dirty });
+        if (!p.save) {
+          // 「編集されていない」は正常なので黙って戻る。
+          // 「この文書を読めていない」は異常なので、断ったことを画面に出す（T-0199）。
+          if (p.why === 'editor-not-loaded') setStatus('Not saved (not loaded)', 'err');
+          return;
+        }
+        const path = currentPath;
+        const snapshot = fileContent;
         setStatus('Saving...', 'warn');
         try {
           // V2 API: overwrite option required
-          await MetaOS.fs.write(currentPath, fileContent, { overwrite: true, silent: true });
+          await MetaOS.fs.write(path, snapshot, { overwrite: true, silent: true });
+          // 書いている間に増えた編集を消さない（写しが動いていたら dirty は落とさない）
+          if (currentPath === path && fileContent === snapshot) dirty = false;
           setStatus('Saved');
           setTimeout(() => setStatus('Synced'), 2000);
         } catch {
@@ -623,7 +664,10 @@
       const autoSave = debounce(saveContent, 1000);
 
       document.getElementById('markdown-editor').addEventListener('input', (e) => {
+        // 編集欄がこの文書のものでないときの打鍵は、この文書への編集ではない（T-0199）
+        if (editorPath !== currentPath) return;
         fileContent = e.target.value;
+        dirty = true;
         setStatus('Editing...', 'warn');
         autoSave();
       });
