@@ -1676,13 +1676,31 @@
         const btn = (fn, label, cls, title) =>
           `<button onclick="${fn}" class="text-[0.6875rem] px-2.5 py-1 rounded ${cls} font-bold transition" title="${esc(title || '')}">${label}</button>`;
         if (proj) {
+          // ★ 転記のボタンは、未送の総括が 0 件でも出す（2026-08-25 / T-0213）。
+          //   隠していたときは、この操作を知らない人の画面に**終結（合流）しか無いように見えた**。
+          //   実際、生きているサブプロジェクトは 5 枚とも 0 件だったので、一度も出ていなかった。
+          //   「押しても何も起きない」ことは、消すのではなく**薄い見た目と説明で**伝えれば足りる
+          //   （押せば pushUp が「まだ渡していない総括がありません」と言う）。
           return `<div class="mb-4 flex flex-wrap items-center gap-2">
             ${btn('fork()', '分岐 ⑂', 'bg-primary text-text-inverted hover:bg-primary/90', '子プロジェクトを切る。意図はあなたが置く')}
             ${btn('openTask()', '起票 ＋', 'bg-hover hover:bg-primary hover:text-text-inverted', 'このプロジェクトの下にタスクを立てる')}
             ${btn('supersede()', '継承 ⇥', 'bg-hover hover:bg-warning hover:text-text-inverted', 'フェーズを切る。前任は凍結し、子は後継が引き継ぐ')}
             ${btn("askFold('総括')", '総括を頼む', 'bg-hover hover:bg-success hover:text-text-inverted', '区切りまでの決定・却下・未解決を Itera が書く')}
-            ${parent && pend ? btn('pushUp()', `転記 ↑ (${pend})`, 'bg-success text-text-inverted hover:opacity-90', '未送の総括を、畳まずそのまま親の履歴へ載せる') : ''}
-            ${parent && n.meta.status === 'live' ? btn('closeMerge()', '終結（合流）', 'bg-hover hover:bg-success hover:text-text-inverted', '転記して役目を終える') : ''}
+            ${
+              parent
+                ? btn(
+                    'pushUp()',
+                    pend ? `転記 ↑ (${pend})` : '転記 ↑',
+                    pend
+                      ? 'bg-success text-text-inverted hover:opacity-90'
+                      : 'bg-hover text-text-muted hover:bg-success hover:text-text-inverted',
+                    pend
+                      ? '未送の総括を、畳まずそのまま親の履歴へ載せる（この枝は終わらない）'
+                      : '総括を、畳まずそのまま親の履歴へ載せる（この枝は終わらない）。いま未送の総括は 0 件 —— 先に「総括を頼む」',
+                  )
+                : ''
+            }
+            ${parent && n.meta.status === 'live' ? btn('closeMerge()', '終結（合流）', 'bg-hover hover:bg-success hover:text-text-inverted', '転記して役目を終える。続けるなら「転記 ↑」') : ''}
           </div>`;
         }
         const st = T_STATUS[n.meta.status] || T_STATUS.inbox;
@@ -3184,6 +3202,35 @@
           mk('T-9013', 'task', 'done', 'T-9012'),
         ]);
         ok('開いた子孫が無い閉じた枝は出さない', acRows.length === 1 && acRows[0].id === 'P-9002', acRows);
+
+        // ---- 操作の列（opsBlock）----
+        // ★ T-0213：転記のボタンを「未送の総括が 1 件以上あるとき」だけ出していたので、
+        //   生きているサブプロジェクト（当時 5 枚とも 0 件）の画面には一度も出ず、
+        //   **終結（合流）しか道が無いように見えた**。消えるボタンは、その操作を知らない人には「無い」と同じ。
+        //   ここも「静かに消える」型なので、描画と同じく偽の板で**出るかどうかを問う**。
+        const opsOf = (fake, id) => {
+          const saved = nodes;
+          try {
+            nodes = fake;
+            return opsBlock(fake.find((n) => n.meta.id === id));
+          } finally {
+            nodes = saved;
+          }
+        };
+        const RECAP_BODY = '## 履歴\n\n- 2026-08-25 12:00 Itera: 総括\n\n### 総括 2026-08-25 12:00\n\n**決定**\n- あ\n';
+        const subEmpty = [mk('P-9101', 'project', 'live', ''), mk('P-9102', 'project', 'live', 'P-9101')];
+        const opsEmpty = opsOf(subEmpty, 'P-9102');
+        ok('未送 0 件でも転記のボタンは出る', /pushUp\(\)/.test(opsEmpty) && /転記 ↑</.test(opsEmpty), opsEmpty);
+        const withRecap = mk('P-9102', 'project', 'live', 'P-9101');
+        withRecap.body = RECAP_BODY;
+        const opsPend = opsOf([mk('P-9101', 'project', 'live', ''), withRecap], 'P-9102');
+        ok('未送があれば転記に件数が付く', /転記 ↑ \(1\)/.test(opsPend), opsPend);
+        const opsRoot = opsOf(subEmpty, 'P-9101');
+        ok(
+          '親の無い根には転記も終結も出さない',
+          !/pushUp\(\)/.test(opsRoot) && !/closeMerge\(\)/.test(opsRoot),
+          opsRoot,
+        );
 
         // 畳んだ枝の子孫を根として描き直さない（T-0003：畳むと増えていた）
         const foldRows = renderRows(
