@@ -98,36 +98,12 @@ describe('添付を組み立てられないとき（鍵が無い）', () => {
   });
 
   /**
-   * 事前条件: Anthropic 経路・鍵なし・道具の結果に付いた画像。
-   * 事後条件: 同上。
-   */
-  it('Anthropic: 道具の結果の画像を黙って落とさないこと', async () => {
-    const projector = new AnthropicProjector('sys', undefined, '');
-    const vfs = fakeVfs();
-    const parts = await (projector as any)._convertTurnToParts(toolTurn(), fakeState(vfs));
-    expect(texts(parts)).toContain(buildMediaFailureNotice(MEDIA.path, 'no_credentials'));
-  });
-
-  /**
    * 事前条件: Gemini 経路・鍵なし・利用者の添付。
    * 事後条件: 注記の理由が「鍵が無い」であること（VFS のせいにしない）。
    */
   it('Gemini: 利用者の添付では、理由を取り違えないこと', async () => {
     const projector = new GeminiProjector('sys', undefined, '');
     const parts = await (projector as any)._convertTurnToParts(userTurn(), fakeVfs(), '');
-    const joined = texts(parts);
-    expect(joined).toContain(buildMediaFailureNotice(MEDIA.path, 'no_credentials'));
-    expect(joined).not.toContain('could not be loaded from VFS');
-  });
-
-  /**
-   * 事前条件: Anthropic 経路・鍵なし・利用者の添付。
-   * 事後条件: 同上。
-   */
-  it('Anthropic: 利用者の添付では、理由を取り違えないこと', async () => {
-    const projector = new AnthropicProjector('sys', undefined, '');
-    const vfs = fakeVfs();
-    const parts = await (projector as any)._convertTurnToParts(userTurn(), fakeState(vfs));
     const joined = texts(parts);
     expect(joined).toContain(buildMediaFailureNotice(MEDIA.path, 'no_credentials'));
     expect(joined).not.toContain('could not be loaded from VFS');
@@ -154,6 +130,16 @@ describe('VFS に実体が無いとき', () => {
     const parts = await (projector as any)._convertTurnToParts(toolTurn(), fakeVfs({ exists: false }));
     expect(texts(parts)).toContain(buildMediaFailureNotice(MEDIA.path, 'missing'));
   });
+
+  /**
+   * 事前条件: Anthropic 経路（鍵を使わず本文へ埋める）・VFS に実体なし。
+   * 事後条件: 道具の結果でも注記が入ること。
+   */
+  it('Anthropic: 道具の結果の画像を黙って落とさないこと', async () => {
+    const projector = new AnthropicProjector('sys', undefined);
+    const parts = await (projector as any)._convertTurnToParts(toolTurn(), fakeState(fakeVfs({ exists: false })));
+    expect(texts(parts)).toContain(buildMediaFailureNotice(MEDIA.path, 'missing'));
+  });
 });
 
 describe('添付を組み立てられたとき', () => {
@@ -166,6 +152,38 @@ describe('添付を組み立てられたとき', () => {
     (projector as any)._blobToBase64 = async () => 'QUJD';
     const result = await (projector as any)._resolveMediaDataUrl(MEDIA, fakeVfs());
     expect(result).toEqual({ ok: true, value: 'data:image/png;base64,QUJD' });
+  });
+
+  /**
+   * 事前条件: Anthropic 経路・鍵なし・VFS に実体あり。
+   * 事後条件: 本文へ埋め込む image ブロックが返ること。
+   *
+   * **鍵を渡していないのに成立することが要点。** Files API（別端点）はブラウザから
+   * 叩けないため本文へ載せる方式にした。ここが鍵を要求し始めたら退行である。
+   */
+  it('Anthropic: 鍵なしでも本文への埋め込みが成立すること', async () => {
+    const projector = new AnthropicProjector('sys', undefined);
+    (projector as any)._blobToBase64 = async () => 'QUJD';
+    const result = await (projector as any)._resolveMediaFileAnthropic(MEDIA, fakeVfs());
+    expect(result).toEqual({
+      ok: true,
+      value: { type: 'image', source: { type: 'base64', media_type: 'image/png', data: 'QUJD' } },
+    });
+  });
+
+  /**
+   * 事前条件: Anthropic 経路・PDF。
+   * 事後条件: image ではなく document ブロックになること（型を取り違えると 400 になる）。
+   */
+  it('Anthropic: PDF は document ブロックになること', async () => {
+    const projector = new AnthropicProjector('sys', undefined);
+    (projector as any)._blobToBase64 = async () => 'QUJD';
+    const pdf = { path: 'data/doc.pdf', mimeType: 'application/pdf' } as any;
+    const result = await (projector as any)._resolveMediaFileAnthropic(pdf, fakeVfs());
+    expect(result).toEqual({
+      ok: true,
+      value: { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: 'QUJD' } },
+    });
   });
 
   /**

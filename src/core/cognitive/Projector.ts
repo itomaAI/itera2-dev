@@ -492,19 +492,18 @@ export class OpenAIProjector extends BaseProjector {
 // ==========================================
 
 export class AnthropicProjector extends BaseProjector {
-  private apiKey: string;
-
   public static readonly DEFAULT_CAPABILITIES: LlmCapabilities = {
-    maxMediaSizeMB: 500,
+    // 添付は本文に base64 で載せる。Files API（別端点）はブラウザから叩けないため使わない。
+    // 画像 1 枚の上限が 5MB で、履歴は毎ターン送り直すので控えめに揃えてある。
+    maxMediaSizeMB: 5,
     supportedMimes: ['image/*', 'application/pdf', 'text/plain'],
   };
 
-  constructor(systemPrompt: string, capabilities: Partial<LlmCapabilities> | undefined, apiKey: string) {
+  constructor(systemPrompt: string, capabilities: Partial<LlmCapabilities> | undefined) {
     super(systemPrompt, {
       ...AnthropicProjector.DEFAULT_CAPABILITIES,
       ...capabilities,
     } as LlmCapabilities);
-    this.apiKey = apiKey;
   }
 
   async createContext(
@@ -589,13 +588,7 @@ export class AnthropicProjector extends BaseProjector {
           if (node.media) {
             const support = await this.checkMediaSupport(vfs, node.media, SYSTEM_PRINCIPAL);
             if (support.supported) {
-              const fileObj = await this._resolveMediaFileAnthropic(
-                node.media,
-                vfs,
-                this.apiKey,
-                state.configManager,
-                signal,
-              );
+              const fileObj = await this._resolveMediaFileAnthropic(node.media, vfs, signal);
               if (fileObj.ok) parts.push(fileObj.value);
               else parts.push({ type: 'text', text: buildMediaFailureNotice(node.media.path, fileObj.reason) });
             } else {
@@ -620,13 +613,7 @@ export class AnthropicProjector extends BaseProjector {
 
           const support = await this.checkMediaSupport(vfs, node.media, SYSTEM_PRINCIPAL);
           if (support.supported) {
-            const fileObj = await this._resolveMediaFileAnthropic(
-              node.media,
-              vfs,
-              this.apiKey,
-              state.configManager,
-              signal,
-            );
+            const fileObj = await this._resolveMediaFileAnthropic(node.media, vfs, signal);
             if (fileObj.ok) parts.push(fileObj.value);
             else parts.push({ type: 'text', text: buildMediaFailureNotice(node.media.path, fileObj.reason) });
           } else {
@@ -644,88 +631,47 @@ export class AnthropicProjector extends BaseProjector {
     return [];
   }
 
+  /**
+   * 添付を Anthropic の content ブロックへ変換する。
+   *
+   * **本文に base64 で載せる。** Files API（`POST /v1/files`）は別端点で、
+   * ブラウザからの呼び出しを許していない（正しいブラウザ用ヘッダを付けても
+   * `Disallowed CORS origin` を返す。2026-08-25 実測）。プロキシを挟めば通せるが、
+   * 添付のためだけにプロキシを必須にするのは、ブラウザ単独で動くという目的に反する。
+   *
+   * 副産物として、`file_id` を履歴に焼き込むことで生じる面倒も消える ——
+   * 上げたファイルには寿命があり、失効・削除された添付を 1 つでも参照すると、
+   * そのリクエストは推論の前に丸ごと失敗する（履歴は毎ターン送り直すので、会話が死ぬ）。
+   */
   private async _resolveMediaFileAnthropic(
     mediaObj: any,
     vfs: VfsService,
-    apiKey: string,
-    configManager: ConfigManager,
     signal?: AbortSignal,
   ): Promise<MediaAttachResult<any>> {
-    const anthropicMeta = mediaObj.metadata?.anthropic;
-    if (anthropicMeta && anthropicMeta.fileId) {
-      return { ok: true, value: this._buildAnthropicContentBlock(anthropicMeta.fileId, mediaObj.mimeType) };
-    }
-
     if (!vfs.exists(SYSTEM_PRINCIPAL, mediaObj.path)) return { ok: false, reason: 'missing' };
-    // 鍵が無ければ上げられない（Gemini 側と同じ理由）。
-    if (!apiKey) return { ok: false, reason: 'no_credentials' };
+    if (signal && signal.aborted) throw new DOMException('Aborted', 'AbortError');
 
     try {
       const blob = await vfs.readBlob(SYSTEM_PRINCIPAL, mediaObj.path);
-      const filename = mediaObj.path.split('/').pop() || 'file';
+      const mimeType = mediaObj.mimeType || blob.type;
 
-      const uploadResult = await this._uploadToAnthropic(blob, filename, apiKey, configManager, signal);
+      // テキストはそのまま text ブロックへ置く（document の text ソースより形が確実）。
+      if (mimeType === 'text/plain') {
+        return { ok: true, value: { type: 'text', text: await blob.text() } };
+      }
 
-      if (!mediaObj.metadata) mediaObj.metadata = {};
-      mediaObj.metadata.anthropic = {
-        fileId: uploadResult.id,
-      };
-
-      return { ok: true, value: this._buildAnthropicContentBlock(uploadResult.id, mediaObj.mimeType || blob.type) };
+      const base64 = await this._blobToBase64(blob);
+      return { ok: true, value: this._buildAnthropicContentBlock(base64, mimeType) };
     } catch (e) {
-      console.error('[Projector] Anthropic file upload failed:', e);
-      return { ok: false, reason: 'upload_failed' };
+      console.error('[Projector] Anthropic media encode failed:', e);
+      return { ok: false, reason: 'missing' };
     }
   }
 
-  private _buildAnthropicContentBlock(fileId: string, mimeType: string): any {
-    const isImage = mimeType.startsWith('image/');
-    if (isImage) {
-      return {
-        type: 'image',
-        source: { type: 'file', file_id: fileId },
-      };
-    } else {
-      return {
-        type: 'document',
-        source: { type: 'file', file_id: fileId },
-      };
+  private _buildAnthropicContentBlock(base64: string, mimeType: string): any {
+    if (mimeType.startsWith('image/')) {
+      return { type: 'image', source: { type: 'base64', media_type: mimeType, data: base64 } };
     }
-  }
-
-  private async _uploadToAnthropic(
-    blob: Blob,
-    filename: string,
-    apiKey: string,
-    configManager: ConfigManager,
-    signal?: AbortSignal,
-  ): Promise<any> {
-    const baseUrl = 'https://api.anthropic.com/v1/files';
-    let targetUrl = baseUrl;
-    const proxyUrl = configManager.get('network')?.proxyUrl;
-    if (proxyUrl) {
-      targetUrl = `${proxyUrl}${encodeURIComponent(baseUrl)}`;
-    }
-
-    const formData = new FormData();
-    formData.append('file', blob, filename);
-
-    const response = await fetch(targetUrl, {
-      method: 'POST',
-      headers: {
-        'x-api-key': apiKey,
-        'anthropic-version': '2023-06-01',
-        'anthropic-beta': 'files-api-2025-04-14',
-      },
-      body: formData,
-      signal,
-    });
-
-    if (!response.ok) {
-      const errText = await response.text();
-      throw new Error(`Anthropic Upload Error (${response.status}): ${errText}`);
-    }
-
-    return await response.json();
+    return { type: 'document', source: { type: 'base64', media_type: mimeType, data: base64 } };
   }
 }

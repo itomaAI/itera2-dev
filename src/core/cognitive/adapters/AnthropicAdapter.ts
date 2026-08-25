@@ -23,13 +23,8 @@ export class AnthropicAdapter extends BaseLLMAdapter {
 
   async generateStream(payloadData: any, onChunk: (text: string) => void, signal?: AbortSignal): Promise<void> {
     const { system, messages } = payloadData;
-    const baseUrl = 'https://api.anthropic.com/v1/messages';
-    let targetUrl = baseUrl;
-
-    const proxyUrl = this.config.network?.proxyUrl;
-    if (proxyUrl) {
-      targetUrl = `${proxyUrl}${encodeURIComponent(baseUrl)}`;
-    }
+    // ブラウザから直接叩く。プロキシは挟まない（この OS はブラウザ単独で動くことを目指しているため）。
+    const url = 'https://api.anthropic.com/v1/messages';
 
     const ANTHROPIC_ALLOWED_STRUCTURE = {
       temperature: null,
@@ -68,14 +63,16 @@ export class AnthropicAdapter extends BaseLLMAdapter {
       delete payload.top_k;
     }
 
-    const response = await fetch(targetUrl, {
+    const response = await fetch(url, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'x-api-key': this.apiKey,
         'anthropic-version': '2023-06-01',
-        'anthropic-beta': 'files-api-2025-04-14',
-        'anthropic-dangerously-allow-browser': 'true',
+        // ブラウザから直接叩くことへの明示的な同意。**この名前でないと CORS が開かない。**
+        // 名前が違うと Anthropic は access-control-allow-origin を返さず、
+        // ブラウザは応答を見る前に fetch を落とす（TypeError: NetworkError）。
+        'anthropic-dangerous-direct-browser-access': 'true',
       },
       body: JSON.stringify(payload),
       signal,
@@ -104,28 +101,36 @@ export class AnthropicAdapter extends BaseLLMAdapter {
         if (trimmedLine.startsWith('data: ')) {
           const dataStr = trimmedLine.substring(6);
 
+          // parse だけを try で包む。ここを広く取ると、下の throw を自分の catch が
+          // 握り潰して「警告を出して続行」になる（＝エラーが無かったことにされる）。
+          let data: any;
           try {
-            const data = JSON.parse(dataStr);
-
-            // ★ Anthropic のトークン消費量抽出
-            if (eventType === 'message_start' && data.message?.usage) {
-              const standardInput = data.message.usage.input_tokens || 0;
-              const cached = data.message.usage.cache_read_input_tokens || 0;
-              const cacheWrite = data.message.usage.cache_creation_input_tokens || 0;
-              inputTokens = standardInput;
-              cachedTokens = cached;
-              cacheWriteTokens = cacheWrite;
-            } else if (eventType === 'message_delta' && data.usage) {
-              outputTokens = data.usage.output_tokens || 0;
-            } else if (eventType === 'content_block_delta') {
-              if (data.delta && data.delta.type === 'text_delta') {
-                onChunk(data.delta.text);
-              }
-            } else if (eventType === 'message_stop') {
-              break;
-            }
+            data = JSON.parse(dataStr);
           } catch (e) {
             console.warn('[AnthropicAdapter] Stream Parse Warning:', e);
+            continue;
+          }
+
+          // ★ Anthropic のトークン消費量抽出
+          if (eventType === 'message_start' && data.message?.usage) {
+            const standardInput = data.message.usage.input_tokens || 0;
+            const cached = data.message.usage.cache_read_input_tokens || 0;
+            const cacheWrite = data.message.usage.cache_creation_input_tokens || 0;
+            inputTokens = standardInput;
+            cachedTokens = cached;
+            cacheWriteTokens = cacheWrite;
+          } else if (eventType === 'message_delta' && data.usage) {
+            outputTokens = data.usage.output_tokens || 0;
+          } else if (eventType === 'content_block_delta') {
+            if (data.delta && data.delta.type === 'text_delta') {
+              onChunk(data.delta.text);
+            }
+          } else if (eventType === 'error') {
+            // 途中で流れてくるエラー（overloaded_error など）。拾わないと、
+            // 本文が 1 文字も来ないまま「正常に終わった」ように見える。
+            throw new Error(`Anthropic API Error (stream): ${data.error?.message || dataStr}`);
+          } else if (eventType === 'message_stop') {
+            break;
           }
         }
       }
