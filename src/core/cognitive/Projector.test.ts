@@ -15,12 +15,13 @@ import { AnthropicProjector, buildMediaFailureNotice, GeminiProjector, OpenAIPro
 const MEDIA = { path: 'system/temp/media/shot.png', mimeType: 'image/png' } as any;
 
 /** VFS の代役。実体の有無と大きさだけを答える。 */
-function fakeVfs(opts: { exists?: boolean } = {}) {
+function fakeVfs(opts: { exists?: boolean; size?: number; text?: string } = {}) {
   const exists = opts.exists ?? true;
+  const size = opts.size ?? 1024;
   return {
     exists: () => exists,
-    stat: () => ({ size: 1024 }),
-    readBlob: async () => ({ size: 1024, type: 'image/png' }),
+    stat: () => ({ size }),
+    readBlob: async () => ({ size, type: 'image/png', text: async () => opts.text ?? '' }),
   } as any;
 }
 
@@ -187,6 +188,22 @@ describe('添付を組み立てられたとき', () => {
   });
 
   /**
+   * 事前条件: Anthropic 経路・text/plain。
+   * 事後条件: base64 ではなく document の text ソースで送ること。
+   *
+   * Anthropic は text を base64 の document として受け取らない。器を間違えると 400 になる。
+   */
+  it('Anthropic: text/* は document の text ソースで送ること', async () => {
+    const projector = new AnthropicProjector('sys', undefined);
+    const media = { path: 'data/note.txt', mimeType: 'text/plain' } as any;
+    const result = await (projector as any)._resolveMediaFileAnthropic(media, fakeVfs({ text: 'ほんぶん' }));
+    expect(result).toEqual({
+      ok: true,
+      value: { type: 'document', source: { type: 'text', media_type: 'text/plain', data: 'ほんぶん' } },
+    });
+  });
+
+  /**
    * 事前条件: Gemini 経路・鍵あり・アップロード済みの控えが metadata にある。
    * 事後条件: 再アップロードせずに成功として返ること。
    */
@@ -198,5 +215,42 @@ describe('添付を組み立てられたとき', () => {
     };
     const result = await (projector as any)._resolveMediaFile(media, fakeVfs(), 'key');
     expect(result).toEqual({ ok: true, value: { fileUri: 'files/xyz', mimeType: 'image/png' } });
+  });
+});
+
+describe('埋め込みの上限（base64 の膨張分）', () => {
+  /**
+   * 事前条件: Anthropic 経路。
+   * 事後条件: 公表値（送信サイズ）を 3/4 に割り戻した値を返すこと。種別ごとに違うこと。
+   *
+   * 公表されている 5MB / 32MB は **base64 にしたあと**の大きさである。
+   * 割り戻さないと、上限ぎりぎりの実体が送信時に上限を超える。
+   */
+  it('公表値を実体の大きさへ割り戻し、種別ごとに分けること', () => {
+    const projector = new AnthropicProjector('sys', undefined);
+    expect((projector as any).getMaxMediaSizeMB('image/png')).toBeCloseTo(3.75, 5);
+    expect((projector as any).getMaxMediaSizeMB('application/pdf')).toBeCloseTo(24, 5);
+  });
+
+  /**
+   * 事前条件: 4MB の画像（公表値 5MB は下回る）。
+   * 事後条件: 断ること。base64 にすると 5.33MB になり、上流が 400 を返すため。
+   */
+  it('4MB の画像は、送ると 5MB を超えるので断ること', async () => {
+    const projector = new AnthropicProjector('sys', undefined);
+    const parts = await (projector as any)._convertTurnToParts(
+      userTurn(),
+      fakeState(fakeVfs({ size: 4 * 1024 * 1024 })),
+    );
+    expect(texts(parts)).toContain('exceeds the file size limit (3.75MB)');
+  });
+
+  /**
+   * 事前条件: 上限を上書きしていない Projector（OpenAI）。
+   * 事後条件: 既定の受け口は capabilities の値をそのまま返すこと（他社を巻き込まない）。
+   */
+  it('上書きしていない経路は従来どおりであること', () => {
+    const projector = new OpenAIProjector('sys', undefined);
+    expect((projector as any).getMaxMediaSizeMB('image/png')).toBe((projector as any).capabilities.maxMediaSizeMB);
   });
 });
