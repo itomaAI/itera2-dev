@@ -128,7 +128,7 @@ export class CognitiveManager {
         newLlm = new OpenAIAdapter(apiKey, modelName, baseUrl, llmConfig, this.logger);
         break;
       case 'anthropic':
-        newProjector = new AnthropicProjector(SYSTEM_PROMPT, capabilities, apiKey);
+        newProjector = new AnthropicProjector(SYSTEM_PROMPT, capabilities);
         newLlm = new AnthropicAdapter(apiKey, modelName, llmConfig, this.logger);
         break;
       case 'google':

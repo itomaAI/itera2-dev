@@ -34,7 +34,9 @@ export const PROVIDERS = [
     placeholder: 'sk-ant-...',
     requiresUrl: false,
     defaultCapabilities: {
-      maxMediaSizeMB: 500,
+      // 添付は本文に base64 で載せる（Files API はブラウザから使えない）。
+      // 画像 1 枚の上限が 5MB で、履歴は毎ターン送り直すため、控えめに揃える。
+      maxMediaSizeMB: 5,
       supportedMimes: ['image/*', 'application/pdf', 'text/plain'],
     },
     models: [],
