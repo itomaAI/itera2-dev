@@ -48,6 +48,19 @@ export function buildMediaFailureNotice(path: string, reason: MediaAttachFailure
   }
 }
 
+/** base64 は 3 バイトを 4 文字にするので、送信サイズは元の 4/3 になる。 */
+export const BASE64_EXPANSION_RATIO = 4 / 3;
+
+/** 送信サイズの上限（base64 後・MB）から、VFS 上の実体に許される上限（MB）を求める。 */
+export function rawLimitMBFromEncodedLimitMB(encodedLimitMB: number): number {
+  return encodedLimitMB / BASE64_EXPANSION_RATIO;
+}
+
+/** 上限を表示用に丸める（3.75 のような値も、無駄な桁を付けずに出す）。 */
+function formatLimitMB(mb: number): string {
+  return String(Math.round(mb * 100) / 100);
+}
+
 export abstract class BaseProjector {
   protected systemPrompt: string;
   protected capabilities: LlmCapabilities;
@@ -105,10 +118,21 @@ export abstract class BaseProjector {
     return false;
   }
 
+  /**
+   * 種別ごとの上限（MB）。**VFS 上の実体の大きさ**で答える。
+   *
+   * 既定は capabilities の 1 つの値だが、上流によっては画像と文書で上限が違い、
+   * さらに公表値が「送信サイズ（base64 後）」であることがある。そういう上流は
+   * ここを上書きして、割り戻した値を返す。
+   */
+  protected getMaxMediaSizeMB(_mimeType: string): number {
+    return this.capabilities.maxMediaSizeMB;
+  }
+
   protected getUnsupportedMessage(path: string, mimeType: string, reason: 'mime' | 'size'): string {
     const reasonText =
       reason === 'size'
-        ? `it exceeds the file size limit (${this.capabilities.maxMediaSizeMB}MB)`
+        ? `it exceeds the file size limit (${formatLimitMB(this.getMaxMediaSizeMB(mimeType))}MB)`
         : `its format is not directly supported by this model's vision/file API`;
 
     return `\n[System: Attached file '${path}' (${mimeType}) cannot be processed directly because ${reasonText}. To analyze its content, please write and execute a script to process it from the VFS.]\n`;
@@ -125,7 +149,7 @@ export abstract class BaseProjector {
 
     try {
       const stat = vfs.stat(principal, mediaObj.path);
-      const maxSizeBytes = this.capabilities.maxMediaSizeMB * 1024 * 1024;
+      const maxSizeBytes = this.getMaxMediaSizeMB(mediaObj.mimeType) * 1024 * 1024;
       if (stat.size > maxSizeBytes) {
         return { supported: false, reason: 'size' };
       }
@@ -492,12 +516,31 @@ export class OpenAIProjector extends BaseProjector {
 // ==========================================
 
 export class AnthropicProjector extends BaseProjector {
+  /** 埋め込みの上限（base64 後）。画像はバイト、文書は MB で公表されている。 */
+  public static readonly INLINE_IMAGE_LIMIT_BYTES = 5_242_880;
+  public static readonly INLINE_DOCUMENT_LIMIT_MB = 32;
+
   public static readonly DEFAULT_CAPABILITIES: LlmCapabilities = {
     // 添付は本文に base64 で載せる。Files API（別端点）はブラウザから叩けないため使わない。
-    // 画像 1 枚の上限が 5MB で、履歴は毎ターン送り直すので控えめに揃えてある。
-    maxMediaSizeMB: 5,
+    // 実効の上限は種別ごとに getMaxMediaSizeMB() が決める。ここは緩い側（文書）を
+    // 割り戻した値で、表示と既定のためだけに置いている。
+    maxMediaSizeMB: rawLimitMBFromEncodedLimitMB(32),
     supportedMimes: ['image/*', 'application/pdf', 'text/plain'],
   };
+
+  /**
+   * Anthropic は画像と文書で上限が違い、どちらも**送信サイズ（base64 後）**で公表されている。
+   * VFS 上の実体に許してよい大きさはその 3/4 になる。
+   *
+   * ミャク楽側は同じ関数を `if (this.apiKey)` で分岐させているが、こちらは Files API を
+   * 使わない（鍵を持たない）ので、常に埋め込みの上限でよい。
+   */
+  protected getMaxMediaSizeMB(mimeType: string): number {
+    const encodedLimitMB = (mimeType || '').startsWith('image/')
+      ? AnthropicProjector.INLINE_IMAGE_LIMIT_BYTES / (1024 * 1024)
+      : AnthropicProjector.INLINE_DOCUMENT_LIMIT_MB;
+    return rawLimitMBFromEncodedLimitMB(encodedLimitMB);
+  }
 
   constructor(systemPrompt: string, capabilities: Partial<LlmCapabilities> | undefined) {
     super(systemPrompt, {
@@ -655,9 +698,14 @@ export class AnthropicProjector extends BaseProjector {
       const blob = await vfs.readBlob(SYSTEM_PRINCIPAL, mediaObj.path);
       const mimeType = mediaObj.mimeType || blob.type;
 
-      // テキストはそのまま text ブロックへ置く（document の text ソースより形が確実）。
-      if (mimeType === 'text/plain') {
-        return { ok: true, value: { type: 'text', text: await blob.text() } };
+      // 器は種別ごとに違う。text/* は base64 の document として受け取ってもらえない
+      // （`source.type` が `'text'`）ので、そこだけ生の本文を渡す。
+      if (mimeType.startsWith('text/')) {
+        const text = await blob.text();
+        return {
+          ok: true,
+          value: { type: 'document', source: { type: 'text', media_type: 'text/plain', data: text } },
+        };
       }
 
       const base64 = await this._blobToBase64(blob);

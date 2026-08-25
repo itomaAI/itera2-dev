@@ -35,8 +35,9 @@ export const PROVIDERS = [
     requiresUrl: false,
     defaultCapabilities: {
       // 添付は本文に base64 で載せる（Files API はブラウザから使えない）。
-      // 画像 1 枚の上限が 5MB で、履歴は毎ターン送り直すため、控えめに揃える。
-      maxMediaSizeMB: 5,
+      // 実効の上限は種別ごとに違う（画像 5MB / 文書 32MB。いずれも base64 後の大きさ）。
+      // ここは緩い側を割り戻した値で、AnthropicProjector が種別ごとに絞り込む。
+      maxMediaSizeMB: 24,
       supportedMimes: ['image/*', 'application/pdf', 'text/plain'],
     },
     models: [],
