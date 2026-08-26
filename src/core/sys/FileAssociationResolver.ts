@@ -11,7 +11,7 @@ import { SYSTEM_PRINCIPAL } from '../vfs/types';
 
 export interface ResolvedApp {
   /** 起動すべきアプリのID。Host内蔵機能を使用する場合は特殊なIDを返す */
-  appId: string | 'HostEditor' | 'HostMediaViewer' | 'HostRunner';
+  appId: string | 'HostEditor' | 'HostMediaViewer' | 'HostRunner' | 'HostExplorer';
   /** Guestアプリの場合、そのエントリーポイントとなるHTMLパス */
   appPath?: string;
   /** アプリの表示名（UIメニュー用） */
@@ -51,6 +51,11 @@ export class FileAssociationResolver {
    * ファイル情報から、起動すべきデフォルトのアプリを解決する。
    */
   resolveDefault(stat: VfsStat): ResolvedApp {
+    // ディレクトリは名前で関連付けを引かない。ホストのエクスプローラパネルが受け皿
+    // （PDF などの Media Viewer と同じ位置づけの、ホスト側フォールバック）。
+    if (stat.kind === 'directory') {
+      return { appId: 'HostExplorer', appName: 'Explorer (Host)' };
+    }
     const extension = this._getExtension(stat.name);
     const mimeType = stat.mimeType || this._guessMimeType(stat.name);
 
@@ -90,6 +95,9 @@ export class FileAssociationResolver {
    * 「このプログラムで開く...」のメニュー用に、対応可能なすべてのアプリのリストを返す。
    */
   resolveAllAvailable(stat: VfsStat): ResolvedApp[] {
+    if (stat.kind === 'directory') {
+      return [{ appId: 'HostExplorer', appName: 'Explorer (Host)' }];
+    }
     const extension = this._getExtension(stat.name);
     const mimeType = stat.mimeType || this._guessMimeType(stat.name);
     const available: ResolvedApp[] = [];

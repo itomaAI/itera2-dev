@@ -167,6 +167,11 @@ export class SystemBootstrapper {
       modals: desktop.modals,
       _refreshEngineConfig: () => cognitiveManager.refreshEngineConfig(),
       _closeMobileDrawers: () => desktop.closeMobileDrawers(),
+      _revealInExplorer: (path: string) => {
+        const ok = desktop.explorer.reveal(path);
+        if (ok) desktop.openMobileFilesDrawer();
+        return ok;
+      },
       getMergedProviders: () => cognitiveManager.getMergedProviders(),
       processManager: processManager,
       resolver: resolver,

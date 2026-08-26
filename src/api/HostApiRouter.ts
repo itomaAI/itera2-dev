@@ -36,6 +36,7 @@ export interface IEngine {
 export interface IShell {
   _refreshEngineConfig(): Promise<void>;
   _closeMobileDrawers(): void;
+  _revealInExplorer?(path: string): boolean;
   getMergedProviders?(): Promise<any[]>;
   panels: { chat: any };
   modals: { editor: any; camera: any; audio: any; filePicker?: any };
@@ -401,6 +402,12 @@ export class HostApiRouter {
       d.shell.modals.editor.open(path, content);
       d.shell._closeMobileDrawers();
       return true;
+    });
+    t.registerHandler('host:reveal_in_explorer', async ({ path }) => {
+      if (!d.shell || !d.shell._revealInExplorer) return false;
+      if (typeof path !== 'string' || !path) throw new Error("'path' is required.");
+      // 存在しないパスは「木に無い」として false を返す（例外にしない。呼ぶ側が判断する）
+      return d.shell._revealInExplorer(path.replace(/^\/+|\/+$/g, ''));
     });
     t.registerHandler('host:notify', async ({ message, type, duration }) => {
       if (window.AppUI) window.AppUI.notify(message, type, duration);

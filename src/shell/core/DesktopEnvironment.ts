@@ -220,6 +220,15 @@ export class DesktopEnvironment {
     }
   }
 
+  /**
+   * モバイル配置のときだけファイルの引き出しを開く。
+   * 「モバイルか」は状態で持たず、ナビの釦が画面に在るか（md:hidden）から導く。
+   */
+  public openMobileFilesDrawer(): void {
+    const btnFiles = document.getElementById('mobile-nav-files');
+    if (btnFiles && btnFiles.offsetParent !== null) btnFiles.click();
+  }
+
   public closeMobileDrawers(): void {
     const btnView = document.getElementById('mobile-nav-view');
     if (btnView) {

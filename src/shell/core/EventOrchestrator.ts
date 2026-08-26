@@ -156,7 +156,10 @@ export class EventOrchestrator {
         const stat = this.vfs.stat(this.desktop.getActivePrincipal(), targetPath);
         const resolvedApp = this.resolver.resolveDefault(stat);
 
-        if (resolvedApp.appId === 'HostRunner') {
+        if (resolvedApp.appId === 'HostExplorer') {
+          if (this.desktop.explorer.reveal(targetPath)) this.desktop.openMobileFilesDrawer();
+          this._restoreAddressBar();
+        } else if (resolvedApp.appId === 'HostRunner') {
           const fullUri = `metaos://run/${targetPath}${searchAndHash}`;
           await this.processManager.spawn({
             path: targetPath + searchAndHash,
@@ -284,6 +287,8 @@ export class EventOrchestrator {
         // AppRegistryで紐付けられたアプリを明示的に起動
         if (resolvedApp.appId === 'HostRunner') {
           this.uriRouter.dispatch(`metaos://run/${path}`);
+        } else if (resolvedApp.appId === 'HostExplorer') {
+          this.uriRouter.dispatch(`metaos://open/${path}`);
         } else if (resolvedApp.appId === 'HostEditor') {
           this.uriRouter.dispatch(`metaos://edit/${path}`);
         } else if (resolvedApp.appId === 'HostMediaViewer') {

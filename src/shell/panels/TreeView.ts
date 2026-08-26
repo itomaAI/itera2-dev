@@ -412,6 +412,51 @@ export class TreeView {
   // 4. Interaction Events (Click, Drag & Drop)
   // ==========================================
 
+  /**
+   * 指定パスをツリーの上で見える状態にし、選択して画面内に入れる。
+   *
+   * 祖先を expandedPaths に足して開き、対象がディレクトリならそれも開く。
+   * 木は全ノードが DOM に載っている（閉じたフォルダは hidden なだけ）ので描き直しはしない。
+   * 'open' / 'select' は発火しない —— 利用者の操作ではなく外（API・道具）からの指示なので、
+   * ここからアプリを起動したり選択の通知を出したりはしない。
+   *
+   * @returns 対象が木に無ければ false（何も変えない）
+   */
+  reveal(path: string): boolean {
+    const target = this.container.querySelector(`div[data-path="${path}"]`) as HTMLElement | null;
+    if (!target) return false;
+
+    const segments = path.split('/');
+    const toOpen: string[] = [];
+    for (let i = 1; i < segments.length; i++) toOpen.push(segments.slice(0, i).join('/'));
+    if (target.dataset.kind === 'directory') toOpen.push(path);
+
+    for (const p of toOpen) {
+      const div = this.container.querySelector(`div[data-path="${p}"]`) as HTMLElement | null;
+      if (!div) continue;
+      this.expandedPaths.add(p);
+      const ul = div.parentElement?.querySelector('ul');
+      if (ul) {
+        ul.classList.remove('hidden');
+        ul.classList.add('block');
+      }
+      const iconSpan = div.querySelector('span:first-child');
+      if (iconSpan) {
+        iconSpan.textContent = this._getIcon(p, 'directory', div.dataset.name || '', div.dataset.mount === '1');
+      }
+    }
+
+    this.selectedPaths.clear();
+    this.selectedPaths.add(path);
+    this.lastClickedPath = path;
+    this._updateSelectionUI();
+
+    if (typeof (target as any).scrollIntoView === 'function') {
+      target.scrollIntoView({ block: 'center' });
+    }
+    return true;
+  }
+
   private _updateSelectionUI() {
     const allNodes = this.container.querySelectorAll('.tree-content');
     allNodes.forEach((el) => {

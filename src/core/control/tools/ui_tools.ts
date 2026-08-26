@@ -57,7 +57,13 @@ export function registerUITools(registry: ToolRegistry): void {
           const stat = context.vfs.stat(USER_PRINCIPAL, path);
           const resolvedApp = context.shell.resolver.resolveDefault(stat);
 
-          if (resolvedApp.appId === 'HostEditor') {
+          if (resolvedApp.appId === 'HostExplorer') {
+            // ディレクトリの受け皿はホストのエクスプローラパネル（解決器が決める）
+            const reveal = context.shell._revealInExplorer;
+            if (typeof reveal !== 'function') throw new Error('Explorer is not available.');
+            if (!reveal(path)) throw new Error(`Directory not found in explorer: ${path}`);
+            return { log: `Revealed folder ${path} in Explorer`, ui: `📂 Opened folder` };
+          } else if (resolvedApp.appId === 'HostEditor') {
             const content = await context.vfs.readFile(USER_PRINCIPAL, path);
             context.shell.modals.editor.open(path, content);
             return {
