@@ -12,6 +12,15 @@
     <header class="flex items-center justify-between px-5 py-3 border-b border-border-main shrink-0">
       <div class="flex items-center gap-3">
         <button
+          onclick="toggleList()"
+          class="md:hidden p-2 -ml-2 rounded-full hover:bg-hover text-text-muted hover:text-text-main transition"
+          title="一覧を出す／隠す"
+        >
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path>
+          </svg>
+        </button>
+        <button
           onclick="AppUI.home()"
           class="p-2 -ml-2 rounded-full hover:bg-hover text-text-muted hover:text-text-main transition"
         >
@@ -51,8 +60,13 @@
       </div>
     </header>
 
-    <div class="flex-1 flex min-h-0">
-      <aside class="w-80 shrink-0 border-r border-border-main flex flex-col min-h-0">
+    <div class="flex-1 flex min-h-0 relative">
+      <!-- スマホ幅では一覧を引き出しにする（md 未満で畳む。既定は隠す。札を選ぶと閉じる） -->
+      <div id="list-overlay" onclick="toggleList()" class="fixed inset-0 bg-black/50 z-20 hidden md:hidden"></div>
+      <aside
+        id="list-pane"
+        class="absolute md:relative inset-y-0 left-0 z-30 w-80 max-w-[85vw] md:max-w-none bg-panel md:bg-transparent shrink-0 border-r border-border-main flex flex-col min-h-0 transform -translate-x-full md:translate-x-0 transition-transform duration-200 shadow-2xl md:shadow-none"
+      >
         <div id="views" class="flex flex-wrap gap-1 p-3 border-b border-border-main shrink-0"></div>
         <div id="list" class="flex-1 overflow-y-auto p-2"></div>
       </aside>
@@ -1956,8 +1970,19 @@
         saveUiState();
         renderList();
       };
+      // ---- スマホ幅の一覧（引き出し）。状態は持たず、開いているかは class から読む ----
+      const listIsDrawer = () => window.matchMedia('(max-width: 767px)').matches;
+      window.toggleList = (open) => {
+        const pane = document.getElementById('list-pane');
+        const overlay = document.getElementById('list-overlay');
+        const isOpen = !pane.classList.contains('-translate-x-full');
+        const next = typeof open === 'boolean' ? open : !isOpen;
+        pane.classList.toggle('-translate-x-full', !next);
+        overlay.classList.toggle('hidden', !next);
+      };
       window.select = async (id) => {
         if (!(await commitIfEditing())) return;
+        if (listIsDrawer()) toggleList(false);
         // ★ ここで全件読み直さない。札を選ぶだけなら手元の nodes で足りる（全件は 96 枚で約 300ms）。
         //   外の変更は 4 秒ごとの監視が差分で取り込む（2026-08-24）。
         selectedId = id;
