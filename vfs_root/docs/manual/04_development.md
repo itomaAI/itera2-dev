@@ -6,12 +6,13 @@ This guide explains how to build custom applications and background services for
 
 An App is an HTML file (usually in `apps/`) that provides a UI.
 Use the system libraries (`ui.js` and `std.js`) to inherit the OS theme and standard data access.
+(`system/core/` = the contract every app loads, `system/lib/` = opt-in first-party libraries such as `md.js`, `system/vendor/` = third-party code such as Tailwind. See `03_design_system.md`.)
 
 ```html
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <script src="/system/core/tw.js"></script>
+    <script src="/system/vendor/tw.js"></script>
     <script src="/system/core/ui.js"></script>
     <script src="/system/core/std.js"></script>
 </head>

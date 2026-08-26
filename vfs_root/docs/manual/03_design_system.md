@@ -8,7 +8,7 @@ Instead of hardcoding colors (e.g., `#000000`, `bg-gray-900`), we use **Semantic
 All guest applications MUST include the UI Kit library in their `<head>` section.
 
 ```html
-<script src="/system/core/tw.js"></script>
+<script src="/system/vendor/tw.js"></script>
 <script src="/system/core/ui.js"></script>
 ```
 
@@ -16,6 +16,18 @@ This library automatically injects:
 1.  **Tailwind Configuration**: Maps semantic tokens to CSS variables.
 2.  **Global Styles**: Sets the default typography and scrollbar styling.
 3.  **AppUI Helpers**: Utilities for navigation and OS-native dialogs (`AppUI.alert`, `AppUI.confirm`, `AppUI.prompt`, and `AppUI.showMessageBox`).
+
+## Where shared libraries live (`system/core` / `system/lib` / `system/vendor`)
+
+The split is by **contract**, not by kind:
+
+| Directory | Contents | Rule |
+| :-- | :-- | :-- |
+| `system/core/` | `std.js`, `ui.js` | The guest runtime contract. Every app is expected to load these; a change here affects every app. |
+| `system/lib/` | `md.js`, ... | First-party shared libraries that an app opts into. Add new shared pieces here. |
+| `system/vendor/` | `tw.js` | Third-party code, vendored as-is. Never edit; replace whole files. |
+
+Always load with absolute paths (`/system/...`). Relative paths break once the app is served from a Blob URL.
 
 ## Semantic Tokens Reference
 

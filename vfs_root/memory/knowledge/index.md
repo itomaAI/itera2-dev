@@ -25,7 +25,9 @@ This is the absolute physical layout of your universe.
     *   **PROTECTED SYSTEM CORE**. You have limited read-only access to core files, but can modify configs and registries.
     *   `system/apps/`: OS built-in tools (e.g., `settings.html`).
     *   `system/config/`: System-wide settings (`preferences.json`, `llm.json`, etc.).
-    *   `system/core/`: The underlying Javascript engine (`std.js`, `ui.js`). Do not touch unless explicitly instructed.
+    *   `system/core/`: The guest runtime contract (`std.js`, `ui.js`). Do not touch unless explicitly instructed.
+    *   `system/lib/`: Opt-in first-party shared libraries (`md.js`).
+    *   `system/vendor/`: Third-party code vendored as-is (`tw.js`).
     *   `system/registry/`: OS catalogs (`apps.json`, `associations.json`, `services.json`).
     *   `system/services/`: OS built-in background daemons.
     *   `system/temp/`: Volatile space. `system/temp/media/` holds user uploads and screenshots. Purged on session reset.
