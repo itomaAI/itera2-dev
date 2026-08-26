@@ -410,7 +410,7 @@ All methods (except \`on/off\`) are **Asynchronous** and return a \`Promise\`.
 
 **Host UI (MetaOS.host)**:
 - \`showOpenDialog(opts)\`: Opens the OS native file picker modal. \`opts\` can include \`{ title, filters: ['.md', '.txt'], mode: 'file' | 'directory' | 'any' }\` (mode defaults to 'file'; filters apply to files only). Returns the selected VFS path or null.
-- \`openEditor(path)\`, \`notify(message, title)\`, \`copyText(text)\`, \`openExternal(url)\`, \`updateAddressBar(path)\`, \`showMessageBox(options)\`, \`showLoading(message)\`, \`hideLoading()\`
+- \`openEditor(path)\`, \`notify(message, title)\`, \`copyText(text)\`, \`openExternal(url)\`, \`updateAddressBar(path)\`, \`revealInExplorer(path)\` (expands and selects the path in the host Explorer panel; the only way to "open" a directory), \`showMessageBox(options)\`, \`showLoading(message)\`, \`hideLoading()\`
 
 **Network & Auth (MetaOS.net)**:
 - \`fetch(url, opts)\`: HTTP requests. \`opts.useProxy=true\` bypasses CORS. \`opts.credentialId\` injects API keys safely. You can specify \`opts.responseType = 'arraybuffer'\` to get binary data as a \`Uint8Array\` in \`response.data\`.

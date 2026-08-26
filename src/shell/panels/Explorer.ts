@@ -62,6 +62,11 @@ export class Explorer {
     this._initResizer();
   }
 
+  /** パネルの木で指定パスを見える状態にし、選択する（無ければ false） */
+  public reveal(path: string): boolean {
+    return this.treeView.reveal(path);
+  }
+
   on(event: string, callback: Function): void {
     this.events[event] = callback;
   }
