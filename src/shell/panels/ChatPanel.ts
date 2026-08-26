@@ -120,7 +120,8 @@ export class ChatPanel {
     };
 
     if (this.els.BTN_SEND) {
-      this.els.BTN_SEND.onclick = () => handleSend();
+      // Shift を押しながら送信ボタン → 置くだけ（Ctrl+Shift+Enter と同じ）
+      this.els.BTN_SEND.onclick = (e: MouseEvent) => handleSend({ silent: e.shiftKey });
     }
 
     if (this.els.INPUT) {
