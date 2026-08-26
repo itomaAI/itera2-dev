@@ -285,6 +285,12 @@ export class HostApiRouter {
       }
       if (text) content.push({ text });
 
+      // opts.silent: 履歴に user ターンを置くだけで LLM を起こさない
+      // （後続の ai.task などに心構えを前置きするための経路）
+      if (opts && opts.silent === true) {
+        await d.engine.injectUserTurn(content, { trigger_llm: false });
+        return true;
+      }
       await d.shell._refreshEngineConfig();
       d.shell.panels.chat.setProcessing(true);
       await d.engine.injectUserTurn(content);

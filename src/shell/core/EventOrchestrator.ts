@@ -36,6 +36,11 @@ import { VfsEventFormatter } from '../../core/vfs/VfsEventFormatter';
  */
 export type IndicatorAction = 'processing' | 'hide' | 'keep';
 
+/** チャット欄からの送信オプション。silent は「置くだけ」（LLM を起こさない） */
+export interface ChatSendOptions {
+  silent?: boolean;
+}
+
 export function decideIndicatorOnTurnEnd(role: string, isRunning: boolean, toolPhase: boolean): IndicatorAction {
   if (role === 'model') return 'processing';
   if (!isRunning && !toolPhase) return 'hide';
@@ -334,8 +339,8 @@ export class EventOrchestrator {
   private _bindChatEvents(): void {
     const chat = this.desktop.panels.chat;
 
-    chat.on('send', (text: string, attachments: File[], vfsReferences: string[]) => {
-      this._handleChatSend(text, attachments, vfsReferences);
+    chat.on('send', (text: string, attachments: File[], vfsReferences: string[], opts?: ChatSendOptions) => {
+      this._handleChatSend(text, attachments, vfsReferences, opts);
     });
 
     chat.on('stop', () => this.engine.stop());
@@ -479,8 +484,14 @@ export class EventOrchestrator {
 
   /**
    * チャットから送信されたテキストとメディアの統合処理
+   * opts.silent: 履歴に置くだけで LLM を起こさない（処理中表示も出さない）
    */
-  private async _handleChatSend(text: string, attachments: File[], vfsReferences: string[]) {
+  private async _handleChatSend(
+    text: string,
+    attachments: File[],
+    vfsReferences: string[],
+    opts: ChatSendOptions = {},
+  ) {
     const CACHE_DIR = 'system/temp/media';
     const content: any[] = [];
 
@@ -547,6 +558,10 @@ export class EventOrchestrator {
     if (text) content.push({ text: text });
     if (content.length === 0) return;
 
+    if (opts.silent) {
+      await this.engine.injectUserTurn(content, { trigger_llm: false });
+      return;
+    }
     await this.cognitiveManager.refreshEngineConfig();
     this.desktop.panels.chat.setProcessing(true);
     await this.engine.injectUserTurn(content);
