@@ -1,4 +1,4 @@
-# ファイル（`apps/explorer.html`）
+# ファイル（`system/apps/explorer.html`）
 
 置き場（**data／memory／apps／docs／services**）を見て回るアプリ。ホストの左側にあるエクスプローラパネルとは別物で、
 利用者向けの語彙と操作に絞ってある。ミャク楽の `system/apps/explorer.html` と同じソースで、置き場の定義（`ROOTS`）だけが違う。正はすべて VFS。アプリが持つ状態は「いまどこを見ているか」と「何を選んでいるか」だけ。

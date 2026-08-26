@@ -48,7 +48,7 @@
     "id": "explorer",
     "name": "Files",
     "icon": "\ud83d\uddc2",
-    "path": "apps/explorer.html",
+    "path": "system/apps/explorer.html",
     "description": "Browse data/memory/apps/docs/services: open, import, organize, hand to AI"
   },
   {
