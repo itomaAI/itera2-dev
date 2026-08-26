@@ -462,8 +462,10 @@ export class EventOrchestrator {
           trigger_llm: false,
         });
         this.desktop.panels.chat.appendTurn(turn);
+        return true;
       } catch (e: any) {
         if (window.AppUI) window.AppUI.notify(`Save failed: ${e.message}`, 'error');
+        return false;
       }
     });
 

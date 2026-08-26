@@ -169,27 +169,40 @@ export class EditorModal {
     }, 50);
   }
 
-  private _save(): void {
+  private async _save(): Promise<void> {
     if (!this.currentPath || !this.editorInstance) return;
 
     const content = this.editorInstance.getValue();
 
+    // 結果を待ってから表示を変える。以前は待たずに `Saved!` にしていたので、
+    // 権限エラーで失敗しても緑になっていた（2026-08-26）。
+    // ハンドラは成功で true / 失敗で false を返す（返さない場合は成功扱い）。
+    let ok = true;
     if (this.events['save']) {
-      this.events['save'](this.currentPath, content);
+      try {
+        ok = (await this.events['save'](this.currentPath, content)) !== false;
+      } catch {
+        ok = false;
+      }
     }
 
     // Visual Feedback
     if (this.els.BTN_SAVE) {
-      const originalText = this.els.BTN_SAVE.textContent;
-      this.els.BTN_SAVE.textContent = 'Saved!';
-      this.els.BTN_SAVE.classList.remove('bg-primary');
-      this.els.BTN_SAVE.classList.add('bg-success');
+      const btn = this.els.BTN_SAVE;
+      const originalText = btn.textContent;
+      const cls = ok ? 'bg-success' : 'bg-error';
+      btn.textContent = ok ? 'Saved!' : 'Failed';
+      btn.classList.remove('bg-primary');
+      btn.classList.add(cls);
 
-      setTimeout(() => {
-        this.els.BTN_SAVE!.textContent = originalText;
-        this.els.BTN_SAVE!.classList.remove('bg-success');
-        this.els.BTN_SAVE!.classList.add('bg-primary');
-      }, 1000);
+      setTimeout(
+        () => {
+          btn.textContent = originalText;
+          btn.classList.remove(cls);
+          btn.classList.add('bg-primary');
+        },
+        ok ? 1000 : 2000,
+      );
     }
   }
 }

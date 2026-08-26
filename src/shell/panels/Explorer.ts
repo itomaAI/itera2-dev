@@ -880,6 +880,7 @@ export class Explorer {
     if (res && res.action) {
       if (window.AppUI) window.AppUI.showLoading(`Deleting ${normalized.length} items...`);
       const deletedItems: VfsEventItem[] = [];
+      const failures: { path: string; message: string }[] = [];
       try {
         for (const p of normalized) {
           try {
@@ -887,6 +888,20 @@ export class Explorer {
             deletedItems.push({ srcPath: p });
           } catch (e: any) {
             console.error(`Failed to delete ${p}:`, e);
+            failures.push({ path: p, message: e?.message ?? String(e) });
+          }
+        }
+        // 失敗を黙らせない。権限エラーは console にしか出ておらず、
+        // 「Deleting…」が消えるだけで成功と区別が付かなかった（2026-08-26）。
+        if (failures.length > 0 && window.AppUI) {
+          const first = failures[0];
+          if (deletedItems.length === 0) {
+            window.AppUI.notify(`Delete failed: ${first.message}`, 'error');
+          } else {
+            window.AppUI.notify(
+              `Deleted ${deletedItems.length} item(s), ${failures.length} failed (e.g. ${first.path}: ${first.message})`,
+              'warning',
+            );
           }
         }
         if (deletedItems.length > 0) {
