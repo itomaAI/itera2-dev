@@ -2,14 +2,20 @@
   {
     "id": "notes",
     "name": "Notes",
-    "icon": "📝",
+    "icon": "\ud83d\udcdd",
     "path": "apps/notes.html",
     "description": "Markdown text editor",
     "fileHandlers": [
       {
         "action": "view",
-        "extensions": ["md", "txt"],
-        "mimeTypes": ["text/markdown", "text/plain"]
+        "extensions": [
+          "md",
+          "txt"
+        ],
+        "mimeTypes": [
+          "text/markdown",
+          "text/plain"
+        ]
       }
     ],
     "home": 2
@@ -17,15 +23,15 @@
   {
     "id": "loom",
     "name": "Loom",
-    "icon": "🧵",
+    "icon": "\ud83e\uddf5",
     "path": "apps/loom.html",
-    "description": "プロジェクトの系譜と、その下の仕事（あなたと AI の共同作業の板）",
+    "description": "\u30d7\u30ed\u30b8\u30a7\u30af\u30c8\u306e\u7cfb\u8b5c\u3068\u3001\u305d\u306e\u4e0b\u306e\u4ed5\u4e8b\uff08\u3042\u306a\u305f\u3068 AI \u306e\u5171\u540c\u4f5c\u696d\u306e\u677f\uff09",
     "home": 1
   },
   {
     "id": "tasks",
     "name": "Tasks",
-    "icon": "✅",
+    "icon": "\u2705",
     "path": "apps/tasks.html",
     "description": "Manage daily to-dos",
     "home": 3
@@ -33,15 +39,22 @@
   {
     "id": "calendar",
     "name": "Calendar",
-    "icon": "📅",
+    "icon": "\ud83d\udcc5",
     "path": "apps/calendar.html",
     "description": "Monthly calendar and events",
     "home": 4
   },
   {
+    "id": "explorer",
+    "name": "Files",
+    "icon": "\ud83d\uddc2",
+    "path": "apps/explorer.html",
+    "description": "Browse data/memory/apps/docs/services: open, import, organize, hand to AI"
+  },
+  {
     "id": "settings",
     "name": "Settings",
-    "icon": "⚙️",
+    "icon": "\u2699\ufe0f",
     "path": "system/apps/settings.html",
     "description": "System configuration",
     "home": 5
@@ -49,21 +62,21 @@
   {
     "id": "billing",
     "name": "Billing",
-    "icon": "💳",
+    "icon": "\ud83d\udcb3",
     "path": "system/apps/billing.html",
     "description": "API usage and cost dashboard"
   },
   {
     "id": "local_bridge_settings",
     "name": "Local Bridge",
-    "icon": "🖥️",
+    "icon": "\ud83d\udda5\ufe0f",
     "path": "system/apps/local_bridge_settings.html",
-    "description": "ローカル機との接続・ルート・配布の管理"
+    "description": "\u30ed\u30fc\u30ab\u30eb\u6a5f\u3068\u306e\u63a5\u7d9a\u30fb\u30eb\u30fc\u30c8\u30fb\u914d\u5e03\u306e\u7ba1\u7406"
   },
   {
     "id": "gdrive_sync",
     "name": "Drive Sync",
-    "icon": "☁️",
+    "icon": "\u2601\ufe0f",
     "path": "system/apps/gdrive_app.html",
     "description": "Manage Google Drive synchronization"
   }
