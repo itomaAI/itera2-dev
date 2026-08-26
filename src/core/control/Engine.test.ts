@@ -342,3 +342,56 @@ describe('Engine: 停止したことが利用者に見えるか', () => {
     expect(atLimit.alert).toContain('Autonomous Loop Limit');
   });
 });
+
+/**
+ * 「置くだけ」の user ターン（T-0215）。
+ *   アプリのシステムタスクの前に心構えを置きたいとき、チャット欄に user ターンを積むと
+ *   常に LLM が起きてしまっていた（_evaluateWakeUp は user ターンを無条件に起床の理由にしていた）。
+ *   守りたいのは2点:
+ *     1. trigger_llm: false を明示した user ターンは、単独では LLM を起こさない
+ *     2. そのあと普通の user ターン（または trigger_llm: true のターン）が来れば起きる
+ *        —— 置いたターンは消えず、次の起床で一緒に読まれる
+ */
+describe('Engine: LLM を起こさずに user ターンを置く', () => {
+  beforeEach(() => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  function silentHarness() {
+    const h = createHarness({});
+    // 直前に自分（model）の思考があった状態にする。ここより前の user ターンは起床の理由にならない
+    h.appendTurn('model', { type: 'model_thought', trigger_llm: false });
+    return h;
+  }
+
+  it('trigger_llm: false の user ターンだけでは起きない', async () => {
+    const h = silentHarness();
+    h.appendTurn('user', { type: 'user_input', trigger_llm: false });
+    await h.flush();
+    expect(h.reachedProjector()).toBe(false);
+  });
+
+  it('置いたあとに普通の user ターンが来れば起きる', async () => {
+    const h = silentHarness();
+    h.appendTurn('user', { type: 'user_input', trigger_llm: false });
+    await h.flush();
+    expect(h.reachedProjector()).toBe(false);
+
+    h.appendTurn('user', { type: 'user_input', trigger_llm: true });
+    await h.flush();
+    expect(h.reachedProjector()).toBe(true);
+  });
+
+  it('置いたあとにシステムタスク（trigger_llm: true の system ターン）が来れば起きる', async () => {
+    const h = silentHarness();
+    h.appendTurn('user', { type: 'user_input', trigger_llm: false });
+    h.appendTurn('system', { type: 'event_log', trigger_llm: true });
+    await h.flush();
+    expect(h.reachedProjector()).toBe(true);
+  });
+});

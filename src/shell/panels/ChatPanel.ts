@@ -106,26 +106,31 @@ export class ChatPanel {
   }
 
   private _bindEvents() {
-    const handleSend = () => {
+    // silent: 履歴に user ターンを置くだけで LLM を起こさない（Ctrl+Shift+Enter。ボタンは無い）
+    const handleSend = (opts: { silent?: boolean } = {}) => {
       const inputEl = this.els.INPUT as HTMLTextAreaElement;
       let text = inputEl ? inputEl.value.trim() : '';
       if (!text && this.pendingUploads.length === 0 && this.pendingReferences.length === 0) return;
 
       if (this.events['send']) {
-        this.events['send'](text, [...this.pendingUploads], [...this.pendingReferences]);
+        this.events['send'](text, [...this.pendingUploads], [...this.pendingReferences], opts);
       }
       if (inputEl) inputEl.value = '';
       this._clearUploads();
     };
 
     if (this.els.BTN_SEND) {
-      this.els.BTN_SEND.onclick = handleSend;
+      // Shift を押しながら送信ボタン → 置くだけ（Ctrl+Shift+Enter と同じ）
+      this.els.BTN_SEND.onclick = (e: MouseEvent) => handleSend({ silent: e.shiftKey });
     }
 
     if (this.els.INPUT) {
       const inputEl = this.els.INPUT as HTMLTextAreaElement;
       inputEl.onkeydown = (e) => {
-        if (e.ctrlKey && e.key === 'Enter') handleSend();
+        if (e.ctrlKey && e.key === 'Enter') {
+          e.preventDefault();
+          handleSend({ silent: e.shiftKey });
+        }
       };
       inputEl.addEventListener('paste', (e: ClipboardEvent) => this._handlePaste(e));
 

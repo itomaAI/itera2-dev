@@ -162,8 +162,10 @@ export class Engine {
     // 自分が最後に思考を開始して以降のターンを抽出
     const recentTurns = lastModelIdx === -1 ? historyTurns : historyTurns.slice(lastModelIdx + 1);
 
-    // 【最強トリガー】 ユーザーの入力があれば問答無用で発火する
-    if (recentTurns.some((t) => t.role === 'user')) {
+    // 【最強トリガー】 ユーザーの入力があれば発火する。
+    // ただし trigger_llm: false を明示した user ターン（「置くだけ」送信）は除く。
+    // 置いたターンは履歴に残るので、次に誰かが起こしたときに一緒に読まれる。
+    if (recentTurns.some((t) => t.role === 'user' && !(t.meta && t.meta.trigger_llm === false))) {
       return true;
     }
 
