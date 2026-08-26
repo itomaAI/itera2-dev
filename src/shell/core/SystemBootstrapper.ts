@@ -249,6 +249,15 @@ export class SystemBootstrapper {
 
     // 初期化タスクの実行
     await themeService.applyAppearance(configManager.get('appearance') || { theme: 'system/themes/dark.json' });
+    // チャットに描かないイベントの種類（preferences.hiddenEventTypes。既定 []、ミャク楽は tool_available/info を隠して配る）
+    const applyHiddenEventTypes = () => {
+      desktop.panels.chat.setHiddenEventTypes(configManager.get('preferences')?.hiddenEventTypes);
+    };
+    applyHiddenEventTypes();
+    configManager.onUpdate(() => {
+      applyHiddenEventTypes();
+      desktop.panels.chat.renderHistory(history.get());
+    });
     desktop.panels.chat.renderHistory(history.get());
     desktop.updateStorageUI(vfs.getUsage());
 

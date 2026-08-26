@@ -74,6 +74,7 @@ export class SessionManager {
           `<event type="tool_available">\n[System: Restored Dynamic Tools]\nThe following tools are currently active from background processes:\n${defsText}\n</event>`,
           {
             type: 'tool_available',
+            eventType: 'tool_available',
             trigger_llm: false,
           },
         );

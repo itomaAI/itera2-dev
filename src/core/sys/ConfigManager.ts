@@ -21,6 +21,12 @@ export interface OsConfig {
     autoUpdateSystemFiles: boolean;
     /** 自律ループで連続実行できるツール回数の上限。0 以下で無制限。 */
     maxContinuousTools: number;
+    /**
+     * チャットに描かないイベントの種類（`MetaOS.ai.log(message, type)` の type）。
+     * 例: ["tool_available", "info"]。履歴には常に残り AI には届く。「利用者に見せない」だけ
+     * （T-0246。ミャク楽は tool_available と info を隠して配る）。
+     */
+    hiddenEventTypes?: string[];
   };
   appearance: {
     theme: string;
@@ -50,6 +56,7 @@ const DEFAULT_CONFIG: OsConfig = {
     language: 'English',
     autoUpdateSystemFiles: true,
     maxContinuousTools: DEFAULT_MAX_CONTINUOUS_TOOLS,
+    hiddenEventTypes: [],
   },
   appearance: {
     theme: 'system/themes/light.json',
