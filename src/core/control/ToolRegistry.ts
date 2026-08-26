@@ -196,6 +196,51 @@ export class ToolRegistry {
   }
 
   /**
+   * 道具の一覧（AI が自分で取りに来るための要約）。
+   * 履歴が消えた・圧縮で定義の本文が落ちた・走っている間に定義が変わった、の 3 つの場面で
+   * <tool_catalog action="list" /> から呼ばれる（T-0246）。既定では動的（アプリ・デーモン）だけ。
+   */
+  listToolSets(includeSystem = false): Array<{
+    id: string;
+    kind: 'system' | 'dynamic';
+    name: string;
+    description?: string;
+    tools: Array<{ name: string; description: string; hasDefinition: boolean }>;
+  }> {
+    const out: ReturnType<ToolRegistry['listToolSets']> = [];
+    for (const toolSet of this.toolSets.values()) {
+      if (toolSet.kind === 'system' && !includeSystem) continue;
+      if (toolSet.tools.size === 0) continue;
+      out.push({
+        id: toolSet.id,
+        kind: toolSet.kind,
+        name: toolSet.name,
+        description: toolSet.description,
+        tools: Array.from(toolSet.tools.values()).map((t) => ({
+          name: t.name,
+          description: t.description || '',
+          hasDefinition: !!t.definition,
+        })),
+      });
+    }
+    return out;
+  }
+
+  /**
+   * 1 つの道具の定義（LPML の <define_tag>）を返す。無ければ null。
+   * システムツールはシステムプロンプトに定義があり、ここには持っていない（definition が空）。
+   */
+  getToolDefinition(
+    toolName: string,
+  ): { setId: string; setName: string; kind: 'system' | 'dynamic'; definition: string | null } | null {
+    for (const toolSet of this.toolSets.values()) {
+      const t = toolSet.tools.get(toolName);
+      if (t) return { setId: toolSet.id, setName: toolSet.name, kind: toolSet.kind, definition: t.definition || null };
+    }
+    return null;
+  }
+
+  /**
    * 登録されているすべてのツール名（タグ名）の配列を取得する（Parserの保護対象指定用）
    */
   getRegisteredToolNames(): string[] {
