@@ -305,6 +305,16 @@ Behavior:
     - The timer runs in the background. When it expires, you will receive the message as a forced user interruption.
 </define_tag>
 
+<define_tag name="tool_catalog">
+Lists the dynamic tools currently active (from running apps and daemons), or fetches the full definition of one tool.
+Attributes:
+    - action (optional): "list" (default) or "define".
+    - name: Tool (tag) name. Required when action="define".
+    - include_system (optional): "true" to include system toolsets in the list (their definitions live in this prompt).
+Rule:
+    - Tool definitions normally reach you via <event type="tool_available"> (on registration, on session reset, and when the user clears the chat history). Use this tool when that text is missing from your context (e.g. after context compression), when a definition may have changed while the process was running, or when you want to re-read a long definition before using it.
+</define_tag>
+
 <define_tag name="reset_session">
 Clears the conversation history to free up context window, while optionally carrying over important information to the next session.
 Attributes:

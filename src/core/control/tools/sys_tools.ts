@@ -95,6 +95,65 @@ export function registerSysTools(registry: ToolRegistry): void {
     },
   });
 
+  // 道具の定義を自分で取りに来る入口（T-0246）。
+  // 定義は登録時と履歴の消去・リセット時に <event type="tool_available"> で届くが、
+  // コンテクストの圧縮で本文が落ちたとき／走っている間に定義が変わったとき／長い定義を要るときだけ読みたいとき
+  // のために、一覧と本文を引ける口を残す。
+  registry.registerSystemTool(setId, setName, {
+    name: 'tool_catalog',
+    description: 'List active toolsets or fetch one tool definition.',
+    impl: async (params: any) => {
+      const action = String(params.action || 'list');
+      if (action === 'define') {
+        const name = String(params.name || '').trim();
+        if (!name)
+          return { log: '[Error] name is required for action="define".', ui: '❌ tool_catalog', trigger_llm: false };
+        const found = registry.getToolDefinition(name);
+        if (!found) {
+          return {
+            log: `[Error] No tool named <${name}> is registered. Use <tool_catalog action="list" /> to see what is active.`,
+            ui: '❌ tool_catalog',
+            trigger_llm: false,
+          };
+        }
+        if (!found.definition) {
+          return {
+            log: `<${name}> belongs to ${found.setName} (${found.kind}). It has no separate definition text — system tools are defined in the system prompt.`,
+            ui: `🧰 ${name}`,
+            trigger_llm: false,
+          };
+        }
+        return {
+          log: `<toolset name="${found.setName}" pid="${found.setId}">
+${found.definition}
+</toolset>`,
+          ui: `🧰 ${name}`,
+          trigger_llm: false,
+        };
+      }
+      const includeSystem = params.include_system === 'true';
+      const sets = registry.listToolSets(includeSystem);
+      if (sets.length === 0) {
+        return {
+          log: 'No dynamic tools are active (no app or daemon has registered any).',
+          ui: '🧰 tool_catalog',
+          trigger_llm: false,
+        };
+      }
+      const lines: string[] = [];
+      for (const s of sets) {
+        lines.push(`[${s.kind}] ${s.name} (pid: ${s.id})${s.description ? ` — ${s.description}` : ''}`);
+        for (const t of s.tools) {
+          lines.push(
+            `  - ${t.name}${t.description && t.description !== t.name ? `: ${t.description}` : ''}${t.hasDefinition ? '' : ' (no definition text)'}`,
+          );
+        }
+      }
+      lines.push('', 'Fetch the full definition of one tool with <tool_catalog action="define" name="TOOL_NAME" />.');
+      return { log: lines.join('\n'), ui: `🧰 ${sets.length} toolsets`, trigger_llm: false };
+    },
+  });
+
   registry.registerSystemTool(setId, setName, {
     name: 'yield',
     description: 'Hand over control.',

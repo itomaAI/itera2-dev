@@ -356,9 +356,12 @@ export class EventOrchestrator {
         ],
       });
       if (res && res.action) {
+        // 履歴を消しても、走っているアプリ・デーモンの道具は生きている。
+        // 登録時の tool_available は履歴ごと消えるので、リセット時と同じく定義を積み直す（T-0246）。
         this.sessionManager.clearSession({
           purgeMedia: true,
           triggerLlm: false,
+          restoreTools: true,
         });
       }
     });
