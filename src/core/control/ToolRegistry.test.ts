@@ -62,9 +62,16 @@ describe('ToolRegistry: 一覧と定義', () => {
 });
 
 describe('tool_catalog（システムツール）', () => {
-  it('list は一覧と、define の使い方を返す', async () => {
+  it('list は一覧と、define の使い方を返す。戻りは次のターンを起こす（trigger_llm を false にしない）', async () => {
     const r = registryWithTools();
     const res = await r.execute({ type: 'tool_catalog', params: {} }, { shell: {}, engine: {} });
+    // 2026-08-26: trigger_llm: false を付けていて、実行結果のあと AI が起きなかった（山内さんが踏んだ）
+    expect(res!.trigger_llm).not.toBe(false);
+    const def = await r.execute(
+      { type: 'tool_catalog', params: { action: 'define', name: 'autoexcel_write_cell' } },
+      { shell: {}, engine: {} },
+    );
+    expect(def!.trigger_llm).not.toBe(false);
     expect(res!.log).toContain('autoexcel_write_cell');
     expect(res!.log).toContain('pid: myaku_data_daemon');
     expect(res!.log).toContain('<tool_catalog action="define" name="TOOL_NAME" />');

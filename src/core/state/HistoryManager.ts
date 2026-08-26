@@ -12,6 +12,8 @@ export type TurnContent = string | Array<TextContentNode | MediaContentNode | To
 
 export interface TurnMeta {
   type?: string; // 'message' | 'tool_execution' | 'event_log' | 'error'
+  /** event_log のとき、<event type="…"> の種類（tool_available / info / app_event …）。画面で隠す判定に使う */
+  eventType?: string;
   visible?: boolean;
   trigger_llm?: boolean;
   status?: 'completed' | 'error' | 'pending';

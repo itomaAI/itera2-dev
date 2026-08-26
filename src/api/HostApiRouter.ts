@@ -320,8 +320,11 @@ export class HostApiRouter {
       if (!d.history || !d.shell) return false;
       const triggerLlm = opts?.trigger_llm === true;
       const lpml = `<event type="${type || 'app_event'}">\n${message}\n</event>`;
+      // イベントの種類を meta.eventType に残す（画面で隠す判定 preferences.hiddenEventTypes に使う。T-0246）。
+      // meta.type は従来どおり event_log（Engine の連続回数の判定がこれを見る）。
       const turn = d.history.append('system', lpml, {
         type: 'event_log',
+        eventType: type || 'app_event',
         trigger_llm: triggerLlm,
       });
       d.shell.panels.chat.appendTurn(turn);

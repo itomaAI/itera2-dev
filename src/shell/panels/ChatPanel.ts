@@ -462,8 +462,18 @@ export class ChatPanel {
     }
   }
 
+  /**
+   * 描かないイベントの種類（preferences.hiddenEventTypes。`meta.eventType` と照合）。
+   * 描かないだけで履歴には残る（AI には届く）。切り替えは renderHistory で反映する。
+   */
+  private hiddenEventTypes: Set<string> = new Set();
+  setHiddenEventTypes(types: string[] | undefined | null): void {
+    this.hiddenEventTypes = new Set(Array.isArray(types) ? types.map(String) : []);
+  }
+
   private _appendTurn(turn: Turn) {
     if (turn.meta && turn.meta.visible === false) return;
+    if (turn.meta && turn.meta.eventType && this.hiddenEventTypes.has(String(turn.meta.eventType))) return;
 
     let div = document.getElementById(`turn-${turn.id}`);
     let isUpdate = !!div;
