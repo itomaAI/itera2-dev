@@ -30,74 +30,74 @@
       「ホストのパネルで見る」は MetaOS.host.revealInExplorer（T-0251）を呼ぶ。
       正はすべて VFS。ここは読んで描くだけで、状態は「いまどこを見ているか」と「何を選んでいるか」しか持たない。
     -->
-    <header
-      class="h-14 border-b border-border-main flex items-center justify-between px-4 bg-panel shrink-0 z-10 gap-3"
-    >
-      <div class="flex items-center gap-2 min-w-0">
-        <button
-          onclick="AppUI.home()"
-          class="text-text-muted hover:text-text-main transition p-1 rounded hover:bg-hover"
-          title="ホームへ"
-        >
-          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              stroke-width="2"
-              d="M10 19l-7-7m0 0l7-7m-7 7h18"
-            ></path>
-          </svg>
-        </button>
-        <span class="font-bold tracking-tight shrink-0">ファイル</span>
-        <nav id="crumbs" class="flex items-center gap-1 text-sm min-w-0 overflow-hidden"></nav>
+    <header class="border-b border-border-main bg-panel shrink-0 z-10">
+      <div class="min-h-12 flex flex-wrap items-center justify-between gap-x-3 gap-y-1 px-4 py-1.5">
+        <div class="flex items-center gap-2 min-w-0">
+          <button
+            onclick="AppUI.home()"
+            class="text-text-muted hover:text-text-main transition p-1 rounded hover:bg-hover"
+            title="ホームへ"
+          >
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M10 19l-7-7m0 0l7-7m-7 7h18"
+              ></path>
+            </svg>
+          </button>
+          <span class="font-bold tracking-tight shrink-0">ファイル</span>
+        </div>
+        <div class="flex flex-wrap items-center gap-1" id="toolbar">
+          <button
+            onclick="importFiles()"
+            class="text-sm px-2 py-1 rounded hover:bg-hover text-text-muted hover:text-text-main"
+            title="PC のファイルをこのフォルダに取り込む（ドラッグ&ドロップでも）"
+          >
+            ⬆ 取り込む
+          </button>
+          <button
+            onclick="newFolder()"
+            class="text-sm px-2 py-1 rounded hover:bg-hover text-text-muted hover:text-text-main"
+          >
+            ＋ フォルダ
+          </button>
+          <button
+            onclick="renameSelected()"
+            data-needs="one"
+            class="text-sm px-2 py-1 rounded hover:bg-hover text-text-muted hover:text-text-main disabled:opacity-30"
+          >
+            名前の変更
+          </button>
+          <button
+            onclick="trashSelected()"
+            data-needs="some"
+            class="text-sm px-2 py-1 rounded hover:bg-hover text-text-muted hover:text-error disabled:opacity-30"
+          >
+            ゴミ箱へ
+          </button>
+          <button
+            onclick="askAI()"
+            data-needs="some"
+            class="text-sm px-2 py-1 rounded bg-primary/10 text-primary font-bold hover:bg-primary/20 disabled:opacity-30"
+            title="選んだものを AI に渡す"
+          >
+            ⚡ AI に渡す
+          </button>
+          <button
+            onclick="revealInHost()"
+            id="btn-reveal"
+            data-needs="one"
+            class="hidden text-sm px-2 py-1 rounded hover:bg-hover text-text-muted hover:text-text-main disabled:opacity-30"
+            title="ホストのエクスプローラパネルで見る"
+          >
+            パネルで見る
+          </button>
+        </div>
+        <input type="file" id="file-input" multiple class="hidden" />
       </div>
-      <div class="flex items-center gap-1 shrink-0" id="toolbar">
-        <button
-          onclick="importFiles()"
-          class="text-sm px-2 py-1 rounded hover:bg-hover text-text-muted hover:text-text-main"
-          title="PC のファイルをこのフォルダに取り込む（ドラッグ&ドロップでも）"
-        >
-          ⬆ 取り込む
-        </button>
-        <button
-          onclick="newFolder()"
-          class="text-sm px-2 py-1 rounded hover:bg-hover text-text-muted hover:text-text-main"
-        >
-          ＋ フォルダ
-        </button>
-        <button
-          onclick="renameSelected()"
-          data-needs="one"
-          class="text-sm px-2 py-1 rounded hover:bg-hover text-text-muted hover:text-text-main disabled:opacity-30"
-        >
-          名前の変更
-        </button>
-        <button
-          onclick="trashSelected()"
-          data-needs="some"
-          class="text-sm px-2 py-1 rounded hover:bg-hover text-text-muted hover:text-error disabled:opacity-30"
-        >
-          ゴミ箱へ
-        </button>
-        <button
-          onclick="askAI()"
-          data-needs="some"
-          class="text-sm px-2 py-1 rounded bg-primary/10 text-primary font-bold hover:bg-primary/20 disabled:opacity-30"
-          title="選んだものを AI に渡す"
-        >
-          ⚡ AI に渡す
-        </button>
-        <button
-          onclick="revealInHost()"
-          id="btn-reveal"
-          data-needs="one"
-          class="hidden text-sm px-2 py-1 rounded hover:bg-hover text-text-muted hover:text-text-main disabled:opacity-30"
-          title="ホストのエクスプローラパネルで見る"
-        >
-          パネルで見る
-        </button>
-      </div>
-      <input type="file" id="file-input" multiple class="hidden" />
+      <nav id="crumbs" class="flex items-center gap-1 text-sm px-4 pb-1.5 overflow-x-auto whitespace-nowrap"></nav>
     </header>
 
     <div class="flex-1 flex min-h-0">
