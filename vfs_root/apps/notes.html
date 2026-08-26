@@ -4,9 +4,9 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Notes</title>
-    <script src="/system/core/tw.js"></script>
+    <script src="/system/vendor/tw.js"></script>
     <!-- 描画は同梱のものだけを使う。回線が無くても同じように出る（2026-08-24 / T-0191） -->
-    <script src="/system/libs/md.js"></script>
+    <script src="/system/lib/md.js"></script>
     <!-- MathJax は数式が出てきたときだけ、あとから読み込む -->
     <script>
       window.MathJax = {
@@ -22,7 +22,7 @@
     <script src="/system/core/ui.js"></script>
     <script src="/system/core/std.js"></script>
     <style>
-      /* 描画のクラスは system/libs/md.js が付ける（テーマ変数と Tailwind に寄せてある）。
+      /* 描画のクラスは system/lib/md.js が付ける（テーマ変数と Tailwind に寄せてある）。
          ここに置くのは、クラスでは書きにくいものだけ。 */
       .prose {
         color: rgb(var(--c-text-main));

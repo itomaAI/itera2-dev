@@ -36,7 +36,7 @@ Please execute the installation by strictly following these phases:
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Pomodoro Timer</title>
-    <script src="/system/core/tw.js"></script>
+    <script src="/system/vendor/tw.js"></script>
     <script src="/system/lib/ui.js"></script>
 </head>
 <body class="bg-app text-text-main h-screen flex flex-col p-6">

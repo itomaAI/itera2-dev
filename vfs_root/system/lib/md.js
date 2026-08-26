@@ -1,17 +1,18 @@
 /**
- * system/libs/md.js — ゲスト空間で共有するマークダウン描画。
+ * system/lib/md.js — ゲスト空間で共有するマークダウン描画。
  *
  * 方針:
  *  - **外部に依存しない。** CDN も node_modules も使わない（回線が無い場所でも同じように出る）。
  *  - **HTML は必ず退避してから組み立てる。** 素の HTML を通さないので、読み込んだ文書に
  *    <script> が入っていても実行されない。
- *  - 見た目はテーマ変数（--c-*）と Tailwind のクラスに寄せる（同梱の system/core/tw.js）。
+ *  - 見た目はテーマ変数（--c-*）と Tailwind のクラスに寄せる（同梱の system/vendor/tw.js）。
  *
  * 由来: apps/loom.html の mdRender（2026-08-23）。Loom 固有の出来事・総括の描画は持ち込まず、
  * 一般のマークダウンとして要る部分だけを取り出した（2026-08-24 / T-0191）。
  *
- * 置き場: system/libs/ … OS が配る共有ライブラリ（std.js / ui.js / tw.js と同じ層）。
- * 読み込みは絶対パスで <script src="/system/libs/md.js"></script>。
+ * 置き場: system/lib/ … 読みたいアプリだけが読む自前の共有ライブラリ。
+ *   （system/core/ は全アプリが読む契約＝std.js / ui.js、system/vendor/ は他社製＝tw.js。2026-08-26 / T-0230）
+ * 読み込みは絶対パスで <script src="/system/lib/md.js"></script>。
  */
 (function (global) {
   'use strict';

@@ -34,6 +34,8 @@ export class VfsInitializer {
       'system/apps',
       'system/config',
       'system/core',
+      'system/lib',
+      'system/vendor',
       'system/registry',
       'system/services',
       'system/themes',
