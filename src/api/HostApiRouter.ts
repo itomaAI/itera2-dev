@@ -320,8 +320,9 @@ export class HostApiRouter {
       if (!d.history || !d.shell) return false;
       const triggerLlm = opts?.trigger_llm === true;
       const lpml = `<event type="${type || 'app_event'}">\n${message}\n</event>`;
+      // 道具の定義は meta.type で見分けられるようにする（画面で隠す判定に使う。T-0246）
       const turn = d.history.append('system', lpml, {
-        type: 'event_log',
+        type: type === 'tool_available' ? 'tool_available' : 'event_log',
         trigger_llm: triggerLlm,
       });
       d.shell.panels.chat.appendTurn(turn);

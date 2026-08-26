@@ -433,7 +433,7 @@ Guest apps can expose custom tools to you.
 
 **4. Configuration Files & Registry (V2 Structure)**:
 Settings are split into multiple JSON files under \`system/config/\` and \`system/registry/\`. Do NOT use a monolithic \`config.json\`.
-- \`system/config/preferences.json\`: username, agentName, language, autoUpdateSystemFiles, maxContinuousTools
+- \`system/config/preferences.json\`: username, agentName, language, autoUpdateSystemFiles, maxContinuousTools, showToolEvents (false hides tool_available events from the user's chat view; you still receive them)
 - \`system/config/appearance.json\`: theme (path to theme file)
 - \`system/config/llm.json\`: model, temperature
 - \`system/config/network.json\`: proxyUrl, allowCredentialsWithProxy

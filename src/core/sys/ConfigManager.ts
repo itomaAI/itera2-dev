@@ -21,6 +21,11 @@ export interface OsConfig {
     autoUpdateSystemFiles: boolean;
     /** 自律ループで連続実行できるツール回数の上限。0 以下で無制限。 */
     maxContinuousTools: number;
+    /**
+     * 道具の定義（<event type="tool_available">）をチャットに描くか。
+     * 履歴には常に残り AI には届く。false は「利用者に見せない」だけ（T-0246。ミャク楽は false で配る）。
+     */
+    showToolEvents?: boolean;
   };
   appearance: {
     theme: string;
@@ -50,6 +55,7 @@ const DEFAULT_CONFIG: OsConfig = {
     language: 'English',
     autoUpdateSystemFiles: true,
     maxContinuousTools: DEFAULT_MAX_CONTINUOUS_TOOLS,
+    showToolEvents: true,
   },
   appearance: {
     theme: 'system/themes/light.json',

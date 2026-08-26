@@ -462,8 +462,18 @@ export class ChatPanel {
     }
   }
 
+  /**
+   * 道具の定義（tool_available）を描くか。preferences.showToolEvents。
+   * 描かないだけで履歴には残る（AI には届く）。切り替えは renderHistory で反映する。
+   */
+  private showToolEvents = true;
+  setShowToolEvents(show: boolean): void {
+    this.showToolEvents = show;
+  }
+
   private _appendTurn(turn: Turn) {
     if (turn.meta && turn.meta.visible === false) return;
+    if (!this.showToolEvents && turn.meta && turn.meta.type === 'tool_available') return;
 
     let div = document.getElementById(`turn-${turn.id}`);
     let isUpdate = !!div;

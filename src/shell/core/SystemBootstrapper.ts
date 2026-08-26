@@ -249,6 +249,15 @@ export class SystemBootstrapper {
 
     // 初期化タスクの実行
     await themeService.applyAppearance(configManager.get('appearance') || { theme: 'system/themes/dark.json' });
+    // 道具の定義をチャットに描くか（preferences.showToolEvents。既定 true、ミャク楽は false で配る）
+    const applyShowToolEvents = () => {
+      desktop.panels.chat.setShowToolEvents(configManager.get('preferences')?.showToolEvents !== false);
+    };
+    applyShowToolEvents();
+    configManager.onUpdate(() => {
+      applyShowToolEvents();
+      desktop.panels.chat.renderHistory(history.get());
+    });
     desktop.panels.chat.renderHistory(history.get());
     desktop.updateStorageUI(vfs.getUsage());
 
