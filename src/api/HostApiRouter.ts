@@ -425,6 +425,10 @@ export class HostApiRouter {
       if (!d.shell || !d.shell.modals.filePicker) return null;
       return await d.shell.modals.filePicker.open(options);
     });
+    t.registerHandler('host:show_save_dialog', async ({ options }) => {
+      if (!d.shell || !d.shell.modals.filePicker) return null;
+      return await d.shell.modals.filePicker.openSave(options);
+    });
 
     t.registerHandler('host:address_bar', async ({ path }) => {
       if (!d.processManager) return false;

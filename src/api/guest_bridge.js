@@ -238,6 +238,7 @@
         host: {
             goHome: async () => transport.requestHost('host:go_home', {}),
             showOpenDialog: async (options = {}) => transport.requestHost('host:show_open_dialog', { options }),
+            showSaveDialog: async (options = {}) => transport.requestHost('host:show_save_dialog', { options }),
             openEditor: async (path) => transport.requestHost('host:open_editor', { path }),
             notify: async (message, type, duration) => transport.requestHost('host:notify', { message, type, duration }),
             copyText: async (text) => transport.requestHost('host:copy', { text }),
