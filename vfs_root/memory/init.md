@@ -29,9 +29,8 @@
 1.  **Explain the System**:
     *   Provide a brief, welcoming explanation to the user about how Itera OS v2 works.
     *   **Local Execution & Volatility**: Itera runs 100% in the browser. If the browser cache is cleared, data is lost.
-    *   **Backup & Restore**: Strongly recommend exporting the system as a ZIP file regularly via System Settings.
-    *   **Time Machine (Snapshots)**: Explain the snapshot feature (clock icon) to save the state before making major changes.
-    *   **Safe to Break**: Reassure them that it's an experimental environment. They can always restore a snapshot or factory reset.
+    *   **Backup & Restore**: Strongly recommend keeping a backup — download folders as a ZIP from the Explorer, and/or set up cloud sync.
+    *   **Safe to Break**: Reassure them that it's an experimental environment. Deleted files go to `trash/`, and the official OS apps can be restored from `system/upstream/`. (There is no snapshot / time-machine feature; do not mention one.)
 
 ## Phase 5: Recursive Protocol Update (Overwrite)
 *   **CRITICAL FINAL STEP**:
