@@ -167,6 +167,60 @@
           return compiled;
         }
 
+        // ---------- 無視パターンをホストへ渡す（T-0164） ----------
+        //
+        // 判定は VFS 側にもホスト側にもあるが、**一覧は 1 つ**にする。ここで効いている和
+        // （ignorePatternsFor）をそのままホストへ送り、ホストはそれに従って列挙する。
+        // ホストだけが余分に隠すと、その項目は調停で「ホストから消えた」と読まれる（分岐 2b）。
+        // 逆にホストが余分に返す分は、ここで読み飛ばすだけなので害は無い。
+        //
+        // 送るのは /api/status を受け取るたび（＝接続するたび、巡回のたび）。ホストが
+        // 「いま効いている一覧」を roots[].ignorePatterns で返してくるので、それと比べて
+        // 違うときだけ送る。設定を書き換えたときも、次の巡回で自然に送り直される。
+        // 旧サーバー（v3.5 以前）はこの鍵を返さないので送らない。従来どおり VFS 側だけで捨てる。
+        const ignorePushWarned = new Set();
+        function ignoreListToSend(conn, root) {
+          const out = [];
+          for (const raw of ignorePatternsFor(conn, root)) {
+            const pat = (raw || '').trim();
+            if (!pat || pat.startsWith('#')) continue;
+            if (!out.includes(pat)) out.push(pat);
+          }
+          return out;
+        }
+
+        async function pushIgnore(conn, r) {
+          if (!Array.isArray(r.ignorePatterns)) {
+            const key = `${conn.name}:old`;
+            if (!ignorePushWarned.has(key)) {
+              ignorePushWarned.add(key);
+              log(`ホストが無視パターンを受け取れない版です (${conn.name}, v${r.version || '?'})。VFS 側だけで捨てます`);
+            }
+            return;
+          }
+          const want = ignoreListToSend(conn, r.name);
+          if (want.join('\n') === r.ignorePatterns.join('\n')) return;
+          try {
+            const res = await getJson(api(conn, `/api/${r.name}/ignore`), {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ ignorePatterns: want }),
+            });
+            // 応答の値を見る。「送った」ではなく「効いた」を記録する。
+            log(
+              `無視パターンをホストへ渡した (${conn.name}/${r.name}): ${res.count} 件、ホストの一覧 ${res.files} 件` +
+                (res.changed ? '' : '（変更なし）'),
+            );
+            ignorePushWarned.delete(`${conn.name}/${r.name}:fail`);
+          } catch (e) {
+            const key = `${conn.name}/${r.name}:fail`;
+            if (!ignorePushWarned.has(key)) {
+              ignorePushWarned.add(key);
+              log(`無視パターンをホストへ渡せません (${conn.name}/${r.name}): ${e.message}。VFS 側だけで捨てます`);
+            }
+          }
+        }
+
         // ---------- 補助 ----------
         const api = (conn, path) => `${conn.serverUrl}${path}`;
 
@@ -1123,6 +1177,9 @@
           const roots = status.roots || [];
           const wanted = new Set(roots.map((r) => `${MOUNT_BASE}/${conn.name}/${r.name}`));
           for (const r of roots) {
+            // 先に無視パターンを揃える。調停はホストの一覧を前提にするので、この順でないと
+            // 初回の一周だけ余分な項目（VFS 側で捨てる分）を受け取る。
+            await pushIgnore(conn, { ...r, version: status.version });
             await mountRoot(conn, r);
             const m = mounts.get(`${MOUNT_BASE}/${conn.name}/${r.name}`);
             if (!m) continue;
@@ -1614,7 +1671,7 @@ Attributes:
         }
 
         MetaOS.ai.log(
-          'Local Bridge (daemon v3.8) 起動\n' + (summary.join('\n') || '（有効な接続がありません）'),
+          'Local Bridge (daemon v3.9) 起動\n' + (summary.join('\n') || '（有効な接続がありません）'),
           'system',
         );
       })();
