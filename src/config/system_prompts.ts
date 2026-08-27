@@ -409,6 +409,7 @@ All methods (except \`on/off\`) are **Asynchronous** and return a \`Promise\`.
 - \`getArgs()\`: Returns the args object provided when the app was spawned (e.g., to get the target file path).
 
 **Host UI (MetaOS.host)**:
+- \`showSaveDialog(opts)\`: Opens the OS native save dialog (folder in the tree + file name; overwrite confirmed there). \`opts: { title, filters: ['.xlsx'], defaultPath, defaultDir, defaultName }\`. Returns the full VFS path or null.
 - \`showOpenDialog(opts)\`: Opens the OS native file picker modal. \`opts\` can include \`{ title, filters: ['.md', '.txt'], mode: 'file' | 'directory' | 'any' }\` (mode defaults to 'file'; filters apply to files only). Returns the selected VFS path or null.
 - \`openEditor(path)\`, \`notify(message, title)\`, \`copyText(text)\`, \`openExternal(url)\`, \`updateAddressBar(path)\`, \`revealInExplorer(path)\` (expands and selects the path in the host Explorer panel; the only way to "open" a directory), \`showMessageBox(options)\`, \`showLoading(message)\`, \`hideLoading()\`
 

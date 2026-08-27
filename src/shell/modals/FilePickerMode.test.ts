@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { isSelectableForPicker } from './FilePickerModal';
+import { isSelectableForPicker, resolveSavePath } from './FilePickerModal';
 
 /**
  * ファイル選択ダイアログで何を選べるか（T-0017）
@@ -43,5 +43,24 @@ describe('選べるかどうかの判定', () => {
 
   it('大文字の拡張子でも通す（従来どおり）', () => {
     expect(isSelectableForPicker('file', 'file', 'A.MD', ['.md'])).toBe(true);
+  });
+});
+
+describe('保存先のフルパス（showSaveDialog）', () => {
+  it('フォルダ＋名前をつなぐ。ルートなら名前だけ', () => {
+    expect(resolveSavePath('個人/資料', '見積.xlsx', [])).toBe('個人/資料/見積.xlsx');
+    expect(resolveSavePath('', 'a.txt', [])).toBe('a.txt');
+    expect(resolveSavePath('docs/', 'a.txt', [])).toBe('docs/a.txt');
+  });
+
+  it('拡張子が無ければ filters の先頭を付け、合わない拡張子は断る', () => {
+    expect(resolveSavePath('d', '見積', ['.xlsx', '.csv'])).toBe('d/見積.xlsx');
+    expect(resolveSavePath('d', '見積.csv', ['.xlsx', '.csv'])).toBe('d/見積.csv');
+    expect(resolveSavePath('d', '見積.pdf', ['.xlsx', '.csv'])).toBeNull();
+    expect(resolveSavePath('d', 'v1.2', ['.xlsx'])).toBeNull();
+  });
+
+  it('空・区切り文字・. .. は断る', () => {
+    for (const n of ['', '  ', 'a/b', 'a\\b', '.', '..']) expect(resolveSavePath('d', n, []), n).toBeNull();
   });
 });
