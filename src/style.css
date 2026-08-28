@@ -29,8 +29,19 @@ body {
         position: absolute; top: 0; bottom: 0; right: 0; left: var(--chat-full-left, 0px);
         width: auto; z-index: 45; border-left: 0;
     }
-    #chat-panel.chat-full #chat-history > *,
-    #chat-panel.chat-full #chat-composer > * { max-width: 900px; margin-left: auto; margin-right: auto; }
+    /* 中央の段は「器の左右余白」で作る。
+       子に max-width と margin:auto を与えると、役割ごとの余白
+       （USER の ml-4 ／ ITERA の mr-4 ／ MODEL・SYSTEM の mx-8）まで打ち消してしまい、
+       幅の上下関係が USER = ITERA = MODEL > SYSTEM に化ける（T-0293）。
+       余白の下限は通常時の padding（p-4 / p-3）に合わせてある。 */
+    #chat-panel.chat-full #chat-history {
+        padding-left: max(1rem, calc((100% - 900px) / 2));
+        padding-right: max(1rem, calc((100% - 900px) / 2));
+    }
+    #chat-panel.chat-full #chat-composer {
+        padding-left: max(0.75rem, calc((100% - 900px) / 2));
+        padding-right: max(0.75rem, calc((100% - 900px) / 2));
+    }
 }
 
 .loader {
