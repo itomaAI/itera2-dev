@@ -36,12 +36,14 @@ import { SyncModal } from '../modals/SyncModal';
 import type { SyncAdapterHost, SyncAdapterStatus } from '../services/SyncAdapterHost';
 // Services
 import { LpmlRenderer } from '../services/LpmlRenderer';
+import { PanelLayout } from './PanelLayout';
 
 export class DesktopEnvironment {
   // Components
   public readonly explorer: Explorer;
   public readonly chatPanel: ChatPanel;
   public readonly commandPalette: CommandPaletteModal;
+  public readonly panelLayout: PanelLayout;
 
   private _editorModal: EditorModal;
   private _mediaViewer: MediaViewer;
@@ -96,6 +98,8 @@ export class DesktopEnvironment {
     this.commandPalette = new CommandPaletteModal(vfs, appRegistry, uriRouter, () => this.getActivePrincipal());
     this._syncModal = new SyncModal(adapterHost);
 
+    this.panelLayout = new PanelLayout();
+    this.panelLayout.init();
     this._bindMobileNavigation();
     this._bindCommandPaletteShortcut();
     this._bindSudoToggle();

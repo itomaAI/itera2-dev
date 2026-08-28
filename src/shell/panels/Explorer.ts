@@ -660,7 +660,7 @@ export class Explorer {
       if (!isResizing) return;
       const newWidth = e.clientX;
       if (newWidth > 150 && newWidth < 600) {
-        sidebar.style.width = `${newWidth}px`;
+        sidebar.style.setProperty('--explorer-w', `${newWidth}px`);
       }
       e.preventDefault();
     };

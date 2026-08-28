@@ -20,6 +20,19 @@ body {
 
 .resizer:hover, .resizer.resizing { background: rgb(var(--c-accent-primary)); }
 
+/* --- パネルの開閉・幅・チャット全画面（PC のみ。スマホの引き出しには効かない） --- */
+@media (min-width: 768px) {
+    #sidebar { width: var(--explorer-w, 260px); }
+    #chat-panel { width: var(--chat-w, 400px); }
+    .panel-collapsed { display: none !important; }
+    #chat-panel.chat-full {
+        position: absolute; top: 0; bottom: 0; right: 0; left: var(--chat-full-left, 0px);
+        width: auto; z-index: 45; border-left: 0;
+    }
+    #chat-panel.chat-full #chat-history > *,
+    #chat-panel.chat-full #chat-composer > * { max-width: 900px; margin-left: auto; margin-right: auto; }
+}
+
 .loader {
     border: 3px solid rgb(var(--c-bg-card)); border-top: 3px solid rgb(var(--c-accent-primary)); border-radius: 50%;
     width: 24px; height: 24px; animation: spin 1s linear infinite;

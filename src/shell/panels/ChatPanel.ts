@@ -208,7 +208,7 @@ export class ChatPanel {
       if (!isResizing) return;
       const w = document.body.clientWidth - e.clientX;
       if (w > 300 && w < 800) {
-        panel.style.width = `${w}px`;
+        panel.style.setProperty('--chat-w', `${w}px`);
       }
       e.preventDefault();
     };
