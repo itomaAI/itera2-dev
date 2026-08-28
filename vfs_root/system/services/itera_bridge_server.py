@@ -36,7 +36,7 @@ import time
 import uuid
 from pathlib import Path
 
-VERSION = "3.5.1"
+VERSION = "3.6.0"
 # long-poll（変更があるまで応答を保留する）の上限と刻み。
 # 刻みは応答の遅れの下限になるので細かく、ただし空回りが目に見えない程度に。
 MAX_LONG_POLL_SEC = 60.0
@@ -59,7 +59,7 @@ _state_lock = threading.RLock()
 def load_state():
     CONFIG_DIR.mkdir(parents=True, exist_ok=True)
     if not ROOTS_FILE.exists():
-        return {"roots": {}, "ignorePatterns": list(DEFAULT_IGNORE)}
+        return {"roots": {}, "ignorePatterns": list(DEFAULT_IGNORE), "rootIgnore": {}}
     try:
         data = json.loads(ROOTS_FILE.read_text(encoding="utf-8"))
     except Exception as e:
@@ -67,6 +67,12 @@ def load_state():
         raise SystemExit(f"[itera] {ROOTS_FILE} を読めません: {e}")
     data.setdefault("roots", {})
     data.setdefault("ignorePatterns", list(DEFAULT_IGNORE))
+    # ルートごとの無視パターン。OS 側（local_bridge デーモン）が接続のたびに送ってくる
+    # 「そのルートで実際に効いている一覧」をそのまま保存する（T-0164）。
+    # 在るルートでは全体の ignorePatterns より**こちらが優先**（和にしない）。
+    # 和にすると、サーバーだけが隠す項目が生まれ、OS 側はそれを「ホストから消えた」と読む。
+    if not isinstance(data.get("rootIgnore"), dict):
+        data["rootIgnore"] = {}
     return data
 
 
@@ -265,7 +271,31 @@ class Bridge:
         # 変更検知。serve のときだけ入る（CLI では None のまま）。
         self.watcher = None
         for name, path in self.state["roots"].items():
-            self.scanners[name] = RootScanner(name, path, self.state["ignorePatterns"])
+            self.scanners[name] = RootScanner(name, path, self.ignore_for(name))
+
+    # -- 無視パターン -----------------------------------------------------
+    def ignore_for(self, name):
+        """ルートで効く一覧。OS 側から受け取ったものがあればそれ、無ければ全体の既定。"""
+        pats = self.state["rootIgnore"].get(name)
+        return list(pats) if isinstance(pats, list) else list(self.state["ignorePatterns"])
+
+    def ignore_source(self, name):
+        return "client" if isinstance(self.state["rootIgnore"].get(name), list) else "server"
+
+    def set_root_ignore(self, name, patterns):
+        """OS 側が送ってきた一覧を保存して即座に効かせる。変わったときだけ True。"""
+        patterns = [str(p) for p in patterns]
+        with _state_lock:
+            if name not in self.state["roots"]:
+                raise KeyError(name)
+            if self.state["rootIgnore"].get(name) == patterns:
+                return False
+            self.state["rootIgnore"][name] = patterns
+            save_state(self.state)
+            s = self.scanners.get(name)
+            if s:
+                s.set_ignore(patterns)
+        return True
 
     # -- ルート管理 -------------------------------------------------------
     def add_root(self, path, name=None):
@@ -279,7 +309,7 @@ class Bridge:
                 raise ValueError(f"ルート名 '{name}' は別のパスに使われています: {existing}")
             self.state["roots"][name] = str(p)
             save_state(self.state)
-            self.scanners[name] = RootScanner(name, p, self.state["ignorePatterns"])
+            self.scanners[name] = RootScanner(name, p, self.ignore_for(name))
         # **起動後に増えたルートにも監視を張る。** これを忘れると、そのルートは
         # 60 秒ごとの保険走査でしか変更に気づかない（実測 42〜57 秒）。
         if self.watcher:
@@ -291,6 +321,7 @@ class Bridge:
             if name not in self.state["roots"]:
                 raise KeyError(name)
             del self.state["roots"][name]
+            self.state["rootIgnore"].pop(name, None)
             save_state(self.state)
             self.scanners.pop(name, None)
         if self.watcher:
@@ -306,8 +337,10 @@ class Bridge:
         with _state_lock:
             self.state["ignorePatterns"] = list(patterns)
             save_state(self.state)
-            for s in self.scanners.values():
-                s.set_ignore(patterns)
+            for name, s in self.scanners.items():
+                # OS 側から受け取った一覧を持つルートには全体の既定は効かない
+                if self.ignore_source(name) == "server":
+                    s.set_ignore(patterns)
 
     def rev_token(self):
         """いまの状態を表す短い文字列。ルートの増減と各ルートの rev を含む。
@@ -336,6 +369,10 @@ class Bridge:
                 # 監視が張れているか。**黙って効いていない**のがいちばん困るので必ず出す。
                 "watching": bool(self.watcher and self.watcher.is_watching(name)),
                 "watchError": self.watcher.error_of(name) if self.watcher else "変更検知は未起動です",
+                # いま効いている無視パターン。OS 側は自分の一覧と比べ、違えば送り直す。
+                # 旧サーバーはこの鍵を持たないので、OS 側は「無ければ送らない」と判断できる。
+                "ignorePatterns": list(s.ignore) if s else [],
+                "ignoreSource": self.ignore_source(name),
             })
         return out
 
@@ -435,6 +472,30 @@ def build_app(bridge):
     @app.get("/api/{root}/meta")
     async def get_meta(root: str):
         return get_scanner(root).snapshot()
+
+    @app.post("/api/{root}/ignore")
+    def set_root_ignore(root: str, payload: dict):
+        """OS 側の無視パターンを受け取り、このルートの列挙に効かせる（T-0164）。
+
+        送られてくるのは OS 側で実際に効いている一覧（全体 ∪ 接続 ∪ ルートの和）。
+        ここでは**それをそのまま**使う。サーバー側で足し引きすると両者の判定がずれ、
+        「OS には来ないのに掃除の対象にも出ない」項目が生まれる。
+        変わったときはその場で走査し直し、応答が返る時点で一覧に反映済みにする。
+        """
+        scanner = get_scanner(root)
+        pats = payload.get("ignorePatterns")
+        if not isinstance(pats, list) or not all(isinstance(p, str) for p in pats):
+            raise HTTPException(status_code=400, detail="ignorePatterns は文字列の配列である必要があります")
+        changed = bridge.set_root_ignore(root, pats)
+        if changed:
+            scanner.scan()
+        return {
+            "ok": True,
+            "changed": changed,
+            "count": len(scanner.ignore),
+            "files": len(scanner.meta),
+            "rev": scanner.rev,
+        }
 
     # 以下、ブロックする処理を持つハンドラは async def にしない。
     # async def の中で同期 I/O を回すとイベントループが止まり、その間サーバーは
