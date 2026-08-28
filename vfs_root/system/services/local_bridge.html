@@ -147,8 +147,12 @@
          */
         function ignorePatternsFor(conn, root) {
           const out = [...(config.ignorePatterns || [])];
-          if (conn && Array.isArray(conn.ignorePatterns)) out.push(...conn.ignorePatterns);
-          const perRoot = conn && conn.roots && conn.roots[root];
+          // 実行時の接続オブジェクトは設定を `cfg` に抱える（上の connections を参照）。
+          // conn 直下を読むと、接続ごと・ルートごとの設定が一度も効かない
+          // （T-0059 の実装からそうなっていた。2026-08-28 / T-0292）。
+          const cfg = (conn && conn.cfg) || conn;
+          if (cfg && Array.isArray(cfg.ignorePatterns)) out.push(...cfg.ignorePatterns);
+          const perRoot = cfg && cfg.roots && cfg.roots[root];
           if (perRoot && Array.isArray(perRoot.ignorePatterns)) out.push(...perRoot.ignorePatterns);
           return out;
         }
@@ -1673,7 +1677,7 @@ Attributes:
         }
 
         MetaOS.ai.log(
-          'Local Bridge (daemon v3.9) 起動\n' + (summary.join('\n') || '（有効な接続がありません）'),
+          'Local Bridge (daemon v3.10) 起動\n' + (summary.join('\n') || '（有効な接続がありません）'),
           'system',
         );
       })();
