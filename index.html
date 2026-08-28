@@ -31,7 +31,7 @@
 
     <!-- Header (Keys button removed) -->
     <header
-      class="h-12 bg-panel border-b border-border-main flex items-center justify-between px-4 shrink-0 z-20 shadow-sm relative"
+      class="h-10 bg-panel border-b border-border-main flex items-center justify-between px-4 shrink-0 z-20 shadow-sm relative"
     >
       <div class="flex items-center gap-2">
         <img src="/assets/icon.svg" class="w-6 h-6 rounded shadow-lg shadow-black/20" alt="Logo" />
@@ -51,17 +51,17 @@
       <!-- 1. LEFT SIDEBAR -->
       <div
         id="sidebar"
-        class="bg-panel flex flex-col shrink-0 md:relative fixed inset-y-0 left-0 z-40 w-[260px] transition-transform duration-300 -translate-x-full md:translate-x-0 border-r border-border-main shadow-2xl md:shadow-none h-full"
+        class="bg-panel flex flex-col shrink-0 md:relative fixed inset-y-0 left-0 z-40 w-[260px] transition-transform duration-300 -translate-x-full md:translate-x-0 border-r border-border-main shadow-2xl md:shadow-none h-full overflow-hidden"
       >
         <!-- Controls (Sync & Settings) -->
         <div class="h-10 bg-app border-b border-border-main flex items-center justify-between px-3 shrink-0">
-          <div class="flex items-center gap-2">
+          <div class="flex items-center gap-2 min-w-0">
             <div
-              class="w-2 h-2 rounded-full bg-success animate-pulse shadow-[0_0_4px_rgba(var(--c-accent-success),0.5)]"
+              class="w-2 h-2 rounded-full bg-success animate-pulse shadow-[0_0_4px_rgba(var(--c-accent-success),0.5)] shrink-0"
             ></div>
-            <span class="text-xs font-bold text-text-main tracking-wide">System Online</span>
+            <span class="text-xs font-bold text-text-main tracking-wide truncate min-w-0">System Online</span>
           </div>
-          <div class="flex items-center gap-1">
+          <div class="flex items-center gap-1 shrink-0">
             <button
               id="btn-cloud-sync"
               title="Cloud Sync"
@@ -117,8 +117,10 @@
         <!-- Storage & Actions -->
         <div class="py-3 px-4 border-b border-border-main bg-panel/50 flex flex-col gap-1.5 shrink-0">
           <div class="flex justify-between items-baseline text-[0.625rem]">
-            <span class="font-bold text-text-muted uppercase tracking-wider">Storage</span>
-            <span id="storage-usage-text" class="font-mono text-text-muted">0.0 / 1024.0 MB</span>
+            <span class="font-bold text-text-muted uppercase tracking-wider truncate">Storage</span>
+            <span id="storage-usage-text" class="font-mono text-text-muted shrink-0 whitespace-nowrap"
+              >0.0 / 1024.0 MB</span
+            >
           </div>
           <div class="relative w-full h-1 bg-card rounded-full overflow-hidden">
             <div
@@ -192,6 +194,20 @@
       <div class="flex-1 flex flex-col bg-app min-w-0 relative h-full pb-14 md:pb-0">
         <div class="h-10 bg-panel border-b border-border-main flex items-center px-4 gap-2 shrink-0 z-10">
           <button
+            id="btn-toggle-explorer"
+            class="hidden md:inline-flex text-text-muted hover:text-text-main p-1 rounded hover:bg-hover transition"
+            title="Toggle Explorer"
+          >
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M4 5a1 1 0 011-1h14a1 1 0 011 1v14a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM9 4v16"
+              ></path>
+            </svg>
+          </button>
+          <button
             id="btn-home"
             class="text-text-muted hover:text-text-main p-1 rounded hover:bg-hover transition"
             title="Home"
@@ -260,6 +276,20 @@
               </svg>
             </button>
           </div>
+          <button
+            id="btn-toggle-chat"
+            class="hidden md:inline-flex text-text-muted hover:text-text-main p-1 rounded hover:bg-hover transition"
+            title="Toggle Chat"
+          >
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M4 5a1 1 0 011-1h14a1 1 0 011 1v14a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM15 4v16"
+              ></path>
+            </svg>
+          </button>
         </div>
 
         <div class="flex-1 relative bg-app overflow-hidden group" id="apps-container">
@@ -352,15 +382,31 @@
       >
         <!-- Chat Header (Added Keys & Clear buttons here) -->
         <div class="h-10 border-b border-border-main flex items-center justify-between px-3 bg-panel shrink-0">
-          <div class="flex items-center gap-2">
-            <span class="text-[0.625rem] font-bold text-text-muted uppercase tracking-wider">Itera Agent</span>
+          <div class="flex items-center gap-2 min-w-0">
+            <span class="text-[0.625rem] font-bold text-text-muted uppercase tracking-wider truncate min-w-0"
+              >Itera Agent</span
+            >
             <span
               id="model-status"
               class="text-[0.625rem] px-1.5 py-0.5 rounded bg-primary/10 text-primary border border-primary/20"
               >Loading...</span
             >
           </div>
-          <div class="flex items-center gap-1">
+          <div class="flex items-center gap-1 shrink-0">
+            <button
+              id="btn-chat-fullscreen"
+              title="Fullscreen"
+              class="hidden md:inline-flex text-text-muted hover:text-primary p-1 rounded hover:bg-hover transition"
+            >
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M4 8V4h4M20 8V4h-4M4 16v4h4M20 16v4h-4"
+                ></path>
+              </svg>
+            </button>
             <button
               id="btn-api-keys"
               title="API Keys"
@@ -394,7 +440,7 @@
 
         <div id="chat-history" class="flex-1 overflow-y-auto p-4 space-y-4 bg-app/50 scroll-smooth"></div>
 
-        <div class="p-3 bg-panel border-t border-border-main pb-20 md:pb-3">
+        <div id="chat-composer" class="p-3 bg-panel border-t border-border-main pb-20 md:pb-3">
           <div id="file-preview-area" class="mb-2 hidden flex flex-wrap gap-2"></div>
           <div id="ai-typing" class="text-xs text-primary mb-2 hidden flex items-center gap-1">
             <span class="animate-pulse">●</span> <span id="ai-typing-label">Thinking...</span>
