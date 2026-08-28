@@ -36,7 +36,7 @@ import time
 import uuid
 from pathlib import Path
 
-VERSION = "3.5.0"
+VERSION = "3.5.1"
 # long-poll（変更があるまで応答を保留する）の上限と刻み。
 # 刻みは応答の遅れの下限になるので細かく、ただし空回りが目に見えない程度に。
 MAX_LONG_POLL_SEC = 60.0
@@ -539,11 +539,12 @@ def build_app(bridge):
             proc = subprocess.run(
                 ["bash", "-lc", command], cwd=str(cwd),
                 capture_output=True, text=True, timeout=timeout,
+                encoding="utf-8", errors="replace",
             )
             out, err, code = proc.stdout, proc.stderr, proc.returncode
         except subprocess.TimeoutExpired as e:
-            out = e.stdout.decode() if isinstance(e.stdout, bytes) else (e.stdout or "")
-            err = (e.stderr.decode() if isinstance(e.stderr, bytes) else (e.stderr or "")) + f"\n[timeout {timeout}s]"
+            out = e.stdout.decode("utf-8", "replace") if isinstance(e.stdout, bytes) else (e.stdout or "")
+            err = (e.stderr.decode("utf-8", "replace") if isinstance(e.stderr, bytes) else (e.stderr or "")) + f"\n[timeout {timeout}s]"
             code = 124
         for s in bridge.scanners.values():
             s.touch()
@@ -580,7 +581,8 @@ def _run_search(scanner, query, use_regex, include, limit):
                 cmd += ["--glob", f"!{pat}"]
         cmd += [query, str(scanner.path)]
         try:
-            proc = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
+            proc = subprocess.run(cmd, capture_output=True, text=True, timeout=60,
+                                  encoding="utf-8", errors="replace")
             for line in proc.stdout.splitlines():
                 parts = line.split(":", 2)
                 if len(parts) < 3:
