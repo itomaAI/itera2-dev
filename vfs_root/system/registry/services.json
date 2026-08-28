@@ -22,5 +22,13 @@
     "path": "system/services/gdrive_sync.html",
     "description": "Mounts a Google Drive folder at drive/ and syncs it bi-directionally.",
     "autoStart": false
+  },
+  {
+    "id": "web_search_daemon",
+    "name": "Web Search",
+    "icon": "🔎",
+    "path": "system/services/web_search.html",
+    "description": "Provides web_search / read_webpage / download_file tools to the AI.",
+    "autoStart": true
   }
 ]

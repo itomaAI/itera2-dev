@@ -1,0 +1,436 @@
+<!doctype html>
+<html lang="ja">
+  <body>
+    <!--
+  Web 検索・ページ取得デーモン（AI 向け動的ツールの提供者）
+
+  ■ 渡す道具
+    web_search    … 検索（Brave / Bing / DuckDuckGo）
+    read_webpage  … ページを Markdown にして「読む」（文脈に入る。20000 字で打ち切り）
+    download_file … どんな URL でも VFS に保存する。画像・HTML・PDF を問わない
+
+  ■ 使い分け（2026-08-28 / T-0289。山内さんの整理）
+    ざっと読むなら read_webpage。**解析するなら download_file で生のまま保存し、スクリプトで読む**。
+    生の HTML を文脈へ入れると溢れるので、文脈に入れずに VFS へ置くのがこの道具の役目。
+    「一定以上の大きさの画像だけ拾う」ような選別はここに持たない —— 大きさを当てるには
+    結局その画像を全部取りに行くことになり、推測を挟むわりに当たらない。選別は都度スクリプトで書く。
+
+  ■ この環境の通信経路
+    ホスト経由（MetaOS.net.fetch / net.download）。取得はプロキシが要る（直接は CORS で落ちる）。
+    🔴 ミャク楽の同名デーモンは経路が違う（取得はサーバーの callable。バイナリの口は別途必要）。
+-->
+    <script>
+      (async () => {
+        const sendLog = (msg) => {
+          const time = new Date().toLocaleTimeString();
+          console.log(`Web Search Daemon: [${time}] ${msg}`);
+          window.MetaOS.ai.log(`[Web Search Daemon] ${msg}`, 'info', { silent: true });
+        };
+
+        // 既定の保存先は system/temp 配下（山内さん 2026-08-28）。取ってきたものは一時物として扱う。
+        const DEFAULT_DIR = 'system/temp/downloads';
+
+        const defSearch = `
+<define_tag name="web_search">
+Searches the web using a search engine (Brave, Bing, or DuckDuckGo).
+Attributes:
+  - query: The search query string.
+  - engine (optional): "brave", "bing" or "duckduckgo". Default is "brave".
+Returns: 文字列。"N. タイトル / URL / Snippet" の並び。失敗は "[Error] …"。
+</define_tag>`;
+
+        const defRead = `
+<define_tag name="read_webpage">
+Reads a web page and converts its content to Markdown, removing noise like scripts and nav bars.
+Attributes:
+  - url: The URL of the web page to read.
+Returns: Markdown 文字列（20000 字で打ち切り）。失敗は "[Error] …" / "[Exception] …"。
+Note: 中身を解析したいとき（画像や表を拾う等）は、これではなく download_file で生のまま保存し、
+      スクリプトで読むこと。生の HTML を文脈に入れると溢れる。
+</define_tag>`;
+
+        const defDownload = `
+<define_tag name="download_file">
+Downloads any URL into the VFS (image, HTML, PDF, ...). 文脈には内容を載せない。
+Attributes:
+  - url: 取得する URL。
+  - path (optional): 保存先。省略すると "${DEFAULT_DIR}/<URL から起こした名前>"。
+                     "/" で終えるとディレクトリ扱いで、名前は URL から起こす。
+  - overwrite (optional): "true" で同名を上書きする。既定は "false"（"name-1.jpg" のように退避する）。
+Returns: "保存した: <path>（NN.N KB・<経路>）"。画像として読めたときは寸法（W×H）も付く。失敗は "[Error] …"。
+Note: HTML を保存して DOMParser で解析する使い方を想定している（画像の URL を集める・表を抜く等）。
+</define_tag>`;
+
+        // ================= 検索 =================
+        const searchDuckDuckGo = async (query) => {
+          const response = await window.MetaOS.net.fetch('https://lite.duckduckgo.com/lite/', {
+            method: 'POST',
+            useProxy: true,
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: 'q=' + encodeURIComponent(query),
+          });
+          const htmlStr = typeof response === 'string' ? response : response.data || '';
+          const parser = new DOMParser();
+          const doc = parser.parseFromString(htmlStr, 'text/html');
+          const results = [];
+          doc.querySelectorAll('tr').forEach((tr) => {
+            const titleA = tr.querySelector('td.result-snippet a');
+            if (titleA) {
+              const title = titleA.textContent.trim();
+              const link = titleA.href.startsWith('http') ? titleA.href : 'https://lite.duckduckgo.com' + titleA.href;
+              let snippet = '';
+              const nextTr = tr.nextElementSibling;
+              if (nextTr && nextTr.querySelector('.result-snippet'))
+                snippet = nextTr.querySelector('.result-snippet').textContent.trim();
+              results.push({ title, link, snippet });
+            }
+          });
+          return results;
+        };
+
+        // 鍵はソースに埋めない（配信物に載る）。置き場は system/credentials/（同期対象外）。
+        const readBraveKey = async () => {
+          try {
+            const raw = await window.MetaOS.fs.read('system/credentials/brave.json');
+            const conf = JSON.parse(raw || '{}');
+            return conf.apiKey || null;
+          } catch (e) {
+            return null;
+          }
+        };
+
+        const searchBrave = async (query) => {
+          const apiKey = await readBraveKey();
+          if (!apiKey) {
+            throw new Error(
+              'Brave の鍵が無い。system/credentials/brave.json に {"apiKey": "..."} を置くか、engine="duckduckgo" を使う（鍵は要らない）。',
+            );
+          }
+          const url = `https://api.search.brave.com/res/v1/web/search?q=${encodeURIComponent(query)}`;
+          const response = await window.MetaOS.net.fetch(url, {
+            method: 'GET',
+            useProxy: true,
+            headers: {
+              Accept: 'application/json',
+              'X-Subscription-Token': apiKey,
+            },
+          });
+
+          let data;
+          if (typeof response === 'string') {
+            data = JSON.parse(response);
+          } else if (response.data) {
+            data = typeof response.data === 'string' ? JSON.parse(response.data) : response.data;
+          } else {
+            data = response;
+          }
+
+          const results = [];
+          if (data && data.web && data.web.results) {
+            data.web.results.forEach((r) => {
+              results.push({
+                title: r.title,
+                link: r.url,
+                snippet: r.description || '',
+              });
+            });
+          }
+          return results;
+        };
+
+        const searchBing = async (query) => {
+          const url = `https://www.bing.com/search?q=${encodeURIComponent(query)}`;
+          const response = await window.MetaOS.net.fetch(url, { method: 'GET', useProxy: true });
+          const htmlStr = typeof response === 'string' ? response : response.data || '';
+          const parser = new DOMParser();
+          const doc = parser.parseFromString(htmlStr, 'text/html');
+          const results = [];
+          doc.querySelectorAll('li.b_algo').forEach((li) => {
+            const h2 = li.querySelector('h2');
+            const a = h2?.querySelector('a');
+            const p = li.querySelector('.b_caption p') || li.querySelector('.b_snippet');
+            if (a) {
+              results.push({
+                title: a.textContent.trim(),
+                link: a.href,
+                snippet: p ? p.textContent.trim() : '',
+              });
+            }
+          });
+          if (results.length === 0) {
+            doc.querySelectorAll('h2 a').forEach((a) => {
+              if (a.href && a.href.startsWith('http') && !a.href.includes('bing.com')) {
+                results.push({ title: a.textContent.trim(), link: a.href, snippet: '' });
+              }
+            });
+          }
+          return results;
+        };
+
+        // ================= 保存まわりの小道具 =================
+
+        // 保存した実体が画像として読めるかを見る（画素は読まないので CORS は関係ない）。
+        const probeImage = (src) =>
+          new Promise((resolve) => {
+            const img = new Image();
+            let settled = false;
+            const finish = (v) => {
+              if (settled) return;
+              settled = true;
+              clearTimeout(timer);
+              img.onload = img.onerror = null;
+              resolve(v);
+            };
+            const timer = setTimeout(() => finish(null), 8000);
+            img.onload = () => finish({ w: img.naturalWidth, h: img.naturalHeight });
+            img.onerror = () => finish(null);
+            img.src = src;
+          });
+
+        const humanSize = (bytes) => {
+          if (!Number.isFinite(bytes)) return 'サイズ不明';
+          if (bytes < 1024) return `${bytes} B`;
+          if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+          return `${(bytes / 1024 / 1024).toFixed(2)} MB`;
+        };
+
+        const fileNameFromUrl = (url) => {
+          let name = '';
+          try {
+            const u = new URL(url);
+            name = decodeURIComponent((u.pathname.split('/').pop() || '').trim());
+          } catch (e) {
+            /* そのまま下へ */
+          }
+          name = name.replace(/[\\/:*?"<>|\s]+/g, '_');
+          if (!name) name = 'download';
+          if (!/\.[A-Za-z0-9]{2,5}$/.test(name)) name += '.bin';
+          return name;
+        };
+
+        const freePath = async (dir, name) => {
+          const dot = name.lastIndexOf('.');
+          const stem = dot > 0 ? name.slice(0, dot) : name;
+          const ext = dot > 0 ? name.slice(dot) : '';
+          for (let i = 0; i < 100; i++) {
+            const candidate = `${dir}/${i === 0 ? name : `${stem}-${i}${ext}`}`;
+            if (!(await window.MetaOS.fs.exists(candidate))) return candidate;
+          }
+          return `${dir}/${stem}-${Date.now()}${ext}`;
+        };
+
+        // ================= 道具の登録 =================
+        window.MetaOS.tools.register({
+          name: 'web_search',
+          description: 'Searches the web using Brave, Bing or DuckDuckGo.',
+          definition: defSearch,
+          handler: async (context) => {
+            const attr = context.attributes || context;
+            const query = attr.query;
+            const engine = attr.engine || 'brave';
+
+            if (!query) return '[Error] query attribute is required.';
+            sendLog(`Executing search (${engine}) for: ${query}`);
+
+            try {
+              let results = [];
+              if (engine === 'duckduckgo') {
+                results = await searchDuckDuckGo(query);
+              } else if (engine === 'bing') {
+                results = await searchBing(query);
+              } else {
+                results = await searchBrave(query);
+              }
+
+              if (results.length > 0) {
+                const topResults = results.slice(0, 5);
+                let out = `Search Results (${engine}):\n`;
+                topResults.forEach((r, i) => {
+                  out += `${i + 1}. ${r.title}\n   URL: ${r.link}\n   Snippet: ${r.snippet}\n\n`;
+                });
+                return out;
+              } else {
+                return `[Error] No results found or failed to parse ${engine} HTML.`;
+              }
+            } catch (e) {
+              return `[Exception] ${e.message}`;
+            }
+          },
+        });
+
+        window.MetaOS.tools.register({
+          name: 'read_webpage',
+          description: 'Reads a web page and converts it to Markdown.',
+          definition: defRead,
+          handler: async (context) => {
+            const attr = context.attributes || context;
+            const url = attr.url;
+
+            if (!url) return '[Error] url attribute is required.';
+            sendLog(`Reading webpage: ${url}`);
+
+            try {
+              const response = await window.MetaOS.net.fetch(url, {
+                method: 'GET',
+                useProxy: true,
+              });
+
+              let htmlStr =
+                typeof response === 'string'
+                  ? response
+                  : typeof response.json === 'function'
+                    ? await response.text()
+                    : response.data || response;
+
+              const parser = new DOMParser();
+              const doc = parser.parseFromString(htmlStr, 'text/html');
+
+              const badTags = [
+                'script',
+                'style',
+                'noscript',
+                'svg',
+                'iframe',
+                'nav',
+                'header',
+                'footer',
+                'aside',
+                'form',
+                'button',
+                'meta',
+                'link',
+              ];
+              badTags.forEach((tag) => {
+                const els = doc.querySelectorAll(tag);
+                els.forEach((e) => e.remove());
+              });
+
+              const convert = (node) => {
+                if (node.nodeType === Node.TEXT_NODE) return node.textContent.replace(/\s+/g, ' ');
+                if (node.nodeType !== Node.ELEMENT_NODE) return '';
+
+                const tag = node.tagName.toLowerCase();
+
+                if (tag === 'a') {
+                  const text = Array.from(node.childNodes).map(convert).join('').trim();
+                  if (!text) return '';
+                  let href = node.getAttribute('href');
+                  if (href) {
+                    try {
+                      href = new URL(href, url).href;
+                    } catch (e) {}
+                    if (href.startsWith('javascript:') || href.startsWith('#')) return ` ${text} `;
+                    return ` [${text}](${href}) `;
+                  }
+                  return ` ${text} `;
+                }
+
+                let inner = Array.from(node.childNodes).map(convert).join('');
+
+                if (/^h[1-6]$/.test(tag)) {
+                  const level = parseInt(tag[1]);
+                  return `\n\n${'#'.repeat(level)} ${inner.trim()}\n\n`;
+                }
+                if (tag === 'p') return `\n\n${inner.trim()}\n\n`;
+                if (tag === 'br') return `\n`;
+                if (tag === 'li') return `\n- ${inner.trim()}`;
+                if (tag === 'ul' || tag === 'ol') return `\n${inner}\n`;
+                if (tag === 'div' || tag === 'article' || tag === 'section') return `\n${inner}\n`;
+
+                return inner;
+              };
+
+              let md = convert(doc.body || doc);
+              md = md.replace(/\n{3,}/g, '\n\n').trim();
+
+              const title = doc.title ? `# ${doc.title}\nURL: ${url}\n\n` : `URL: ${url}\n\n`;
+              let finalOut = title + md;
+
+              if (finalOut.length > 20000) {
+                finalOut = finalOut.substring(0, 20000) + '\n\n...[Content truncated due to length]...';
+              }
+
+              return finalOut;
+            } catch (e) {
+              return `[Exception] ${e.message}`;
+            }
+          },
+        });
+
+        window.MetaOS.tools.register({
+          name: 'download_file',
+          description: 'Downloads any URL into the VFS (image, HTML, PDF, ...).',
+          definition: defDownload,
+          handler: async (context) => {
+            const attr = context.attributes || context;
+            const url = attr.url;
+            if (!url) return '[Error] url attribute is required.';
+
+            let target = (attr.path || '').trim();
+            const overwrite = String(attr.overwrite || '').toLowerCase() === 'true';
+
+            try {
+              if (!target || target.endsWith('/')) {
+                const dir = target ? target.replace(/\/+$/, '') : DEFAULT_DIR;
+                try {
+                  await window.MetaOS.fs.mkdir(dir);
+                } catch (e) {
+                  /* 既に在る */
+                }
+                target = overwrite ? `${dir}/${fileNameFromUrl(url)}` : await freePath(dir, fileNameFromUrl(url));
+              } else {
+                const dir = target.split('/').slice(0, -1).join('/');
+                if (dir) {
+                  try {
+                    await window.MetaOS.fs.mkdir(dir);
+                  } catch (e) {
+                    /* 既に在る */
+                  }
+                }
+                if (!overwrite && (await window.MetaOS.fs.exists(target))) {
+                  const name = target.split('/').pop();
+                  target = await freePath(dir || '.', name);
+                }
+              }
+
+              sendLog(`Downloading: ${url} -> ${target}`);
+
+              let result = null,
+                route = '直接';
+              try {
+                result = await window.MetaOS.net.download(url, target);
+              } catch (e1) {
+                route = 'プロキシ経由';
+                result = await window.MetaOS.net.download(url, target, { useProxy: true });
+              }
+
+              // 画像として読めるなら寸法を添える。読めなくても消さない（HTML や PDF はここを通らない）。
+              let dim = '';
+              try {
+                const localUrl = await window.MetaOS.fs.resolveUrl(target);
+                const size = await probeImage(localUrl);
+                if (size) dim = `${size.w}×${size.h}・`;
+              } catch (e) {
+                /* 寸法は付かなくてよい */
+              }
+
+              return `保存した: ${target}（${dim}${humanSize(result && result.size)}・${route}）`;
+            } catch (e) {
+              return `[Exception] ${e.message}`;
+            }
+          },
+        });
+
+        const allDefs = `${defSearch}\n${defRead}\n${defDownload}`;
+        window.MetaOS.ai.log(allDefs, 'tool_available');
+        sendLog('Dynamic tools registered: web_search, read_webpage, download_file.');
+
+        window.addEventListener('unload', () => {
+          window.MetaOS.tools.unregister('web_search');
+          window.MetaOS.tools.unregister('read_webpage');
+          window.MetaOS.tools.unregister('download_file');
+        });
+      })();
+    </script>
+  </body>
+</html>
