@@ -194,7 +194,9 @@
             const key = `${conn.name}:old`;
             if (!ignorePushWarned.has(key)) {
               ignorePushWarned.add(key);
-              log(`ホストが無視パターンを受け取れない版です (${conn.name}, v${r.version || '?'})。VFS 側だけで捨てます`);
+              log(
+                `ホストが無視パターンを受け取れない版です (${conn.name}, v${r.version || '?'})。VFS 側だけで捨てます`,
+              );
             }
             return;
           }
