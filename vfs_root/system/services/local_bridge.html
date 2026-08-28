@@ -1293,6 +1293,10 @@ Attributes:
 </define_tag>`,
           local_fetch: `<define_tag name="local_fetch">
 Materializes stubs and re-checks already-materialized files against the host.
+When to use: a stub is materialized automatically the moment you touch it
+(read_file, search, open, etc.), so you do NOT need this tool just to read a file.
+Use it when you want files brought into the VFS WITHOUT touching them —
+e.g. a whole directory in one go, or to re-check materialized files against the host.
 Attributes:
   - path (required): Path relative to the root. A directory covers everything under it.
   - connection (optional) / root (optional): Target selection.
