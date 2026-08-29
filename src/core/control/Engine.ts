@@ -57,6 +57,10 @@ export class Engine {
   private debounceTimer: ReturnType<typeof setTimeout> | null = null;
   /** 予約済みの起床時刻（epoch ms）。早い締切が勝つ判定に使う。0 は未予約 */
   private debounceDeadline: number = 0;
+  /** 起こさない変更だけが積まれたときの短い評価（loop_stop を出すため）。起こす予約があれば譲る */
+  private settleTimer: ReturnType<typeof setTimeout> | null = null;
+  /** 前回の起床以降に「起こす」変更（trigger_llm / wake:fast）が来たか */
+  private pendingWake: boolean = false;
   private continuousToolCount: number = 0;
   private hasPendingEvents: boolean = false;
   /** 連続実行の上限に達して停止中か。解除は利用者の発言（と明示的なタスク要求）だけ。 */
@@ -140,14 +144,17 @@ export class Engine {
       // どんな履歴の変更であれ、一旦保留イベントとしてスケジュールする
       this.hasPendingEvents = true;
       if (turn.meta?.wake === 'fast') {
+        this.pendingWake = true;
         this._schedulePing(FAST_WAKE_DEBOUNCE_MS);
       } else if (turn.meta?.trigger_llm === true) {
+        this.pendingWake = true;
         this._schedulePing(WAKE_DEBOUNCE_MS);
-      } else if (!this.debounceTimer) {
-        // 起こさない変更（halt した結果・trigger_llm:false のログ）は、まだ走っている仲間を待つ理由が無い。
+      } else {
+        // 起こさない変更（halt した結果・[Pending] の枠・trigger_llm:false のログ）は待つ理由が無い。
         // 早く評価して loop_stop(idle) を出す（出さないと画面の Processing が 10 秒残る）。
-        // ただし起こす変更が既に締切を持っているときは触らない —— ここで縮めると、遅いツールを待つ意味が消える
-        this._schedulePing(FAST_WAKE_DEBOUNCE_MS);
+        // ただしこれは起こす予約と競わせない —— 締切として持つと、あとから来た結果の 10 秒を潰す
+        // （配信後に踏んだ: [Pending] の枠が 1.5 秒の締切になり、遅いツールを待たなかった）
+        this._scheduleSettle();
       }
     }
   }
@@ -168,6 +175,12 @@ export class Engine {
     // 起床を予約する経路はここ1箇所なので、判定もここに集約する。
     if (this.haltedByToolCap) return;
 
+    // 起こす予約が立つので、短い評価は要らない
+    if (this.settleTimer) {
+      clearTimeout(this.settleTimer);
+      this.settleTimer = null;
+    }
+
     // 早い締切が勝つ。10 秒待ちの途中に利用者が発言したら 1.5 秒で起きる。
     // 逆に、発言のあとに来たツール結果で締切を後ろへ押さない
     const now = Date.now();
@@ -180,8 +193,22 @@ export class Engine {
       this.debounceTimer = null;
       this.debounceDeadline = 0;
       this.hasPendingEvents = false;
+      this.pendingWake = false;
       this._ping();
     }, delay);
+  }
+
+  /** 起こさない変更だけのとき、短く待って評価する。起こす予約が生きていれば何もしない */
+  private _scheduleSettle(): void {
+    if (this.isRunning || this.stopRequested || this.haltedByToolCap) return;
+    if (this.debounceTimer || this.settleTimer) return;
+    this.settleTimer = setTimeout(() => {
+      this.settleTimer = null;
+      if (this.debounceTimer || this.isRunning) return;
+      this.hasPendingEvents = false;
+      this.pendingWake = false;
+      this._ping();
+    }, FAST_WAKE_DEBOUNCE_MS);
   }
 
   /**
@@ -396,10 +423,14 @@ export class Engine {
       this.isRunning = false;
       this.abortController = null;
       if (this.hasPendingEvents) {
-        // 実行中に寄せておいた締切を引き継ぐ（無ければツール結果と同じ待ち）
+        // 実行中に寄せておいた締切を引き継ぐ。起こす変更が無ければ短い評価だけ
         const carried = this.debounceDeadline;
         this.debounceDeadline = 0;
-        this._schedulePing(carried > 0 ? Math.max(0, carried - Date.now()) : WAKE_DEBOUNCE_MS);
+        if (carried > 0 || this.pendingWake) {
+          this._schedulePing(carried > 0 ? Math.max(0, carried - Date.now()) : WAKE_DEBOUNCE_MS);
+        } else {
+          this._scheduleSettle();
+        }
       } else {
         this.debounceDeadline = 0;
       }
@@ -555,7 +586,12 @@ export class Engine {
       clearTimeout(this.debounceTimer);
       this.debounceTimer = null;
     }
+    if (this.settleTimer) {
+      clearTimeout(this.settleTimer);
+      this.settleTimer = null;
+    }
     this.debounceDeadline = 0;
+    this.pendingWake = false;
     this.hasPendingEvents = false;
 
     if (this.abortController) {

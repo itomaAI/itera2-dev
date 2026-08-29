@@ -467,6 +467,18 @@ describe('Engine: 起床までのデバウンス（起因で待ち幅を分け�
     expect(h.stops.some((s: any) => s.reason === 'idle')).toBe(true);
   });
 
+  it('先に起こさない変更（[Pending] の枠）があっても、あとから来た結果は 10 秒待つ（配信後に踏んだ）', async () => {
+    const h = createHarness({});
+    h.appendTurn('model', { type: TurnType.MODEL_THOUGHT });
+    h.appendTurn('system', { trigger_llm: false });
+    await vi.advanceTimersByTimeAsync(1000);
+    h.appendTurn('system', { trigger_llm: true });
+    await vi.advanceTimersByTimeAsync(1600);
+    expect(h.reachedProjector()).toBe(false);
+    await vi.advanceTimersByTimeAsync(9000);
+    expect(h.reachedProjector()).toBe(true);
+  });
+
   it('起こさない変更は、起こす変更が置いた 10 秒の締切を縮めない', async () => {
     const h = createHarness({});
     h.appendTurn('system', { trigger_llm: true });
