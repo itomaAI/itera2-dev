@@ -92,9 +92,9 @@ function createHarness(preferences: any) {
   const appendTurn = (role: string, meta: any = { trigger_llm: true }) =>
     history.append(role, '<event type="x" />', meta);
 
-  /** デバウンス（1500ms）を越えて時間を進め、予約されていた起床を走らせる */
+  /** デバウンス（ツール結果は 10000ms）を越えて時間を進め、予約されていた起床を走らせる */
   const flush = async () => {
-    await vi.advanceTimersByTimeAsync(2000);
+    await vi.advanceTimersByTimeAsync(11000);
   };
 
   const alertCount = () =>
@@ -392,6 +392,59 @@ describe('Engine: LLM を起こさずに user ターンを置く', () => {
     h.appendTurn('user', { type: 'user_input', trigger_llm: false });
     h.appendTurn('system', { type: 'event_log', trigger_llm: true });
     await h.flush();
+    expect(h.reachedProjector()).toBe(true);
+  });
+});
+
+describe('Engine: 起床までのデバウンス（起因で待ち幅を分ける）', () => {
+  // 背景（T-0301）:
+  //   ツールは並行して走り、1 つ終わるたびに共有ターンが update されて trigger_llm が立つ。
+  //   すべての履歴変更を同じ 1.5 秒で起こしていたため、残りが [Pending] のまま起きていた。
+  //   ツールの結果ほかは 10 秒待ち、利用者の発言は従来どおり待たせない。
+  //   予約は「早い締切が勝つ」。
+  beforeEach(() => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    vi.useFakeTimers();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  const userTurn = (h: ReturnType<typeof createHarness>) => (h as any).appendTurn('user', { trigger_llm: true });
+
+  it('ツールの結果では 1.5 秒で起きず、10 秒で起きる（本命）', async () => {
+    const h = createHarness({});
+    h.appendTurn('system');
+    await vi.advanceTimersByTimeAsync(1600);
+    expect(h.reachedProjector()).toBe(false);
+    await vi.advanceTimersByTimeAsync(9000);
+    expect(h.reachedProjector()).toBe(true);
+  });
+
+  it('利用者の発言は従来どおり 1.5 秒で起きる', async () => {
+    const h = createHarness({});
+    userTurn(h);
+    await vi.advanceTimersByTimeAsync(1600);
+    expect(h.reachedProjector()).toBe(true);
+  });
+
+  it('10 秒待ちの途中に利用者が発言したら、発言から 1.5 秒で起きる', async () => {
+    const h = createHarness({});
+    h.appendTurn('system');
+    await vi.advanceTimersByTimeAsync(5000);
+    userTurn(h);
+    await vi.advanceTimersByTimeAsync(1400);
+    expect(h.reachedProjector()).toBe(false);
+    await vi.advanceTimersByTimeAsync(200);
+    expect(h.reachedProjector()).toBe(true);
+  });
+
+  it('発言のあとに来たツールの結果で締切を後ろへ押さない', async () => {
+    const h = createHarness({});
+    userTurn(h);
+    await vi.advanceTimersByTimeAsync(500);
+    h.appendTurn('system');
+    await vi.advanceTimersByTimeAsync(1100);
     expect(h.reachedProjector()).toBe(true);
   });
 });

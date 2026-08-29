@@ -38,7 +38,7 @@ export class ProcessManager {
   private appRegistry: AppRegistry;
   private configManager: ConfigManager;
   public processes: Map<string, Process> = new Map();
-  private MAX_APPS = 5;
+  private MAX_APPS = 10;
   private events: Record<string, Function[]> = {};
   private els: Record<string, HTMLElement | null> = {};
 
