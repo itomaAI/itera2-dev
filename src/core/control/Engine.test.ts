@@ -12,7 +12,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { Engine } from './Engine';
+import { Engine, TurnType } from './Engine';
 import { DEFAULT_MAX_CONTINUOUS_TOOLS } from '../sys/ConfigManager';
 
 const ALERT_MARK = 'Max continuous tool executions';
@@ -454,6 +454,27 @@ describe('Engine: 起床までのデバウンス（起因で待ち幅を分け�
     await vi.advanceTimersByTimeAsync(1400);
     expect(h.reachedProjector()).toBe(false);
     await vi.advanceTimersByTimeAsync(200);
+    expect(h.reachedProjector()).toBe(true);
+  });
+
+  it('起こさない変更（halt した結果など）は 10 秒待たずに止まる（画面の Processing が残らない）', async () => {
+    const h = createHarness({});
+    // 直前に自分の思考があった状況（そこより後ろだけが起床の判定に入る）
+    h.appendTurn('model', { type: TurnType.MODEL_THOUGHT });
+    h.appendTurn('system', { trigger_llm: false });
+    await vi.advanceTimersByTimeAsync(1600);
+    expect(h.reachedProjector()).toBe(false);
+    expect(h.stops.some((s: any) => s.reason === 'idle')).toBe(true);
+  });
+
+  it('起こさない変更は、起こす変更が置いた 10 秒の締切を縮めない', async () => {
+    const h = createHarness({});
+    h.appendTurn('system', { trigger_llm: true });
+    await vi.advanceTimersByTimeAsync(2000);
+    h.appendTurn('system', { trigger_llm: false });
+    await vi.advanceTimersByTimeAsync(1600);
+    expect(h.reachedProjector()).toBe(false);
+    await vi.advanceTimersByTimeAsync(7000);
     expect(h.reachedProjector()).toBe(true);
   });
 
