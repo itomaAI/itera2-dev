@@ -108,6 +108,7 @@ function createHarness(preferences: any) {
   };
 
   return {
+    engine,
     runCycleAt,
     pingAgain,
     appendTurn,
@@ -400,7 +401,8 @@ describe('Engine: 起床までのデバウンス（起因で待ち幅を分け�
   // 背景（T-0301）:
   //   ツールは並行して走り、1 つ終わるたびに共有ターンが update されて trigger_llm が立つ。
   //   すべての履歴変更を同じ 1.5 秒で起こしていたため、残りが [Pending] のまま起きていた。
-  //   ツールの結果ほかは 10 秒待ち、利用者の発言は従来どおり待たせない。
+  //   通常は 10 秒待ち、meta.wake === 'fast' を名乗ったターンだけ 1.5 秒で起こす。
+  //   どのツールが速いかを Engine は知らない（利用者の発言・system_task・set_timer が自分で名乗る）。
   //   予約は「早い締切が勝つ」。
   beforeEach(() => {
     vi.spyOn(console, 'error').mockImplementation(() => {});
@@ -410,7 +412,9 @@ describe('Engine: 起床までのデバウンス（起因で待ち幅を分け�
     vi.useRealTimers();
   });
 
-  const userTurn = (h: ReturnType<typeof createHarness>) => (h as any).appendTurn('user', { trigger_llm: true });
+  /** 利用者の発言（injectUserTurn が wake: 'fast' を名乗る） */
+  const userTurn = (h: ReturnType<typeof createHarness>) =>
+    (h as any).appendTurn('user', { trigger_llm: true, wake: 'fast' });
 
   it('ツールの結果では 1.5 秒で起きず、10 秒で起きる（本命）', async () => {
     const h = createHarness({});
@@ -421,11 +425,25 @@ describe('Engine: 起床までのデバウンス（起因で待ち幅を分け�
     expect(h.reachedProjector()).toBe(true);
   });
 
-  it('利用者の発言は従来どおり 1.5 秒で起きる', async () => {
+  it('利用者の発言は従来どおり 1.5 秒で起きる（injectUserTurn が名乗る）', async () => {
     const h = createHarness({});
-    userTurn(h);
+    await h.engine.injectUserTurn('hi');
     await vi.advanceTimersByTimeAsync(1600);
     expect(h.reachedProjector()).toBe(true);
+  });
+
+  it('wake: fast を名乗ったツールの結果も 1.5 秒で起きる（特別扱いはツール側の名乗りで決まる）', async () => {
+    const h = createHarness({});
+    h.appendTurn('system', { trigger_llm: true, wake: 'fast' });
+    await vi.advanceTimersByTimeAsync(1600);
+    expect(h.reachedProjector()).toBe(true);
+  });
+
+  it('名乗らない user ターンは通常の待ち（Engine は役割で特別扱いしない）', async () => {
+    const h = createHarness({});
+    h.appendTurn('user', { trigger_llm: true });
+    await vi.advanceTimersByTimeAsync(1600);
+    expect(h.reachedProjector()).toBe(false);
   });
 
   it('10 秒待ちの途中に利用者が発言したら、発言から 1.5 秒で起きる', async () => {

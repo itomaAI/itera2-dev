@@ -16,6 +16,8 @@ export interface TurnMeta {
   eventType?: string;
   visible?: boolean;
   trigger_llm?: boolean;
+  /** 'fast' なら短いデバウンスで起こす（利用者の発言・即応を求めるツールが自分で名乗る）。既定は通常 */
+  wake?: 'fast' | 'normal';
   status?: 'completed' | 'error' | 'pending';
   [key: string]: any;
 }

@@ -67,7 +67,7 @@ The **Guest** environment (where apps run) is isolated from the **Host** (where 
 
 *   **AI Interaction (`MetaOS.ai`)**:
     *   `.task(instruction, context, opts)`: Triggers the AI to perform a background task.
-    *   `.log(message, type, opts)`: Appends an event to the AI's history (e.g., to inform the AI that a user clicked a button).
+    *   `.log(message, type, opts)`: Appends an event to the AI's history (e.g., to inform the AI that a user clicked a button). Pass `opts.trigger_llm=true` to wake the AI (debounced 10s); add `opts.wake="fast"` when the event demands a prompt wake-up (1.5s).
 
 *   **Network & Hardware (`MetaOS.net`, `MetaOS.device`)**:
     *   `.fetch(url, opts)`: Fetches external APIs (can bypass CORS via proxy).

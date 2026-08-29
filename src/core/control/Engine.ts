@@ -16,12 +16,13 @@ import { RESERVED_SYSTEM_TAGS } from '../cognitive/Translator';
 
 /**
  * 起床までのデバウンス（ms）。
- * 利用者の発言と明示的なタスク要求は待たせない。
- * ツールの結果ほかの履歴変更は長めに待つ —— ツールは並行して走り、1 つ終わるたびに
- * 共有ターンが update されて trigger_llm が立つので、短いと残りが [Pending] のまま起きてしまう。
+ * 通常は長めに待つ —— ツールは並行して走り、1 つ終わるたびに共有ターンが update されて
+ * trigger_llm が立つので、短いと残りが [Pending] のまま起きてしまう。
+ * meta.wake === 'fast' を名乗ったターンだけ短く待つ。どのツールが速いかを Engine は知らない
+ * （利用者の発言・system_task・set_timer などが自分で名乗る）。
  */
-export const USER_INPUT_DEBOUNCE_MS = 1500;
-export const TOOL_RESULT_DEBOUNCE_MS = 10000;
+export const WAKE_DEBOUNCE_MS = 10000;
+export const FAST_WAKE_DEBOUNCE_MS = 1500;
 
 export const TurnType = {
   USER_INPUT: 'user_input',
@@ -117,7 +118,6 @@ export class Engine {
       const turn: Turn = payload.turn;
 
       // ユーザーの直接入力、またはシステム/アプリからの明示的なタスク要求の場合はカウントをリセットする
-      let delay = TOOL_RESULT_DEBOUNCE_MS;
       if (payload.type === 'append') {
         if (
           turn.role === 'user' ||
@@ -126,7 +126,6 @@ export class Engine {
             typeof turn.content === 'string' &&
             turn.content.includes('<event type="system_task">'))
         ) {
-          delay = USER_INPUT_DEBOUNCE_MS;
           this.continuousToolCount = 0;
           // 上限による停止も、ここで一緒に解除する。
           // 【重要】この解除は下の _schedulePing() より前に置くこと。
@@ -140,11 +139,11 @@ export class Engine {
 
       // どんな履歴の変更であれ、一旦保留イベントとしてスケジュールする
       this.hasPendingEvents = true;
-      this._schedulePing(delay);
+      this._schedulePing(turn.meta?.wake === 'fast' ? FAST_WAKE_DEBOUNCE_MS : WAKE_DEBOUNCE_MS);
     }
   }
 
-  private _schedulePing(delay: number = TOOL_RESULT_DEBOUNCE_MS): void {
+  private _schedulePing(delay: number = WAKE_DEBOUNCE_MS): void {
     // 実行中に来た予約は finally で拾う。締切だけ手前へ寄せておく
     if (this.isRunning) {
       const deadline = Date.now() + delay;
@@ -207,6 +206,7 @@ export class Engine {
     const turnMeta: TurnMeta = {
       type: TurnType.USER_INPUT,
       trigger_llm: true,
+      wake: 'fast', // 利用者の発言は待たせない
       ...meta,
     };
     const turn = this.state.history.append('user', inputContent, turnMeta);
@@ -390,7 +390,7 @@ export class Engine {
         // 実行中に寄せておいた締切を引き継ぐ（無ければツール結果と同じ待ち）
         const carried = this.debounceDeadline;
         this.debounceDeadline = 0;
-        this._schedulePing(carried > 0 ? Math.max(0, carried - Date.now()) : TOOL_RESULT_DEBOUNCE_MS);
+        this._schedulePing(carried > 0 ? Math.max(0, carried - Date.now()) : WAKE_DEBOUNCE_MS);
       } else {
         this.debounceDeadline = 0;
       }
@@ -437,6 +437,12 @@ export class Engine {
 
     const sharedTurnId = sharedTurn.id;
 
+    /** 1 つでも 'fast' を名乗った結果があれば、そのターンは速く起こす（名乗りはツール側） */
+    const calcTurnWake = (): TurnMeta => {
+      const fast = combinedResults.some((r) => r.output.wake === 'fast');
+      return fast ? { wake: 'fast' } : {};
+    };
+
     const calcTurnTrigger = () => {
       let willTrigger = false;
       let isHalted = false;
@@ -477,6 +483,7 @@ export class Engine {
 
         const updatedTurn = this.state.history.update(sharedTurnId, getSortedResults(), {
           trigger_llm: calcTurnTrigger(),
+          ...calcTurnWake(),
         });
 
         if (updatedTurn) {
@@ -492,6 +499,7 @@ export class Engine {
         const updatedTurn = this.state.history.update(sharedTurnId, getSortedResults(), {
           type: TurnType.ERROR,
           trigger_llm: calcTurnTrigger(),
+          ...calcTurnWake(),
         });
 
         if (updatedTurn) {
