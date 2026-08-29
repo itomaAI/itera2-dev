@@ -139,7 +139,16 @@ export class Engine {
 
       // どんな履歴の変更であれ、一旦保留イベントとしてスケジュールする
       this.hasPendingEvents = true;
-      this._schedulePing(turn.meta?.wake === 'fast' ? FAST_WAKE_DEBOUNCE_MS : WAKE_DEBOUNCE_MS);
+      if (turn.meta?.wake === 'fast') {
+        this._schedulePing(FAST_WAKE_DEBOUNCE_MS);
+      } else if (turn.meta?.trigger_llm === true) {
+        this._schedulePing(WAKE_DEBOUNCE_MS);
+      } else if (!this.debounceTimer) {
+        // 起こさない変更（halt した結果・trigger_llm:false のログ）は、まだ走っている仲間を待つ理由が無い。
+        // 早く評価して loop_stop(idle) を出す（出さないと画面の Processing が 10 秒残る）。
+        // ただし起こす変更が既に締切を持っているときは触らない —— ここで縮めると、遅いツールを待つ意味が消える
+        this._schedulePing(FAST_WAKE_DEBOUNCE_MS);
+      }
     }
   }
 
