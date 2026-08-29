@@ -14,6 +14,16 @@ import type { Translator, ParsedAction } from '../cognitive/Translator';
 import type { ToolRegistry } from './ToolRegistry';
 import { RESERVED_SYSTEM_TAGS } from '../cognitive/Translator';
 
+/**
+ * 起床までのデバウンス（ms）。
+ * 通常は長めに待つ —— ツールは並行して走り、1 つ終わるたびに共有ターンが update されて
+ * trigger_llm が立つので、短いと残りが [Pending] のまま起きてしまう。
+ * meta.wake === 'fast' を名乗ったターンだけ短く待つ。どのツールが速いかを Engine は知らない
+ * （利用者の発言・system_task・set_timer などが自分で名乗る）。
+ */
+export const WAKE_DEBOUNCE_MS = 10000;
+export const FAST_WAKE_DEBOUNCE_MS = 1500;
+
 export const TurnType = {
   USER_INPUT: 'user_input',
   MODEL_THOUGHT: 'model_thought',
@@ -45,6 +55,8 @@ export class Engine {
   };
 
   private debounceTimer: ReturnType<typeof setTimeout> | null = null;
+  /** 予約済みの起床時刻（epoch ms）。早い締切が勝つ判定に使う。0 は未予約 */
+  private debounceDeadline: number = 0;
   private continuousToolCount: number = 0;
   private hasPendingEvents: boolean = false;
   /** 連続実行の上限に達して停止中か。解除は利用者の発言（と明示的なタスク要求）だけ。 */
@@ -127,12 +139,17 @@ export class Engine {
 
       // どんな履歴の変更であれ、一旦保留イベントとしてスケジュールする
       this.hasPendingEvents = true;
-      this._schedulePing();
+      this._schedulePing(turn.meta?.wake === 'fast' ? FAST_WAKE_DEBOUNCE_MS : WAKE_DEBOUNCE_MS);
     }
   }
 
-  private _schedulePing(): void {
-    if (this.isRunning) return;
+  private _schedulePing(delay: number = WAKE_DEBOUNCE_MS): void {
+    // 実行中に来た予約は finally で拾う。締切だけ手前へ寄せておく
+    if (this.isRunning) {
+      const deadline = Date.now() + delay;
+      if (this.debounceDeadline === 0 || deadline < this.debounceDeadline) this.debounceDeadline = deadline;
+      return;
+    }
     // ユーザーが停止を要求した後は、実行中だったツールの結果更新などで
     // ループが自動的に再開してしまわないようにする
     if (this.stopRequested) return;
@@ -142,12 +159,20 @@ export class Engine {
     // 起床を予約する経路はここ1箇所なので、判定もここに集約する。
     if (this.haltedByToolCap) return;
 
+    // 早い締切が勝つ。10 秒待ちの途中に利用者が発言したら 1.5 秒で起きる。
+    // 逆に、発言のあとに来たツール結果で締切を後ろへ押さない
+    const now = Date.now();
+    const deadline = now + delay;
+    if (this.debounceTimer && this.debounceDeadline !== 0 && this.debounceDeadline <= deadline) return;
     if (this.debounceTimer) clearTimeout(this.debounceTimer);
 
+    this.debounceDeadline = deadline;
     this.debounceTimer = setTimeout(() => {
+      this.debounceTimer = null;
+      this.debounceDeadline = 0;
       this.hasPendingEvents = false;
       this._ping();
-    }, 1500);
+    }, delay);
   }
 
   /**
@@ -181,6 +206,7 @@ export class Engine {
     const turnMeta: TurnMeta = {
       type: TurnType.USER_INPUT,
       trigger_llm: true,
+      wake: 'fast', // 利用者の発言は待たせない
       ...meta,
     };
     const turn = this.state.history.append('user', inputContent, turnMeta);
@@ -361,7 +387,12 @@ export class Engine {
       this.isRunning = false;
       this.abortController = null;
       if (this.hasPendingEvents) {
-        this._schedulePing();
+        // 実行中に寄せておいた締切を引き継ぐ（無ければツール結果と同じ待ち）
+        const carried = this.debounceDeadline;
+        this.debounceDeadline = 0;
+        this._schedulePing(carried > 0 ? Math.max(0, carried - Date.now()) : WAKE_DEBOUNCE_MS);
+      } else {
+        this.debounceDeadline = 0;
       }
     }
   }
@@ -406,6 +437,12 @@ export class Engine {
 
     const sharedTurnId = sharedTurn.id;
 
+    /** 1 つでも 'fast' を名乗った結果があれば、そのターンは速く起こす（名乗りはツール側） */
+    const calcTurnWake = (): TurnMeta => {
+      const fast = combinedResults.some((r) => r.output.wake === 'fast');
+      return fast ? { wake: 'fast' } : {};
+    };
+
     const calcTurnTrigger = () => {
       let willTrigger = false;
       let isHalted = false;
@@ -446,6 +483,7 @@ export class Engine {
 
         const updatedTurn = this.state.history.update(sharedTurnId, getSortedResults(), {
           trigger_llm: calcTurnTrigger(),
+          ...calcTurnWake(),
         });
 
         if (updatedTurn) {
@@ -461,6 +499,7 @@ export class Engine {
         const updatedTurn = this.state.history.update(sharedTurnId, getSortedResults(), {
           type: TurnType.ERROR,
           trigger_llm: calcTurnTrigger(),
+          ...calcTurnWake(),
         });
 
         if (updatedTurn) {
@@ -507,6 +546,7 @@ export class Engine {
       clearTimeout(this.debounceTimer);
       this.debounceTimer = null;
     }
+    this.debounceDeadline = 0;
     this.hasPendingEvents = false;
 
     if (this.abortController) {
