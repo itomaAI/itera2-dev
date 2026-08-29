@@ -467,8 +467,22 @@ export class ChatPanel {
    * 描かないだけで履歴には残る（AI には届く）。切り替えは renderHistory で反映する。
    */
   private hiddenEventTypes: Set<string> = new Set();
-  setHiddenEventTypes(types: string[] | undefined | null): void {
-    this.hiddenEventTypes = new Set(Array.isArray(types) ? types.map(String) : []);
+
+  /**
+   * 描かないイベントの種類を差し替える。
+   *
+   * @returns 集合が実際に変わったときだけ true。
+   *
+   * 描き直しが要るかどうかは「自分の絵が何に依存しているか」で決まり、それを知るのは描く側だけである。
+   * 呼ぶ側（配線）はこの返事に従えばよく、自分で判定を持たなくてよい（T-0304）。
+   */
+  setHiddenEventTypes(types: string[] | undefined | null): boolean {
+    const next = new Set(Array.isArray(types) ? types.map(String) : []);
+    const same = next.size === this.hiddenEventTypes.size && [...next].every((t) => this.hiddenEventTypes.has(t));
+    if (same) return false;
+
+    this.hiddenEventTypes = next;
+    return true;
   }
 
   private _appendTurn(turn: Turn) {

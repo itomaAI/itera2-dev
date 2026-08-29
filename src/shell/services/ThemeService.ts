@@ -28,7 +28,10 @@ export class ThemeService {
   }
 
   public start(): void {
-    this.configManager.onUpdate(async (config) => {
+    this.configManager.onUpdate(async (config, changed) => {
+      // 自分が見ているのは appearance だけ。他のカテゴリが変わったときに
+      // テーマを読み直しても、同じ絵を描き直すだけで何も変わらない（T-0304）。
+      if (!changed.has('appearance')) return;
       if (config.appearance) {
         await this.applyAppearance(config.appearance);
       }

@@ -78,11 +78,17 @@ const DEFAULT_CONFIG: OsConfig = {
   },
 };
 
+/**
+ * 設定の変更を受け取る側。
+ * `changed` には**値が実際に変わったカテゴリ**だけが入る（書き直されただけのものは入らない）。
+ */
+export type ConfigUpdateListener = (config: OsConfig, changed: ReadonlySet<string>) => void;
+
 export class ConfigManager {
   private vfs: VfsService;
   private cache: OsConfig;
   private configDir = 'system/config';
-  private listeners: ((config: OsConfig) => void)[] = [];
+  private listeners: ConfigUpdateListener[] = [];
 
   constructor(vfs: VfsService, eventBus: VfsEventBus) {
     this.vfs = vfs;
@@ -91,8 +97,7 @@ export class ConfigManager {
 
     // VFSの変更を監視し、設定ファイルが更新されたら再ロードする
     eventBus.subscribe(async (events) => {
-      let configChanged = false;
-      const loadPromises: Promise<void>[] = [];
+      const loadPromises: Promise<{ category: string; changed: boolean }>[] = [];
       for (const event of events) {
         if (event.path.startsWith(`${this.configDir}/`) && event.path.endsWith('.json')) {
           // apps.json と services.json は別のマネージャが扱うので無視
@@ -100,13 +105,16 @@ export class ConfigManager {
           if (filename === 'apps.json' || filename === 'services.json') continue;
 
           loadPromises.push(this._loadCategory(filename!));
-          configChanged = true;
         }
       }
-      if (configChanged) {
-        await Promise.all(loadPromises);
-        this._notify();
-      }
+      if (loadPromises.length === 0) return;
+
+      // 「ファイルが書かれた」ではなく「値が変わった」ときだけ知らせる（T-0304）。
+      // 旧値と新値を同時に持つのはここだけなので、この判定はここにしか置けない。
+      // 購読者ごとに同じ番人を書かせると、書き忘れた購読者が黙って空回りする。
+      const results = await Promise.all(loadPromises);
+      const changed = new Set(results.filter((r) => r.changed).map((r) => r.category));
+      if (changed.size > 0) this._notify(changed);
     });
   }
 
@@ -121,38 +129,51 @@ export class ConfigManager {
   }
 
   /**
-   * 単一のカテゴリ（ファイル）を非同期でロードし、キャッシュを更新する
+   * 単一のカテゴリ（ファイル）を非同期でロードし、キャッシュを更新する。
+   *
+   * @returns どのカテゴリを読んだかと、値が変わったかどうか
+   *   （書き直されただけ＝内容が同じなら changed: false）
    */
-  private async _loadCategory(filename: string): Promise<void> {
+  private async _loadCategory(filename: string): Promise<{ category: string; changed: boolean }> {
     const category = filename.replace('.json', '');
     const path = `${this.configDir}/${filename}`;
+    const previous = this.cache[category];
 
     // デフォルトのカテゴリ設定をディープコピーしてベースにする
     const defaultData = DEFAULT_CONFIG[category] ? JSON.parse(JSON.stringify(DEFAULT_CONFIG[category])) : {};
 
+    let next: any = defaultData;
     try {
       if (this.vfs.exists(SYSTEM_PRINCIPAL, path)) {
         const content = await this.vfs.readFile(SYSTEM_PRINCIPAL, path);
         const parsed = JSON.parse(content);
-        this.cache[category] = this._deepMerge(defaultData, parsed);
-      } else {
-        this.cache[category] = defaultData;
+        next = this._deepMerge(defaultData, parsed);
       }
     } catch (e) {
       console.warn(`[ConfigManager] Failed to load or parse ${path}, using defaults.`, e);
-      this.cache[category] = defaultData;
+      next = defaultData;
     }
+
+    this.cache[category] = next;
+    return { category, changed: !this._isEqual(previous, next) };
   }
 
-  onUpdate(callback: (config: OsConfig) => void): () => void {
+  /**
+   * 設定が変わったときに呼ばれる。第 2 引数は**値が変わったカテゴリの名前**。
+   *
+   * 何が変わったかを知っているのはここなので、それを伝える。
+   * 自分に関わる変化かどうかを決めるのは購読者の側であり（依存を知るのは購読者だけ）、
+   * 中間の配線が代わりに決めてはいけない（T-0304）。
+   */
+  onUpdate(callback: ConfigUpdateListener): () => void {
     this.listeners.push(callback);
     return () => {
       this.listeners = this.listeners.filter((cb) => cb !== callback);
     };
   }
 
-  private _notify(): void {
-    this.listeners.forEach((cb) => cb(this.cache));
+  private _notify(changed: Set<string>): void {
+    this.listeners.forEach((cb) => cb(this.cache, changed));
   }
 
   get(): OsConfig;
@@ -166,7 +187,9 @@ export class ConfigManager {
    */
   async update(category: keyof OsConfig, updates: any): Promise<void> {
     // ディープマージを使用して安全に更新
-    const newCategoryData = this._deepMerge(this.cache[category] || {}, updates);
+    const previous = this.cache[category];
+    const newCategoryData = this._deepMerge(previous || {}, updates);
+    const changed = !this._isEqual(previous, newCategoryData);
     this.cache[category] = newCategoryData;
 
     const path = `${this.configDir}/${String(category)}.json`;
@@ -179,6 +202,30 @@ export class ConfigManager {
       console.error(`[ConfigManager] Failed to save config to ${path}`, e);
       throw e;
     }
+
+    // 値を変えた者が知らせる。この書き込みで飛ぶ VFS イベントは、
+    // そのときすでにキャッシュが新しいので「変わらなかった」と判定されて黙る（T-0304）。
+    if (changed) this._notify(new Set([String(category)]));
+  }
+
+  /**
+   * 値としての同一性。キーの並びは見ない。
+   *
+   * JSON 文字列どうしの比較にすると、同じ値でも並びが違うだけで「変わった」になる。
+   * 設定は人が書き換えるファイルなので、並びは動く。
+   */
+  private _isEqual(a: any, b: any): boolean {
+    if (a === b) return true;
+    if (a === null || b === null || typeof a !== 'object' || typeof b !== 'object') return false;
+
+    if (Array.isArray(a) || Array.isArray(b)) {
+      if (!Array.isArray(a) || !Array.isArray(b) || a.length !== b.length) return false;
+      return a.every((v, i) => this._isEqual(v, b[i]));
+    }
+
+    const keys = Object.keys(a);
+    if (keys.length !== Object.keys(b).length) return false;
+    return keys.every((k) => Object.prototype.hasOwnProperty.call(b, k) && this._isEqual(a[k], b[k]));
   }
 
   /**

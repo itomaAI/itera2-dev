@@ -255,13 +255,18 @@ export class SystemBootstrapper {
     // 初期化タスクの実行
     await themeService.applyAppearance(configManager.get('appearance') || { theme: 'system/themes/dark.json' });
     // チャットに描かないイベントの種類（preferences.hiddenEventTypes。既定 []、ミャク楽は tool_available/info を隠して配る）
-    const applyHiddenEventTypes = () => {
-      desktop.panels.chat.setHiddenEventTypes(configManager.get('preferences')?.hiddenEventTypes);
-    };
-    applyHiddenEventTypes();
-    configManager.onUpdate(() => {
-      applyHiddenEventTypes();
-      desktop.panels.chat.renderHistory(history.get());
+    //
+    // 判定は持ち主に置く（T-0304）:
+    //   「設定が変わったか」   … ConfigManager（旧値と新値を同時に持つ唯一の場所）
+    //   「その変化が絵に効くか」… ChatPanel（自分が何に依存して描いているかを知る唯一の場所）
+    // 配線であるここは何も計算しない。返事に従って描き直すだけである。
+    // かつてここが無条件に描き直していたため、設定ファイルが書かれるたびに
+    // 履歴が丸ごと組み直され、チャット欄が最下部へ飛んでいた。
+    desktop.panels.chat.setHiddenEventTypes(configManager.get('preferences')?.hiddenEventTypes);
+    configManager.onUpdate((config) => {
+      if (desktop.panels.chat.setHiddenEventTypes(config.preferences?.hiddenEventTypes)) {
+        desktop.panels.chat.renderHistory(history.get());
+      }
     });
     desktop.panels.chat.renderHistory(history.get());
     desktop.updateStorageUI(vfs.getUsage());
