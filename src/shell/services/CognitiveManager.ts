@@ -34,6 +34,25 @@ export class CognitiveManager {
     this.onStatusUpdate = callback;
   }
 
+  /**
+   * llm.json の変更を購読し、値が変わったときだけアダプタを作り直す（T-0313）。
+   *
+   * かつて作り直しは「入口」に配線されていた（チャット送信・ai.ask・ai.task・ai.log(trigger)）。
+   * その結果、設定を変えても次にそれらの入口を通るまで旧モデルのまま走り、
+   * ツール結果からの継続や set_timer の起床では反映されなかった。
+   * Engine はステップごとに `this.llm` を読むので、変更の持ち主（ConfigManager）が知らせた時点で
+   * 差し替えれば、各ステップは常に直前の設定で走る。入口が設定のことを知る必要は無い。
+   *
+   * 走っている generateStream は呼び出し時の参照を持つので、進行中の生成には影響しない。
+   * 秘密鍵（localStorage）は VFS を通らないため、その保存は別途（secrets_updated）で知らされる。
+   */
+  public start(): void {
+    this.configManager.onUpdate((_config, changed) => {
+      if (!changed.has('llm')) return;
+      void this.refreshEngineConfig();
+    });
+  }
+
   public async getMergedProviders(): Promise<any[]> {
     const merged = JSON.parse(JSON.stringify(PROVIDERS));
 
