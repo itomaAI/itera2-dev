@@ -572,7 +572,6 @@ export class EventOrchestrator {
       await this.engine.injectUserTurn(content, { trigger_llm: false });
       return;
     }
-    await this.cognitiveManager.refreshEngineConfig();
     this.desktop.panels.chat.setProcessing(true);
     await this.engine.injectUserTurn(content);
   }

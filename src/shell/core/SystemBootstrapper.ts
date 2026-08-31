@@ -165,7 +165,6 @@ export class SystemBootstrapper {
     const shellFacade = {
       panels: desktop.panels,
       modals: desktop.modals,
-      _refreshEngineConfig: () => cognitiveManager.refreshEngineConfig(),
       _closeMobileDrawers: () => desktop.closeMobileDrawers(),
       _revealInExplorer: (path: string) => {
         const ok = desktop.explorer.reveal(path);
@@ -251,6 +250,7 @@ export class SystemBootstrapper {
     // ルーティングとイベントの活性化
     orchestrator.bindAll();
     themeService.start();
+    cognitiveManager.start(); // llm.json の変更でアダプタを作り直す（入口では作り直さない。T-0313）
 
     // 初期化タスクの実行
     await themeService.applyAppearance(configManager.get('appearance') || { theme: 'system/themes/dark.json' });

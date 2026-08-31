@@ -34,7 +34,6 @@ export interface IEngine {
   stop(): void;
 }
 export interface IShell {
-  _refreshEngineConfig(): Promise<void>;
   _closeMobileDrawers(): void;
   _revealInExplorer?(path: string): boolean;
   getMergedProviders?(): Promise<any[]>;
@@ -292,7 +291,6 @@ export class HostApiRouter {
         await d.engine.injectUserTurn(content, { trigger_llm: false });
         return true;
       }
-      await d.shell._refreshEngineConfig();
       d.shell.panels.chat.setProcessing(true);
       await d.engine.injectUserTurn(content);
       return true;
@@ -312,7 +310,6 @@ export class HostApiRouter {
       });
       if (!opts?.silent) {
         d.shell.panels.chat.appendTurn(turn);
-        await d.shell._refreshEngineConfig();
         d.shell.panels.chat.setProcessing(true);
       }
       return true;
@@ -333,7 +330,6 @@ export class HostApiRouter {
       });
       d.shell.panels.chat.appendTurn(turn);
       if (triggerLlm) {
-        await d.shell._refreshEngineConfig();
         d.shell.panels.chat.setProcessing(true);
       }
       return true;
