@@ -36,6 +36,14 @@ jobs:
       - name: Build
         run: npm run build
 
+      # Google Analytics のタグは配信時にだけ差し込む（ソースには無い）。
+      # リポジトリ変数 GA_MEASUREMENT_ID（Settings → Secrets and variables → Actions → Variables）が空なら何もしない
+      - name: Inject Google Analytics tag (deploy-time only)
+        if: ${{ vars.GA_MEASUREMENT_ID != '' }}
+        env:
+          GA_MEASUREMENT_ID: ${{ vars.GA_MEASUREMENT_ID }}
+        run: node scripts/inject_ga.js dist/index.html
+
       - name: Setup Pages
         uses: actions/configure-pages@v4
 
