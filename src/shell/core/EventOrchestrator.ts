@@ -147,6 +147,22 @@ export class EventOrchestrator {
   // ==========================================
   // 2. URI Routing (Intent Dispatching)
   // ==========================================
+
+  /**
+   * VFS のパスを関連付けのアプリで開く（metaos://open/… と同じ経路。T-0344）。
+   * チャットのリンク・files 枠・ゲストの MetaOS.host.open がここに来る。
+   * 失敗は通知で見せて例外にしない（開けなかったことは利用者に伝わればよい）。
+   */
+  public openPath(path: string): void {
+    const p = (path || '').trim().replace(/^\/+/, '');
+    if (!p) return;
+    try {
+      this.uriRouter.dispatch(`metaos://open/${p}`);
+    } catch (e: any) {
+      if (window.AppUI) window.AppUI.notify(`Cannot open: ${e.message}`, 'error');
+    }
+  }
+
   private _bindUriRouting(): void {
     // metaos://open/... (データファイルを関連付けアプリで開く)
     this.uriRouter.register('open', async (path: string, queryArgs: Record<string, string>, searchAndHash: string) => {
@@ -157,7 +173,8 @@ export class EventOrchestrator {
         const resolvedApp = this.resolver.resolveDefault(stat);
 
         if (resolvedApp.appId === 'HostExplorer') {
-          if (this.desktop.explorer.reveal(targetPath)) this.desktop.openMobileFilesDrawer();
+          // 畳んだパネルを開くところまで desktop が引き受ける（T-0344）
+          this.desktop.revealInExplorer(targetPath);
           this._restoreAddressBar();
         } else if (resolvedApp.appId === 'HostRunner') {
           const fullUri = `metaos://run/${targetPath}${searchAndHash}`;
@@ -375,6 +392,9 @@ export class EventOrchestrator {
       this.history.delete(id);
       chat.renderHistory(this.history.get());
     });
+
+    // 成果物枠の VFS リンク・files 枠の「開く」（T-0344）。アドレスバーと同じ経路で関連付けのアプリへ
+    chat.on('open_path', (path: string) => this.openPath(path));
 
     chat.on('preview_request', async (name: string, src: string, mime: string, path?: string) => {
       if (path) {

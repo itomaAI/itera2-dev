@@ -245,6 +245,7 @@
             openExternal: async (url) => transport.requestHost('host:open_url', { url }),
             updateAddressBar: async (path) => transport.requestHost('host:address_bar', { path }),
             revealInExplorer: async (path) => transport.requestHost('host:reveal_in_explorer', { path }),
+            open: async (path) => transport.requestHost('host:open_path', { path }),
             showMessageBox: async (options) => transport.requestHost('host:show_message_box', { options }),
             showLoading: async (message) => transport.requestHost('host:show_loading', { message }),
             hideLoading: async () => transport.requestHost('host:hide_loading', {})

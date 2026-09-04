@@ -36,6 +36,7 @@ export interface IEngine {
 export interface IShell {
   _closeMobileDrawers(): void;
   _revealInExplorer?(path: string): boolean;
+  _openPath?(path: string): void;
   getMergedProviders?(): Promise<any[]>;
   panels: { chat: any };
   modals: { editor: any; camera: any; audio: any; filePicker?: any };
@@ -407,6 +408,14 @@ export class HostApiRouter {
       if (typeof path !== 'string' || !path) throw new Error("'path' is required.");
       // 存在しないパスは「木に無い」として false を返す（例外にしない。呼ぶ側が判断する）
       return d.shell._revealInExplorer(path.replace(/^\/+|\/+$/g, ''));
+    });
+    // 関連付けのアプリで開く（metaos://open/… と同じ経路。T-0344）。
+    // ゲストは「何で開くか」を知らなくてよい。開けなかったときはホストが通知で見せる。
+    t.registerHandler('host:open_path', async ({ path }) => {
+      if (!d.shell || !d.shell._openPath) throw new Error('open is not available.');
+      if (typeof path !== 'string' || !path) throw new Error("'path' is required.");
+      d.shell._openPath(path.replace(/^\/+|\/+$/g, ''));
+      return true;
     });
     t.registerHandler('host:notify', async ({ message, type, duration }) => {
       if (window.AppUI) window.AppUI.notify(message, type, duration);

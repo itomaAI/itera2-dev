@@ -166,11 +166,10 @@ export class SystemBootstrapper {
       panels: desktop.panels,
       modals: desktop.modals,
       _closeMobileDrawers: () => desktop.closeMobileDrawers(),
-      _revealInExplorer: (path: string) => {
-        const ok = desktop.explorer.reveal(path);
-        if (ok) desktop.openMobileFilesDrawer();
-        return ok;
-      },
+      _revealInExplorer: (path: string) => desktop.revealInExplorer(path),
+      // 関連付けで開く（ゲストの MetaOS.host.open。T-0344）。intent の登録は EventOrchestrator にあり、
+      // dispatch は同期で登録済みの handler を呼ぶだけなので、ここで router を握っていれば足りる
+      _openPath: (path: string) => uriRouter.dispatch(`metaos://open/${path}`),
       getMergedProviders: () => cognitiveManager.getMergedProviders(),
       processManager: processManager,
       resolver: resolver,

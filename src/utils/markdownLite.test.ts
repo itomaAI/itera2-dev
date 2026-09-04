@@ -82,4 +82,35 @@ describe('renderMarkdownLite', () => {
     const html = renderMarkdownLite('あ\n\nい');
     expect(html.includes('\n')).toBe(false);
   });
+
+  describe('リンク（T-0344）', () => {
+    it('http(s) は外部リンク（新しいタブ）', () => {
+      const html = renderMarkdownLite('[公式](https://example.com/a?b=1&amp;c=2)');
+      expect(html).toContain('href="https://example.com/a?b=1&amp;c=2"');
+      expect(html).toContain('target="_blank"');
+      expect(html).not.toContain('data-vfs-link');
+    });
+
+    it('それ以外は VFS のパスとして data-vfs-link を付け、先頭の / は剥がす', () => {
+      const html = renderMarkdownLite('結果は [見積.xlsx](/個人/資料/見積.xlsx) です');
+      expect(html).toContain('data-vfs-link="個人/資料/見積.xlsx"');
+      expect(html).toContain('>見積.xlsx</a>');
+      expect(html).toContain('href="#"');
+    });
+
+    it('箇条書きの中でも効く。強調と混ざっても壊れない', () => {
+      const html = renderMarkdownLite('- **[a](data/a.md)** を見る');
+      expect(html).toContain('<strong class="font-bold"><a href="#" data-vfs-link="data/a.md"');
+    });
+
+    it('引用符は属性に入れる前に落とす', () => {
+      const html = renderMarkdownLite('[x](data/a"b.md)');
+      expect(html).toContain('data-vfs-link="data/a&quot;b.md"');
+    });
+
+    it('インラインコードの中の [x](y) はリンクにしない', () => {
+      const html = renderMarkdownLite('`[x](y)`');
+      expect(html).not.toContain('<a ');
+    });
+  });
 });

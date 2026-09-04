@@ -10,6 +10,7 @@ import type { Principal, VfsStat } from '../../core/vfs/types';
 import { VfsEventFormatter, type VfsEventItem } from '../../core/vfs/VfsEventFormatter';
 import { TreeView } from './TreeView';
 import JSZip from 'jszip';
+import { triggerBrowserDownload } from '../../utils/download';
 
 declare global {
   interface Window {
@@ -111,17 +112,6 @@ export class Explorer {
     this.treeView.on('context_menu_request', (paths: string[], x: number, y: number) => {
       this._buildContextMenu(paths, x, y);
     });
-  }
-
-  private _triggerBrowserDownload(blob: Blob, filename: string) {
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    setTimeout(() => URL.revokeObjectURL(url), 100);
   }
 
   private _bindUploads(): void {
@@ -789,7 +779,7 @@ export class Explorer {
         const stat = this.vfs.stat(this.getActivePrincipal(), p);
         if (stat.kind === 'file') {
           const blob = await this.vfs.readBlob(this.getActivePrincipal(), p);
-          this._triggerBrowserDownload(blob, stat.name);
+          triggerBrowserDownload(blob, stat.name);
           this._emitHistory('file_downloaded', `User downloaded file: ${p}`);
           return;
         }
@@ -855,7 +845,7 @@ export class Explorer {
       }
 
       const zipBlob = await zip.generateAsync({ type: 'blob' });
-      this._triggerBrowserDownload(zipBlob, zipName);
+      triggerBrowserDownload(zipBlob, zipName);
       this._emitHistory('project_exported', `User downloaded ${normalized.length} items as ${zipName}`);
 
       if (errorCount > 0 && window.AppUI) {

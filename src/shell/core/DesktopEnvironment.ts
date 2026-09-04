@@ -233,6 +233,19 @@ export class DesktopEnvironment {
     if (btnFiles && btnFiles.offsetParent !== null) btnFiles.click();
   }
 
+  /**
+   * エクスプローラで path を見せる（ディレクトリを「開く」の受け皿。T-0344 で 1 か所にまとめた）。
+   * 木に無ければ false。在れば、PC で畳んであるパネルを開き、スマホなら引き出しを出す。
+   * 「見せる」と言いながらパネルが閉じたままにならないように、開くのはここが引き受ける。
+   */
+  public revealInExplorer(path: string): boolean {
+    const ok = this.explorer.reveal(path);
+    if (!ok) return false;
+    this.panelLayout.setExplorer(true);
+    this.openMobileFilesDrawer();
+    return true;
+  }
+
   public closeMobileDrawers(): void {
     const btnView = document.getElementById('mobile-nav-view');
     if (btnView) {

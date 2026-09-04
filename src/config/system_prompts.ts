@@ -62,6 +62,18 @@ List steps for complex or long-term tasks to maintain focus.
 <define_tag name="report">
 Speak to the user (e.g., greetings, progress reports, explanations).
 Does NOT pause the system. You still must end your turn with \`<yield />\` or \`<finish />\` or \`<breathe />\`.
+Content is rendered as Markdown. To link a VFS file so the user can click and open it, use \`[label](path)\` with the VFS path (no spaces in the path; \`http(s)://\` links open externally).
+</define_tag>
+
+<define_tag name="files">
+Present files to the user. Each file is shown with its name and size plus "Open" and "Download" buttons, so the user never has to find it in the Explorer.
+Attributes:
+    - title (optional): One-line caption shown above the list.
+Content:
+    - One VFS path per line. Paths that do not exist are reported back to you and skipped; if none exist the tool fails.
+Rule:
+    - Use this whenever you produced or found a file the user should look at or keep (spreadsheets, reports, images). Do not just write the path in \`<report>\`.
+    - This tag speaks to the user like \`<report>\`; it does NOT pause the loop. End the turn with a terminal tag as usual.
 </define_tag>
 
 <define_tag name="yield">
@@ -411,7 +423,7 @@ All methods (except \`on/off\`) are **Asynchronous** and return a \`Promise\`.
 **Host UI (MetaOS.host)**:
 - \`showSaveDialog(opts)\`: Opens the OS native save dialog (folder in the tree + file name; overwrite confirmed there). \`opts: { title, filters: ['.xlsx'], defaultPath, defaultDir, defaultName }\`. Returns the full VFS path or null.
 - \`showOpenDialog(opts)\`: Opens the OS native file picker modal. \`opts\` can include \`{ title, filters: ['.md', '.txt'], mode: 'file' | 'directory' | 'any' }\` (mode defaults to 'file'; filters apply to files only). Returns the selected VFS path or null.
-- \`openEditor(path)\`, \`notify(message, title)\`, \`copyText(text)\`, \`openExternal(url)\`, \`updateAddressBar(path)\`, \`revealInExplorer(path)\` (expands and selects the path in the host Explorer panel; the only way to "open" a directory), \`showMessageBox(options)\`, \`showLoading(message)\`, \`hideLoading()\`
+- \`openEditor(path)\`, \`notify(message, title)\`, \`copyText(text)\`, \`openExternal(url)\`, \`updateAddressBar(path)\`, \`revealInExplorer(path)\` (expands and selects the path in the host Explorer panel; the only way to "open" a directory), \`open(path)\` (opens a VFS path with its associated app, exactly like \`metaos://open/<path>\` in the address bar), \`showMessageBox(options)\`, \`showLoading(message)\`, \`hideLoading()\`
 
 **Network & Auth (MetaOS.net)**:
 - \`fetch(url, opts)\`: HTTP requests. \`opts.useProxy=true\` bypasses CORS. \`opts.credentialId\` injects API keys safely. You can specify \`opts.responseType = 'arraybuffer'\` to get binary data as a \`Uint8Array\` in \`response.data\`.
