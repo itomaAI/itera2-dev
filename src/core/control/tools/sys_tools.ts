@@ -4,6 +4,28 @@
  */
 
 import type { ToolRegistry } from '../ToolRegistry';
+import type { PresentedFile } from '../../types/tools';
+import { USER_PRINCIPAL } from '../../vfs/types';
+
+/**
+ * files の本文からパスを取り出す。1 行 1 パス。
+ * 箇条書きの印（- / *）・バッククォート・先頭の / は剥がす（AI が書きがちな揺れを吸収する）。
+ * 空行は無視し、同じパスは 1 つにする。
+ */
+export function parsePresentedPaths(content: string): string[] {
+  const out: string[] = [];
+  for (const raw of content.split('\n')) {
+    let line = raw.trim();
+    if (!line) continue;
+    line = line
+      .replace(/^[-*]\s+/, '')
+      .replace(/^`+|`+$/g, '')
+      .trim();
+    line = line.replace(/^\/+/, '').replace(/\/+$/, '');
+    if (line && !out.includes(line)) out.push(line);
+  }
+  return out;
+}
 
 export function registerSysTools(registry: ToolRegistry): void {
   const setId = 'system:core';
@@ -44,6 +66,45 @@ export function registerSysTools(registry: ToolRegistry): void {
       artifact: { kind: 'speech' as const, text: params.content || '' },
       trigger_llm: false,
     }),
+  });
+
+  // files: 利用者にファイルを差し出す（T-0344）。
+  // 本文は 1 行 1 パス。存在を stat で確かめ、ChatPanel が「開く」「ダウンロード」付きで描く。
+  // 無いパスは artifact に missing で残しつつ log で AI に返す（黙って落とさない）。
+  // 全部無ければ失敗にする（「差し出した」と言わない）。
+  registry.registerSystemTool(setId, setName, {
+    name: 'files',
+    description: 'Present files to user.',
+    impl: async (params: any, context: any) => {
+      const paths = parsePresentedPaths(params.content || '');
+      if (paths.length === 0) throw new Error('No file path given. Write one VFS path per line inside <files>.');
+
+      const files: PresentedFile[] = paths.map((path) => {
+        const name = path.split('/').pop() || path;
+        try {
+          const stat = context.vfs.stat(USER_PRINCIPAL, path);
+          const kind = stat?.kind === 'directory' ? 'directory' : 'file';
+          return { path, name, kind, size: typeof stat?.size === 'number' ? stat.size : undefined };
+        } catch {
+          return { path, name, kind: 'file', missing: true };
+        }
+      });
+
+      const missing = files.filter((f) => f.missing).map((f) => f.path);
+      if (missing.length === files.length) {
+        throw new Error(`File not found: ${missing.join(', ')}`);
+      }
+      const shown = files.length - missing.length;
+      const log =
+        `Presented ${shown} file(s) to user.` + (missing.length ? ` Not found (skipped): ${missing.join(', ')}` : '');
+
+      return {
+        log,
+        ui: `📎 files (${shown})`,
+        artifact: { kind: 'files' as const, title: params.title || undefined, files },
+        trigger_llm: false,
+      };
+    },
   });
 
   registry.registerSystemTool(setId, setName, {

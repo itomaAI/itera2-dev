@@ -238,8 +238,28 @@ export function renderMarkdownLite(escapedText: string): string {
 }
 
 /**
- * 行内の装飾。強調のみ（インラインコードは退避済み）。
+ * 行内の装飾。リンクと強調（インラインコードは退避済み）。
+ *
+ * リンク `[名前](先)` は先の種類で分ける（ゲストの system/lib/md.js と同じ作法）:
+ *   - `http(s)://…` … 外部。新しいタブで開く
+ *   - それ以外       … VFS のパス。`data-vfs-link` を付けて描き、
+ *                      辿るのは描画側（ChatPanel → EventOrchestrator）の仕事。ここでは決めない
+ * 先に空白は入れられない（md.js と同じ）。入力はエスケープ済みなので `&` は `&amp;` で来る。
+ * 属性に入れる前に引用符だけ落とす（エスケープが `"` を変えないため）。
  */
 function inline(text: string): string {
-  return text.replace(/\*\*([^*\n]+)\*\*/g, '<strong class="font-bold">$1</strong>');
+  return text
+    .replace(/\[([^\]\n]+)\]\(([^\s)]+)\)/g, (_m, label, href) => anchor(href, label))
+    .replace(/\*\*([^*\n]+)\*\*/g, '<strong class="font-bold">$1</strong>');
+}
+
+const LINK_CLASS = 'text-primary underline underline-offset-2 hover:opacity-80';
+
+function anchor(href: string, label: string): string {
+  const safe = href.replace(/"/g, '&quot;');
+  if (/^https?:\/\//i.test(href)) {
+    return `<a href="${safe}" target="_blank" rel="noopener" class="${LINK_CLASS}">${label}</a>`;
+  }
+  const path = href.replace(/^\/+/, '');
+  return `<a href="#" data-vfs-link="${path.replace(/"/g, '&quot;')}" class="${LINK_CLASS} decoration-dotted" title="${safe}">${label}</a>`;
 }

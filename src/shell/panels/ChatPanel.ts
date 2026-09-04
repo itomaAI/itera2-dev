@@ -10,8 +10,23 @@ import { USER_PRINCIPAL } from '../../core/vfs/types';
 import type { LpmlRenderer } from '../services/LpmlRenderer';
 import { renderMarkdownTables } from '../../utils/markdownTable';
 import { renderMarkdownLite } from '../../utils/markdownLite';
+import { triggerBrowserDownload } from '../../utils/download';
+import type { FilesArtifact } from '../../core/types/tools';
 import hljs from 'highlight.js/lib/common';
 import { LABEL_STREAM } from '../styles/typography';
+
+/** files 枠の文言（T-0344）。製品側で言葉を変えるならここだけ */
+const FILES_LABELS = { open: 'Open', download: 'Download', missing: 'Not found' };
+const FILES_BTN =
+  'shrink-0 px-2 py-0.5 rounded border border-border-main bg-panel text-text-main text-[0.833em] hover:bg-hover transition';
+
+function formatFileSize(size: number | undefined, kind: 'file' | 'directory'): string {
+  if (kind === 'directory') return 'folder';
+  if (typeof size !== 'number') return '';
+  if (size < 1024) return `${size} B`;
+  if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`;
+  return `${(size / (1024 * 1024)).toFixed(1)} MB`;
+}
 
 /**
  * ターンの見た目は「会話レイヤ」と「機構レイヤ」の2種類しかない。
@@ -164,6 +179,19 @@ export class ChatPanel {
       this.els.BTN_CLEAR.onclick = () => {
         if (this.events['clear']) this.events['clear']();
       };
+    }
+
+    // 成果物枠の中の VFS リンク（markdownLite が data-vfs-link を付けたもの）は関連付けで開く（T-0344）。
+    // 描き直しても効くように、履歴の容れ物で 1 回だけ委譲して受ける。
+    if (this.els.HISTORY) {
+      this.els.HISTORY.addEventListener('click', (e: Event) => {
+        const target = e.target as HTMLElement | null;
+        const a = target && target.closest ? (target.closest('[data-vfs-link]') as HTMLElement | null) : null;
+        if (!a) return;
+        e.preventDefault();
+        const path = a.getAttribute('data-vfs-link');
+        if (path && this.events['open_path']) this.events['open_path'](path);
+      });
     }
 
     if (this.els.FILE_UPLOAD) {
@@ -642,12 +670,14 @@ export class ChatPanel {
    */
   private _renderArtifact(
     container: HTMLElement,
-    artifact: { kind?: string; text?: string },
+    artifact: { kind?: string; text?: string; files?: unknown[] },
     turnId?: string,
     source?: string,
   ) {
+    const isFiles = artifact?.kind === 'files';
     const text = artifact?.text || '';
-    if (!text.trim()) return;
+    if (!isFiles && !text.trim()) return;
+    if (isFiles && !(artifact.files && artifact.files.length)) return;
 
     const div = document.createElement('div');
     div.className = `relative group ${CLS_ARTIFACT} mt-2 break-words`;
@@ -670,12 +700,92 @@ export class ChatPanel {
       div.appendChild(this._createDeleteButton(turnId));
     }
 
-    const body = document.createElement('div');
-    const escaped = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-    body.innerHTML = renderMarkdownLite(escaped);
-    div.appendChild(body);
+    if (isFiles) {
+      div.appendChild(this._buildFilesBody(artifact as FilesArtifact));
+    } else {
+      const body = document.createElement('div');
+      const escaped = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      body.innerHTML = renderMarkdownLite(escaped);
+      div.appendChild(body);
+    }
 
     container.appendChild(div);
+  }
+
+  /**
+   * files の成果物（T-0344）。1 件 1 行で、名前・大きさと「開く」「ダウンロード」を並べる。
+   * 「開く」は open_path イベント（→ metaos://open/… で関連付けのアプリへ）、
+   * 「ダウンロード」はここで Blob を読んで保存させる。ディレクトリにダウンロードは付けない。
+   * 無いファイルは打ち消しで残す（履歴を読み返したとき何を出そうとしたか分かるように）。
+   * 文字列は textContent で置く（パスは利用者の入力由来なので innerHTML に混ぜない）。
+   */
+  private _buildFilesBody(artifact: FilesArtifact): HTMLElement {
+    const body = document.createElement('div');
+    if (artifact.title) {
+      const t = document.createElement('div');
+      t.className = 'font-bold mb-1';
+      t.textContent = artifact.title;
+      body.appendChild(t);
+    }
+    const list = document.createElement('div');
+    list.className = 'flex flex-col gap-1';
+    for (const f of artifact.files) {
+      const row = document.createElement('div');
+      row.className =
+        'flex items-center gap-2 px-2 py-1.5 rounded border border-border-main bg-overlay/5 min-w-0' +
+        (f.missing ? ' opacity-60' : '');
+
+      const icon = document.createElement('span');
+      icon.className = 'shrink-0';
+      icon.textContent = f.kind === 'directory' ? '📁' : '📄';
+      row.appendChild(icon);
+
+      const meta = document.createElement('div');
+      meta.className = 'flex flex-col min-w-0 flex-1';
+      const name = document.createElement('span');
+      name.className = 'font-bold truncate' + (f.missing ? ' line-through' : '');
+      name.textContent = f.name;
+      name.title = f.path;
+      meta.appendChild(name);
+      const sub = document.createElement('span');
+      sub.className = 'text-[0.833em] text-text-muted truncate';
+      sub.textContent = f.missing ? `${FILES_LABELS.missing} · ${f.path}` : formatFileSize(f.size, f.kind);
+      meta.appendChild(sub);
+      row.appendChild(meta);
+
+      if (!f.missing) {
+        const open = document.createElement('button');
+        open.className = FILES_BTN;
+        open.dataset.filesAction = 'open';
+        open.textContent = FILES_LABELS.open;
+        open.onclick = () => {
+          if (this.events['open_path']) this.events['open_path'](f.path);
+        };
+        row.appendChild(open);
+
+        if (f.kind === 'file') {
+          const dl = document.createElement('button');
+          dl.className = FILES_BTN;
+          dl.dataset.filesAction = 'download';
+          dl.textContent = FILES_LABELS.download;
+          dl.onclick = () => this._downloadPath(f.path, f.name);
+          row.appendChild(dl);
+        }
+      }
+      list.appendChild(row);
+    }
+    body.appendChild(list);
+    return body;
+  }
+
+  private async _downloadPath(path: string, name: string) {
+    if (!this.vfs) return;
+    try {
+      const blob = await this.vfs.readBlob(this.getActivePrincipal(), path);
+      triggerBrowserDownload(blob, name);
+    } catch (e: any) {
+      if ((window as any).AppUI) (window as any).AppUI.notify(`Cannot download: ${e.message}`, 'error');
+    }
   }
 
   /**

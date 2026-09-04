@@ -19,9 +19,31 @@ import type { MediaRef } from './content';
  * shouldEmit も log/media のみを見るため、追加のガードは不要である。
  * report 本文は modelターンの生出力に既に含まれており、二重に入れてはならない。
  */
-export interface ToolArtifact {
+export type ToolArtifact = SpeechArtifact | FilesArtifact;
+
+/** report / ask の本文 */
+export interface SpeechArtifact {
   kind: 'speech';
   text: string;
+}
+
+/**
+ * files が利用者に差し出したファイルの並び（T-0344）。
+ * ChatPanel が 1 件ずつ「開く」「ダウンロード」付きで描く。
+ * 無いパスも `missing: true` で残す（履歴を読み返したとき、何を出そうとしたかが分かるように）。
+ */
+export interface FilesArtifact {
+  kind: 'files';
+  title?: string;
+  files: PresentedFile[];
+}
+
+export interface PresentedFile {
+  path: string;
+  name: string;
+  kind: 'file' | 'directory';
+  size?: number;
+  missing?: boolean;
 }
 
 /**
