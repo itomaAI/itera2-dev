@@ -196,7 +196,8 @@ export class ProcessManager {
       const iframe = document.createElement('iframe');
       iframe.id = `proc-${pid}`;
       iframe.name = pid;
-      iframe.sandbox = 'allow-scripts allow-forms allow-modals allow-popups allow-same-origin';
+      // allow-downloads: ゲストアプリから a[download] で保存できるようにする（T-0345。スキルアプリの履歴から成果物を落とす）
+      iframe.sandbox = 'allow-scripts allow-forms allow-modals allow-popups allow-same-origin allow-downloads';
 
       if (type === 'app') {
         iframe.className = 'absolute inset-0 w-full h-full border-none bg-app transition-opacity duration-300';
