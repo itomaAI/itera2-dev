@@ -20,6 +20,13 @@ export interface GuestSpawnOptions {
   args?: Record<string, string>;
 }
 
+/** この端末の VFS の容量（バイト）。ゲストが書ける上限は `max - reserved`。 */
+export interface VfsUsage {
+  used: number;
+  max: number;
+  reserved: number;
+}
+
 export interface DynamicToolRegistration {
   name: string;
   description?: string;
@@ -46,6 +53,10 @@ export interface HostApiContract {
   'sys:get_args': {
     request: Record<string, never>;
     response: Record<string, string> | null;
+  };
+  'fs:get_usage': {
+    request: Record<string, never>;
+    response: VfsUsage;
   };
   'host:go_home': {
     request: Record<string, never>;
