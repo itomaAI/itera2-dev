@@ -4,7 +4,7 @@
  */
 
 import type { HistoryManager, Turn, TurnContent, TurnMeta } from '../state/HistoryManager';
-import type { ToolExecutionEntry } from '../types/tools';
+import type { ToolExecutionEntry, ToolResult } from '../types/tools';
 import type { VfsService } from '../vfs/VfsService';
 import type { ConfigManager } from '../sys/ConfigManager';
 import { DEFAULT_MAX_CONTINUOUS_TOOLS } from '../sys/ConfigManager';
@@ -69,6 +69,13 @@ export class Engine {
   private overtakeRequested: boolean = false;
   /** ツールの束の世代。stop() で見捨てた束の遅い結果が、いまの本数を減らさないようにする */
   private batchSerial: number = 0;
+  /**
+   * 「閉じた」束の世代（これ以下の世代は閉じている）。
+   * 束は、次の投影（createContext）を取った瞬間と stop() で閉じる。
+   * 閉じた束の遅い結果は枠を埋めず、返ったその時刻に新しい system ターンとして積む ——
+   * モデルが一度読んだターンは、あとから変わらない（時間の順序を壊さない）。T-0326
+   */
+  private closedBatchSerial: number = 0;
   /** 連続実行の上限に達して停止中か。解除は利用者の発言（と明示的なタスク要求）だけ。 */
   private haltedByToolCap: boolean = false;
   /** ユーザーが明示的に停止を要求したか（デバウンス待機中・ツール実行中の停止を成立させるため） */
@@ -314,6 +321,8 @@ export class Engine {
         return;
       }
 
+      // ここで束を閉じる。この投影に入らなかった結果は、枠ではなく新しいターンへ届く
+      this.closedBatchSerial = this.batchSerial;
       const messages = await this.projector.createContext(this.state, this.abortController.signal);
 
       // 空のMODELターンをHistoryに追加 (自己トリガーを防ぐため trigger_llm: false)
@@ -471,19 +480,63 @@ export class Engine {
     // 画面では MODEL → USER → MODEL → SYSTEM の順になる（履歴の中の順は正しいのに）。T-0326
     this._emit('turn_end', { role: 'system', turn: sharedTurn });
 
-    const calcTurnTrigger = () => {
+    /** 結果の集まりが LLM を起こすか。エラーが 1 つでもあれば起こす。halt があれば起こさない */
+    const triggerOf = (outputs: ToolResult[]) => {
       let willTrigger = false;
       let isHalted = false;
       let hasError = false;
 
-      combinedResults.forEach((r) => {
-        if (r.output.trigger_llm !== false) willTrigger = true;
-        if (r.output.halt_loop === true) isHalted = true;
-        if (r.output.error === true) hasError = true;
+      outputs.forEach((o) => {
+        if (o.trigger_llm !== false) willTrigger = true;
+        if (o.halt_loop === true) isHalted = true;
+        if (o.error === true) hasError = true;
       });
 
       if (hasError) return true;
       return isHalted ? false : willTrigger;
+    };
+    const calcTurnTrigger = () => triggerOf(combinedResults.map((r) => r.output));
+
+    /**
+     * 返った結果を届ける。束が開いていれば枠を埋める。
+     * 閉じていれば（次の投影が取られたあと・停止のあと）、枠には「あとで返った」の印だけを置き、
+     * 結果そのものは返ったこの時刻に新しい system ターンとして積む。
+     * 投影は最後の model ターンより後ろのターンを起床の理由に数えるので、これで遅い結果も起こせる。
+     */
+    const deliver = (index: number, output: ToolResult, isError: boolean) => {
+      // 本数を減らしてから履歴を更新する。最後の 1 本なら、この更新の変更通知が起床を予約する
+      settleOne();
+      if (batch > this.closedBatchSerial) {
+        combinedResults[index].output = output;
+        const updatedTurn = this.state.history.update(sharedTurnId, getSortedResults(), {
+          ...(isError ? { type: TurnType.ERROR } : {}),
+          trigger_llm: calcTurnTrigger(),
+        });
+        if (updatedTurn) this._emit('turn_end', { role: 'system', turn: updatedTurn });
+        return;
+      }
+
+      combinedResults[index].output = {
+        log: `[Returned later. The <tool_output> is in a later turn.]`,
+        ui: `↓ returned later`,
+        trigger_llm: false,
+      };
+      // 印だけの書き換え。meta は触らない（起こす理由は下の新しいターンが持つ）
+      const markedTurn = this.state.history.update(sharedTurnId, getSortedResults());
+      if (markedTurn) this._emit('turn_end', { role: 'system', turn: markedTurn });
+
+      const lateEntry: ToolExecutionEntry = {
+        ...combinedResults[index],
+        output: {
+          ...output,
+          log: `[Late result of the tool dispatched in an earlier turn]\n${output.log ?? ''}`,
+        },
+      };
+      const lateTurn = this.state.history.append('system', [lateEntry], {
+        type: isError ? TurnType.ERROR : TurnType.TOOL_EXECUTION,
+        trigger_llm: triggerOf([output]),
+      });
+      this._emit('turn_end', { role: 'system', turn: lateTurn });
     };
 
     actions.forEach(async (action, index) => {
@@ -504,37 +557,9 @@ export class Engine {
         // extraContext 経由で shell 等が注入されているため、anyキャストで型検査を通過させる
         const result = await this.registry.execute(action, context as any);
 
-        if (!result) {
-          combinedResults[index].output = { log: '', trigger_llm: false };
-        } else {
-          combinedResults[index].output = result;
-        }
-
-        // 本数を減らしてから履歴を更新する。最後の 1 本なら、この更新の変更通知が起床を予約する
-        settleOne();
-        const updatedTurn = this.state.history.update(sharedTurnId, getSortedResults(), {
-          trigger_llm: calcTurnTrigger(),
-        });
-
-        if (updatedTurn) {
-          this._emit('turn_end', { role: 'system', turn: updatedTurn });
-        }
+        deliver(index, result ?? { log: '', trigger_llm: false }, false);
       } catch (err: any) {
-        combinedResults[index].output = {
-          log: `Error: ${err.message}`,
-          error: true,
-          trigger_llm: true,
-        };
-
-        settleOne();
-        const updatedTurn = this.state.history.update(sharedTurnId, getSortedResults(), {
-          type: TurnType.ERROR,
-          trigger_llm: calcTurnTrigger(),
-        });
-
-        if (updatedTurn) {
-          this._emit('turn_end', { role: 'system', turn: updatedTurn });
-        }
+        deliver(index, { log: `Error: ${err.message}`, error: true, trigger_llm: true }, true);
 
         if (err.code === 'UNKNOWN_TOOL') {
           const isReservedTag = RESERVED_SYSTEM_TAGS.has(err.actionType);
@@ -578,8 +603,9 @@ export class Engine {
     }
     this.hasPendingEvents = false;
     this.overtakeRequested = false;
-    // 走っている束は見捨てる。遅れて届いた結果は履歴には入るが、本数には数えず、
-    // 利用者が次に発言するまで起こさない（stopRequested が予約を止める）
+    // 走っている束は見捨てる（閉じる）。遅れて届いた結果は新しいターンとして履歴に入るが、
+    // 本数には数えず、利用者が次に発言するまで起こさない（stopRequested が予約を止める）
+    this.closedBatchSerial = this.batchSerial;
     this.batchSerial++;
     this.outstandingTools = 0;
 

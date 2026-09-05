@@ -500,9 +500,12 @@ function createLoopHarness(policy: 'realtime' | 'batch', toolCount: number) {
         }),
     ),
   };
+  // 1 周目だけツールを投げる。2 周目以降は「report と yield で待つ」を模して何も投げない
+  let parsed = 0;
   const translator = {
     parse: () => {
-      const actions: any = Array.from({ length: toolCount }, (_, i) => ({
+      const n = parsed++ === 0 ? toolCount : 0;
+      const actions: any = Array.from({ length: n }, (_, i) => ({
         type: 'tool',
         params: { i },
         originalIndex: i,
@@ -548,7 +551,12 @@ function createLoopHarness(policy: 'realtime' | 'batch', toolCount: number) {
     pendingAtWake,
     startCycle,
     wakes: () => createContext.mock.calls.length,
-    resolveTool: (i: number) => resolvers[i]({ log: `ok ${i}` }),
+    /** 結果を返し、届け（microtask）まで進める */
+    resolveTool: async (i: number, output: any = { log: `ok ${i}` }) => {
+      resolvers[i](output);
+      await vi.advanceTimersByTimeAsync(0);
+    },
+    turns,
   };
 }
 
@@ -669,5 +677,111 @@ describe('Engine: [Pending] の共有ターンは、投げた時点で画面に�
     const modelEnd = h.events.indexOf('end:model');
     expect(modelEnd).toBeGreaterThanOrEqual(0);
     expect(h.events[modelEnd + 1]).toBe('end:system');
+  });
+});
+
+describe('Engine: 閉じた束の遅い結果は、枠を埋めずに新しいターンとして積む', () => {
+  // 背景（T-0326 の配信後に踏んだ）:
+  //   'realtime' で 1 本目の結果から起きたあと、モデルが report と yield だけで待つと、
+  //   遅れて返った結果は最後の model ターンより «前» にある枠を書き換えていた。
+  //   起床の判定は最後の model ターンより後ろだけを見るので、その結果では二度と起きなかった。
+  //   山内さんの指摘: 投げた枠をあとから書き換えるのは時間の順序を壊す。
+  //   いまは、次の投影を取った瞬間に束を閉じ、閉じたあとの結果は返ったその時刻に新しい system ターンとして積む。
+  beforeEach(() => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    vi.useFakeTimers();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  const lastTurn = (h: any) => h.turns[h.turns.length - 1];
+  const modelIdx = (h: any) => h.turns.findLastIndex((t: any) => t.role === 'model');
+
+  it('遅れた結果は最後の model ターンより後ろに積まれ、1.5 秒で起きる（本命。#85 では起きなかった）', async () => {
+    const h = createLoopHarness('realtime', 2);
+    await h.startCycle();
+    await h.resolveTool(0);
+    await vi.advanceTimersByTimeAsync(1600);
+    expect(h.wakes()).toBe(2); // 1 本目で起きた（2 本目は [Pending]）
+    const frameId = h.turns.find((t: any) => Array.isArray(t.content)).id;
+
+    await h.resolveTool(1, { log: 'slow result' });
+    const late = lastTurn(h);
+    expect(late.id).not.toBe(frameId);
+    expect(late.role).toBe('system');
+    expect(h.turns.indexOf(late)).toBeGreaterThan(modelIdx(h));
+    expect(late.content[0].actionType).toBe('tool');
+    expect(late.content[0].output.log).toContain('slow result');
+    // 枠の側は印だけ
+    const frame = h.turns.find((t: any) => t.id === frameId);
+    expect(frame.content[1].output.log).toContain('Returned later');
+    expect(frame.content[1].output.log).not.toContain('slow result');
+
+    await vi.advanceTimersByTimeAsync(1600);
+    expect(h.wakes()).toBe(3);
+    expect(h.pendingAtWake[2]).toBe(0);
+  });
+
+  it('遅れた結果が halt（trigger_llm: false）なら起こさない', async () => {
+    const h = createLoopHarness('realtime', 2);
+    await h.startCycle();
+    await h.resolveTool(0);
+    await vi.advanceTimersByTimeAsync(1600);
+    expect(h.wakes()).toBe(2);
+    await h.resolveTool(1, { log: 'done', trigger_llm: false, halt_loop: true });
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(h.wakes()).toBe(2);
+    expect(lastTurn(h).meta.trigger_llm).toBe(false);
+  });
+
+  it('遅れた結果が 2 つなら 2 ターン（1 件 1 ターン。作ったターンは書き換えない）', async () => {
+    const h = createLoopHarness('realtime', 3);
+    await h.startCycle();
+    await h.resolveTool(0);
+    await vi.advanceTimersByTimeAsync(1600);
+    const before = h.turns.length;
+    await h.resolveTool(1);
+    await h.resolveTool(2);
+    expect(h.turns.length).toBe(before + 2);
+    expect(lastTurn(h).content).toHaveLength(1);
+  });
+
+  it('投影を取る前に返った結果は枠を埋める（閉じるのは投影の瞬間）', async () => {
+    const h = createLoopHarness('realtime', 2);
+    await h.startCycle();
+    await h.resolveTool(0);
+    await vi.advanceTimersByTimeAsync(1000);
+    await h.resolveTool(1);
+    await vi.advanceTimersByTimeAsync(600);
+    expect(h.wakes()).toBe(2);
+    expect(h.pendingAtWake[1]).toBe(0);
+    // 新しい system ターンは増えていない（枠に入った）
+    expect(h.turns.filter((t: any) => t.role === 'system' && Array.isArray(t.content)).length).toBe(1);
+  });
+
+  it("'batch' で利用者が追い越したあとの遅い結果も新しいターンになり、束が揃ってから起きる", async () => {
+    const h = createLoopHarness('batch', 2);
+    await h.startCycle();
+    await h.engine.injectUserTurn('hey');
+    await vi.advanceTimersByTimeAsync(1600);
+    expect(h.wakes()).toBe(2);
+    await h.resolveTool(0);
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(h.wakes()).toBe(2); // 1 本目だけでは起きない
+    await h.resolveTool(1);
+    expect(h.turns.filter((t: any) => t.role === 'system' && Array.isArray(t.content)).length).toBe(3);
+    await vi.advanceTimersByTimeAsync(1600);
+    expect(h.wakes()).toBe(3);
+  });
+
+  it('停止したあとの結果も新しいターンになるが、次の発言まで起こさない', async () => {
+    const h = createLoopHarness('realtime', 1);
+    await h.startCycle();
+    h.engine.stop();
+    await h.resolveTool(0);
+    expect(lastTurn(h).content[0].output.log).toContain('ok 0');
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(h.wakes()).toBe(1);
   });
 });
