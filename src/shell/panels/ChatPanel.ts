@@ -100,6 +100,7 @@ export class ChatPanel {
     this._initElements();
     this._bindEvents();
     this._initResizer();
+    this._initScrollTracking();
   }
 
   setVfs(vfs: VfsService) {
@@ -370,6 +371,7 @@ export class ChatPanel {
       <div class="msg-content whitespace-pre-wrap break-all"></div>
     `;
     this.els.HISTORY.appendChild(div);
+    this._observeBox(div);
     this.currentStreamEl = div.querySelector('.msg-content') as HTMLElement;
 
     if (this.currentStreamContent) {
@@ -458,8 +460,51 @@ export class ChatPanel {
   renderHistory(history: Turn[]) {
     if (!this.els.HISTORY) return;
     this.els.HISTORY.innerHTML = '';
+    // 消した箱の観察は捨て、器だけ観察し直す（箱は _appendTurn が足すたびに観察する）
+    if (this.boxObserver) {
+      this.boxObserver.disconnect();
+      this.boxObserver.observe(this.els.HISTORY);
+    }
     history.forEach((turn) => this._appendTurn(turn));
     this._scrollToBottom(true);
+  }
+
+  /**
+   * 直近の scroll イベント時点で下端に居たか（＝追従してよいか）。
+   *
+   * 「足す前に測る」ができない場面のための記憶である —— 器の高さが変わったとき
+   * （Thinking の印の出入り・パネルの伸縮・スマホのキーボード）と、足した箱があとから
+   * 伸びたとき（MathJax・画像）は、変化が起きてから通知が来るので、その時点で測ると
+   * 既に「下端から離れている」ように見える。
+   * 判定そのものは _isAtBottom と同じ（定義は 1 つ）。更新するのは scroll イベントと
+   * 自分が下端へ送ったときだけ。
+   */
+  private stickToBottom = true;
+  private boxObserver: ResizeObserver | null = null;
+
+  /**
+   * 器と箱の大きさの変化に追従する（T-0355）。
+   *
+   * 症状: USER 枠を送ったあとに Thinking の印が出ると、印の分だけ #chat-history が縮み、
+   * scrollTop はそのままなので下端が隠れる（Chrome はスクロール固定で救うことがあるが Safari は救わない）。
+   * scrollTop を足したあとに増える高さは、ここでしか拾えない。
+   */
+  private _initScrollTracking() {
+    const el = this.els.HISTORY;
+    if (!el) return;
+    el.addEventListener('scroll', () => {
+      this.stickToBottom = this._isAtBottom();
+    });
+    if (typeof ResizeObserver === 'undefined') return;
+    this.boxObserver = new ResizeObserver(() => {
+      if (this.stickToBottom) this._scrollToBottom(true);
+    });
+    this.boxObserver.observe(el);
+  }
+
+  /** 足した箱を観察する（あとから伸びたら追従する）。renderHistory で作り直すときは観察し直す。 */
+  private _observeBox(box: HTMLElement) {
+    if (this.boxObserver) this.boxObserver.observe(box);
   }
 
   /**
@@ -479,6 +524,11 @@ export class ChatPanel {
   /**
    * 最下部へ送る。
    *
+   * ★ 送りは**即時**でなければならない（#chat-history に scroll-smooth を付けない。T-0355）。
+   *   smooth だと送りがアニメーションになり、直後（数十 ms）に届く次のターンの「足す前の測定」が
+   *   途中の位置を読んで「過去を読んでいる」と誤判定する。追従はそこで止まり、アニメーションは
+   *   古い目標で終わるので、報告の枠が下に隠れたまま残る（実測: 200 px の枠が丸ごと隠れた）。
+   *
    * @param force        利用者自身の操作の結果なら true（自分が送ったものは必ず見せる）
    * @param wasAtBottom  **足す前に**測った位置。false なら過去を読んでいるので動かさない
    */
@@ -487,6 +537,7 @@ export class ChatPanel {
     if (!el) return;
     if (force || wasAtBottom) {
       el.scrollTop = el.scrollHeight;
+      this.stickToBottom = true;
     }
   }
 
@@ -569,6 +620,7 @@ export class ChatPanel {
 
     if (!isUpdate) {
       this.els.HISTORY!.appendChild(div);
+      this._observeBox(div);
     }
 
     // 外部ライブラリの適用（MathJaxはCDN、Highlight.jsはバンドル済み）
