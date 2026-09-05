@@ -313,7 +313,6 @@ export class HostApiRouter {
         type: 'event_log',
         visible: !opts?.silent,
         trigger_llm: true,
-        wake: 'fast', // 明示的なタスク要求は待たせない
       });
       if (!opts?.silent) {
         d.shell.panels.chat.appendTurn(turn);
@@ -328,12 +327,10 @@ export class HostApiRouter {
       const lpml = `<event type="${type || 'app_event'}">\n${message}\n</event>`;
       // イベントの種類を meta.eventType に残す（画面で隠す判定 preferences.hiddenEventTypes に使う。T-0246）。
       // meta.type は従来どおり event_log（Engine の連続回数の判定がこれを見る）。
-      // opts.wake === 'fast' で、短いデバウンスで起こしてもらえる（アプリ・デーモンが自分で名乗る）
       const turn = d.history.append('system', lpml, {
         type: 'event_log',
         eventType: type || 'app_event',
         trigger_llm: triggerLlm,
-        ...(opts?.wake === 'fast' ? { wake: 'fast' as const } : {}),
       });
       d.shell.panels.chat.appendTurn(turn);
       if (triggerLlm) {

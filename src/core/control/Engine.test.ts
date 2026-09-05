@@ -397,13 +397,15 @@ describe('Engine: LLM を起こさずに user ターンを置く', () => {
   });
 });
 
-describe('Engine: 起床までのデバウンス（起因で待ち幅を分ける）', () => {
-  // 背景（T-0301）:
-  //   ツールは並行して走り、1 つ終わるたびに共有ターンが update されて trigger_llm が立つ。
-  //   すべての履歴変更を同じ 1.5 秒で起こしていたため、残りが [Pending] のまま起きていた。
-  //   通常は 10 秒待ち、meta.wake === 'fast' を名乗ったターンだけ 1.5 秒で起こす。
-  //   どのツールが速いかを Engine は知らない（利用者の発言・system_task・set_timer が自分で名乗る）。
-  //   予約は「早い締切が勝つ」。
+describe('Engine: 起床の予約（待ちは 1.5 秒一本。自分のツールは時間ではなく本数で待つ）', () => {
+  // 背景（T-0326）:
+  //   T-0301 で「ツールの結果は 10 秒待ち、利用者の発言だけ 1.5 秒」にしたところ、
+  //   発言の 1.5 秒がストリーミング中に過ぎ、finally が即座に次の発話を始めて、
+  //   ツールの結果を待たずに [Pending] のまま起きていた。速いツールも 10 秒待たされていた。
+  //   いまは待ちを 1.5 秒の一本にし、「自分が投げたツールが返るまで起きない」は本数で守る。
+  //   守るかどうかは配布物の方針（config/wake_policy.ts）:
+  //     'realtime' … 守らない。起こす変更が来たら起きる（残りは [Pending] として見える）
+  //     'batch'    … 守る。ただし利用者の発言だけは追い越せる
   beforeEach(() => {
     vi.spyOn(console, 'error').mockImplementation(() => {});
     vi.useFakeTimers();
@@ -412,90 +414,260 @@ describe('Engine: 起床までのデバウンス（起因で待ち幅を分け�
     vi.useRealTimers();
   });
 
-  /** 利用者の発言（injectUserTurn が wake: 'fast' を名乗る） */
-  const userTurn = (h: ReturnType<typeof createHarness>) =>
-    (h as any).appendTurn('user', { trigger_llm: true, wake: 'fast' });
-
-  it('ツールの結果では 1.5 秒で起きず、10 秒で起きる（本命）', async () => {
+  it('ツールの結果は 1.5 秒で起きる（10 秒待たない）', async () => {
     const h = createHarness({});
     h.appendTurn('system');
     await vi.advanceTimersByTimeAsync(1600);
-    expect(h.reachedProjector()).toBe(false);
-    await vi.advanceTimersByTimeAsync(9000);
     expect(h.reachedProjector()).toBe(true);
   });
 
-  it('利用者の発言は従来どおり 1.5 秒で起きる（injectUserTurn が名乗る）', async () => {
+  it('利用者の発言も 1.5 秒で起きる', async () => {
     const h = createHarness({});
     await h.engine.injectUserTurn('hi');
     await vi.advanceTimersByTimeAsync(1600);
     expect(h.reachedProjector()).toBe(true);
   });
 
-  it('wake: fast を名乗ったツールの結果も 1.5 秒で起きる（特別扱いはツール側の名乗りで決まる）', async () => {
-    const h = createHarness({});
-    h.appendTurn('system', { trigger_llm: true, wake: 'fast' });
-    await vi.advanceTimersByTimeAsync(1600);
-    expect(h.reachedProjector()).toBe(true);
-  });
-
-  it('名乗らない user ターンは通常の待ち（Engine は役割で特別扱いしない）', async () => {
-    const h = createHarness({});
-    h.appendTurn('user', { trigger_llm: true });
-    await vi.advanceTimersByTimeAsync(1600);
-    expect(h.reachedProjector()).toBe(false);
-  });
-
-  it('10 秒待ちの途中に利用者が発言したら、発言から 1.5 秒で起きる', async () => {
+  it('締切は先着で決まる（あとから来た変更で後ろへ押さない）', async () => {
     const h = createHarness({});
     h.appendTurn('system');
-    await vi.advanceTimersByTimeAsync(5000);
-    userTurn(h);
-    await vi.advanceTimersByTimeAsync(1400);
-    expect(h.reachedProjector()).toBe(false);
-    await vi.advanceTimersByTimeAsync(200);
+    await vi.advanceTimersByTimeAsync(1000);
+    h.appendTurn('system');
+    await vi.advanceTimersByTimeAsync(600);
     expect(h.reachedProjector()).toBe(true);
   });
 
-  it('起こさない変更（halt した結果など）は 10 秒待たずに止まる（画面の Processing が残らない）', async () => {
+  it('起こさない変更（halt した結果など）も 1.5 秒で評価して止まる（画面の Processing が残らない）', async () => {
     const h = createHarness({});
-    // 直前に自分の思考があった状況（そこより後ろだけが起床の判定に入る）
     h.appendTurn('model', { type: TurnType.MODEL_THOUGHT });
     h.appendTurn('system', { trigger_llm: false });
     await vi.advanceTimersByTimeAsync(1600);
     expect(h.reachedProjector()).toBe(false);
     expect(h.stops.some((s: any) => s.reason === 'idle')).toBe(true);
   });
+});
 
-  it('先に起こさない変更（[Pending] の枠）があっても、あとから来た結果は 10 秒待つ（配信後に踏んだ）', async () => {
-    const h = createHarness({});
-    h.appendTurn('model', { type: TurnType.MODEL_THOUGHT });
-    h.appendTurn('system', { trigger_llm: false });
-    await vi.advanceTimersByTimeAsync(1000);
-    h.appendTurn('system', { trigger_llm: true });
-    await vi.advanceTimersByTimeAsync(1600);
-    expect(h.reachedProjector()).toBe(false);
-    await vi.advanceTimersByTimeAsync(9000);
-    expect(h.reachedProjector()).toBe(true);
+/**
+ * ツールを実際に投げる 1 周を回せる道具（上の createHarness は投影の手前で止めるので使えない）。
+ *   - 投影は成功し、呼ばれるたびに「共有ターンに [Pending] が何本残っていたか」を記録する
+ *   - LLM は即座に返り、translator は toolCount 本のアクションを返す
+ *   - 各ツールの結果は resolveTool(i) で手で返す
+ */
+function createLoopHarness(policy: 'realtime' | 'batch', toolCount: number) {
+  const turns: any[] = [];
+  const subscribers: Function[] = [];
+  const notify = (payload: any) => subscribers.forEach((cb) => cb(payload));
+  const history = {
+    on: (_event: string, cb: Function) => {
+      subscribers.push(cb);
+      return () => {};
+    },
+    get: () => turns,
+    append: (role: string, content: any, meta: any) => {
+      const turn = { id: `t${turns.length}`, timestamp: 0, role, content, meta };
+      turns.push(turn);
+      notify({ type: 'append', turn });
+      return turn;
+    },
+    update: (id: string, content: any, meta: any) => {
+      const turn = turns.find((t) => t.id === id);
+      if (!turn) return null;
+      turn.content = content;
+      turn.meta = { ...turn.meta, ...meta };
+      notify({ type: 'update', turn });
+      return turn;
+    },
+  };
+
+  /** 投影のたびに記録する: 共有ターンに残っていた [Pending] の本数 */
+  const pendingAtWake: number[] = [];
+  const createContext = vi.fn(async () => {
+    const pending = turns
+      .filter((t) => t.role === 'system' && Array.isArray(t.content))
+      .flatMap((t) => t.content)
+      .filter((r: any) => String(r.output?.log ?? '').startsWith('[Pending]')).length;
+    pendingAtWake.push(pending);
+    return [];
   });
 
-  it('起こさない変更は、起こす変更が置いた 10 秒の締切を縮めない', async () => {
-    const h = createHarness({});
-    h.appendTurn('system', { trigger_llm: true });
-    await vi.advanceTimersByTimeAsync(2000);
-    h.appendTurn('system', { trigger_llm: false });
+  const resolvers: Array<(v: any) => void> = [];
+  const registry = {
+    getRegisteredToolNames: () => ['tool'],
+    execute: vi.fn(
+      (action: any) =>
+        new Promise((resolve) => {
+          resolvers[action.params.i] = resolve;
+        }),
+    ),
+  };
+  const translator = {
+    parse: () => {
+      const actions: any = Array.from({ length: toolCount }, (_, i) => ({
+        type: 'tool',
+        params: { i },
+        originalIndex: i,
+      }));
+      actions.isTruncated = false;
+      actions.hasLeak = false;
+      return actions;
+    },
+  };
+  const llm = {
+    generateStream: vi.fn(async (_m: any, onChunk: (c: string) => void) => {
+      onChunk('<tool />');
+    }),
+  };
+  const engine = new Engine(
+    { history, vfs: {}, configManager: { get: () => ({}) } } as any,
+    { createContext } as any,
+    llm as any,
+    translator as any,
+    registry as any,
+    {},
+    policy,
+  );
+  const events: string[] = [];
+  engine.on('turn_start', (d: any) => events.push(`start:${d.role}`));
+  engine.on('turn_end', (d: any) => events.push(`end:${d.role}`));
+  const stops: any[] = [];
+  engine.on('loop_stop', (d: any) => stops.push(d));
+
+  /** 1 周回してツールを投げた直後の状態にする（ずらし開始の 50ms×本数を進める） */
+  const startCycle = async () => {
+    await engine.injectUserTurn('go');
     await vi.advanceTimersByTimeAsync(1600);
-    expect(h.reachedProjector()).toBe(false);
-    await vi.advanceTimersByTimeAsync(7000);
-    expect(h.reachedProjector()).toBe(true);
+    await vi.advanceTimersByTimeAsync(50 * toolCount + 10);
+    expect(registry.execute).toHaveBeenCalledTimes(toolCount);
+  };
+
+  return {
+    engine,
+    history,
+    events,
+    stops,
+    pendingAtWake,
+    startCycle,
+    wakes: () => createContext.mock.calls.length,
+    resolveTool: (i: number) => resolvers[i]({ log: `ok ${i}` }),
+  };
+}
+
+describe("Engine: 方針 'realtime'（Itera）—— 自分のツールを待たずに起きる", () => {
+  beforeEach(() => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    vi.useFakeTimers();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
-  it('発言のあとに来たツールの結果で締切を後ろへ押さない', async () => {
-    const h = createHarness({});
-    userTurn(h);
-    await vi.advanceTimersByTimeAsync(500);
-    h.appendTurn('system');
-    await vi.advanceTimersByTimeAsync(1100);
-    expect(h.reachedProjector()).toBe(true);
+  it('ツールが走っている最中に利用者が発言したら、発言から 1.5 秒で起きる（残りは [Pending] として見える）', async () => {
+    const h = createLoopHarness('realtime', 2);
+    await h.startCycle();
+    await h.engine.injectUserTurn('hey');
+    await vi.advanceTimersByTimeAsync(1600);
+    expect(h.wakes()).toBe(2);
+    expect(h.pendingAtWake[1]).toBe(2);
+  });
+
+  it('結果は返った順に起こす（1 本目の結果から 1.5 秒で起き、2 本目は [Pending]）', async () => {
+    const h = createLoopHarness('realtime', 2);
+    await h.startCycle();
+    h.resolveTool(0);
+    await vi.advanceTimersByTimeAsync(1600);
+    expect(h.wakes()).toBe(2);
+    expect(h.pendingAtWake[1]).toBe(1);
+  });
+
+  it('ツールが返るまでは評価もしない（自分が積んだ [Pending] の枠で loop_stop(idle) を出さない）', async () => {
+    const h = createLoopHarness('realtime', 1);
+    await h.startCycle();
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(h.wakes()).toBe(1);
+    expect(h.stops.filter((s: any) => s.reason === 'idle')).toHaveLength(0);
+  });
+
+  it('置くだけの発言（trigger_llm: false）はツールを追い越さない', async () => {
+    const h = createLoopHarness('realtime', 1);
+    await h.startCycle();
+    await h.engine.injectUserTurn('note', { trigger_llm: false });
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(h.wakes()).toBe(1);
+  });
+});
+
+describe("Engine: 方針 'batch'（ミャク楽）—— 自分のツールが全部返るまで起きない", () => {
+  beforeEach(() => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    vi.useFakeTimers();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('2 本のうち 1 本が返っても起きず、全部返ってから 1.5 秒で起きる（本命）', async () => {
+    const h = createLoopHarness('batch', 2);
+    await h.startCycle();
+    h.resolveTool(0);
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(h.wakes()).toBe(1);
+    h.resolveTool(1);
+    await vi.advanceTimersByTimeAsync(1600);
+    expect(h.wakes()).toBe(2);
+    expect(h.pendingAtWake[1]).toBe(0);
+  });
+
+  it('デーモンの通知（trigger_llm の system ターン）は束の終わりを待つ', async () => {
+    const h = createLoopHarness('batch', 2);
+    await h.startCycle();
+    h.history.append('system', '<event type="x" />', { trigger_llm: true });
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(h.wakes()).toBe(1);
+    h.resolveTool(0);
+    h.resolveTool(1);
+    await vi.advanceTimersByTimeAsync(1600);
+    expect(h.wakes()).toBe(2);
+  });
+
+  it('利用者の発言だけは追い越せる（発言から 1.5 秒で起きる。[Pending] が残るのはこのときだけ）', async () => {
+    const h = createLoopHarness('batch', 2);
+    await h.startCycle();
+    await h.engine.injectUserTurn('hey');
+    await vi.advanceTimersByTimeAsync(1600);
+    expect(h.wakes()).toBe(2);
+    expect(h.pendingAtWake[1]).toBe(2);
+  });
+
+  it('停止したら走っている束を見捨てる: 遅れて返っても起きず、次の発言で起きる', async () => {
+    const h = createLoopHarness('batch', 2);
+    await h.startCycle();
+    h.engine.stop();
+    h.resolveTool(0);
+    h.resolveTool(1);
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(h.wakes()).toBe(1);
+    await h.engine.injectUserTurn('again');
+    await vi.advanceTimersByTimeAsync(1600);
+    expect(h.wakes()).toBe(2);
+  });
+});
+
+describe('Engine: [Pending] の共有ターンは、投げた時点で画面に通知される', () => {
+  // 背景（T-0326）: 共有ターンは最初の結果が届くまで描かれず、その前に次の発話が始まると
+  // 画面では MODEL → USER → MODEL → SYSTEM の順になっていた（履歴の中の順は正しいのに）。
+  beforeEach(() => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    vi.useFakeTimers();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('モデルの turn_end の直後に system の turn_end が出る（結果が返る前に）', async () => {
+    const h = createLoopHarness('realtime', 1);
+    await h.startCycle();
+    const modelEnd = h.events.indexOf('end:model');
+    expect(modelEnd).toBeGreaterThanOrEqual(0);
+    expect(h.events[modelEnd + 1]).toBe('end:system');
   });
 });
