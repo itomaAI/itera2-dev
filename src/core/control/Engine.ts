@@ -511,7 +511,7 @@ export class Engine {
 
       combinedResults[index].output = {
         log: `[Returned later. The <tool_output> is in a later turn.]`,
-        ui: `📥 Returned later`,
+        ui: `⏩ Returned later`,
         trigger_llm: false,
       };
       // 印だけの書き換え。meta は触らない（起こす理由は下の新しいターンが持つ）
