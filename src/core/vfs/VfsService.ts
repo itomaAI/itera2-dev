@@ -166,7 +166,15 @@ export class VfsService {
     if (this.providerManager) {
       if (this.providerManager.isMountPoint(nodePath)) stat.isMountPoint = true;
       const info = this.providerManager.findProviderForPath(nodePath);
-      if (info) stat.syncProvider = { mountPath: info.mountPath, pid: info.pid };
+      if (info) {
+        stat.syncProvider = {
+          mountPath: info.mountPath,
+          pid: info.pid,
+          // 「登録が在る」と「いま取りに行ける」は別（T-0353）。
+          // マウントはプロセスの死では消えないので、ここも毎回導く。
+          alive: this.providerManager.isProviderAlive(info.pid),
+        };
+      }
     }
 
     return stat;

@@ -24,8 +24,13 @@ function makePathResolver() {
   };
 }
 
-function makeProviderManager(pathResolver: any) {
+/**
+ * livePids に挙げた pid だけ「プロセスが生きている」状態にする。
+ * 登録（registerProvider）と生存（processes に居る）は別の軸である —— T-0353。
+ */
+function makeProviderManager(pathResolver: any, livePids: string[] = []) {
   const processes = new Map<string, any>();
+  for (const pid of livePids) processes.set(pid, { iframe: { contentWindow: {} } });
   const transport = { sendEvent: () => {}, invokeGuest: async () => true };
   return new ProviderManager(new VfsEventBus(), transport as any, { processes } as any, pathResolver as any);
 }
@@ -156,7 +161,7 @@ describe('VfsService.getTree: 同期の印', () => {
 function makeStatService(
   files: Record<string, { syncState?: 'stub' | 'synced' }>,
   mounts: Array<{ path: string; pid: string }>,
-  opts: { withProvider?: boolean } = {},
+  opts: { withProvider?: boolean; deadPids?: string[] } = {},
 ) {
   const pathResolver: any = makePathResolver();
   pathResolver.getIdByPath = (p: string) => (p in files ? p : undefined);
@@ -177,7 +182,11 @@ function makeStatService(
   };
 
   if (opts.withProvider !== false) {
-    const providerManager = makeProviderManager(pathResolver);
+    // 既定では、マウントした担当はみな生きているものとする。
+    // deadPids に挙げたものだけ「登録は在るがプロセスは居ない」状態を作る。
+    const dead = opts.deadPids || [];
+    const live = mounts.map((m) => m.pid).filter((pid) => !dead.includes(pid));
+    const providerManager = makeProviderManager(pathResolver, live);
     for (const m of mounts) providerManager.registerProvider(m.path, m.pid);
     svc.providerManager = providerManager;
   }
@@ -191,14 +200,14 @@ describe('VfsService.stat: 実体の有無と管轄は直交する', () => {
     const svc = makeStatService({ [`${MOUNT}/a.ts`]: { syncState: 'stub' } }, [{ path: MOUNT, pid: 'local_bridge' }]);
     const s = svc.stat(PRINCIPAL, `${MOUNT}/a.ts`);
     expect(s.syncState).toBe('stub');
-    expect(s.syncProvider).toEqual({ mountPath: MOUNT, pid: 'local_bridge' });
+    expect(s.syncProvider).toEqual({ mountPath: MOUNT, pid: 'local_bridge', alive: true });
   });
 
   it('管轄下で実体もある … syncState は付かないが管轄は分かる（直交の証明）', () => {
     const svc = makeStatService({ [`${MOUNT}/a.ts`]: {} }, [{ path: MOUNT, pid: 'local_bridge' }]);
     const s = svc.stat(PRINCIPAL, `${MOUNT}/a.ts`);
     expect(s.syncState).toBeUndefined();
-    expect(s.syncProvider).toEqual({ mountPath: MOUNT, pid: 'local_bridge' });
+    expect(s.syncProvider).toEqual({ mountPath: MOUNT, pid: 'local_bridge', alive: true });
   });
 
   it('孤児のスタブ … 実体が無く、取りに行く相手も居ない', () => {
@@ -219,7 +228,7 @@ describe('VfsService.stat: 実体の有無と管轄は直交する', () => {
   it('ルートマウントでも管轄は隠さない（getTree の isVirtual と規則が違う）', () => {
     const svc = makeStatService({ 'data/x.md': { syncState: 'stub' } }, [{ path: '', pid: 'gdrive_sync_daemon' }]);
     const s = svc.stat(PRINCIPAL, 'data/x.md');
-    expect(s.syncProvider).toEqual({ mountPath: '', pid: 'gdrive_sync_daemon' });
+    expect(s.syncProvider).toEqual({ mountPath: '', pid: 'gdrive_sync_daemon', alive: true });
   });
 
   it('深いマウントがルートマウントに勝つ（最長前置一致）', () => {
@@ -241,5 +250,57 @@ describe('VfsService.stat: 実体の有無と管轄は直交する', () => {
     const s = svc.stat(PRINCIPAL, 'memory/init.md');
     expect(s.syncProvider).toBeUndefined();
     expect(s.isMountPoint).toBeUndefined();
+  });
+});
+
+/**
+ * 「登録が在る」と「いま応じられる」は別（T-0353）
+ *
+ * マウントの登録はプロセスの死では消えない（unregisterProvider を呼ばれたときだけ消える）。
+ * 実測: local_bridge を kill してもマウント 5 件は残り、file_info は担当が居るかのように見えたまま、
+ * read_file だけが『Failed to fetch missing content』で落ちた。
+ * 表示と実際の可否を食い違わせないため、生死も毎回導く。
+ */
+describe('VfsService.stat: 登録が在っても、応じられるとは限らない', () => {
+  it('担当プロセスが死んでいれば alive=false（登録と mountPath はそのまま）', () => {
+    const svc = makeStatService({ [`${MOUNT}/a.ts`]: { syncState: 'stub' } }, [{ path: MOUNT, pid: 'local_bridge' }], {
+      deadPids: ['local_bridge'],
+    });
+    const s = svc.stat(PRINCIPAL, `${MOUNT}/a.ts`);
+    expect(s.syncProvider).toEqual({ mountPath: MOUNT, pid: 'local_bridge', alive: false });
+  });
+
+  it('生死は問い合わせのたびに評価される（保存されない）', () => {
+    const svc = makeStatService({ [`${MOUNT}/a.ts`]: { syncState: 'stub' } }, [{ path: MOUNT, pid: 'local_bridge' }]);
+    expect(svc.stat(PRINCIPAL, `${MOUNT}/a.ts`).syncProvider!.alive).toBe(true);
+
+    // 途中でプロセスが消える（kill 相当）。登録は触らない
+    (svc as any).providerManager.processManager.processes.delete('local_bridge');
+    expect(svc.stat(PRINCIPAL, `${MOUNT}/a.ts`).syncProvider!.alive).toBe(false);
+    expect(svc.stat(PRINCIPAL, `${MOUNT}/a.ts`).syncProvider!.pid).toBe('local_bridge');
+  });
+});
+
+describe('ProviderManager.isProviderAlive', () => {
+  it('プロセスが居て窓があるときだけ真', () => {
+    const pathResolver = makePathResolver();
+    const pm: any = makeProviderManager(pathResolver, ['alive_one']);
+    expect(pm.isProviderAlive('alive_one')).toBe(true);
+    expect(pm.isProviderAlive('never_started')).toBe(false);
+  });
+
+  it('窓の無いプロセス（描画前・破棄後）は応じられない扱い', () => {
+    const pathResolver = makePathResolver();
+    const pm: any = makeProviderManager(pathResolver, []);
+    pm.processManager.processes.set('no_window', { iframe: {} });
+    expect(pm.isProviderAlive('no_window')).toBe(false);
+  });
+
+  it('取り寄せは、応じられない担当に対しては偽を返す（判定が 1 か所である証拠）', async () => {
+    const pathResolver = makePathResolver();
+    const pm: any = makeProviderManager(pathResolver, []);
+    pm.registerProvider(MOUNT, 'local_bridge');
+    expect(pm.isProviderAlive('local_bridge')).toBe(false);
+    expect(await pm.fetchContent(`${MOUNT}/a.ts`)).toBe(false);
   });
 });

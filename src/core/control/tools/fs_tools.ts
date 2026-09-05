@@ -304,8 +304,11 @@ export function registerFSTools(registry: ToolRegistry): void {
       const prov = stat.syncProvider;
       if (isStub || prov) {
         const body = isStub ? 'stub (metadata only; the content is not in the VFS yet)' : 'local copy';
+        // 担当が登録されていても、そのプロセスが落ちていれば取りに行けない（T-0353）。
+        // ここを黙ると『provider が居るのに read が失敗する』という読めない状態になる。
         const owner = prov
-          ? `provider=${prov.pid} (mount=/${prov.mountPath})`
+          ? `provider=${prov.pid} (mount=/${prov.mountPath})` +
+            (prov.alive ? '' : ' — NOT RUNNING; the content cannot be fetched until it is restarted')
           : 'no provider — the content can never be fetched (orphaned stub)';
         log += `Sync: ${body} / ${owner}\n`;
       }

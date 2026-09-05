@@ -103,17 +103,39 @@ export class ProviderManager {
     return matchedInfo;
   }
 
+  /** 担当プロセスの窓（応じられないときは null）。生死の判定はここ 1 か所に置く。 */
+  private _liveWindow(pid: string): Window | null {
+    const proc = this.processManager.processes.get(pid);
+    return proc && proc.iframe && proc.iframe.contentWindow ? proc.iframe.contentWindow : null;
+  }
+
+  /**
+   * その担当プロセスが「いま実際に応じられるか」（T-0353）。
+   *
+   * ★ マウントの登録はプロセスの死では消えない（unregisterProvider を呼ばれたときだけ消える）。
+   *   したがって「マウント表に在る」ことは「中身を取りに行ける」ことを意味しない。
+   *   実測: local_bridge を kill してもマウント 5 件は registered のまま残り、
+   *   file_info は担当が居るかのように見えたまま、read_file だけが
+   *   『Failed to fetch missing content』で落ちた。
+   *
+   * 判定は fetchContent が実際に使う条件そのもの（_liveWindow）である。
+   * 表示と実際の可否が食い違わないよう、条件を 2 か所に書かない。
+   */
+  isProviderAlive(pid: string): boolean {
+    return this._liveWindow(pid) !== null;
+  }
+
   async fetchContent(path: string): Promise<boolean> {
     const info = this.findProviderForPath(path);
     if (!info) return false;
 
-    const proc = this.processManager.processes.get(info.pid);
-    if (!proc || !proc.iframe || !proc.iframe.contentWindow) return false;
+    const win = this._liveWindow(info.pid);
+    if (!win) return false;
 
     // 同一パスへの同時フェッチを防止（重複リクエストの排除）
     if (!this.fetchPromises.has(path)) {
       const fetchTask = this.transport
-        .invokeGuest(info.pid, 'fs:resolve_missing', { path }, proc.iframe.contentWindow)
+        .invokeGuest(info.pid, 'fs:resolve_missing', { path }, win)
         .catch((e) => {
           console.error(`[ProviderManager] Fetch failed for ${path}:`, e);
           return false;
