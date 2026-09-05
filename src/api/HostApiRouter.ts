@@ -566,6 +566,8 @@ export class HostApiRouter {
       const blob = await res.blob();
       await d.vfs.writeFile(USER_PRINCIPAL, destPath, blob, {
         overwrite: true,
+        // 実体化のときに元の日付を保つための口（T-0351）
+        meta: options?.meta,
       });
       return { path: destPath, size: blob.size };
     });

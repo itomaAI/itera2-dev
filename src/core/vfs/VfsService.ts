@@ -273,6 +273,8 @@ export class VfsService {
         const nodePath = this.pathResolver.getPathById(node.id);
         result[nodePath] = {
           kind: node.kind,
+          size: node.meta.size,
+          createdAt: node.meta.createdAt,
           updatedAt: node.meta.updatedAt,
           version: node.meta.version,
           hash: node.meta.hash,
@@ -286,6 +288,8 @@ export class VfsService {
       const rootNode = this.nodeStore.getNode(rootId)!;
       result[rootPath] = {
         kind: rootNode.kind,
+        size: rootNode.meta.size,
+        createdAt: rootNode.meta.createdAt,
         updatedAt: rootNode.meta.updatedAt,
         version: rootNode.meta.version,
         hash: rootNode.meta.hash,

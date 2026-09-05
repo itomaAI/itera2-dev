@@ -94,7 +94,10 @@ export class WriteFileOp extends BaseOperation<
             throw new Error(`Cannot write file: A directory exists at ${normPath}`);
 
           node = { ...existingNode };
-          node.meta = { ...node.meta, updatedAt: now, version: node.meta.version + 1 };
+          // opts.meta は「実体化」のための口。スタブの中身を取り寄せただけで
+          // 更新日時が今になってしまうのを避ける（T-0351）。指定が無ければ従来どおり now。
+          node.meta = { ...node.meta, updatedAt: opts.meta?.updatedAt ?? now, version: node.meta.version + 1 };
+          if (opts.meta?.createdAt) node.meta.createdAt = opts.meta.createdAt;
           delete node.meta.syncState;
           eventType = 'update';
         } else {
@@ -105,7 +108,12 @@ export class WriteFileOp extends BaseOperation<
             parentId,
             kind: 'file',
             flags: { isSystem: !!opts.system, isTrashed: false },
-            meta: { size: 0, createdAt: now, updatedAt: now, version: 1 },
+            meta: {
+              size: 0,
+              createdAt: opts.meta?.createdAt ?? now,
+              updatedAt: opts.meta?.updatedAt ?? now,
+              version: 1,
+            },
             acl: this.ctx.auth.getDefaultAcl(principal, parentId),
           };
         }
@@ -256,7 +264,9 @@ export class CreateStubOp extends BaseOperation<
             await this.ctx.contentStore.delete(existingNode.contentRef);
           }
           node = { ...existingNode };
-          node.meta = { ...node.meta, ...meta, syncState: 'stub', version: node.meta.version + 1, updatedAt: now };
+          // 渡された meta が素直に勝つ。ここで updatedAt を now で塗ると、
+          // 提供者が渡したホスト側の更新日時が潰れる（T-0351 / 実測: local_release で日付が今日になっていた）。
+          node.meta = { ...node.meta, ...meta, syncState: 'stub', version: node.meta.version + 1 };
           delete node.contentRef;
         } else {
           this.ctx.auth.checkNodePermission(principal, parentId, 'write');

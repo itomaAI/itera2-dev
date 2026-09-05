@@ -957,7 +957,20 @@
                 const res = await fetch(api(conn, `/api/${root}/file/${rel}`));
                 if (!res.ok) return false;
                 const buf = await res.arrayBuffer();
-                await MetaOS.fs.write(reqPath, new Uint8Array(buf), { overwrite: true, silent: true });
+                // 中身を取り寄せただけで更新日時が「今」になってしまわないよう、
+                // スタブが持っている日付（＝ホストの mtime）をそのまま渡す（T-0351）
+                let keep;
+                try {
+                  const s = await MetaOS.fs.stat(reqPath);
+                  keep = { createdAt: s.createdAt, updatedAt: s.updatedAt };
+                } catch (e) {
+                  keep = undefined;
+                }
+                await MetaOS.fs.write(reqPath, new Uint8Array(buf), {
+                  overwrite: true,
+                  silent: true,
+                  meta: keep,
+                });
                 return true;
               } catch (e) {
                 log(`実体取得に失敗 ${rel}: ${e.message}`);

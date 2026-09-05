@@ -1074,7 +1074,15 @@
             return false;
           }
 
-          await MetaOS.fs.write(path, res.data, { overwrite: true, silent: true });
+          // 取り寄せただけで更新日時が「今」にならないよう、スタブが持っている日付を渡す（T-0351）
+          let keep;
+          try {
+            const s = await MetaOS.fs.stat(path);
+            keep = { createdAt: s.createdAt, updatedAt: s.updatedAt };
+          } catch (e) {
+            keep = undefined;
+          }
+          await MetaOS.fs.write(path, res.data, { overwrite: true, silent: true, meta: keep });
 
           // 実体化したのでアンカーのローカル側ハッシュを更新する。
           // ここを怠ると次のサイクルで「ローカルが変化した」と誤判定し、

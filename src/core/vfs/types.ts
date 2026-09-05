@@ -146,6 +146,9 @@ export interface TreeNode {
 
 export interface SyncStateItem {
   kind: 'file' | 'directory';
+  /** バイト数。同期プロバイダはこれを索引へ書く。無いと相手側のスタブが 0 バイトになる（T-0351） */
+  size?: number;
+  createdAt?: number;
   updatedAt: number;
   version: number;
   hash?: string;
@@ -168,6 +171,11 @@ export interface ReadOptions {
 export interface WriteOptions {
   overwrite?: boolean;
   system?: boolean;
+  /**
+   * 日付を明示して書く（T-0351）。スタブの中身を取り寄せる「実体化」で使う。
+   * 指定が無ければ従来どおり、書いた時刻が updatedAt になる。
+   */
+  meta?: { createdAt?: number; updatedAt?: number };
 }
 
 export interface DeleteOptions {
