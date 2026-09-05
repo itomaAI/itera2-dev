@@ -205,6 +205,12 @@ export class HostApiRouter {
       d.vfs.listFiles(getPrincipal(sourcePid), { path, ...opts }),
     );
     t.registerHandler('fs:exists', async ({ path }, sourcePid) => d.vfs.exists(getPrincipal(sourcePid), path));
+    // この端末の VFS の容量（バイト）。素の事実 3 つだけを配る。割合や「満杯か」はゲストが自分で決める（T-0354）。
+    // パスも中身も漏れないので権限検査は無い。
+    t.registerHandler('fs:get_usage', async () => {
+      const u = d.vfs.getUsage();
+      return { used: u.used, max: u.max, reserved: u.reserved };
+    });
     t.registerHandler('fs:get_sync_state', async ({ path }, sourcePid) =>
       d.vfs.getSyncState(getPrincipal(sourcePid), path || ''),
     );

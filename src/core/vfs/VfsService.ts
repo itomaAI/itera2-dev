@@ -337,13 +337,19 @@ export class VfsService {
     return JSON.parse(JSON.stringify(node.acl));
   }
 
-  getUsage(): { used: number; max: number; percent: number; isFull: boolean } {
+  /**
+   * この端末の VFS の容量。`used` は索引（NodeStore）の総量で system の分を含む。
+   * `reserved` は system 予約（利用者・ゲストが書ける上限は `max - reserved`。BaseOperation.checkQuota と同じ数）。
+   * シェルの表示は percent / isFull を使い、ゲストへは `fs:get_usage` が used / max / reserved だけを配る（T-0354）。
+   */
+  getUsage(): { used: number; max: number; reserved: number; percent: number; isFull: boolean } {
     const used = this.nodeStore.getTotalSize();
     const max = VFS_HARD_LIMITS.MAX_STORAGE_BYTES;
+    const reserved = VFS_HARD_LIMITS.SYSTEM_RESERVE_BYTES;
     const percent = Math.min(100, (used / max) * 100);
     const isFull = used >= max;
 
-    return { used, max, percent, isFull };
+    return { used, max, reserved, percent, isFull };
   }
 
   async readFile(principal: Principal, path: string, opts: ReadOptions = {}): Promise<string> {
