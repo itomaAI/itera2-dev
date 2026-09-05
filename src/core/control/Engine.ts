@@ -13,18 +13,7 @@ import type { BaseLLMAdapter } from '../cognitive/adapters/BaseAdapter';
 import type { Translator, ParsedAction } from '../cognitive/Translator';
 import type { ToolRegistry } from './ToolRegistry';
 import { RESERVED_SYSTEM_TAGS } from '../cognitive/Translator';
-import { WAKE_POLICY, type WakePolicy } from '../../config/wake_policy';
-
-/**
- * 起床までのデバウンス（ms）。近い時刻の履歴の変更を 1 回の起床に束ねるためだけの待ち。
- * 締切は先に予約した変更のもので決まり、あとから来た変更で後ろへ押さない。
- *
- * 「自分が投げたツールが返るまで起きない」は時間ではなく本数（outstandingTools）で守り、
- * 守るかどうかは配布物ごとの方針（config/wake_policy.ts）で決める。
- * 以前はツールの結果だけ 10 秒待って [Pending] のまま起きるのを避けていたが、
- * 速いツールも 10 秒待たされ、利用者の発言（1.5 秒）に追い越されて結局 [Pending] のまま起きていた（T-0326）。
- */
-export const WAKE_DEBOUNCE_MS = 1500;
+import { WAKE_POLICY, WAKE_DEBOUNCE_MS, type WakePolicy } from '../../config/wake_policy';
 
 export const TurnType = {
   USER_INPUT: 'user_input',
@@ -518,7 +507,7 @@ export class Engine {
 
       combinedResults[index].output = {
         log: `[Returned later. The <tool_output> is in a later turn.]`,
-        ui: `↓ returned later`,
+        ui: `📥 Returned later`,
         trigger_llm: false,
       };
       // 印だけの書き換え。meta は触らない（起こす理由は下の新しいターンが持つ）
