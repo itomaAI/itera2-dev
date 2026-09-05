@@ -58,6 +58,25 @@ export interface VfsNodeMeta {
   mimeType?: string;
   version: number;
   hash?: string;
+  /**
+   * 実体（バイト列）が手元にあるか無いか。**それだけを意味する。**
+   *
+   * ★ 名前が "sync" なので「同期の状態」に見えるが、そうではない。
+   *   実質は `'stub'`（実体が無い）か、未設定（実体がある）かの 2 状態で、
+   *   `'synced'` は実ファイルに付くことがない（`WriteFileOp` は実体化のとき delete する）。
+   *   **`stub?: boolean` という名前にすべきだった。** 保存済みのノードに入っている値なので、
+   *   改名には移行が要る。名前の綺麗さのために動いているものを止めない、という判断で据え置いている。
+   *
+   * ★ 「同期の管轄下か」とは**直交する**。そちらは保存しない ——
+   *   `VfsStat.syncProvider` / `TreeNode.isVirtual` として、
+   *   問い合わせのたびに ProviderManager のマウント表から導く（T-0352）。
+   *   管轄を保存された印にすると、デーモンが落ちた・マウントを外したあとも嘘が残る。
+   *
+   * この値を読んでいる場所: 容量に数えない（NodeStore）／実体化の引き金（VfsService.readBlob）／
+   * 移動・複製前の実体化（_hydrateIfNeeded）／中身検索を飛ばす（search_tools）／
+   * 名前を薄く表示（TreeView）／バックアップから除外（backupExclusion）／同期デーモン。
+   * **どれも「中身が手元にあるか」を訊いている。**
+   */
   syncState?: 'synced' | 'stub';
 }
 
