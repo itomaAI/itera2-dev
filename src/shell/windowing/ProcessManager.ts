@@ -373,7 +373,13 @@ export class ProcessManager {
     return proc ? proc.args || null : null;
   }
 
-  async captureScreenshot(pid?: string): Promise<string> {
+  /**
+   * 画面を撮る。pid を渡せばそのプロセスを、省略すれば前面のアプリを撮る（T-0350）。
+   * 背景のアプリも撮れる（前面/背景は z-index で分けているだけで、描画は生きている）。
+   * timeoutMs は重い画面のための逃げ道。既定 30 秒
+   * （実測: 14,976 ノードの画面で 18.6 秒かかった。もとの 15 秒では足りない）。
+   */
+  async captureScreenshot(pid?: string, timeoutMs: number = 30000): Promise<string> {
     let targetPid = pid;
     if (!targetPid) {
       const fg = Array.from(this.processes.values()).find((p) => p.state === 'foreground');
@@ -383,6 +389,9 @@ export class ProcessManager {
     if (!targetPid) throw new Error('No foreground process to capture.');
 
     const proc = this.processes.get(targetPid);
+    if (proc && proc.type === 'daemon') {
+      throw new Error(`Cannot capture a daemon (it has no visible window): ${targetPid}`);
+    }
     if (!proc || !proc.iframe || !proc.iframe.contentWindow) {
       throw new Error(`Process ${targetPid} not found or has no iframe.`);
     }
@@ -404,8 +413,13 @@ export class ProcessManager {
 
       setTimeout(() => {
         window.removeEventListener('message', handler);
-        reject(new Error('Screenshot timeout'));
-      }, 15000);
+        reject(
+          new Error(
+            `Screenshot timeout after ${Math.round(timeoutMs / 1000)}s (${targetPid}). ` +
+              `The guest did not answer. Heavy screens can exceed this; retry with a larger timeout.`,
+          ),
+        );
+      }, timeoutMs);
 
       iframe.contentWindow!.postMessage({ action: 'CAPTURE' }, '*');
     });
