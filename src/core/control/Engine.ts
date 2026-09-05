@@ -21,7 +21,7 @@ import { RESERVED_SYSTEM_TAGS } from '../cognitive/Translator';
  * meta.wake === 'fast' を名乗ったターンだけ短く待つ。どのツールが速いかを Engine は知らない
  * （利用者の発言・system_task・set_timer などが自分で名乗る）。
  */
-export const WAKE_DEBOUNCE_MS = 1500;
+export const WAKE_DEBOUNCE_MS = 10000;
 export const FAST_WAKE_DEBOUNCE_MS = 1500;
 
 export const TurnType = {
