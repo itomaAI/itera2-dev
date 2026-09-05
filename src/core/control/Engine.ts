@@ -47,6 +47,8 @@ export class Engine {
 
   /** 起床の方針。既定は配布物の定数（試験だけが差し替える） */
   private readonly wakePolicy: WakePolicy;
+  /** 起床までのデバウンス（ms）。既定は配布物の定数（試験だけが差し替える） */
+  private readonly wakeDebounceMs: number;
 
   private debounceTimer: ReturnType<typeof setTimeout> | null = null;
   private continuousToolCount: number = 0;
@@ -78,6 +80,7 @@ export class Engine {
     registry: ToolRegistry,
     extraContext: Record<string, any> = {},
     wakePolicy: WakePolicy = WAKE_POLICY,
+    wakeDebounceMs: number = WAKE_DEBOUNCE_MS,
   ) {
     this.state = state;
     this.projector = projector;
@@ -86,6 +89,7 @@ export class Engine {
     this.registry = registry;
     this.extraContext = extraContext;
     this.wakePolicy = wakePolicy;
+    this.wakeDebounceMs = wakeDebounceMs;
 
     // Historyの変更を監視し、非同期でトリガーする
     this.state.history.on('change', (payload) => this._onHistoryChange(payload));
@@ -191,7 +195,7 @@ export class Engine {
       this.hasPendingEvents = false;
       this.overtakeRequested = false;
       this._ping();
-    }, WAKE_DEBOUNCE_MS);
+    }, this.wakeDebounceMs);
   }
 
   /**

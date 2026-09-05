@@ -58,6 +58,9 @@ function createHarness(preferences: any) {
     { generateStream: vi.fn() } as any,
     { parse: () => [] } as any,
     { getRegisteredToolNames: () => [] } as any,
+    {},
+    'realtime',
+    1500,
   );
 
   const stops: any[] = [];
@@ -528,6 +531,7 @@ function createLoopHarness(policy: 'realtime' | 'batch', toolCount: number) {
     registry as any,
     {},
     policy,
+    1500, // 待ちの窓の仕組みを試すので、配布物の定数に依らず固定する
   );
   const events: string[] = [];
   engine.on('turn_start', (d: any) => events.push(`start:${d.role}`));
