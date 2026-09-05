@@ -78,6 +78,15 @@ export class GuestCompiler {
 <script>
 window.addEventListener('message', async (e) => {
     if (e.data.action === 'CAPTURE') {
+        // 撮影のあいだだけ requestAnimationFrame を setTimeout に差し替える（T-0350）。
+        //
+        // html-to-image は画像を読み込んだあと requestAnimationFrame を待つ。
+        // ところがブラウザの窓が実際に描かれていないとき（利用者が別の窓・別のタブを見ている、
+        // 窓が他のウィンドウに完全に隠れている）rAF は発火しない。document.visibilityState は
+        // 'visible' のままなので、外からは「見えている」ようにしか見えないが、撮影は永久に返らない。
+        // 自律で動いている時間帯は、まさに利用者が見ていない時間帯なので、ここが効く。
+        const rafOriginal = window.requestAnimationFrame;
+        window.requestAnimationFrame = (cb) => window.setTimeout(() => cb(performance.now()), 0);
         try {
             // ライブラリはBlob URLの同期スクリプトとして先に読み込まれるため待機は不要
             if (typeof window.htmlToImage === 'undefined') throw new Error('html-to-image failed to load');
@@ -94,6 +103,8 @@ window.addEventListener('message', async (e) => {
             parent.postMessage({ type: 'SCREENSHOT_RESULT', pid: '${pid}', data }, '*');
         } catch (err) {
             parent.postMessage({ type: 'SCREENSHOT_ERROR', pid: '${pid}', message: String(err) }, '*');
+        } finally {
+            window.requestAnimationFrame = rafOriginal;
         }
     }
 });

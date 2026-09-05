@@ -151,16 +151,42 @@ export function registerUITools(registry: ToolRegistry): void {
   registry.registerSystemTool(setId, setName, {
     name: 'take_screenshot',
     description: 'Capture screenshot.',
-    impl: async (_params: any, context: { shell: any; vfs: VfsService }) => {
-      if (context.shell?.processManager) {
+    impl: async (params: any, context: { shell: any; vfs: VfsService }) => {
+      const pm = context.shell?.processManager;
+      if (pm) {
+        // pid を省略すれば従来どおり前面のアプリ（T-0350）
+        const wanted = String(params?.pid || '').trim();
+        const procs: Map<string, any> = pm.processes instanceof Map ? pm.processes : new Map();
+
+        if (wanted) {
+          const proc = procs.get(wanted);
+          if (!proc) {
+            const capturable = Array.from(procs.values())
+              .filter((p: any) => p.type !== 'daemon')
+              .map((p: any) => p.pid);
+            throw new Error(`Process not found: ${wanted}. Capturable apps: ${capturable.join(', ') || '(none)'}`);
+          }
+          if (proc.type === 'daemon') {
+            throw new Error(`Cannot capture a daemon (it has no visible window): ${wanted}`);
+          }
+        }
+
+        // timeout は秒で受ける。既定は ProcessManager 側の 15 秒、上限 60 秒
+        const sec = Number(params?.timeout);
+        const timeoutMs = Number.isFinite(sec) && sec > 0 ? Math.min(sec, 60) * 1000 : undefined;
+
+        const foreground = Array.from(procs.values()).find((p: any) => p.state === 'foreground') as any;
+        const target = wanted || foreground?.pid || 'foreground';
+
         await new Promise((r) => setTimeout(r, 1000)); // Render wait
 
         try {
           // captureScreenshot はプレーンな Base64 文字列を返す
-          const base64 = await context.shell.processManager.captureScreenshot();
+          const base64 = await pm.captureScreenshot(wanted || undefined, timeoutMs);
 
           const timestamp = Date.now();
-          const path = `system/temp/media/screenshot_${timestamp}.png`;
+          const safe = String(target).replace(/[^\w.-]+/g, '_');
+          const path = `system/temp/media/screenshot_${safe}_${timestamp}.png`;
 
           // ツールの責任として Blob に変換してから VFS に渡す
           const byteString = atob(base64);
@@ -178,8 +204,8 @@ export function registerUITools(registry: ToolRegistry): void {
           });
 
           return {
-            log: `Captured main process and saved to ${path}`,
-            ui: `📸 Screenshot Saved`,
+            log: `Captured ${target} and saved to ${path}`,
+            ui: `📸 Screenshot Saved (${target})`,
             media: { path: path, mimeType: 'image/png', metadata: {} },
           };
         } catch (e: any) {

@@ -300,8 +300,13 @@ Lists all currently running processes. Shows PID, Type (App/Daemon), State (Fore
 </define_tag>
 
 <define_tag name="take_screenshot">
-Captures the current foreground application image for visual verification.
-Use this to check layout or rendering results. (No pid required, it automatically captures what the user is currently seeing).
+Captures a running application's image for visual verification.
+Attributes:
+    - pid (optional): Target Process ID. If omitted, captures the foreground app (what the user is currently seeing).
+    - timeout (optional): Seconds to wait for the guest to answer (default 30, max 60). Heavy screens need more (measured: ~19s for a 15,000-node screen).
+Rule:
+    - Background apps can be captured too (foreground/background differ only by z-index; both keep rendering). Daemons have no window and cannot be captured.
+    - Use this to check layout or rendering results.
 </define_tag>
 
 <define_tag name="get_time">
