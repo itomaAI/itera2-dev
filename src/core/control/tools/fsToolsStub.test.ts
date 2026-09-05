@@ -47,7 +47,9 @@ function ctxWithList(files: any[]) {
   return { vfs: { listFiles: () => files } } as any;
 }
 
-const PROVIDER = { mountPath: 'local/yachiyo/ws_itera', pid: 'local_bridge' };
+const PROVIDER = { mountPath: 'local/yachiyo/ws_itera', pid: 'local_bridge', alive: true };
+/** 登録は在るが、その担当プロセスが落ちている（T-0353。マウントは死んでも消えない） */
+const DEAD_PROVIDER = { ...PROVIDER, alive: false };
 
 describe('file_info: 実体の有無と管轄を分けて出す', () => {
   it('管轄下のスタブ … 実体が無いことと、取りに行ける相手が出る', async () => {
@@ -128,5 +130,26 @@ describe('list_files detail: スタブの印', () => {
   it('detail を付けなければ従来どおりパスだけ', async () => {
     const res = await tools().list_files.impl({ path: 'x' }, ctxWithList(['x/a.md', 'x/b.md']));
     expect(res.log).toBe('x/a.md\nx/b.md');
+  });
+});
+
+describe('file_info: 担当が居ても応じられないとき（T-0353）', () => {
+  it('落ちている担当は「動いていない」と明示する', async () => {
+    const res = await tools().file_info.impl(
+      { path: 'x' },
+      ctxWithStat(statOf({ syncState: 'stub', syncProvider: DEAD_PROVIDER })),
+    );
+    expect(res.log).toContain('provider=local_bridge');
+    expect(res.log).toContain('NOT RUNNING');
+    // 孤児（そもそも担当が居ない）とは別の状態である
+    expect(res.log).not.toContain('orphaned stub');
+  });
+
+  it('生きている担当には余計な警告を出さない', async () => {
+    const res = await tools().file_info.impl(
+      { path: 'x' },
+      ctxWithStat(statOf({ syncState: 'stub', syncProvider: PROVIDER })),
+    );
+    expect(res.log).not.toContain('NOT RUNNING');
   });
 });

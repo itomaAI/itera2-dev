@@ -153,12 +153,15 @@ export interface VfsStat {
   acl: AccessControlList;
   isMountPoint?: boolean;
   /**
-   * この節点を担当する Sync Provider（居なければ undefined）。**保存しない。**
+   * この節点を担当する Sync Provider（マウント表に無ければ undefined）。**保存しない。**
    * 問い合わせのたびに ProviderManager のマウント表から導くので、
-   * デーモンが落ちた・マウントを外したときは次の問い合わせで自然に消える（T-0352）。
+   * マウントを外せば次の問い合わせで消える（T-0352）。
    * 保存された印にすると、管轄が変わったあとも嘘が残る。
+   *
+   * ★ alive は「登録が在る」とは別（T-0353）。**マウントの登録はプロセスの死では消えない**ため、
+   *   この値が在っても中身を取りに行けるとは限らない。取りに行けるかは alive を見る。
    */
-  syncProvider?: { mountPath: string; pid: string };
+  syncProvider?: { mountPath: string; pid: string; alive: boolean };
 }
 
 export interface TreeNode {

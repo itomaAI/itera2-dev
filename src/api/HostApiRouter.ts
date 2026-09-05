@@ -260,7 +260,13 @@ export class HostApiRouter {
     t.registerHandler('fs:list_mounts', async () => {
       const pm = d.vfs.getProviderManager();
       if (!pm) throw new Error('ProviderManager not connected.');
-      return pm.listMounts().map((m) => ({ ...m, registered: true }));
+      // registered … マウント表に載っている（この一覧に出る時点で常に true）
+      // alive      … その担当プロセスがいま応じられる（T-0353）
+      //
+      // 🔴 管轄の除外（根をマウントするデーモンが他プロバイダの部分木を避ける処理）は、
+      //   alive ではなく **mountPath で判断すること**。相手が一時的に落ちている間に除外を外すと、
+      //   取り込みが相手の管轄のディレクトリを削除し、その削除が利用者の実機まで伝播しうる。
+      return pm.listMounts().map((m) => ({ ...m, registered: true, alive: pm.isProviderAlive(m.pid) }));
     });
 
     // ==========================================
