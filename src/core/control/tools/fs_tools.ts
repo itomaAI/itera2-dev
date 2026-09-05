@@ -296,6 +296,12 @@ export function registerFSTools(registry: ToolRegistry): void {
       log += `Created: ${new Date(stat.createdAt).toISOString()}\n`;
       log += `Updated: ${new Date(stat.updatedAt).toISOString()}\n`;
 
+      if (stat.syncState) {
+        log +=
+          stat.syncState === 'stub'
+            ? `Sync: stub (metadata only; the content is not in the VFS yet. Reading it fetches it from the provider.)\n`
+            : `Sync: ${stat.syncState}\n`;
+      }
       if (stat.version !== undefined) log += `Version: ${stat.version}\n`;
       if (stat.hash) log += `Hash: ${stat.hash}\n`;
 
@@ -346,7 +352,9 @@ export function registerFSTools(registry: ToolRegistry): void {
             const typeMark = f.kind === 'directory' ? '[DIR] ' : '      ';
             const sizeStr = f.size < 1024 ? `${f.size} B` : `${(f.size / 1024).toFixed(1)} KB`;
             const dateStr = new Date(f.updatedAt).toISOString().slice(0, 19).replace('T', ' ');
-            return `${typeMark} ${(f.path || f.name).padEnd(40)} | ${sizeStr.padStart(10)} | ${dateStr}`;
+            // スタブ（中身がまだ手元に無い）を見分けられるようにする（T-0351）
+            const stubMark = f.syncState === 'stub' ? ' | stub' : '';
+            return `${typeMark} ${(f.path || f.name).padEnd(40)} | ${sizeStr.padStart(10)} | ${dateStr}${stubMark}`;
           })
           .join('\n');
       };
