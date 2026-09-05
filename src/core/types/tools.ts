@@ -47,12 +47,8 @@ export interface PresentedFile {
 }
 
 /**
- * 起床の速さ。'fast' を名乗った結果（ターン）は短いデバウンスで LLM を起こす。
- * 既定（未指定）は通常の待ち。どのツールを特別扱いするかを Engine に固定で書かない
- * （各ツールが自分で名乗る）。
+ * ツールの結果。
  */
-export type WakeMode = 'fast' | 'normal';
-
 export interface ToolResult {
   log?: string;
   ui?: string;
@@ -61,7 +57,6 @@ export interface ToolResult {
   error?: boolean;
   trigger_llm?: boolean;
   halt_loop?: boolean;
-  wake?: WakeMode;
 }
 
 export type ToolParams = Record<string, string>;

@@ -20,8 +20,9 @@ import { VfsEventFormatter } from '../../core/vfs/VfsEventFormatter';
  * ターン終了時に待機表示をどうするか。── T-0028
  *
  * Engine の流れ:
- *   turn_start(model) → stream → turn_end(model) → [ツールがあれば _dispatchActions（await されない）]
- *   → finally で isRunning=false → 各ツール結果が turn_end(system) を出す → 最後に loop_stop
+ *   turn_start(model) → stream → turn_end(model) → [ツールがあれば _dispatchActions（await されない）:
+ *   [Pending] の枠が turn_end(system) を出す] → finally で isRunning=false
+ *   → 各ツール結果が turn_end(system) を出す → 最後に loop_stop
  *
  * ★ 以前は turn_end で「isRunning が false なら消す」としていた。
  *   ツール実行は isRunning=false になった**後**に走るため、最初のツール結果が届いた時点で

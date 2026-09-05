@@ -116,8 +116,7 @@ export function registerSysTools(registry: ToolRegistry): void {
       const message = params.message || 'Timer expired.';
 
       setTimeout(() => {
-        // 予定した時刻の割り込みなので、速く起こしてもらう（名乗るのはツール側）
-        if (context.engine) context.engine.injectSystemEvent('timer_alert', message, { wake: 'fast' });
+        if (context.engine) context.engine.injectSystemEvent('timer_alert', message);
       }, delay * 1000);
 
       return {

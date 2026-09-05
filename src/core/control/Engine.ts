@@ -13,16 +13,18 @@ import type { BaseLLMAdapter } from '../cognitive/adapters/BaseAdapter';
 import type { Translator, ParsedAction } from '../cognitive/Translator';
 import type { ToolRegistry } from './ToolRegistry';
 import { RESERVED_SYSTEM_TAGS } from '../cognitive/Translator';
+import { WAKE_POLICY, type WakePolicy } from '../../config/wake_policy';
 
 /**
- * 起床までのデバウンス（ms）。
- * 通常は長めに待つ —— ツールは並行して走り、1 つ終わるたびに共有ターンが update されて
- * trigger_llm が立つので、短いと残りが [Pending] のまま起きてしまう。
- * meta.wake === 'fast' を名乗ったターンだけ短く待つ。どのツールが速いかを Engine は知らない
- * （利用者の発言・system_task・set_timer などが自分で名乗る）。
+ * 起床までのデバウンス（ms）。近い時刻の履歴の変更を 1 回の起床に束ねるためだけの待ち。
+ * 締切は先に予約した変更のもので決まり、あとから来た変更で後ろへ押さない。
+ *
+ * 「自分が投げたツールが返るまで起きない」は時間ではなく本数（outstandingTools）で守り、
+ * 守るかどうかは配布物ごとの方針（config/wake_policy.ts）で決める。
+ * 以前はツールの結果だけ 10 秒待って [Pending] のまま起きるのを避けていたが、
+ * 速いツールも 10 秒待たされ、利用者の発言（1.5 秒）に追い越されて結局 [Pending] のまま起きていた（T-0326）。
  */
-export const WAKE_DEBOUNCE_MS = 10000;
-export const FAST_WAKE_DEBOUNCE_MS = 1500;
+export const WAKE_DEBOUNCE_MS = 1500;
 
 export const TurnType = {
   USER_INPUT: 'user_input',
@@ -54,15 +56,19 @@ export class Engine {
     loop_stop: [],
   };
 
+  /** 起床の方針。既定は配布物の定数（試験だけが差し替える） */
+  private readonly wakePolicy: WakePolicy;
+
   private debounceTimer: ReturnType<typeof setTimeout> | null = null;
-  /** 予約済みの起床時刻（epoch ms）。早い締切が勝つ判定に使う。0 は未予約 */
-  private debounceDeadline: number = 0;
-  /** 起こさない変更だけが積まれたときの短い評価（loop_stop を出すため）。起こす予約があれば譲る */
-  private settleTimer: ReturnType<typeof setTimeout> | null = null;
-  /** 前回の起床以降に「起こす」変更（trigger_llm / wake:fast）が来たか */
-  private pendingWake: boolean = false;
   private continuousToolCount: number = 0;
+  /** 前回の評価以降に履歴が変わったか（実行中・ツール待ちの間に来た変更を、あとで拾うため） */
   private hasPendingEvents: boolean = false;
+  /** 自分が投げたツールのうち、まだ結果が返っていない本数 */
+  private outstandingTools: number = 0;
+  /** 前回の評価以降に、ツールの結果を待たずに起きてよい変更（方針次第。利用者の発言など）が来たか */
+  private overtakeRequested: boolean = false;
+  /** ツールの束の世代。stop() で見捨てた束の遅い結果が、いまの本数を減らさないようにする */
+  private batchSerial: number = 0;
   /** 連続実行の上限に達して停止中か。解除は利用者の発言（と明示的なタスク要求）だけ。 */
   private haltedByToolCap: boolean = false;
   /** ユーザーが明示的に停止を要求したか（デバウンス待機中・ツール実行中の停止を成立させるため） */
@@ -75,6 +81,7 @@ export class Engine {
     translator: Translator,
     registry: ToolRegistry,
     extraContext: Record<string, any> = {},
+    wakePolicy: WakePolicy = WAKE_POLICY,
   ) {
     this.state = state;
     this.projector = projector;
@@ -82,6 +89,7 @@ export class Engine {
     this.translator = translator;
     this.registry = registry;
     this.extraContext = extraContext;
+    this.wakePolicy = wakePolicy;
 
     // Historyの変更を監視し、非同期でトリガーする
     this.state.history.on('change', (payload) => this._onHistoryChange(payload));
@@ -141,31 +149,37 @@ export class Engine {
       // 自分自身の思考更新はトリガー要因にしない
       if (turn.role === 'model') return;
 
-      // どんな履歴の変更であれ、一旦保留イベントとしてスケジュールする
+      // どんな履歴の変更であれ、一旦保留イベントとして覚える。
+      // 起こす変更か（trigger_llm）どうかは、予約のときではなく評価（_evaluateWakeUp）で見る。
+      // 起こさない変更でも評価は要る —— halt した結果や [Pending] の枠のあとに
+      // loop_stop(idle) を出さないと、画面の Processing が残り続ける。
       this.hasPendingEvents = true;
-      if (turn.meta?.wake === 'fast') {
-        this.pendingWake = true;
-        this._schedulePing(FAST_WAKE_DEBOUNCE_MS);
-      } else if (turn.meta?.trigger_llm === true) {
-        this.pendingWake = true;
-        this._schedulePing(WAKE_DEBOUNCE_MS);
-      } else {
-        // 起こさない変更（halt した結果・[Pending] の枠・trigger_llm:false のログ）は待つ理由が無い。
-        // 早く評価して loop_stop(idle) を出す（出さないと画面の Processing が 10 秒残る）。
-        // ただしこれは起こす予約と競わせない —— 締切として持つと、あとから来た結果の 10 秒を潰す
-        // （配信後に踏んだ: [Pending] の枠が 1.5 秒の締切になり、遅いツールを待たなかった）
-        this._scheduleSettle();
-      }
+      if (this._canOvertakeTools(turn)) this.overtakeRequested = true;
+      this._scheduleEvaluation();
     }
   }
 
-  private _schedulePing(delay: number = WAKE_DEBOUNCE_MS): void {
-    // 実行中に来た予約は finally で拾う。締切だけ手前へ寄せておく
-    if (this.isRunning) {
-      const deadline = Date.now() + delay;
-      if (this.debounceDeadline === 0 || deadline < this.debounceDeadline) this.debounceDeadline = deadline;
-      return;
-    }
+  /**
+   * この変更は、自分が投げたツールの結果を待たずに起きてよいものか。
+   * 方針は配布物ごとの定数（config/wake_policy.ts）。判定はここ 1 か所に置く。
+   */
+  private _canOvertakeTools(turn: Turn): boolean {
+    // 起こさない変更（置くだけの発言・halt した結果・trigger_llm:false のログ・自分が積む [Pending] の枠）は
+    // 追い越す理由にならない。束が返ってから評価する（そこで loop_stop(idle) が出る）
+    if (turn.meta?.trigger_llm !== true) return false;
+    if (this.wakePolicy === 'realtime') return true;
+    // 'batch': 利用者の発言だけは追い越せる。ツールの結果・デーモンの通知は束の終わりを待つ
+    return turn.role === 'user';
+  }
+
+  /**
+   * 履歴の評価（→ 起床）を予約する。予約が既にあれば何もしない（締切は先着で決まる）。
+   * 実行中なら finally が、ツールを待っているなら束の最後の結果が、それぞれ拾う。
+   */
+  private _scheduleEvaluation(): void {
+    if (this.isRunning) return;
+    // 自分のツールが返るのを待っている。追い越してよい変更が来ていなければ、束の終わりを待つ
+    if (this.outstandingTools > 0 && !this.overtakeRequested) return;
     // ユーザーが停止を要求した後は、実行中だったツールの結果更新などで
     // ループが自動的に再開してしまわないようにする
     if (this.stopRequested) return;
@@ -174,41 +188,14 @@ export class Engine {
     // 上げただけで停止中のループが不意に走り出す（実測）。
     // 起床を予約する経路はここ1箇所なので、判定もここに集約する。
     if (this.haltedByToolCap) return;
+    if (this.debounceTimer) return;
 
-    // 起こす予約が立つので、短い評価は要らない
-    if (this.settleTimer) {
-      clearTimeout(this.settleTimer);
-      this.settleTimer = null;
-    }
-
-    // 早い締切が勝つ。10 秒待ちの途中に利用者が発言したら 1.5 秒で起きる。
-    // 逆に、発言のあとに来たツール結果で締切を後ろへ押さない
-    const now = Date.now();
-    const deadline = now + delay;
-    if (this.debounceTimer && this.debounceDeadline !== 0 && this.debounceDeadline <= deadline) return;
-    if (this.debounceTimer) clearTimeout(this.debounceTimer);
-
-    this.debounceDeadline = deadline;
     this.debounceTimer = setTimeout(() => {
       this.debounceTimer = null;
-      this.debounceDeadline = 0;
       this.hasPendingEvents = false;
-      this.pendingWake = false;
+      this.overtakeRequested = false;
       this._ping();
-    }, delay);
-  }
-
-  /** 起こさない変更だけのとき、短く待って評価する。起こす予約が生きていれば何もしない */
-  private _scheduleSettle(): void {
-    if (this.isRunning || this.stopRequested || this.haltedByToolCap) return;
-    if (this.debounceTimer || this.settleTimer) return;
-    this.settleTimer = setTimeout(() => {
-      this.settleTimer = null;
-      if (this.debounceTimer || this.isRunning) return;
-      this.hasPendingEvents = false;
-      this.pendingWake = false;
-      this._ping();
-    }, FAST_WAKE_DEBOUNCE_MS);
+    }, WAKE_DEBOUNCE_MS);
   }
 
   /**
@@ -242,7 +229,6 @@ export class Engine {
     const turnMeta: TurnMeta = {
       type: TurnType.USER_INPUT,
       trigger_llm: true,
-      wake: 'fast', // 利用者の発言は待たせない
       ...meta,
     };
     const turn = this.state.history.append('user', inputContent, turnMeta);
@@ -422,18 +408,9 @@ export class Engine {
     } finally {
       this.isRunning = false;
       this.abortController = null;
-      if (this.hasPendingEvents) {
-        // 実行中に寄せておいた締切を引き継ぐ。起こす変更が無ければ短い評価だけ
-        const carried = this.debounceDeadline;
-        this.debounceDeadline = 0;
-        if (carried > 0 || this.pendingWake) {
-          this._schedulePing(carried > 0 ? Math.max(0, carried - Date.now()) : WAKE_DEBOUNCE_MS);
-        } else {
-          this._scheduleSettle();
-        }
-      } else {
-        this.debounceDeadline = 0;
-      }
+      // 実行中に来た変更を拾う。ツールを投げた直後は outstandingTools > 0 なので、
+      // 追い越せる変更（方針次第）が来ていなければ、ここでは予約されず、束の最後の結果が拾う
+      if (this.hasPendingEvents) this._scheduleEvaluation();
     }
   }
 
@@ -470,6 +447,18 @@ export class Engine {
       return [...combinedResults].sort((a, b) => (a.originalIndex ?? 0) - (b.originalIndex ?? 0));
     };
 
+    // 束の本数を先に数える（枠を積む前に）。全部返るまで待つかどうかは方針（wakePolicy）が決める。
+    // 世代（batchSerial）は stop() で見捨てた束の遅い結果を数えないため
+    const batch = ++this.batchSerial;
+    this.outstandingTools = actions.length;
+    /** 1 本返った（または走らせなかった）。この束のものなら本数を減らす */
+    const settleOne = () => {
+      if (batch !== this.batchSerial) return;
+      this.outstandingTools = Math.max(0, this.outstandingTools - 1);
+      // 履歴を更新しない経路（停止で走らせなかった）でも、待っていた変更を取り残さない
+      if (this.outstandingTools === 0 && this.hasPendingEvents) this._scheduleEvaluation();
+    };
+
     const sharedTurn = this.state.history.append('system', getSortedResults(), {
       type: TurnType.TOOL_EXECUTION,
       trigger_llm: false,
@@ -477,11 +466,10 @@ export class Engine {
 
     const sharedTurnId = sharedTurn.id;
 
-    /** 1 つでも 'fast' を名乗った結果があれば、そのターンは速く起こす（名乗りはツール側） */
-    const calcTurnWake = (): TurnMeta => {
-      const fast = combinedResults.some((r) => r.output.wake === 'fast');
-      return fast ? { wake: 'fast' } : {};
-    };
+    // 【重要】[Pending] の枠も、この時点で画面へ出す。
+    // 出さないと、枠は最初の結果が届くまで描かれず、その前に次のモデルの発話が始まると
+    // 画面では MODEL → USER → MODEL → SYSTEM の順になる（履歴の中の順は正しいのに）。T-0326
+    this._emit('turn_end', { role: 'system', turn: sharedTurn });
 
     const calcTurnTrigger = () => {
       let willTrigger = false;
@@ -508,6 +496,7 @@ export class Engine {
       // this.abortController は既に null 化されている可能性があるため、
       // 捕捉済みの signal と停止フラグの両方を見る。
       if (signal?.aborted || this.stopRequested) {
+        settleOne();
         return;
       }
 
@@ -521,9 +510,10 @@ export class Engine {
           combinedResults[index].output = result;
         }
 
+        // 本数を減らしてから履歴を更新する。最後の 1 本なら、この更新の変更通知が起床を予約する
+        settleOne();
         const updatedTurn = this.state.history.update(sharedTurnId, getSortedResults(), {
           trigger_llm: calcTurnTrigger(),
-          ...calcTurnWake(),
         });
 
         if (updatedTurn) {
@@ -536,10 +526,10 @@ export class Engine {
           trigger_llm: true,
         };
 
+        settleOne();
         const updatedTurn = this.state.history.update(sharedTurnId, getSortedResults(), {
           type: TurnType.ERROR,
           trigger_llm: calcTurnTrigger(),
-          ...calcTurnWake(),
         });
 
         if (updatedTurn) {
@@ -586,13 +576,12 @@ export class Engine {
       clearTimeout(this.debounceTimer);
       this.debounceTimer = null;
     }
-    if (this.settleTimer) {
-      clearTimeout(this.settleTimer);
-      this.settleTimer = null;
-    }
-    this.debounceDeadline = 0;
-    this.pendingWake = false;
     this.hasPendingEvents = false;
+    this.overtakeRequested = false;
+    // 走っている束は見捨てる。遅れて届いた結果は履歴には入るが、本数には数えず、
+    // 利用者が次に発言するまで起こさない（stopRequested が予約を止める）
+    this.batchSerial++;
+    this.outstandingTools = 0;
 
     if (this.abortController) {
       // ストリーミング中: abort() 経由で AbortError が発生し、catch側が loop_stop を emit する
