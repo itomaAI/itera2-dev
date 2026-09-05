@@ -1,10 +1,14 @@
 /**
  * src/core/control/tools/fsToolsStub.test.ts
- * スタブ（中身がまだ手元に無いファイル）が道具から見えること（T-0351）
+ * スタブが道具から見えること（T-0351）と、実体の有無と管轄が直交すること（T-0352）
  *
  * これが無いと袋小路になる: `search` は「スタブは飛ばした。file_info で見よ」と言うのに、
  * その file_info に印が出ていなかった。中身が手元にあるのか無いのかは、
  * 読む前に判断を変える情報なので、AI から見えていなければならない。
+ *
+ * 軸は 2 つある。混ぜると「取りに行ける stub」と「取りに行けない stub（孤児）」を区別できない。
+ *   実体があるか（syncState） … ファイル自身の性質。node.meta に保存される
+ *   誰の管轄か（syncProvider） … 保存しない。stat が毎回マウント表から導く
  */
 
 import { describe, it, expect } from 'vitest';
@@ -43,25 +47,56 @@ function ctxWithList(files: any[]) {
   return { vfs: { listFiles: () => files } } as any;
 }
 
-describe('file_info: スタブかどうかが出る', () => {
-  it('スタブなら stub と、意味（中身はまだ手元に無い）が出る', async () => {
+const PROVIDER = { mountPath: 'local/yachiyo/ws_itera', pid: 'local_bridge' };
+
+describe('file_info: 実体の有無と管轄を分けて出す', () => {
+  it('管轄下のスタブ … 実体が無いことと、取りに行ける相手が出る', async () => {
+    const res = await tools().file_info.impl(
+      { path: 'x' },
+      ctxWithStat(statOf({ syncState: 'stub', syncProvider: PROVIDER })),
+    );
+    expect(res.log).toContain('Sync: stub (metadata only; the content is not in the VFS yet)');
+    expect(res.log).toContain('provider=local_bridge (mount=/local/yachiyo/ws_itera)');
+    expect(res.log).not.toContain('orphaned');
+  });
+
+  it('管轄下で実体もある … local copy と管轄が出る（直交の証明）', async () => {
+    const res = await tools().file_info.impl({ path: 'x' }, ctxWithStat(statOf({ syncProvider: PROVIDER })));
+    expect(res.log).toContain('Sync: local copy / provider=local_bridge');
+    expect(res.log).not.toContain('stub');
+  });
+
+  it('孤児のスタブ … 取りに行けないことを言う（黙って stub とだけ言わない）', async () => {
     const res = await tools().file_info.impl({ path: 'x' }, ctxWithStat(statOf({ syncState: 'stub' })));
     expect(res.log).toContain('Sync: stub');
-    expect(res.log).toContain('not in the VFS yet');
+    expect(res.log).toContain('orphaned stub');
+    expect(res.log).toContain('can never be fetched');
   });
 
-  it('実体があるなら synced', async () => {
-    const res = await tools().file_info.impl({ path: 'x' }, ctxWithStat(statOf({ syncState: 'synced' })));
-    expect(res.log).toContain('Sync: synced');
-  });
-
-  it('同期の対象でないファイルには余計な行を足さない', async () => {
+  it('管轄外の素のファイルには余計な行を足さない', async () => {
     const res = await tools().file_info.impl({ path: 'x' }, ctxWithStat(statOf()));
     expect(res.log).not.toContain('Sync:');
+    expect(res.log).not.toContain('Mount point:');
+  });
+
+  it("死んだ値 'synced' を印字しない（本番コードでファイルに付くことは無い）", async () => {
+    const res = await tools().file_info.impl({ path: 'x' }, ctxWithStat(statOf({ syncState: 'synced' })));
+    expect(res.log).not.toContain('Sync: synced');
+  });
+
+  it('マウント地点そのものには、その旨を足す', async () => {
+    const res = await tools().file_info.impl(
+      { path: 'x' },
+      ctxWithStat(statOf({ syncProvider: PROVIDER, isMountPoint: true })),
+    );
+    expect(res.log).toContain('Mount point: yes');
   });
 
   it('スタブでも大きさと日付はそのまま出る（0 バイト扱いにしない）', async () => {
-    const res = await tools().file_info.impl({ path: 'x' }, ctxWithStat(statOf({ syncState: 'stub' })));
+    const res = await tools().file_info.impl(
+      { path: 'x' },
+      ctxWithStat(statOf({ syncState: 'stub', syncProvider: PROVIDER })),
+    );
     expect(res.log).toContain('Size: 721 bytes');
     expect(res.log).toContain('2026-08-21T13:40:09');
   });

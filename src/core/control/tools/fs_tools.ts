@@ -296,12 +296,20 @@ export function registerFSTools(registry: ToolRegistry): void {
       log += `Created: ${new Date(stat.createdAt).toISOString()}\n`;
       log += `Updated: ${new Date(stat.updatedAt).toISOString()}\n`;
 
-      if (stat.syncState) {
-        log +=
-          stat.syncState === 'stub'
-            ? `Sync: stub (metadata only; the content is not in the VFS yet. Reading it fetches it from the provider.)\n`
-            : `Sync: ${stat.syncState}\n`;
+      // 2 つの軸を分けて出す（T-0352）:
+      //   実体があるか無いか（stub） … ファイル自身の性質
+      //   誰の管轄か（syncProvider） … 保存されず、問い合わせのたびにマウント表から導く
+      // 両方あって初めて「取りに行ける stub」と「取りに行けない stub（孤児）」を区別できる。
+      const isStub = stat.syncState === 'stub';
+      const prov = stat.syncProvider;
+      if (isStub || prov) {
+        const body = isStub ? 'stub (metadata only; the content is not in the VFS yet)' : 'local copy';
+        const owner = prov
+          ? `provider=${prov.pid} (mount=/${prov.mountPath})`
+          : 'no provider — the content can never be fetched (orphaned stub)';
+        log += `Sync: ${body} / ${owner}\n`;
       }
+      if (stat.isMountPoint) log += `Mount point: yes (a sync provider is attached here)\n`;
       if (stat.version !== undefined) log += `Version: ${stat.version}\n`;
       if (stat.hash) log += `Hash: ${stat.hash}\n`;
 

@@ -125,10 +125,21 @@ export interface VfsStat {
   mimeType?: string;
   version: number;
   hash?: string;
+  /**
+   * 実体が手元にあるか無いか（'stub' ＝ 無い）。**ファイル自身の性質**であり、node.meta に保存される。
+   * 「同期の管轄下か」とは直交する（そちらは syncProvider を見る）。
+   */
   syncState?: 'synced' | 'stub';
   flags: VfsNodeFlags;
   acl: AccessControlList;
   isMountPoint?: boolean;
+  /**
+   * この節点を担当する Sync Provider（居なければ undefined）。**保存しない。**
+   * 問い合わせのたびに ProviderManager のマウント表から導くので、
+   * デーモンが落ちた・マウントを外したときは次の問い合わせで自然に消える（T-0352）。
+   * 保存された印にすると、管轄が変わったあとも嘘が残る。
+   */
+  syncProvider?: { mountPath: string; pid: string };
 }
 
 export interface TreeNode {
