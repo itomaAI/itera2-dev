@@ -139,9 +139,10 @@ export class VfsService {
     }
 
     const node = this.nodeStore.getNode(id)!;
-    return {
+    const nodePath = this.pathResolver.getPathById(node.id);
+    const stat: VfsStat = {
       id: node.id,
-      path: this.pathResolver.getPathById(node.id),
+      path: nodePath,
       name: node.name,
       kind: node.kind,
       size: node.meta.size,
@@ -154,6 +155,21 @@ export class VfsService {
       flags: JSON.parse(JSON.stringify(node.flags)),
       acl: JSON.parse(JSON.stringify(node.acl)),
     };
+
+    // 「同期の管轄下か」は保存せず、ここで毎回導く（T-0352）。
+    // syncState（実体の有無）とは直交する量である。
+    //
+    // ★ getTree の isVirtual と違い、ルートマウント（mountPath === ''）も隠さない。
+    //   木では「全ディレクトリが該当して印の情報量がゼロになる」ため境界から先だけに印を付けるが、
+    //   stat は 1 件を名指しで問う場面なので、担当が居るかどうかを省くと
+    //   「取りに行ける stub」と「取りに行けない stub（孤児）」を区別できなくなる。
+    if (this.providerManager) {
+      if (this.providerManager.isMountPoint(nodePath)) stat.isMountPoint = true;
+      const info = this.providerManager.findProviderForPath(nodePath);
+      if (info) stat.syncProvider = { mountPath: info.mountPath, pid: info.pid };
+    }
+
+    return stat;
   }
 
   listFiles(principal: Principal, options: ListOptions & { path?: string } = {}): (string | VfsStat)[] {
