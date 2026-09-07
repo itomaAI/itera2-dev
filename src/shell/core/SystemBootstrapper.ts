@@ -49,6 +49,8 @@ import { HostGuestToolInvoker } from '../services/HostGuestToolInvoker';
 import { ProviderManager } from '../../core/vfs/ProviderManager';
 import { HistoryEventRecorder } from '../services/HistoryEventRecorder';
 import { SyncAdapterHost } from '../services/SyncAdapterHost';
+import { LocalReset } from '../../core/sys/LocalReset';
+import { VfsFsck } from '../../core/vfs/VfsFsck';
 
 export class SystemBootstrapper {
   public static async boot(): Promise<void> {
@@ -69,6 +71,9 @@ export class SystemBootstrapper {
     const dialogService = new DialogService();
     window.AppUI = dialogService;
 
+    // 起動失敗画面で「工場出荷状態に戻す」が押されていれば、DB 接続もデーモンも無いこの時点で消す（T-0381）。
+    await LocalReset.enforceAtBoot();
+
     // ==========================================
     // 1. VFS Subsystem Initialization
     // ==========================================
@@ -79,6 +84,23 @@ export class SystemBootstrapper {
     const vfs = new VfsService(nodeStore, contentStore, pathResolver, eventBus);
 
     await nodeStore.loadAll();
+
+    // 起動失敗画面で「修復して起動」が押されていれば、配信の書き直しより前にメタデータと実体の食い違いを直す（T-0381）。
+    if (LocalReset.consumeRepairRequest()) {
+      try {
+        const report = await new VfsFsck(nodeStore, contentStore).runRepair();
+        console.warn('[SystemBootstrapper] Repair before boot:', report);
+        LocalReset.setNotice(
+          report.totalErrorsFixed > 0 ? { kind: 'repaired', fixed: report.totalErrorsFixed } : { kind: 'repair_clean' },
+        );
+      } catch (e) {
+        console.error('[SystemBootstrapper] Repair before boot failed:', e);
+        LocalReset.setNotice({
+          kind: 'repair_failed',
+          reason: (e as { message?: string } | null)?.message || String(e),
+        });
+      }
+    }
 
     const initializer = new VfsInitializer(vfs, nodeStore, pathResolver);
     await initializer.initialize();
@@ -282,6 +304,26 @@ export class SystemBootstrapper {
     // ダッシュボードの起動
     const homePath = configManager.get('appearance')?.layout?.homePath || 'apps/home.html';
     await processManager.spawn({ path: homePath, show: true });
+
+    // 起動失敗画面からの消去・修復の結果を 1 度だけ伝える（黙って消すと障害に見える）
+    const resetNotice = LocalReset.consumeNotice();
+    if (resetNotice) {
+      const text = {
+        reset_done: ['この端末のデータを工場出荷状態に戻しました。', 'warning'],
+        reset_failed: [
+          `データの消去に失敗しました。他のタブを閉じてもう一度お試しください: ${(resetNotice as any).reason}`,
+          'error',
+        ],
+        repair_clean: ['修復を試みましたが、ファイルシステムに問題は見つかりませんでした。', 'info'],
+        repaired: [
+          `ファイルシステムを修復しました（${(resetNotice as any).fixed} 件）。拾ったものは .lost+found にあります。`,
+          'warning',
+        ],
+        repair_failed: [`修復に失敗しました: ${(resetNotice as any).reason}`, 'error'],
+      }[resetNotice.kind] as [string, string];
+      logger.log('system', { action: 'local_reset', message: `${resetNotice.kind}: ${text[0]}` });
+      dialogService.notify(text[0], text[1]);
+    }
 
     logger.log('system', {
       action: 'boot',

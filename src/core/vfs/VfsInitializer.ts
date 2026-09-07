@@ -20,9 +20,18 @@ export class VfsInitializer {
     this.pathResolver = pathResolver;
   }
 
+  /**
+   * 直前の initialize() で書けなかった配信ファイル。起動は続けるが、後から見られるように残す（T-0381）。
+   * 1 件の OPFS 書き込み失敗（別タブとの競合・サイトデータの消去）で OS が起動しないのをやめた。
+   */
+  public failures: Array<{ path: string; error: unknown }> = [];
+
   async initialize(): Promise<void> {
     let deployedCount = 0;
     let updatedCount = 0;
+    const failures: Array<{ path: string; error: unknown }> = [];
+    // ファイルの実体（OPFS）が 1 つでも書けたか。ディレクトリは IndexedDB だけなので数えない。
+    let writtenFiles = 0;
 
     // OSの初回起動判定：'system' ディレクトリが存在するか
     const isFirstBoot = !this.vfs.exists(SYSTEM_PRINCIPAL, 'system');
@@ -74,70 +83,95 @@ export class VfsInitializer {
       const isDir = key.endsWith('/');
       const cleanPath = isDir ? key.slice(0, -1) : key;
 
-      // ★ 追加: system/upstream/ 配下に「常に最新の公式リリースファイル」を強制展開する
-      // これにより、ユーザーやAIがアプリを改造して壊してしまっても、常に最新の公式コード（APIの使い方）を参照できる
-      const upstreamPath = `system/upstream/${cleanPath}`;
-      if (isDir) {
-        if (!this.vfs.exists(SYSTEM_PRINCIPAL, upstreamPath)) {
-          await this.vfs.mkdir(SYSTEM_PRINCIPAL, upstreamPath);
-        }
-      } else {
-        let shouldWrite = true;
-        if (this.vfs.exists(SYSTEM_PRINCIPAL, upstreamPath)) {
-          try {
-            // パフォーマンス最適化: 既存ファイルと内容が完全に一致する場合は上書き(イベント発火)をスキップ
-            const currentContent = await this.vfs.readFile(SYSTEM_PRINCIPAL, upstreamPath, { bypassFetch: true });
-            if (currentContent === content) {
-              shouldWrite = false;
+      // 1 件ごとに区切る。upstream/ の写しや既定ファイルが 1 つ書けないだけで起動全体を止めない（T-0381）。
+      // 失敗は failures に残して次へ進む。致命かどうかはループの後で決める。
+      try {
+        // ★ 追加: system/upstream/ 配下に「常に最新の公式リリースファイル」を強制展開する
+        // これにより、ユーザーやAIがアプリを改造して壊してしまっても、常に最新の公式コード（APIの使い方）を参照できる
+        const upstreamPath = `system/upstream/${cleanPath}`;
+        if (isDir) {
+          if (!this.vfs.exists(SYSTEM_PRINCIPAL, upstreamPath)) {
+            await this.vfs.mkdir(SYSTEM_PRINCIPAL, upstreamPath);
+          }
+        } else {
+          let shouldWrite = true;
+          if (this.vfs.exists(SYSTEM_PRINCIPAL, upstreamPath)) {
+            try {
+              // パフォーマンス最適化: 既存ファイルと内容が完全に一致する場合は上書き(イベント発火)をスキップ
+              const currentContent = await this.vfs.readFile(SYSTEM_PRINCIPAL, upstreamPath, { bypassFetch: true });
+              if (currentContent === content) {
+                shouldWrite = false;
+              }
+            } catch (e) {
+              // 読み込みに失敗した場合は安全のため上書きする
             }
-          } catch (e) {
-            // 読み込みに失敗した場合は安全のため上書きする
+          }
+
+          if (shouldWrite) {
+            await this.vfs.writeFile(SYSTEM_PRINCIPAL, upstreamPath, content, {
+              overwrite: true,
+              system: true,
+            });
           }
         }
 
-        if (shouldWrite) {
-          await this.vfs.writeFile(SYSTEM_PRINCIPAL, upstreamPath, content, {
-            overwrite: true,
-            system: true,
-          });
+        // 領域の判定
+        const isSystemArea = cleanPath.startsWith('system/');
+        const isConfigArea = cleanPath.startsWith('system/config/') || cleanPath.startsWith('system/registry/');
+
+        // 初回起動ではなく、かつシステム領域外のファイル・ディレクトリは展開をスキップ（ユーザーの自由な削除を尊重）
+        if (!isFirstBoot && !isSystemArea) {
+          continue;
         }
+
+        const id = this.pathResolver.getIdByPath(cleanPath);
+
+        if (id === undefined) {
+          // パスが存在しない場合は新規作成
+          if (isDir) {
+            await this.vfs.mkdir(SYSTEM_PRINCIPAL, cleanPath);
+          } else {
+            await this.vfs.writeFile(SYSTEM_PRINCIPAL, cleanPath, content, {
+              system: isSystemArea,
+            });
+          }
+          deployedCount++;
+          if (!isDir) writtenFiles++;
+        } else if (id !== null && !isDir) {
+          const node = this.nodeStore.getNode(id);
+
+          // system配下であっても、configやregistryはユーザーデータ/動的データなので強制上書きから除外する
+          const isForceUpdateArea = isSystemArea && !isConfigArea;
+
+          // autoUpdate が有効、かつ強制アップデート対象のファイル（システムライブラリ等）の場合のみ上書きする
+          if (node && node.kind === 'file' && isForceUpdateArea && autoUpdate) {
+            await this.vfs.writeFile(SYSTEM_PRINCIPAL, cleanPath, content, {
+              overwrite: true,
+              system: true,
+            });
+            updatedCount++;
+            writtenFiles++;
+          }
+        }
+      } catch (e) {
+        failures.push({ path: cleanPath, error: e });
+        console.warn(`[VfsInitializer] Could not reconcile '${cleanPath}'. Continuing with the rest.`, e);
       }
+    }
 
-      // 領域の判定
-      const isSystemArea = cleanPath.startsWith('system/');
-      const isConfigArea = cleanPath.startsWith('system/config/') || cleanPath.startsWith('system/registry/');
+    this.failures = failures;
 
-      // 初回起動ではなく、かつシステム領域外のファイル・ディレクトリは展開をスキップ（ユーザーの自由な削除を尊重）
-      if (!isFirstBoot && !isSystemArea) {
-        continue;
-      }
-
-      const id = this.pathResolver.getIdByPath(cleanPath);
-
-      if (id === undefined) {
-        // パスが存在しない場合は新規作成
-        if (isDir) {
-          await this.vfs.mkdir(SYSTEM_PRINCIPAL, cleanPath);
-        } else {
-          await this.vfs.writeFile(SYSTEM_PRINCIPAL, cleanPath, content, {
-            system: isSystemArea,
-          });
-        }
-        deployedCount++;
-      } else if (id !== null && !isDir) {
-        const node = this.nodeStore.getNode(id);
-
-        // system配下であっても、configやregistryはユーザーデータ/動的データなので強制上書きから除外する
-        const isForceUpdateArea = isSystemArea && !isConfigArea;
-
-        // autoUpdate が有効、かつ強制アップデート対象のファイル（システムライブラリ等）の場合のみ上書きする
-        if (node && node.kind === 'file' && isForceUpdateArea && autoUpdate) {
-          await this.vfs.writeFile(SYSTEM_PRINCIPAL, cleanPath, content, {
-            overwrite: true,
-            system: true,
-          });
-          updatedCount++;
-        }
+    if (failures.length > 0) {
+      console.warn(
+        `[VfsInitializer] ${failures.length} entries could not be written (deployed: ${deployedCount}, updated: ${updatedCount}).`,
+        failures.map((f) => f.path),
+      );
+      // 初回起動でファイルが 1 件も書けていないなら、この先で system/ を読む処理が全部落ちる。
+      // ここで止めた方が原因（最初の失敗）が画面に出る。
+      if (isFirstBoot && writtenFiles === 0) {
+        const first = failures[0];
+        const reason = (first.error as { message?: string } | null)?.message || String(first.error);
+        throw new Error(`VFS initialization failed: nothing could be written (first: ${first.path}: ${reason})`);
       }
     }
 
