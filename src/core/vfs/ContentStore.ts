@@ -5,12 +5,42 @@
 
 import type { ContentRef } from './types';
 
+/**
+ * 一過性とみなして再試行する OPFS の例外（T-0380）。
+ *
+ * - InvalidStateError: `createWritable()` は `<key>.crswap` に書いて `close()` で本体と入れ替える。
+ *   その間に本体や swap が別の書き手（同じオリジンの別タブ、サイトデータの消去で消えたルート）に
+ *   触られると、Chromium はこの名前で失敗する。定型文は
+ *   「An operation that depends on state cached in an interface object was made but the state had
+ *   changed since it was read from disk.」（実例: 2026-09-07 WB 中村さんの起動エラー）
+ * - NoModificationAllowedError: 同じ実体に排他の書き手がいる（別タブ）。
+ *
+ * どちらも次の瞬間には解けている相手なので、ハンドルを取り直して数回だけやり直す。
+ * それ以外（QuotaExceededError・TypeError 等）はやり直しても変わらないので即座に投げる。
+ */
+export function isTransientOpfsError(e: unknown): boolean {
+  const name = (e as { name?: unknown } | null | undefined)?.name;
+  return name === 'InvalidStateError' || name === 'NoModificationAllowedError';
+}
+
+/** 再試行の間隔（ms）。長さが再試行の回数。合計でも 250ms なので起動を目に見えて遅くしない。 */
+export const OPFS_WRITE_RETRY_DELAYS_MS: readonly number[] = [50, 200];
+
+export interface ContentStoreOptions {
+  /** 試験用。再試行の間隔を差し替える（`[]` で再試行なし）。 */
+  retryDelaysMs?: readonly number[];
+}
+
+const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+
 export class ContentStore {
   private useOpfs: boolean = false;
   private rootHandlePromise: Promise<FileSystemDirectoryHandle> | null = null;
   private memoryStore: Map<string, Blob> = new Map();
+  private readonly retryDelaysMs: readonly number[];
 
-  constructor() {
+  constructor(options: ContentStoreOptions = {}) {
+    this.retryDelaysMs = options.retryDelaysMs ?? OPFS_WRITE_RETRY_DELAYS_MS;
     if (typeof navigator !== 'undefined' && navigator.storage && navigator.storage.getDirectory) {
       this.useOpfs = true;
       this.rootHandlePromise = navigator.storage.getDirectory();
@@ -37,19 +67,43 @@ export class ContentStore {
       return { backend, key };
     }
 
-    try {
-      const root = await this.rootHandlePromise!;
-      const fileHandle = await root.getFileHandle(key, { create: true });
-      const writable = await fileHandle.createWritable();
+    let lastError: any;
+    for (let attempt = 0; attempt <= this.retryDelaysMs.length; attempt++) {
+      let writable: FileSystemWritableFileStream | null = null;
+      try {
+        if (attempt > 0) {
+          await sleep(this.retryDelaysMs[attempt - 1]);
+          // ルートのハンドルも取り直す。サイトデータの消去でルートごと消えていると、
+          // 古いハンドルはどれだけ待っても使えない。
+          this.rootHandlePromise = navigator.storage.getDirectory();
+        }
+        const root = await this.rootHandlePromise!;
+        const fileHandle = await root.getFileHandle(key, { create: true });
+        writable = await fileHandle.createWritable();
 
-      await writable.write(content as any);
-      await writable.close();
+        await writable.write(content as any);
+        await writable.close();
 
-      return { backend, key };
-    } catch (e: any) {
-      console.error(`[ContentStore] Failed to write file to OPFS: ${key}`, e);
-      throw new Error(`OPFS Write Error: ${e.message || String(e)}`);
+        return { backend, key };
+      } catch (e: any) {
+        lastError = e;
+        // 開いたまま捨てると swap ファイルが残る。失敗しても構わない。
+        if (writable) {
+          try {
+            await writable.abort();
+          } catch {
+            /* noop */
+          }
+        }
+        if (!isTransientOpfsError(e) || attempt === this.retryDelaysMs.length) break;
+        console.warn(
+          `[ContentStore] Transient OPFS error on ${key} (attempt ${attempt + 1}/${this.retryDelaysMs.length + 1}). Retrying.`,
+          e,
+        );
+      }
     }
+    console.error(`[ContentStore] Failed to write file to OPFS: ${key}`, lastError);
+    throw new Error(`OPFS Write Error: ${lastError?.message || String(lastError)}`);
   }
 
   async readText(ref: ContentRef): Promise<string> {
