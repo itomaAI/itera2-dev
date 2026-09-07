@@ -50,6 +50,7 @@ import { ProviderManager } from '../../core/vfs/ProviderManager';
 import { HistoryEventRecorder } from '../services/HistoryEventRecorder';
 import { SyncAdapterHost } from '../services/SyncAdapterHost';
 import { StorageLossGuard } from '../../core/sys/StorageLossGuard';
+import { instanceGuard } from '../../core/sys/InstanceGuard';
 import { LocalReset } from '../../core/sys/LocalReset';
 import { VfsFsck } from '../../core/vfs/VfsFsck';
 
@@ -139,7 +140,7 @@ export class SystemBootstrapper {
 
     // 動作中にブラウザのデータが消されたら、全プロセス（デーモンを含む）を止めてから読み込み直す。
     // 古い在庫のまま走らせない（T-0383。Itera にはクラウドが無いので消えたものは戻らない）。
-    StorageLossGuard.onTrip(() => {
+    const haltAllProcesses = () => {
       for (const pid of Array.from(processManager.processes.keys())) {
         try {
           processManager.kill(pid);
@@ -147,7 +148,12 @@ export class SystemBootstrapper {
           /* 止められないものは放置して読み込み直す */
         }
       }
-    });
+    };
+    StorageLossGuard.onTrip(haltAllProcesses);
+
+    // 別のタブが「Use this tab」を押したら、全プロセスを止めて鍵を渡し、読み込み直して待機中のタブになる（T-0384）。
+    // 覆いの文は部品の既定（英語）のまま。
+    instanceGuard.onHandover(haltAllProcesses);
     nodeStore.setStorageLossHandler((reason) => void StorageLossGuard.trip(`vfs ${reason}`));
     history.setStorageLossHandler((reason) => void StorageLossGuard.trip(`history ${reason}`));
     const uriRouter = new UriRouter('open');
