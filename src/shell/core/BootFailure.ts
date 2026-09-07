@@ -45,9 +45,14 @@ function confirmed(action: BootFailureAction): boolean {
 
 export function renderBootFailure(loader: HTMLElement, error: unknown, view: BootFailureView): void {
   const failedText = view.failedText ?? ((label: string, reason: string) => `[${label}] failed: ${reason}`);
-  loader.classList.remove('flex-col', 'items-center', 'justify-center');
-  loader.classList.add('p-8', 'overflow-auto');
+  // #boot-loader は `flex flex-col items-center justify-center` で来る。`flex` を残すと子が横一列に並ぶ
+  // （T-0384 の実機で題・本文・ボタンが横に並んだ）。縦の文書として組み直す。
+  loader.classList.remove('flex', 'flex-col', 'items-center', 'justify-center');
+  loader.classList.add('block', 'p-8', 'overflow-auto');
   loader.replaceChildren();
+
+  const column = document.createElement('div');
+  column.className = 'max-w-2xl mx-auto';
 
   const title = document.createElement('div');
   title.className = 'text-error font-bold mb-4 text-xl';
@@ -64,7 +69,7 @@ export function renderBootFailure(loader: HTMLElement, error: unknown, view: Boo
   hint.textContent = view.hint;
 
   const actions = document.createElement('div');
-  actions.className = 'mt-6 flex flex-col gap-4 max-w-xl';
+  actions.className = 'mt-6 flex flex-col gap-4';
 
   for (const action of view.actions) {
     const wrap = document.createElement('div');
@@ -94,5 +99,6 @@ export function renderBootFailure(loader: HTMLElement, error: unknown, view: Boo
     actions.appendChild(wrap);
   }
 
-  loader.append(title, message, hint, actions);
+  column.append(title, message, hint, actions);
+  loader.append(column);
 }

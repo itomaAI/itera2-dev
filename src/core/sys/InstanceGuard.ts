@@ -106,15 +106,20 @@ export class InstanceGuard {
    */
   async claim(): Promise<ClaimResult> {
     const locks = this.locks;
-    if (!locks) return 'unsupported';
+    if (!locks) {
+      console.info('[InstanceGuard] unsupported (no Web Locks). Running without the single-instance guard.');
+      return 'unsupported';
+    }
     return new Promise<ClaimResult>((resolve) => {
       locks
         .request(LOCK_NAME, { ifAvailable: true }, (lock) => {
           if (!lock) {
+            console.info('[InstanceGuard] held by another tab. Not booting.');
             resolve('held');
             return;
           }
           this.startHolding();
+          console.info('[InstanceGuard] acquired. This tab is the instance.');
           resolve('acquired');
           return this.holdUntilReleased();
         })
