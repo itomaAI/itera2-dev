@@ -50,6 +50,8 @@ import { ProviderManager } from '../../core/vfs/ProviderManager';
 import { HistoryEventRecorder } from '../services/HistoryEventRecorder';
 import { SyncAdapterHost } from '../services/SyncAdapterHost';
 import { StorageLossGuard } from '../../core/sys/StorageLossGuard';
+import { LocalReset } from '../../core/sys/LocalReset';
+import { VfsFsck } from '../../core/vfs/VfsFsck';
 
 export class SystemBootstrapper {
   public static async boot(): Promise<void> {
@@ -70,6 +72,9 @@ export class SystemBootstrapper {
     const dialogService = new DialogService();
     window.AppUI = dialogService;
 
+    // 起動失敗画面で「工場出荷状態に戻す」が押されていれば、DB 接続もデーモンも無いこの時点で消す（T-0381）。
+    await LocalReset.enforceAtBoot();
+
     // ==========================================
     // 1. VFS Subsystem Initialization
     // ==========================================
@@ -80,6 +85,23 @@ export class SystemBootstrapper {
     const vfs = new VfsService(nodeStore, contentStore, pathResolver, eventBus);
 
     await nodeStore.loadAll();
+
+    // 起動失敗画面で「修復して起動」が押されていれば、配信の書き直しより前にメタデータと実体の食い違いを直す（T-0381）。
+    if (LocalReset.consumeRepairRequest()) {
+      try {
+        const report = await new VfsFsck(nodeStore, contentStore).runRepair();
+        console.warn('[SystemBootstrapper] Repair before boot:', report);
+        LocalReset.setNotice(
+          report.totalErrorsFixed > 0 ? { kind: 'repaired', fixed: report.totalErrorsFixed } : { kind: 'repair_clean' },
+        );
+      } catch (e) {
+        console.error('[SystemBootstrapper] Repair before boot failed:', e);
+        LocalReset.setNotice({
+          kind: 'repair_failed',
+          reason: (e as { message?: string } | null)?.message || String(e),
+        });
+      }
+    }
 
     const initializer = new VfsInitializer(vfs, nodeStore, pathResolver);
     await initializer.initialize();
@@ -309,6 +331,26 @@ export class SystemBootstrapper {
         'Browser storage was cleared while Itera was running, so it was reloaded. Local files and chat history on this device are gone unless you have a backup or a sync target.',
         'warning',
       );
+    }
+
+    // 起動失敗画面からの消去・修復の結果を 1 度だけ伝える（黙って消すと障害に見える）
+    const resetNotice = LocalReset.consumeNotice();
+    if (resetNotice) {
+      const text = {
+        reset_done: ['Local data has been reset to factory state.', 'warning'],
+        reset_failed: [
+          `Could not erase local data. Close other tabs and try again: ${(resetNotice as any).reason}`,
+          'error',
+        ],
+        repair_clean: ['Repair ran, but no problems were found in the file system.', 'info'],
+        repaired: [
+          `Repaired the file system (${(resetNotice as any).fixed} issues). Rescued files are in .lost+found.`,
+          'warning',
+        ],
+        repair_failed: [`Repair failed: ${(resetNotice as any).reason}`, 'error'],
+      }[resetNotice.kind] as [string, string];
+      logger.log('system', { action: 'local_reset', message: `${resetNotice.kind}: ${text[0]}` });
+      dialogService.notify(text[0], text[1]);
     }
 
     logger.log('system', {
