@@ -75,8 +75,31 @@ export class HistoryManager {
           db.createObjectStore(this.storeName);
         }
       };
-      request.onsuccess = (e) => resolve((e.target as any).result as IDBDatabase);
+      request.onsuccess = (e) => {
+        const db = (e.target as any).result as IDBDatabase;
+        this.watchStorageLoss(db);
+        resolve(db);
+      };
     });
+  }
+
+  private storageLossHandler: ((reason: 'close' | 'versionchange') => void) | null = null;
+
+  /** 動作中に DB が外から消された／閉じられたときの受け手（T-0383）。NodeStore と同じ形。 */
+  setStorageLossHandler(handler: (reason: 'close' | 'versionchange') => void): void {
+    this.storageLossHandler = handler;
+  }
+
+  private watchStorageLoss(db: IDBDatabase): void {
+    db.onclose = () => this.storageLossHandler?.('close');
+    db.onversionchange = () => {
+      try {
+        db.close();
+      } catch {
+        /* noop */
+      }
+      this.storageLossHandler?.('versionchange');
+    };
   }
 
   private async _saveToDB(): Promise<void> {

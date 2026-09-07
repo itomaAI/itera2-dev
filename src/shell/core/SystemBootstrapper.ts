@@ -49,6 +49,7 @@ import { HostGuestToolInvoker } from '../services/HostGuestToolInvoker';
 import { ProviderManager } from '../../core/vfs/ProviderManager';
 import { HistoryEventRecorder } from '../services/HistoryEventRecorder';
 import { SyncAdapterHost } from '../services/SyncAdapterHost';
+import { StorageLossGuard } from '../../core/sys/StorageLossGuard';
 
 export class SystemBootstrapper {
   public static async boot(): Promise<void> {
@@ -113,6 +114,20 @@ export class SystemBootstrapper {
 
     const translator = new Translator();
     const processManager = new ProcessManager(vfs, appRegistry, configManager);
+
+    // 動作中にブラウザのデータが消されたら、全プロセス（デーモンを含む）を止めてから読み込み直す。
+    // 古い在庫のまま走らせない（T-0383。Itera にはクラウドが無いので消えたものは戻らない）。
+    StorageLossGuard.onTrip(() => {
+      for (const pid of Array.from(processManager.processes.keys())) {
+        try {
+          processManager.kill(pid);
+        } catch {
+          /* 止められないものは放置して読み込み直す */
+        }
+      }
+    });
+    nodeStore.setStorageLossHandler((reason) => void StorageLossGuard.trip(`vfs ${reason}`));
+    history.setStorageLossHandler((reason) => void StorageLossGuard.trip(`history ${reason}`));
     const uriRouter = new UriRouter('open');
 
     // 同期アダプタのホスト。実際の読み込みは DesktopEnvironment（=描画スロットの供給元）
@@ -282,6 +297,19 @@ export class SystemBootstrapper {
     // ダッシュボードの起動
     const homePath = configManager.get('appearance')?.layout?.homePath || 'apps/home.html';
     await processManager.spawn({ path: homePath, show: true });
+
+    // 前回、動作中にブラウザのデータが消されて読み込み直したなら、1 度だけ伝える（黙って戻すと障害に見える）
+    const storageLoss = StorageLossGuard.consumeNotice();
+    if (storageLoss) {
+      logger.log('system', {
+        action: 'storage_loss',
+        message: `Reloaded after local storage was removed underneath a running session (${storageLoss}).`,
+      });
+      dialogService.notify(
+        'Browser storage was cleared while Itera was running, so it was reloaded. Local files and chat history on this device are gone unless you have a backup or a sync target.',
+        'warning',
+      );
+    }
 
     logger.log('system', {
       action: 'boot',

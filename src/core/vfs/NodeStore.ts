@@ -39,9 +39,36 @@ export class NodeStore {
       };
 
       request.onsuccess = (e) => {
-        resolve((e.target as any).result as IDBDatabase);
+        const db = (e.target as any).result as IDBDatabase;
+        this.watchStorageLoss(db);
+        resolve(db);
       };
     });
+  }
+
+  private storageLossHandler: ((reason: 'close' | 'versionchange') => void) | null = null;
+
+  /**
+   * 動作中に DB が外から消された／閉じられたときの受け手（T-0383）。
+   * 受け手は起動時に SystemBootstrapper が付ける。付ける前に届いた分は捨てる（起動中は起動の失敗として出る）。
+   */
+  setStorageLossHandler(handler: (reason: 'close' | 'versionchange') => void): void {
+    this.storageLossHandler = handler;
+  }
+
+  private watchStorageLoss(db: IDBDatabase): void {
+    // close: ブラウザが接続を強制的に閉じた（サイトデータの消去・容量逼迫での退避）
+    db.onclose = () => this.storageLossHandler?.('close');
+    // versionchange: 別の接続（別タブの消去）が DB を消そうとしている。
+    // こちらが閉じないと相手は blocked のまま。閉じてから知らせる。
+    db.onversionchange = () => {
+      try {
+        db.close();
+      } catch {
+        /* noop */
+      }
+      this.storageLossHandler?.('versionchange');
+    };
   }
 
   private async _tx(mode: IDBTransactionMode, callback: (store: IDBObjectStore) => IDBRequest): Promise<any> {
