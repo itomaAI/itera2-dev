@@ -25,6 +25,7 @@ const DOM_IDS = {
   INPUT_IMPORT: 'input-sys-import',
   BTN_RESET: 'btn-sys-reset',
   BTN_REPAIR: 'btn-sys-repair',
+  STORAGE_STATUS: 'sys-storage-status',
   BTN_BACKUP_INDEX: 'btn-sys-backup-index',
   BTN_RESTORE_INDEX: 'btn-sys-restore-index',
   INPUT_RESTORE_INDEX: 'input-sys-restore-index',
@@ -103,6 +104,29 @@ export class SystemModal {
 
   open() {
     if (this.els.MODAL) this.els.MODAL.classList.remove('hidden');
+    void this._refreshStorageStatus();
+  }
+
+  /**
+   * 永続化の可否（T-0383）。拒否のままだと、容量が逼迫したときにブラウザがこの端末のデータを丸ごと消しうる。
+   * Itera にはクラウドが無いので、見えるところに出しておく。
+   */
+  private async _refreshStorageStatus() {
+    const el = this.els.STORAGE_STATUS;
+    if (!el) return;
+    try {
+      const persisted = navigator.storage && navigator.storage.persisted ? await navigator.storage.persisted() : null;
+      if (persisted === true) {
+        el.textContent = "Storage persistence: granted — the browser will not evict this site's data.";
+      } else if (persisted === false) {
+        el.textContent =
+          "Storage persistence: not granted — the browser may evict this site's data under storage pressure. Export a backup regularly.";
+      } else {
+        el.textContent = 'Storage persistence: unknown.';
+      }
+    } catch {
+      el.textContent = 'Storage persistence: unknown.';
+    }
   }
 
   close() {
