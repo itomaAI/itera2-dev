@@ -15,6 +15,7 @@ import type { FileAssociationResolver, ResolvedApp } from '../../core/sys/FileAs
 import type { VfsEventBus } from '../../core/vfs/VfsEventBus';
 import type { ConfigManager } from '../../core/sys/ConfigManager';
 import { VfsEventFormatter } from '../../core/vfs/VfsEventFormatter';
+import { isProbablyText, TEXT_SNIFF_BYTES } from '../../core/sys/textDetect';
 
 /**
  * ターン終了時に待機表示をどうするか。── T-0028
@@ -186,8 +187,7 @@ export class EventOrchestrator {
             currentUri: fullUri,
           });
         } else if (resolvedApp.appId === 'HostEditor') {
-          const content = await this.vfs.readFile(this.desktop.getActivePrincipal(), targetPath);
-          this.desktop.modals.editor.open(targetPath, content);
+          await this._openInEditorOrViewer(targetPath);
           this._restoreAddressBar();
         } else if (resolvedApp.appId === 'HostMediaViewer') {
           const blob = await this.vfs.readBlob(this.desktop.getActivePrincipal(), targetPath);
@@ -233,8 +233,7 @@ export class EventOrchestrator {
     // metaos://edit/... (強制的にHostコードエディタで開く)
     this.uriRouter.register('edit', async (path: string) => {
       try {
-        const content = await this.vfs.readFile(this.desktop.getActivePrincipal(), path);
-        this.desktop.modals.editor.open(path, content);
+        await this._openInEditorOrViewer(path);
         this.desktop.closeMobileDrawers();
       } catch (e: any) {
         if (window.AppUI) window.AppUI.notify(`File not found: ${e.message}`, 'error');
@@ -294,6 +293,27 @@ export class EventOrchestrator {
   // ==========================================
   // 4. Explorer Panel Events
   // ==========================================
+  /**
+   * ホストのエディタで開く。ただし中身がテキストでなければ（xlsm のような関連付けの無いバイナリ）
+   * エディタに出さず、メディアビューワーの「プレビューなし・ダウンロード」へ回す（T-0389）。
+   * 名前（拡張子）の一覧は増やしても漏れるので、開く直前に先頭のバイト列で決める。
+   */
+  private async _openInEditorOrViewer(path: string): Promise<void> {
+    const principal = this.desktop.getActivePrincipal();
+    const blob = await this.vfs.readBlob(principal, path);
+    const head = new Uint8Array(await blob.slice(0, TEXT_SNIFF_BYTES).arrayBuffer());
+    if (isProbablyText(head)) {
+      this.desktop.modals.editor.open(path, await blob.text());
+      return;
+    }
+    this.desktop.modals.media.open(path, blob);
+    if (window.AppUI)
+      window.AppUI.notify(
+        'Not a text file, so it is not opened in the editor. Download it and open it with an app on your device.',
+        'info',
+      );
+  }
+
   private _bindExplorerEvents(): void {
     const explorer = this.desktop.panels.explorer;
 

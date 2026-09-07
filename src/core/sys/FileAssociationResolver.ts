@@ -159,13 +159,79 @@ export class FileAssociationResolver {
       html: 'text/html',
       css: 'text/css',
       js: 'application/javascript',
+      xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      xlsm: 'application/vnd.ms-excel.sheet.macroEnabled.12',
+      xls: 'application/vnd.ms-excel',
+      docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      doc: 'application/msword',
+      pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+      ppt: 'application/vnd.ms-powerpoint',
     };
     return map[ext] || 'application/octet-stream';
   }
 
+  /**
+   * 名前と MIME からバイナリと分かるもの（メニューと既定の解決。中身は読まない）。
+   * ここに無いものはエディタ側で先頭のバイト列を見て決める（`textDetect.ts`・T-0389）ので、一覧は目安でよい。
+   */
   private _isBinary(filename: string, mimeType: string): boolean {
-    if (mimeType.startsWith('image/') || mimeType === 'application/pdf' || mimeType === 'application/zip') return true;
+    if (
+      mimeType.startsWith('image/') ||
+      mimeType.startsWith('audio/') ||
+      mimeType.startsWith('video/') ||
+      mimeType.startsWith('font/') ||
+      mimeType === 'application/pdf' ||
+      mimeType === 'application/zip' ||
+      // Office の MIME は前方一致で（`application/vnd.` 全体は取らない —— Windows は csv に vnd.ms-excel を付けることがある）
+      mimeType.startsWith('application/vnd.openxmlformats-officedocument.') ||
+      mimeType.startsWith('application/vnd.ms-excel.sheet') ||
+      mimeType === 'application/msword'
+    )
+      return true;
     const ext = this._getExtension(filename);
-    return ['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'ico', 'pdf', 'zip', 'mp3', 'mp4'].includes(ext);
+    return [
+      'png',
+      'jpg',
+      'jpeg',
+      'gif',
+      'webp',
+      'svg',
+      'ico',
+      'bmp',
+      'pdf',
+      'zip',
+      '7z',
+      'rar',
+      'gz',
+      'tgz',
+      'bz2',
+      'xz',
+      'jar',
+      'xlsx',
+      'xlsm',
+      'xls',
+      'docx',
+      'doc',
+      'pptx',
+      'ppt',
+      'mp3',
+      'mp4',
+      'wav',
+      'ogg',
+      'm4a',
+      'webm',
+      'mov',
+      'avi',
+      'woff',
+      'woff2',
+      'ttf',
+      'otf',
+      'exe',
+      'dll',
+      'wasm',
+      'sqlite',
+      'db',
+      'bin',
+    ].includes(ext);
   }
 }
