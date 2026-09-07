@@ -6,6 +6,7 @@
 import type { ToolRegistry } from '../ToolRegistry';
 import type { VfsService } from '../../vfs/VfsService';
 import { SYSTEM_PRINCIPAL, USER_PRINCIPAL } from '../../vfs/types';
+import { isProbablyText, TEXT_SNIFF_BYTES } from '../../sys/textDetect';
 
 export function registerUITools(registry: ToolRegistry): void {
   const setId = 'system:ui';
@@ -64,8 +65,17 @@ export function registerUITools(registry: ToolRegistry): void {
             if (!reveal(path)) throw new Error(`Directory not found in explorer: ${path}`);
             return { log: `Revealed folder ${path} in Explorer`, ui: `📂 Opened folder` };
           } else if (resolvedApp.appId === 'HostEditor') {
-            const content = await context.vfs.readFile(USER_PRINCIPAL, path);
-            context.shell.modals.editor.open(path, content);
+            // 関連付けの無いバイナリ（xlsm など）はエディタに出さず、ビューワー（ダウンロード）へ（T-0389）
+            const blob = await context.vfs.readBlob(USER_PRINCIPAL, path);
+            const head = new Uint8Array(await blob.slice(0, TEXT_SNIFF_BYTES).arrayBuffer());
+            if (!isProbablyText(head)) {
+              context.shell.modals.media.open(path, blob);
+              return {
+                log: `Opened ${path} in Media Viewer (not text; no app is associated, download only)`,
+                ui: `📦 Opened Media (download)`,
+              };
+            }
+            context.shell.modals.editor.open(path, await blob.text());
             return {
               log: `Opened ${path} in Host Editor`,
               ui: `📝 Opened Editor`,

@@ -14,7 +14,9 @@ function tools() {
   return defs;
 }
 
-function ctx(kind: 'file' | 'directory', revealResult: boolean | undefined) {
+function ctx(kind: 'file' | 'directory', revealResult: boolean | undefined, content: Uint8Array | string = '') {
+  const edited: string[] = [];
+  const viewed: string[] = [];
   const revealed: string[] = [];
   const shell: any = {
     resolver: {
@@ -23,7 +25,10 @@ function ctx(kind: 'file' | 'directory', revealResult: boolean | undefined) {
         appName: 'x',
       }),
     },
-    modals: { editor: { open: () => {} } },
+    modals: {
+      editor: { open: (p: string) => edited.push(p) },
+      media: { open: (p: string) => viewed.push(p) },
+    },
   };
   if (revealResult !== undefined) {
     shell._revealInExplorer = (p: string) => {
@@ -31,8 +36,12 @@ function ctx(kind: 'file' | 'directory', revealResult: boolean | undefined) {
       return revealResult;
     };
   }
-  const vfs: any = { stat: (_p: any, path: string) => ({ name: path, kind, path }), readFile: async () => '' };
-  return { context: { shell, vfs }, revealed };
+  const vfs: any = {
+    stat: (_p: any, path: string) => ({ name: path, kind, path }),
+    readFile: async () => '',
+    readBlob: async () => new Blob([content as unknown as BlobPart]),
+  };
+  return { context: { shell, vfs }, revealed, edited, viewed };
 }
 
 describe('open: ディレクトリ', () => {
@@ -54,10 +63,21 @@ describe('open: ディレクトリ', () => {
   });
 
   it('ファイルは従来どおり（エディタへ）', async () => {
-    const { context, revealed } = ctx('file', true);
+    const { context, revealed, edited } = ctx('file', true, '# README\n');
     const res = await tools().open.impl({ path: 'README' }, context);
     expect(revealed).toEqual([]);
     expect(res.ui).toContain('📝');
+    expect(edited).toEqual(['README']);
+  });
+
+  it('関連付けの無いバイナリ（xlsm の zip 先頭）はエディタに出さず、ビューワー（ダウンロード）へ（T-0389）', async () => {
+    const zipHead = Uint8Array.from([0x50, 0x4b, 0x03, 0x04, 0x14, 0x00, 0x06, 0x00, 0x08, 0x00]);
+    const { context, edited, viewed } = ctx('file', true, zipHead);
+    const res = await tools().open.impl({ path: '個人/資料/見積.xlsm' }, context);
+    expect(edited).toEqual([]);
+    expect(viewed).toEqual(['個人/資料/見積.xlsm']);
+    expect(res.ui).toContain('📦');
+    expect(res.log).toMatch(/not text/);
   });
 });
 
