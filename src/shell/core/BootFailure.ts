@@ -28,6 +28,8 @@ export interface BootFailureView {
   /** エラー文の下に出す案内。 */
   hint: string;
   actions: BootFailureAction[];
+  /** 行動が失敗したときに本文へ足す文。既定は英語（Itera）。ミャク楽は日本語を差し込む。 */
+  failedText?: (label: string, reason: string) => string;
 }
 
 function errorText(error: unknown): string {
@@ -42,6 +44,7 @@ function confirmed(action: BootFailureAction): boolean {
 }
 
 export function renderBootFailure(loader: HTMLElement, error: unknown, view: BootFailureView): void {
+  const failedText = view.failedText ?? ((label: string, reason: string) => `[${label}] failed: ${reason}`);
   loader.classList.remove('flex-col', 'items-center', 'justify-center');
   loader.classList.add('p-8', 'overflow-auto');
   loader.replaceChildren();
@@ -78,7 +81,7 @@ export function renderBootFailure(loader: HTMLElement, error: unknown, view: Boo
         await action.run();
       } catch (e) {
         button.disabled = false;
-        message.textContent = `${errorText(error)}\n\n[${action.label}] に失敗しました: ${errorText(e)}`;
+        message.textContent = `${errorText(error)}\n\n${failedText(action.label, errorText(e))}`;
       }
     });
     wrap.appendChild(button);

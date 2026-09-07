@@ -309,17 +309,17 @@ export class SystemBootstrapper {
     const resetNotice = LocalReset.consumeNotice();
     if (resetNotice) {
       const text = {
-        reset_done: ['この端末のデータを工場出荷状態に戻しました。', 'warning'],
+        reset_done: ['Local data has been reset to factory state.', 'warning'],
         reset_failed: [
-          `データの消去に失敗しました。他のタブを閉じてもう一度お試しください: ${(resetNotice as any).reason}`,
+          `Could not erase local data. Close other tabs and try again: ${(resetNotice as any).reason}`,
           'error',
         ],
-        repair_clean: ['修復を試みましたが、ファイルシステムに問題は見つかりませんでした。', 'info'],
+        repair_clean: ['Repair ran, but no problems were found in the file system.', 'info'],
         repaired: [
-          `ファイルシステムを修復しました（${(resetNotice as any).fixed} 件）。拾ったものは .lost+found にあります。`,
+          `Repaired the file system (${(resetNotice as any).fixed} issues). Rescued files are in .lost+found.`,
           'warning',
         ],
-        repair_failed: [`修復に失敗しました: ${(resetNotice as any).reason}`, 'error'],
+        repair_failed: [`Repair failed: ${(resetNotice as any).reason}`, 'error'],
       }[resetNotice.kind] as [string, string];
       logger.log('system', { action: 'local_reset', message: `${resetNotice.kind}: ${text[0]}` });
       dialogService.notify(text[0], text[1]);

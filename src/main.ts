@@ -26,30 +26,31 @@ document.addEventListener('DOMContentLoaded', async () => {
     const loader = document.getElementById('boot-loader');
     if (loader) {
       // Itera にはクラウドが無い。「再読み込み」で抜けられないときの出口は、修復か、全部消すか（T-0381）。
+      // 画面に出る文は英語（Itera の決まり。コメントは日本語でよい）。
       renderBootFailure(loader, e, {
-        title: '起動に失敗しました',
-        hint: 'まず「再読み込み」を試してください。同じ画面が続くときは「修復して起動」を。それでも起動しないときだけ、最後の手段として工場出荷状態に戻せます。',
+        title: 'System Boot Error',
+        hint: 'Try "Reload" first. If this screen keeps coming back, try "Repair and boot". Use the factory reset only as a last resort.',
         actions: [
-          { label: '再読み込み', run: () => window.location.reload() },
+          { label: 'Reload', run: () => window.location.reload() },
           {
-            label: '修復して起動',
+            label: 'Repair and boot',
             description:
-              'メタデータと実体の食い違いを直してから起動します。データは消しません（拾ったものは .lost+found に入ります）。',
+              'Fixes mismatches between metadata and file contents before booting. Nothing is deleted (rescued files go to .lost+found).',
             run: () => {
               LocalReset.requestRepair();
               window.location.reload();
             },
           },
           {
-            label: '工場出荷状態に戻す（全データ消去）',
+            label: 'Factory reset (erase all data)',
             danger: true,
             description:
-              'この端末の Itera のファイル・会話履歴をすべて消して、初期状態で起動します。戻せません。控え（ZIP エクスポートや同期先）があるか先に確かめてください。',
+              'Erases all Itera files and chat history on this device and boots from a clean state. This cannot be undone. Make sure you have a backup (ZIP export or a sync target) first.',
             confirm: () =>
               window.confirm(
-                'この端末の Itera のファイルと会話履歴をすべて消します。戻せません。\n' +
-                  '他のタブで Itera を開いていれば、先に閉じてください。\n\n続けますか？',
-              ) && window.confirm('本当に消しますか？（最後の確認）'),
+                'This will erase all Itera files and chat history on this device. This cannot be undone.\n' +
+                  'If Itera is open in another tab, close it first.\n\nContinue?',
+              ) && window.confirm('Really erase everything? (final confirmation)'),
             run: () => {
               LocalReset.requestFactoryReset();
               window.location.reload();
