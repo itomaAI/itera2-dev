@@ -61,7 +61,8 @@ export class OpenAIAdapter extends BaseLLMAdapter {
       user: null,
     };
 
-    const RESERVED_INTERNAL_KEYS = ['model', 'generationConfig', 'providerOptions', 'network'];
+    // thinkingTag は OS 内部のスイッチ（システムプロンプトの組み立て用）であり、API パラメータではない
+    const RESERVED_INTERNAL_KEYS = ['model', 'generationConfig', 'providerOptions', 'network', 'thinkingTag'];
 
     const payload: any = {
       model: this.modelName,
