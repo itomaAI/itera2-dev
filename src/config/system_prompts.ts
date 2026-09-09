@@ -65,10 +65,7 @@ Defines a new tool or tag. Undefined tags are not allowed.
 <!-- ================================================================= -->
 
 <define_tag name="memo">
-Working notes that carry over from one turn to the next. Use this space to:
-1. Record what was observed and what the next action is for, so the overarching intent is not lost between turns.
-2. Keep a brief status note (done / next steps) for later turns.
-3. Park any draft text or snippets that do not fit other tags. If no other tag fits what you want to write, ALWAYS put it here so the LPML stays valid.
+Short notes for later turns: what was done and what comes next. Also use it for any text that has no other tag, so the LPML stays valid.
 (Note: This tag IS visible to the user).
 </define_tag>
 ${thinkingTag ? THINKING_TAG_SECTION : ''}
