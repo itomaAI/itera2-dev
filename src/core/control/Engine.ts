@@ -381,7 +381,7 @@ export class Engine {
         this._emit('turn_end', { role: 'system', turn: warningTurn });
       }
 
-      const validActions = actions.filter((a) => a.type !== 'thinking' && a.type !== 'plan');
+      const validActions = actions.filter((a) => a.type !== 'thinking' && a.type !== 'memo' && a.type !== 'plan');
 
       if (validActions.length > 0) {
         this.continuousToolCount++;

@@ -88,6 +88,9 @@ export class LpmlRenderer {
       case 'thinking':
         title = '💭 thinking';
         break;
+      case 'memo':
+        title = '🗒️ memo';
+        break;
       case 'plan':
         title = '📅 plan';
         break;
