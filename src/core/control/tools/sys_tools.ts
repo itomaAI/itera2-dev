@@ -243,4 +243,9 @@ ${found.definition}
     description: 'Log only',
     impl: async () => null,
   });
+  registry.registerSystemTool(setId, setName, {
+    name: 'memo',
+    description: 'Log only',
+    impl: async () => null,
+  });
 }

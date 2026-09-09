@@ -60,6 +60,7 @@ export class Translator {
       'create_file',
       'edit_file',
       'thinking',
+      'memo',
       'plan',
       'report',
       'ask',

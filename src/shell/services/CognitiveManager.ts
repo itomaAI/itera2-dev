@@ -8,7 +8,7 @@ import type { Engine } from '../../core/control/Engine';
 import type { SystemLogger } from '../../core/state/SystemLogger';
 import type { VfsService } from '../../core/vfs/VfsService';
 import { SYSTEM_PRINCIPAL } from '../../core/vfs/types';
-import { SYSTEM_PROMPT } from '../../config/system_prompts';
+import { buildSystemPrompt } from '../../config/system_prompts';
 import { PROVIDERS } from '../../config/providers';
 
 import { GeminiProjector, OpenAIProjector, AnthropicProjector } from '../../core/cognitive/Projector';
@@ -97,6 +97,7 @@ export class CognitiveManager {
       model: 'gemini-3.6-flash',
     };
     const rawModel = llmConfig.model;
+    const systemPrompt = buildSystemPrompt({ thinkingTag: llmConfig.thinkingTag !== false });
 
     let provider = 'google';
     let modelName = rawModel;
@@ -143,16 +144,16 @@ export class CognitiveManager {
             : provider === 'custom'
               ? secrets.custom_url || 'http://localhost:11434/v1'
               : 'https://api.openai.com/v1';
-        newProjector = new OpenAIProjector(SYSTEM_PROMPT, capabilities);
+        newProjector = new OpenAIProjector(systemPrompt, capabilities);
         newLlm = new OpenAIAdapter(apiKey, modelName, baseUrl, llmConfig, this.logger);
         break;
       case 'anthropic':
-        newProjector = new AnthropicProjector(SYSTEM_PROMPT, capabilities);
+        newProjector = new AnthropicProjector(systemPrompt, capabilities);
         newLlm = new AnthropicAdapter(apiKey, modelName, llmConfig, this.logger);
         break;
       case 'google':
       default:
-        newProjector = new GeminiProjector(SYSTEM_PROMPT, capabilities, apiKey);
+        newProjector = new GeminiProjector(systemPrompt, capabilities, apiKey);
         newLlm = new GeminiAdapter(apiKey, modelName, llmConfig, this.logger);
         break;
     }
