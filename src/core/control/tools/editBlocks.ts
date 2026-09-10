@@ -54,14 +54,23 @@ function afterLine(text: string, end: number): number {
   return i;
 }
 
-function findMarkers(source: RegExp, text: string, from: number, to: number): Marker[] {
+/**
+ * <edit_file> の中身は改行で始まる（`<edit_file …>` の直後で行を変えて書くため）。
+ * 素朴に数えると「1 行目に書いた SEARCH」が 2 行目として報告され、読む側が一度つまずく。
+ * ここで差し引いて、書いた側の見た目と揃えておく。
+ */
+function leadingShift(content: string): number {
+  return /^\r?\n/.test(content) ? 1 : 0;
+}
+
+function findMarkers(source: RegExp, text: string, from: number, to: number, shift: number): Marker[] {
   const re = new RegExp(source.source, 'gm');
   re.lastIndex = from;
   const out: Marker[] = [];
   let m: RegExpExecArray | null;
   while ((m = re.exec(text)) !== null) {
     if (m.index >= to) break;
-    out.push({ index: m.index, end: m.index + m[0].length, len: m[0].length, line: lineOf(text, m.index) });
+    out.push({ index: m.index, end: m.index + m[0].length, len: m[0].length, line: lineOf(text, m.index) - shift });
     if (m[0].length === 0) re.lastIndex++;
   }
   return out;
@@ -79,13 +88,13 @@ function pick(label: string, cands: Marker[], n: number, headerLine: number, ch:
   const list = cands.map((c) => `line ${c.line} (${c.len} '${ch}')`).join(', ');
   if (exact.length === 0) {
     throw new Error(
-      `Ambiguous ${label} for the SEARCH block starting at line ${headerLine}: ` +
+      `Ambiguous ${label} for the SEARCH block starting at line ${headerLine} of this edit_file content: ` +
         `${cands.length} candidate lines (${list}), none of which is ${n} characters long like the opening marker. ` +
         `Make the intended ${label} exactly ${n} '${ch}' characters. No changes were made to the file.`,
     );
   }
   throw new Error(
-    `Ambiguous ${label} for the SEARCH block starting at line ${headerLine}: ` +
+    `Ambiguous ${label} for the SEARCH block starting at line ${headerLine} of this edit_file content: ` +
       `${exact.length} of the ${cands.length} candidate lines (${list}) are ${n} characters long, ` +
       `so the block cannot be delimited. Use longer markers (e.g. ${n + 3} characters for all three) ` +
       `so that only the intended line matches. No changes were made to the file.`,
@@ -97,11 +106,17 @@ function pick(label: string, cands: Marker[], n: number, headerLine: number, ch:
  * 壊れた塊を黙って読み飛ばさない —— どれか 1 つでも決まらなければ例外を投げる。
  */
 export function parseEditBlocks(content: string): EditBlock[] {
+  const shift = leadingShift(content);
   const heads: Marker[] = [];
   const re = new RegExp(HEADER.source, 'gm');
   let m: RegExpExecArray | null;
   while ((m = re.exec(content)) !== null) {
-    heads.push({ index: m.index, end: m.index + m[0].length, len: m[1].length, line: lineOf(content, m.index) });
+    heads.push({
+      index: m.index,
+      end: m.index + m[0].length,
+      len: m[1].length,
+      line: lineOf(content, m.index) - shift,
+    });
   }
   if (heads.length === 0) {
     throw new Error(
@@ -123,11 +138,11 @@ export function parseEditBlocks(content: string): EditBlock[] {
     const bound = i + 1 < heads.length ? heads[i + 1].index : content.length;
 
     const bodyStart = afterLine(content, h.end);
-    let seps = findMarkers(SEPARATOR, content, bodyStart, Math.max(bound, bodyStart));
-    if (seps.length === 0) seps = findMarkers(SEPARATOR, content, bodyStart, content.length);
+    let seps = findMarkers(SEPARATOR, content, bodyStart, Math.max(bound, bodyStart), shift);
+    if (seps.length === 0) seps = findMarkers(SEPARATOR, content, bodyStart, content.length, shift);
     if (seps.length === 0) {
       throw new Error(
-        `No separator found for the SEARCH block starting at line ${h.line}. ` +
+        `No separator found for the SEARCH block starting at line ${h.line} of this edit_file content. ` +
           `Expected a line of ${h.len} '=' characters between the text to find and the replacement. ` +
           `No changes were made to the file.`,
       );
@@ -135,11 +150,11 @@ export function parseEditBlocks(content: string): EditBlock[] {
     const sep = pick('separator', seps, h.len, h.line, '=');
 
     const repStart = afterLine(content, sep.end);
-    let closers = findMarkers(CLOSER, content, repStart, Math.max(bound, repStart));
-    if (closers.length === 0) closers = findMarkers(CLOSER, content, repStart, content.length);
+    let closers = findMarkers(CLOSER, content, repStart, Math.max(bound, repStart), shift);
+    if (closers.length === 0) closers = findMarkers(CLOSER, content, repStart, content.length, shift);
     if (closers.length === 0) {
       throw new Error(
-        `No closing marker found for the SEARCH block starting at line ${h.line}. ` +
+        `No closing marker found for the SEARCH block starting at line ${h.line} of this edit_file content. ` +
           `Expected a line of ${h.len} '>' characters after the replacement. ` +
           `No changes were made to the file.`,
       );
@@ -150,7 +165,8 @@ export function parseEditBlocks(content: string): EditBlock[] {
     const replacement = content.slice(repStart, closer.index).replace(/\r?\n$/, '');
     if (pattern.length === 0) {
       throw new Error(
-        `The SEARCH block starting at line ${h.line} has nothing to find (the part above the separator is empty). ` +
+        `The SEARCH block starting at line ${h.line} of this edit_file content has nothing to find ` +
+          `(the part above the separator is empty). ` +
           `No changes were made to the file.`,
       );
     }
@@ -214,7 +230,7 @@ function notFoundHint(text: string, pattern: string, isRegex: boolean): string {
       if (rows[i].includes(needle)) lines.push(i + 1);
     }
     if (lines.length > 0) {
-      return ` Its first line occurs at line ${lines.join(', ')}, so it is the rest of the block that differs.`;
+      return ` Its first line occurs at line ${lines.join(', ')} of the file, so it is the rest of the block that differs.`;
     }
   }
   return '';
@@ -230,7 +246,8 @@ export function applyEditBlocks(fileContent: string, blocks: EditBlock[], opts: 
 
   for (let i = 0; i < blocks.length; i++) {
     const b = blocks[i];
-    const where = `block ${i + 1} (SEARCH at line ${b.line})`;
+    // 行番号は 2 つの座標系を行き来する。どちらの話をしているかを必ず言葉で添える
+    const where = `block ${i + 1} (its SEARCH marker is on line ${b.line} of this edit_file content)`;
 
     if (b.replacement === b.pattern) {
       throw new Error(
@@ -255,7 +272,7 @@ export function applyEditBlocks(fileContent: string, blocks: EditBlock[], opts: 
       const shown = hits.slice(0, 8).map((h) => lineOf(text, h.index));
       const more = hits.length > shown.length ? ', ...' : '';
       throw new Error(
-        `The SEARCH pattern of ${where} matched ${hits.length} times (line ${shown.join(', ')}${more}), ` +
+        `The SEARCH pattern of ${where} matched ${hits.length} times in the file (lines ${shown.join(', ')}${more}), ` +
           `but it must match exactly once. Add surrounding lines to the block until it is unique. ` +
           `No changes were made to the file.`,
       );
