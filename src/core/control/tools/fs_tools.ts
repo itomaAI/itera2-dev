@@ -6,6 +6,7 @@
 import type { ToolRegistry } from '../ToolRegistry';
 import type { VfsService } from '../../vfs/VfsService';
 import { AGENT_PRINCIPAL } from '../../vfs/types';
+import { parseEditBlocks, applyEditBlocks } from './editBlocks';
 
 export function registerFSTools(registry: ToolRegistry): void {
   const setId = 'system:fs';
@@ -189,84 +190,17 @@ export function registerFSTools(registry: ToolRegistry): void {
       }
 
       // SEARCH ブロック編集モード
+      // 切り出しと適用は editBlocks.ts（VFS に触らない純粋な文字列処理）。ここは橋渡しだけを持つ。
+      // どちらも例外を投げうるが、書き込みはその後なので **失敗すれば 1 文字も書かれない**。
       if (/<{4,}SEARCH/.test(content)) {
-        const blocks: { patternStr: string; replaceStr: string }[] = [];
-        const startRegex = /^(<{4,})SEARCH[^\r\n]*$/gm;
-        let startMatch;
+        const blocks = parseEditBlocks(content);
+        const currentFileContent = await vfs.readFile(AGENT_PRINCIPAL, params.path);
+        const newContent = applyEditBlocks(currentFileContent, blocks, { regex: params.regex === 'true' });
 
-        while ((startMatch = startRegex.exec(content)) !== null) {
-          const len = startMatch[1].length;
-          const headerEnd = startMatch.index + startMatch[0].length;
-          let contentStart = headerEnd;
-          if (content[contentStart] === '\r') contentStart++;
-          if (content[contentStart] === '\n') contentStart++;
-
-          const midRegex = new RegExp(`^={${len}}$`, 'gm');
-          midRegex.lastIndex = contentStart;
-          const midMatch = midRegex.exec(content);
-          if (!midMatch) continue;
-
-          const patternStr = content.substring(contentStart, midMatch.index).replace(/(?:\r?\n)$/, '');
-          const midEnd = midMatch.index + midMatch[0].length;
-
-          let replaceStart = midEnd;
-          if (content[replaceStart] === '\r') replaceStart++;
-          if (content[replaceStart] === '\n') replaceStart++;
-
-          const endRegex = new RegExp(`^>{${len}}$`, 'gm');
-          endRegex.lastIndex = replaceStart;
-          const endMatch = endRegex.exec(content);
-          if (!endMatch) continue;
-
-          const replaceStr = content.substring(replaceStart, endMatch.index).replace(/(?:\r?\n)$/, '');
-          blocks.push({ patternStr, replaceStr });
-          startRegex.lastIndex = endMatch.index + endMatch[0].length;
-        }
-
-        if (blocks.length === 0) {
-          throw new Error(
-            'Invalid edit block format. Ensure you have opening `<{N}SEARCH`, separator `={N}`, and closing `>{N}` markers. The number of characters (N) MUST be exactly the same across all three markers for each block, and they must be placed on their own lines.',
-          );
-        }
-
-        const isRegex = params.regex === 'true';
-        let currentFileContent = await vfs.readFile(AGENT_PRINCIPAL, params.path);
-        let replaceCount = 0;
-
-        for (let i = 0; i < blocks.length; i++) {
-          let patternStr = blocks[i].patternStr;
-          let replaceStr = blocks[i].replaceStr;
-
-          if (!isRegex) {
-            patternStr = patternStr.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-          }
-
-          let regex;
-          try {
-            regex = new RegExp(patternStr, 'm');
-          } catch (e: any) {
-            throw new Error(`Invalid RegExp in block ${i + 1}: ${e.message}`);
-          }
-
-          if (!regex.test(currentFileContent)) {
-            throw new Error(`Search pattern not found for block ${i + 1}. No changes were made to the file.`);
-          }
-
-          const safeReplaceStr = replaceStr.replace(/\$/g, '$$$$');
-          const newContent = currentFileContent.replace(regex, safeReplaceStr);
-
-          if (newContent === currentFileContent) {
-            throw new Error(`Replacement resulted in no change for block ${i + 1}. No changes were made to the file.`);
-          }
-
-          currentFileContent = newContent;
-          replaceCount++;
-        }
-
-        await vfs.writeFile(AGENT_PRINCIPAL, params.path, currentFileContent, {
+        await vfs.writeFile(AGENT_PRINCIPAL, params.path, newContent, {
           overwrite: true,
         });
-        const blockMsg = replaceCount > 1 ? `${replaceCount} blocks updated` : 'Content replaced';
+        const blockMsg = blocks.length > 1 ? `${blocks.length} blocks updated` : 'Content replaced';
         return { log: blockMsg, ui: `✏️ Replaced content in ${params.path}` };
       }
 
