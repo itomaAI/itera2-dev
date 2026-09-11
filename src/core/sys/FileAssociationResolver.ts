@@ -8,6 +8,7 @@ import type { VfsStat } from '../vfs/types';
 import type { VfsService } from '../vfs/VfsService';
 import type { VfsEventBus } from '../vfs/VfsEventBus';
 import { SYSTEM_PRINCIPAL } from '../vfs/types';
+import { REGISTRY_LAYERS } from '../../config/config_layers';
 
 export interface ResolvedApp {
   /** 起動すべきアプリのID。Host内蔵機能を使用する場合は特殊なIDを返す */
@@ -23,28 +24,53 @@ export class FileAssociationResolver {
   private appRegistry: AppRegistry;
   private associations: any = { extensions: {}, mimeTypes: {} };
 
-  constructor(vfs: VfsService, appRegistry: AppRegistry, eventBus: VfsEventBus) {
+  /** 読む順。後の層が勝つ（`src/config/config_layers.ts`）。 */
+  private readonly registryDirs: readonly string[];
+
+  constructor(
+    vfs: VfsService,
+    appRegistry: AppRegistry,
+    eventBus: VfsEventBus,
+    layers: readonly string[] = REGISTRY_LAYERS,
+  ) {
     this.vfs = vfs;
     this.appRegistry = appRegistry;
+    this.registryDirs = layers.length > 0 ? [...layers] : [...REGISTRY_LAYERS];
+
+    const watched = new Set(this.registryDirs.map((dir) => `${dir}/associations.json`));
 
     eventBus.subscribe((events) => {
-      const isUpdated = events.some((e) => e.path === 'system/registry/associations.json');
+      const isUpdated = events.some((e) => watched.has(e.path));
       if (isUpdated) {
         this.loadAssociations();
       }
     });
   }
 
+  /**
+   * 層を順に重ねる。**拡張子ごと・MIME ごとに後の層が勝つ。**
+   * 層ごと差し替えにしないのは、利用者が 1 つの拡張子だけ変えたときに
+   * 配信側の残りの関連付けまで失わせないため。
+   */
   async loadAssociations(): Promise<void> {
-    try {
-      if (this.vfs.exists(SYSTEM_PRINCIPAL, 'system/registry/associations.json')) {
-        const content = await this.vfs.readFile(SYSTEM_PRINCIPAL, 'system/registry/associations.json');
-        this.associations = JSON.parse(content);
+    const merged: { extensions: Record<string, string>; mimeTypes: Record<string, string> } = {
+      extensions: {},
+      mimeTypes: {},
+    };
+
+    for (const dir of this.registryDirs) {
+      const path = `${dir}/associations.json`;
+      try {
+        if (!this.vfs.exists(SYSTEM_PRINCIPAL, path)) continue;
+        const parsed = JSON.parse(await this.vfs.readFile(SYSTEM_PRINCIPAL, path));
+        Object.assign(merged.extensions, parsed?.extensions || {});
+        Object.assign(merged.mimeTypes, parsed?.mimeTypes || {});
+      } catch (e) {
+        console.warn(`[FileAssociationResolver] Failed to load ${path}. Skipping this layer.`, e);
       }
-    } catch (e) {
-      console.warn('[FileAssociationResolver] Failed to load associations.json', e);
-      this.associations = { extensions: {}, mimeTypes: {} };
     }
+
+    this.associations = merged;
   }
 
   /**
