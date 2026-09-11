@@ -78,6 +78,12 @@ export class Explorer {
     this.treeView.render(this.vfs.getTree(this.getActivePrincipal()));
   }
 
+  /** 最上位の記号の上書き（appearance.json の rootIcons）。並びと同じく、変わったときだけ描き直す。 */
+  public setRootIcons(icons?: Record<string, string> | null): void {
+    if (!this.treeView.setRootIcons(icons)) return;
+    this.treeView.render(this.vfs.getTree(this.getActivePrincipal()));
+  }
+
   on(event: string, callback: Function): void {
     this.events[event] = callback;
   }

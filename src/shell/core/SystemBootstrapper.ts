@@ -307,11 +307,13 @@ export class SystemBootstrapper {
     desktop.panels.chat.setHiddenEventTypes(configManager.get('preferences')?.hiddenEventTypes);
     // 一覧の並びの上書き（appearance.sortWeight）。同じ形で、判定は持ち主（Explorer）に置く。
     desktop.panels.explorer.setSortWeights(configManager.get('appearance')?.sortWeight);
+    desktop.panels.explorer.setRootIcons(configManager.get('appearance')?.rootIcons);
     configManager.onUpdate((config) => {
       if (desktop.panels.chat.setHiddenEventTypes(config.preferences?.hiddenEventTypes)) {
         desktop.panels.chat.renderHistory(history.get());
       }
       desktop.panels.explorer.setSortWeights(config.appearance?.sortWeight);
+      desktop.panels.explorer.setRootIcons(config.appearance?.rootIcons);
     });
     desktop.panels.chat.renderHistory(history.get());
     desktop.updateStorageUI(vfs.getUsage());

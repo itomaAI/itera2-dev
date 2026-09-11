@@ -129,17 +129,35 @@
 
     <script>
       // ---------- 置き場（環境ごとに違うのはここだけ） ----------
-      const ROOTS = [
-        { path: 'data', icon: '🗃️', name: 'data' },
-        { path: 'memory', icon: '🧠', name: 'memory' },
-        { path: 'apps', icon: '🧩', name: 'apps' },
-        { path: 'docs', icon: '📚', name: 'docs' },
-        { path: 'services', icon: '⚙️', name: 'services' },
-      ];
+      // 最上位の一覧は **VFS から作る**。ここに名前を書かない。
+      //
+      // 🔴 以前はここが固定の一覧（data / memory / apps / docs / services）だった。
+      //    配布物で最上位の構成が変わると（itera2 は agent / user / system）、
+      //    **無いフォルダを指したまま開く**。2026-09-11 に実際にそうなっていた。
+      //    並びは重み、記号は表から引く（どちらもホストのサイドバーと同じ設定）。
+      let ROOTS = [];
+
+      async function loadRoots() {
+        const { weights, icons } = await loadAppearance();
+        let items = [];
+        try {
+          items = await MetaOS.fs.list('', { detail: true });
+        } catch (_) {
+          items = [];
+        }
+        ROOTS = items
+          .filter((e) => e.kind === 'directory' && !e.name.startsWith('.'))
+          .sort((a, b) => compareEntries(a, b, weights))
+          .map((e) => ({ path: e.name, name: e.name, icon: rootIconOf(e.name, icons) || '📁' }));
+        return ROOTS;
+      }
+
+      /** 起点。最上位が 1 つも読めないときだけ system へ逃がす（必ず在るため）。 */
+      const firstRoot = () => (ROOTS.length ? ROOTS[0].path : 'system');
       const TEXT_EXT = ['md', 'txt', 'json', 'js', 'ts', 'css', 'html', 'yml', 'yaml', 'xml', 'log', 'jsonl'];
 
       const $ = (id) => document.getElementById(id);
-      let cwd = ROOTS[0].path; // いま見ているフォルダ
+      let cwd = ''; // いま見ているフォルダ（起動時に loadRoots → navigate で決まる）
       let entries = []; // cwd の中身（stat の配列）
       let selected = new Set(); // 選んでいるパス
       let lastClicked = null;
@@ -162,6 +180,10 @@
           : '';
       const rootOf = (p) => ROOTS.find((r) => p === r.path || p.startsWith(r.path + '/'));
       const iconOf = (e) => {
+        // 最上位の特例は表から引く（ホストのサイドバーと同じ設定）。
+        // appearance は起動時に読んである。まだ無ければ既定で引く。
+        const special = rootIconOf(e.path, appearance ? appearance.icons : DEFAULT_ROOT_ICONS);
+        if (special) return special;
         if (e.kind === 'directory') return expanded.has(e.path) || e.path === cwd ? '📂' : '📁';
         const x = extOf(e.name);
         if (['xlsx', 'xls', 'csv'].includes(x)) return '📊';
@@ -186,27 +208,39 @@
       //    （分けると、片方だけ直した状態に気づけない）。
       const CONFIG_LAYERS = ['system/config', 'user/config'];
       const DEFAULT_SORT_WEIGHTS = { system: 100, local: 100, trash: 200 };
-      let sortWeights = null;
+      const DEFAULT_ROOT_ICONS = { system: '⚙️', trash: '🗑️', agent: '✨' };
+      let appearance = null;
 
       /**
-       * 並びの重みを読む。配信の既定に **重ねる**（置き換えない）。
+       * 並びの重みと最上位の記号を読む。どちらも配信の既定に **重ねる**（置き換えない）。
        * 読めない層は飛ばす —— 見た目の設定が欠けているだけで一覧が出ないほうが困る。
        */
-      async function loadSortWeights() {
-        if (sortWeights) return sortWeights;
-        let merged = { ...DEFAULT_SORT_WEIGHTS };
+      async function loadAppearance() {
+        if (appearance) return appearance;
+        let weights = { ...DEFAULT_SORT_WEIGHTS };
+        let icons = { ...DEFAULT_ROOT_ICONS };
         for (const dir of CONFIG_LAYERS) {
           try {
             const conf = JSON.parse(await MetaOS.fs.read(`${dir}/appearance.json`));
             if (conf && conf.sortWeight && typeof conf.sortWeight === 'object') {
-              merged = { ...merged, ...conf.sortWeight };
+              weights = { ...weights, ...conf.sortWeight };
+            }
+            if (conf && conf.rootIcons && typeof conf.rootIcons === 'object') {
+              icons = { ...icons, ...conf.rootIcons };
             }
           } catch (_) {
             // その層が無い・壊れている。次の層へ
           }
         }
-        sortWeights = merged;
-        return sortWeights;
+        appearance = { weights, icons };
+        return appearance;
+      }
+
+      /** 最上位の記号。最上位にだけ効く（深いところの同名フォルダを巻き込まない）。 */
+      function rootIconOf(path, icons) {
+        if (!path || path.includes('/')) return null;
+        const raw = icons ? icons[path] : undefined;
+        return typeof raw === 'string' && raw ? raw : null;
       }
 
       function weightOf(name, weights) {
@@ -224,7 +258,7 @@
 
       // ---------- 読む ----------
       async function listDir(path) {
-        const [items, weights] = await Promise.all([MetaOS.fs.list(path, { detail: true }), loadSortWeights()]);
+        const [items, { weights }] = await Promise.all([MetaOS.fs.list(path, { detail: true }), loadAppearance()]);
         return items
           .filter((e) => e.name !== '.keep' && !e.name.startsWith('.'))
           .sort((a, b) => compareEntries(a, b, weights));
@@ -247,7 +281,7 @@
       // ---------- 描く ----------
       async function navigate(path, opts = {}) {
         path = String(path || '').replace(/^\/+|\/+$/g, '');
-        if (!path) path = ROOTS[0].path;
+        if (!path) path = firstRoot();
         try {
           const st = await MetaOS.fs.stat(path);
           if (st.kind !== 'directory') path = parentOf(path);
@@ -572,7 +606,8 @@
         try {
           args = (await MetaOS.system.getArgs()) || {};
         } catch (_) {}
-        await navigate(args && args.path ? args.path : ROOTS[0].path);
+        await loadRoots();
+        await navigate(args && args.path ? args.path : firstRoot());
         if (MetaOS.system.on) {
           let timer = null;
           MetaOS.system.on('vfs_mutation', (m) => {
