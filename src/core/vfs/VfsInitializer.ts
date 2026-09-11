@@ -4,6 +4,10 @@
  */
 
 import { DEFAULT_FILES } from '../../config/default_files';
+import { CONFIG_LAYERS, REGISTRY_LAYERS, writeLayerOf } from '../../config/config_layers';
+
+/** 利用者が書く層。ここは配信で上書きしない。 */
+const WRITE_LAYERS = [writeLayerOf(CONFIG_LAYERS), writeLayerOf(REGISTRY_LAYERS)];
 import type { VfsService } from './VfsService';
 import type { NodeStore } from './NodeStore';
 import type { PathResolver } from './PathResolver';
@@ -117,7 +121,13 @@ export class VfsInitializer {
 
         // 領域の判定
         const isSystemArea = cleanPath.startsWith('system/');
-        const isConfigArea = cleanPath.startsWith('system/config/') || cleanPath.startsWith('system/registry/');
+        // 書き先の層（設定・登録簿それぞれの最後の層）だけを強制更新から外す。
+        // 利用者が書く場所を配信で上書きすると設定が消えるため。
+        // 逆に、書き先でない層は**配信が正**なので毎回上書きする
+        // （そうしないと、新しく足した項目が既存の環境へ永久に届かない）。
+        // 層が 1 つの配布物では書き先＝system/config・system/registry なので、
+        // これまでと同じ「config と registry は上書きしない」になる。
+        const isWriteLayer = WRITE_LAYERS.some((dir) => cleanPath.startsWith(`${dir}/`));
 
         // 初回起動ではなく、かつシステム領域外のファイル・ディレクトリは展開をスキップ（ユーザーの自由な削除を尊重）
         if (!isFirstBoot && !isSystemArea) {
@@ -140,8 +150,8 @@ export class VfsInitializer {
         } else if (id !== null && !isDir) {
           const node = this.nodeStore.getNode(id);
 
-          // system配下であっても、configやregistryはユーザーデータ/動的データなので強制上書きから除外する
-          const isForceUpdateArea = isSystemArea && !isConfigArea;
+          // system 配下であっても、利用者が書く層は強制上書きから除外する
+          const isForceUpdateArea = isSystemArea && !isWriteLayer;
 
           // autoUpdate が有効、かつ強制アップデート対象のファイル（システムライブラリ等）の場合のみ上書きする
           if (node && node.kind === 'file' && isForceUpdateArea && autoUpdate) {

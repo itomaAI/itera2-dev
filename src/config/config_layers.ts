@@ -17,3 +17,20 @@
  * 形は `src/config/wake_policy.ts` と同じ —— コードは共通、並びだけが配布物ごとの定数。
  */
 export const CONFIG_LAYERS: readonly string[] = ['system/config'];
+
+/**
+ * 登録簿（apps.json / services.json）を読む順。**後の層が勝つ。**
+ *
+ * 同じ `id` が両方にあれば、後の層の項目で置き換える。
+ *
+ * 🔴 **アダプタ（adapters.json）にはこの層を使わない。**
+ * アダプタはホストの window へ `import()` される＝ホストの任意コード実行と等価であり、
+ * かつ利用者の層は同期される。層を認めると、アカウントが奪われたときに
+ * **すべての端末でホストのコードが走る**。アダプタは配信物だけから読む。
+ */
+export const REGISTRY_LAYERS: readonly string[] = ['system/registry'];
+
+/** 書き先＝最後の層。ここは配信で上書きしない（VfsInitializer が使う）。 */
+export function writeLayerOf(layers: readonly string[]): string {
+  return layers[layers.length - 1];
+}
