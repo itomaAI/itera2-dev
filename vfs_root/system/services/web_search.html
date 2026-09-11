@@ -219,6 +219,62 @@ Note: HTML を保存して DOMParser で解析する使い方を想定してい�
           return `${dir}/${stem}-${Date.now()}${ext}`;
         };
 
+        // ================= クラウドの関数（あれば使う） =================
+        //
+        // itera2（クラウド版）は Functions に webSearch / fetchPage を持っている。
+        // 静的ホストの配布物（itera2-dev）は持っていない。**同じファイルで両方に効かせる**ため、
+        // 「どこに繋ぐか」を設定から読む。**配布物ごとにこのファイルを分けない。**
+        //
+        // 中継を通す利点は 2 つ:
+        //   - 鍵が要らない（利用者ごとに Brave の鍵を置かなくてよい）
+        //   - CORS プロキシが要らない（callable は cors:true で応答する）
+        let cloudBaseCache;
+        async function cloudBase() {
+          if (cloudBaseCache !== undefined) return cloudBaseCache;
+          cloudBaseCache = null;
+          try {
+            const conf = JSON.parse(await window.MetaOS.fs.read('system/config/cloud.json'));
+            if (conf && typeof conf.functionsBase === 'string' && conf.functionsBase) {
+              cloudBaseCache = conf.functionsBase.replace(/\/+$/, '');
+            }
+          } catch (_) {
+            // 設定が無い＝クラウドの関数を持たない配布物。従来どおり動く
+          }
+          return cloudBaseCache;
+        }
+
+        /**
+         * callable を呼ぶ。ログインは要らない（誰でも使える口）。
+         * ログイン中なら ID トークンを添える —— 中継側が利用者ごとに数えるため。
+         */
+        async function callCloud(name, data) {
+          const base = await cloudBase();
+          if (!base) throw new Error('クラウドの関数を持たない配布物です');
+          const headers = { 'Content-Type': 'application/json' };
+          try {
+            const auth = JSON.parse(await window.MetaOS.fs.read('system/temp/firebase_auth.json'));
+            if (auth && auth.signedIn && auth.idToken) headers['Authorization'] = `Bearer ${auth.idToken}`;
+          } catch (_) {
+            // 未ログイン。そのまま呼ぶ
+          }
+          const res = await window.MetaOS.net.fetch(`${base}/${name}`, {
+            method: 'POST',
+            headers,
+            body: JSON.stringify({ data }),
+          });
+          const body = typeof res === 'string' ? res : res.data || res;
+          const payload = typeof body === 'string' ? JSON.parse(body) : body;
+          if (payload && payload.error) {
+            throw new Error(payload.error.message || JSON.stringify(payload.error));
+          }
+          return payload.result;
+        }
+
+        async function searchItera(query) {
+          const out = await callCloud('webSearch', { query, count: 5 });
+          return (out.results || []).map((r) => ({ title: r.title, link: r.url, snippet: r.description }));
+        }
+
         // ================= 道具の登録 =================
         window.MetaOS.tools.register({
           name: 'web_search',
@@ -227,14 +283,18 @@ Note: HTML を保存して DOMParser で解析する使い方を想定してい�
           handler: async (context) => {
             const attr = context.attributes || context;
             const query = attr.query;
-            const engine = attr.engine || 'brave';
+            // 既定は「クラウドの関数があればそれ」。無ければ従来どおり brave。
+            // 明示された engine は常に尊重する（比べたいときがあるため）。
+            const engine = attr.engine || ((await cloudBase()) ? 'itera' : 'brave');
 
             if (!query) return '[Error] query attribute is required.';
             sendLog(`Executing search (${engine}) for: ${query}`);
 
             try {
               let results = [];
-              if (engine === 'duckduckgo') {
+              if (engine === 'itera') {
+                results = await searchItera(query);
+              } else if (engine === 'duckduckgo') {
                 results = await searchDuckDuckGo(query);
               } else if (engine === 'bing') {
                 results = await searchBing(query);
@@ -270,17 +330,26 @@ Note: HTML を保存して DOMParser で解析する使い方を想定してい�
             sendLog(`Reading webpage: ${url}`);
 
             try {
-              const response = await window.MetaOS.net.fetch(url, {
-                method: 'GET',
-                useProxy: true,
-              });
+              let htmlStr;
+              // クラウドの関数があるなら、そちら経由で取る。
+              // 利点は 2 つ: CORS プロキシが要らない／宛先の検査（SSRF 対策）が中継側に入っている。
+              if (await cloudBase()) {
+                const out = await callCloud('fetchPage', { url });
+                htmlStr = out.text || '';
+                if (out.truncated) sendLog(`（2MB で打ち切った: ${url}）`);
+              } else {
+                const response = await window.MetaOS.net.fetch(url, {
+                  method: 'GET',
+                  useProxy: true,
+                });
 
-              let htmlStr =
-                typeof response === 'string'
-                  ? response
-                  : typeof response.json === 'function'
-                    ? await response.text()
-                    : response.data || response;
+                htmlStr =
+                  typeof response === 'string'
+                    ? response
+                    : typeof response.json === 'function'
+                      ? await response.text()
+                      : response.data || response;
+              }
 
               const parser = new DOMParser();
               const doc = parser.parseFromString(htmlStr, 'text/html');
