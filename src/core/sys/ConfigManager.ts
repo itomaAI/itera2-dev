@@ -50,6 +50,12 @@ export interface OsConfig {
      * 既定を外したいときは、その名前に 0 を書く。実装は src/shell/panels/nodeOrder.ts。
      */
     sortWeight?: Record<string, number>;
+    /**
+     * 最上位の記号の上書き。名前 → 絵文字。配信の既定（system ⚙️ / trash 🗑️ / agent ✨）に
+     * **重ねて** 効く。最上位にだけ効く（深いところで名前を見ると、
+     * `user/docs/system` のような普通のフォルダまで歯車になる）。
+     */
+    rootIcons?: Record<string, string>;
   };
   llm: { model: string; [key: string]: any };
   network: { proxyUrl: string; allowCredentialsWithProxy: boolean };

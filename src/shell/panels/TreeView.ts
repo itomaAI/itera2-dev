@@ -4,7 +4,14 @@
  */
 
 import type { TreeNode } from '../../core/vfs/types';
-import { compareNodes, DEFAULT_SORT_WEIGHTS, type SortWeights } from './nodeOrder';
+import {
+  compareNodes,
+  rootIconOf,
+  DEFAULT_ROOT_ICONS,
+  DEFAULT_SORT_WEIGHTS,
+  type RootIcons,
+  type SortWeights,
+} from './nodeOrder';
 
 export class TreeView {
   private container: HTMLElement;
@@ -13,6 +20,9 @@ export class TreeView {
 
   /** 一覧の並びの上書き（appearance.json の sortWeight）。設定が読めるまでは配信の既定。 */
   private sortWeights: SortWeights = DEFAULT_SORT_WEIGHTS;
+
+  /** 最上位の記号の上書き（appearance.json の rootIcons）。同上。 */
+  private rootIcons: RootIcons = DEFAULT_ROOT_ICONS;
 
   private expandedPaths: Set<string> = new Set();
   private selectedPaths: Set<string> = new Set();
@@ -253,6 +263,17 @@ export class TreeView {
    * 並びの上書きを差し替える。変わったときだけ true を返す
    * （呼び出し側が「描き直すか」を決められるように。判定はここが持つ ＝ T-0304 の形）。
    */
+  /**
+   * 最上位の記号の上書きを差し替える。変わったときだけ true を返す（setSortWeights と同じ形）。
+   * 配信の既定に **重ねる** —— 1 つ足しただけで trash や system の印が消えないように。
+   */
+  setRootIcons(icons?: RootIcons | null): boolean {
+    const next = icons && typeof icons === 'object' ? { ...DEFAULT_ROOT_ICONS, ...icons } : { ...DEFAULT_ROOT_ICONS };
+    if (JSON.stringify(next) === JSON.stringify(this.rootIcons)) return false;
+    this.rootIcons = next;
+    return true;
+  }
+
   setSortWeights(weights?: SortWeights | null): boolean {
     // 配信の既定に **重ねる**（置き換えない）。
     // 置き換えにすると、利用者が自分のフォルダを 1 つ前へ出すだけで
@@ -383,8 +404,10 @@ export class TreeView {
    * 「開くと印が消える」「同期後に印が戻らない」といった形で食い違う。
    */
   private _getIcon(path: string, kind: string, name: string, _isMountPoint: boolean): string {
-    if (path === 'trash') return '🗑️';
-    if (path === 'system') return '⚙️';
+    // 最上位の特例は表（appearance.rootIcons）で持つ。ここに名前を書き足さない
+    // —— 領域の名前が変わるたびにコードを直すことになる（並びの重みと同じ理由）。
+    const rootIcon = rootIconOf(path, this.rootIcons);
+    if (rootIcon) return rootIcon;
     if (kind !== 'directory') return this._getFileIcon(name);
     // マウント地点も含め、ディレクトリは開閉が分かる形を保つ。
     // 同期の印はアイコンに重ねず、名前の右に出す（_getSyncIndicator）。

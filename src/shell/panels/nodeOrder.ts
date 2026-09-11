@@ -22,6 +22,9 @@
 /** 名前 → 重み。小さいほど先に出る。 */
 export type SortWeights = Record<string, number>;
 
+/** 最上位の名前 → 記号。ディレクトリの既定（📁 / 📂）より優先する。 */
+export type RootIcons = Record<string, string>;
+
 /**
  * 配信の既定。利用者が普段触るもの（`user/` `agent/`）より後ろへ送る。
  *
@@ -33,6 +36,35 @@ export const DEFAULT_SORT_WEIGHTS: SortWeights = {
   local: 100,
   trash: 200,
 };
+
+/**
+ * 配信の既定の記号。**最上位の名前だけ**に効く。
+ *
+ * 開閉の分かるディレクトリ（📁 / 📂）をわざわざ潰すのは、
+ * この 3 つが「入れ物」ではなく「その端末の仕組み」だからである。
+ * 並びの重み（上の DEFAULT_SORT_WEIGHTS）と組み合わせて、
+ * **下に沈み、かつ一目で別物と分かる**状態にする。
+ *
+ * `agent` は AI の領域（この配布物に無ければ、単に使われないだけ）。
+ */
+export const DEFAULT_ROOT_ICONS: RootIcons = {
+  system: '⚙️',
+  trash: '🗑️',
+  agent: '✨',
+};
+
+/**
+ * 最上位の記号を引く。無ければ null（＝呼び出し側が従来どおりの記号を出す）。
+ *
+ * 🔴 **最上位にだけ効かせる。** 深いところで名前だけを見ると、
+ * `user/docs/system` のような普通のフォルダまで歯車になる。
+ */
+export function rootIconOf(path: string, icons?: RootIcons | null): string | null {
+  if (!path || path.includes('/')) return null;
+  const table = icons && typeof icons === 'object' ? icons : DEFAULT_ROOT_ICONS;
+  const raw = (table as Record<string, unknown>)[path];
+  return typeof raw === 'string' && raw ? raw : null;
+}
 
 /**
  * 重みを引く。設定が壊れていても落ちない（読めない値は既定の 0 として扱う）。

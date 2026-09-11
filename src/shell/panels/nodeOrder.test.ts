@@ -9,7 +9,15 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { compareNodes, weightOf, DEFAULT_SORT_WEIGHTS, type SortWeights } from './nodeOrder';
+import {
+  compareNodes,
+  weightOf,
+  rootIconOf,
+  DEFAULT_ROOT_ICONS,
+  DEFAULT_SORT_WEIGHTS,
+  type RootIcons,
+  type SortWeights,
+} from './nodeOrder';
 
 const dir = (name: string) => ({ name, kind: 'directory' });
 const file = (name: string) => ({ name, kind: 'file' });
@@ -80,5 +88,39 @@ describe('weightOf', () => {
     expect(weightOf('local', broken)).toBe(0);
     expect(weightOf('trash', broken)).toBe(0);
     expect(weightOf('system', 'まるごと文字列' as unknown as SortWeights)).toBe(0);
+  });
+});
+
+describe('rootIconOf', () => {
+  it('最上位の名前には表の記号を返す', () => {
+    expect(rootIconOf('system', DEFAULT_ROOT_ICONS)).toBe('⚙️');
+    expect(rootIconOf('trash', DEFAULT_ROOT_ICONS)).toBe('🗑️');
+    expect(rootIconOf('agent', DEFAULT_ROOT_ICONS)).toBe('✨');
+  });
+
+  it('表に無い最上位は null（呼び出し側が従来どおりの記号を出す）', () => {
+    expect(rootIconOf('user', DEFAULT_ROOT_ICONS)).toBeNull();
+    expect(rootIconOf('local', DEFAULT_ROOT_ICONS)).toBeNull();
+  });
+
+  it('🔴 最上位にだけ効く（深いところの同名フォルダは巻き込まない）', () => {
+    // ここを名前だけで見ると、利用者が作った user/docs/system が歯車になる。
+    expect(rootIconOf('user/docs/system', DEFAULT_ROOT_ICONS)).toBeNull();
+    expect(rootIconOf('agent/rules/trash', DEFAULT_ROOT_ICONS)).toBeNull();
+  });
+
+  it('上書きできる。壊れた値と空文字は無いものとして扱う', () => {
+    expect(rootIconOf('agent', { agent: '🤖' })).toBe('🤖');
+    expect(rootIconOf('agent', { agent: '' })).toBeNull();
+    expect(rootIconOf('agent', { agent: 42 } as unknown as RootIcons)).toBeNull();
+  });
+
+  it('設定が無ければ配信の既定を使う', () => {
+    expect(rootIconOf('system', undefined)).toBe('⚙️');
+    expect(rootIconOf('system', null)).toBe('⚙️');
+  });
+
+  it('空のパスは記号を持たない', () => {
+    expect(rootIconOf('', DEFAULT_ROOT_ICONS)).toBeNull();
   });
 });
