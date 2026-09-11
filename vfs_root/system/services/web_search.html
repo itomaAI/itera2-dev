@@ -244,19 +244,39 @@ Note: HTML を保存して DOMParser で解析する使い方を想定してい�
         }
 
         /**
-         * callable を呼ぶ。ログインは要らない（誰でも使える口）。
-         * ログイン中なら ID トークンを添える —— 中継側が利用者ごとに数えるため。
+         * いまの ID トークン。**毎回読む** —— トークンは 1 時間ごとに書き換わるので、控えを持つと古くなる。
          */
-        async function callCloud(name, data) {
-          const base = await cloudBase();
-          if (!base) throw new Error('クラウドの関数を持たない配布物です');
-          const headers = { 'Content-Type': 'application/json' };
+        async function idToken() {
           try {
             const auth = JSON.parse(await window.MetaOS.fs.read('system/temp/firebase_auth.json'));
-            if (auth && auth.signedIn && auth.idToken) headers['Authorization'] = `Bearer ${auth.idToken}`;
+            return auth && auth.signedIn && auth.idToken ? auth.idToken : null;
           } catch (_) {
-            // 未ログイン。そのまま呼ぶ
+            return null;
           }
+        }
+
+        /**
+         * クラウドの関数を使える状態か。**繋ぎ先があり、かつログインしている**ときだけ。
+         *
+         * 🔴 中継は 2026-09-11 から **ログイン必須** である
+         * （山内さん「検索は誰でも使えてしまうのか、それはちょっと問題かも」）。
+         * 未ログインで呼ぶと必ず弾かれるので、呼ばずに従来の経路へ落とす ——
+         * 「サインインしていないと何も動かない」より、「鍵があれば動く」ほうがよい。
+         */
+        async function cloudReady() {
+          const base = await cloudBase();
+          if (!base) return null;
+          return (await idToken()) ? base : null;
+        }
+
+        /** callable を呼ぶ。**ログイン必須**（中継側が未ログインを弾く）。 */
+        async function callCloud(name, data) {
+          const base = await cloudBase();
+          if (!base) throw new Error('This build has no cloud functions configured.');
+          const token = await idToken();
+          // 利用者に見える文は英語（itera2 の UI は英語で統一する。2026-09-11 山内さん）
+          if (!token) throw new Error('Sign in to Itera Cloud to use web search.');
+          const headers = { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` };
           const res = await window.MetaOS.net.fetch(`${base}/${name}`, {
             method: 'POST',
             headers,
@@ -285,7 +305,7 @@ Note: HTML を保存して DOMParser で解析する使い方を想定してい�
             const query = attr.query;
             // 既定は「クラウドの関数があればそれ」。無ければ従来どおり brave。
             // 明示された engine は常に尊重する（比べたいときがあるため）。
-            const engine = attr.engine || ((await cloudBase()) ? 'itera' : 'brave');
+            const engine = attr.engine || ((await cloudReady()) ? 'itera' : 'brave');
 
             if (!query) return '[Error] query attribute is required.';
             sendLog(`Executing search (${engine}) for: ${query}`);
@@ -333,10 +353,10 @@ Note: HTML を保存して DOMParser で解析する使い方を想定してい�
               let htmlStr;
               // クラウドの関数があるなら、そちら経由で取る。
               // 利点は 2 つ: CORS プロキシが要らない／宛先の検査（SSRF 対策）が中継側に入っている。
-              if (await cloudBase()) {
+              if (await cloudReady()) {
                 const out = await callCloud('fetchPage', { url });
                 htmlStr = out.text || '';
-                if (out.truncated) sendLog(`（2MB で打ち切った: ${url}）`);
+                if (out.truncated) sendLog(`(truncated at 2MB: ${url})`);
               } else {
                 const response = await window.MetaOS.net.fetch(url, {
                   method: 'GET',
