@@ -4,11 +4,15 @@
  */
 
 import type { TreeNode } from '../../core/vfs/types';
+import { compareNodes, DEFAULT_SORT_WEIGHTS, type SortWeights } from './nodeOrder';
 
 export class TreeView {
   private container: HTMLElement;
   private contextMenu: HTMLElement | null;
   private events: Record<string, Function> = {};
+
+  /** 一覧の並びの上書き（appearance.json の sortWeight）。設定が読めるまでは配信の既定。 */
+  private sortWeights: SortWeights = DEFAULT_SORT_WEIGHTS;
 
   private expandedPaths: Set<string> = new Set();
   private selectedPaths: Set<string> = new Set();
@@ -57,7 +61,11 @@ export class TreeView {
   }
 
   private _buildInitialTree(parentElement: DocumentFragment | HTMLElement, nodes: TreeNode[], indentLevel: number) {
-    for (const node of nodes) {
+    // 並びは «見た目» なので、木を組む側（PathResolver）ではなくここで決める。
+    // 渡された配列は他の持ち主のものなので、写しを並べ替える。
+    const ordered = [...nodes].sort((a, b) => compareNodes(a, b, this.sortWeights));
+
+    for (const node of ordered) {
       if (node.name === '.keep') continue;
 
       const li = this._createNodeElement(
@@ -241,17 +249,31 @@ export class TreeView {
     }
   }
 
+  /**
+   * 並びの上書きを差し替える。変わったときだけ true を返す
+   * （呼び出し側が「描き直すか」を決められるように。判定はここが持つ ＝ T-0304 の形）。
+   */
+  setSortWeights(weights?: SortWeights | null): boolean {
+    // 配信の既定に **重ねる**（置き換えない）。
+    // 置き換えにすると、利用者が自分のフォルダを 1 つ前へ出すだけで
+    // system / trash の後回しが消える —— 上書きした覚えのないものまで動く。
+    // 既定を外したいときは、その名前に 0 を書く。
+    const next =
+      weights && typeof weights === 'object' ? { ...DEFAULT_SORT_WEIGHTS, ...weights } : { ...DEFAULT_SORT_WEIGHTS };
+    if (JSON.stringify(next) === JSON.stringify(this.sortWeights)) return false;
+    this.sortWeights = next;
+    return true;
+  }
+
   private _sortChildren(ul: HTMLElement) {
     const items = Array.from(ul.children) as HTMLElement[];
-    items.sort((a, b) => {
-      const aKind = a.dataset.kind || 'file';
-      const bKind = b.dataset.kind || 'file';
-      if (aKind !== bKind) return aKind === 'directory' ? -1 : 1;
-
-      const aName = a.dataset.name || '';
-      const bName = b.dataset.name || '';
-      return aName.localeCompare(bName);
-    });
+    items.sort((a, b) =>
+      compareNodes(
+        { name: a.dataset.name || '', kind: a.dataset.kind || 'file' },
+        { name: b.dataset.name || '', kind: b.dataset.kind || 'file' },
+        this.sortWeights,
+      ),
+    );
 
     for (const item of items) {
       ul.appendChild(item);

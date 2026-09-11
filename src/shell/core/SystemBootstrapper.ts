@@ -305,10 +305,13 @@ export class SystemBootstrapper {
     // かつてここが無条件に描き直していたため、設定ファイルが書かれるたびに
     // 履歴が丸ごと組み直され、チャット欄が最下部へ飛んでいた。
     desktop.panels.chat.setHiddenEventTypes(configManager.get('preferences')?.hiddenEventTypes);
+    // 一覧の並びの上書き（appearance.sortWeight）。同じ形で、判定は持ち主（Explorer）に置く。
+    desktop.panels.explorer.setSortWeights(configManager.get('appearance')?.sortWeight);
     configManager.onUpdate((config) => {
       if (desktop.panels.chat.setHiddenEventTypes(config.preferences?.hiddenEventTypes)) {
         desktop.panels.chat.renderHistory(history.get());
       }
+      desktop.panels.explorer.setSortWeights(config.appearance?.sortWeight);
     });
     desktop.panels.chat.renderHistory(history.get());
     desktop.updateStorageUI(vfs.getUsage());
