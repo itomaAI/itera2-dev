@@ -44,6 +44,12 @@ export interface OsConfig {
       systemFontSize?: string;
     };
     layout?: { animations: boolean; homePath?: string };
+    /**
+     * 一覧の並びの上書き。名前 → 重み（小さいほど先。既定 0）。
+     * 配信の既定（system / local を後ろ、trash をいちばん下）に **重ねて** 効く。
+     * 既定を外したいときは、その名前に 0 を書く。実装は src/shell/panels/nodeOrder.ts。
+     */
+    sortWeight?: Record<string, number>;
   };
   llm: { model: string; [key: string]: any };
   network: { proxyUrl: string; allowCredentialsWithProxy: boolean };

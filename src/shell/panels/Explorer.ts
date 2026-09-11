@@ -68,6 +68,16 @@ export class Explorer {
     return this.treeView.reveal(path);
   }
 
+  /**
+   * 一覧の並びの上書き（appearance.json の sortWeight）を差し替える。
+   * 変わったときだけ描き直す —— 設定ファイルが書かれるたびに木を組み直すと、
+   * 展開の状態や選択が毎回飛ぶ（チャット欄で同じことを踏んで T-0304 で直している）。
+   */
+  public setSortWeights(weights?: Record<string, number> | null): void {
+    if (!this.treeView.setSortWeights(weights)) return;
+    this.treeView.render(this.vfs.getTree(this.getActivePrincipal()));
+  }
+
   on(event: string, callback: Function): void {
     this.events[event] = callback;
   }
