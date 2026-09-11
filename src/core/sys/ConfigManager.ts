@@ -6,6 +6,7 @@
 import type { VfsService } from '../vfs/VfsService';
 import type { VfsEventBus } from '../vfs/VfsEventBus';
 import { SYSTEM_PRINCIPAL } from '../vfs/types';
+import { CONFIG_LAYERS } from '../../config/config_layers';
 
 /**
  * 自律ループで連続実行できるツール回数の既定の上限。
@@ -87,11 +88,14 @@ export type ConfigUpdateListener = (config: OsConfig, changed: ReadonlySet<strin
 export class ConfigManager {
   private vfs: VfsService;
   private cache: OsConfig;
-  private configDir = 'system/config';
+  /** 読む順。後が勝つ。書き先は最後（`src/config/config_layers.ts`）。 */
+  private readonly configDirs: readonly string[];
   private listeners: ConfigUpdateListener[] = [];
 
-  constructor(vfs: VfsService, eventBus: VfsEventBus) {
+  constructor(vfs: VfsService, eventBus: VfsEventBus, layers: readonly string[] = CONFIG_LAYERS) {
     this.vfs = vfs;
+    // 空で渡されても動けなくならないようにする（層が無い＝コードの既定だけ、ではなく必ず 1 層は持つ）
+    this.configDirs = layers.length > 0 ? [...layers] : [...CONFIG_LAYERS];
     // ディープコピーで初期化
     this.cache = JSON.parse(JSON.stringify(DEFAULT_CONFIG));
 
@@ -99,7 +103,7 @@ export class ConfigManager {
     eventBus.subscribe(async (events) => {
       const loadPromises: Promise<{ category: string; changed: boolean }>[] = [];
       for (const event of events) {
-        if (event.path.startsWith(`${this.configDir}/`) && event.path.endsWith('.json')) {
+        if (this.configDirs.some((dir) => event.path.startsWith(`${dir}/`)) && event.path.endsWith('.json')) {
           // apps.json と services.json は別のマネージャが扱うので無視
           const filename = event.path.split('/').pop();
           if (filename === 'apps.json' || filename === 'services.json') continue;
@@ -136,26 +140,52 @@ export class ConfigManager {
    */
   private async _loadCategory(filename: string): Promise<{ category: string; changed: boolean }> {
     const category = filename.replace('.json', '');
-    const path = `${this.configDir}/${filename}`;
     const previous = this.cache[category];
 
-    // デフォルトのカテゴリ設定をディープコピーしてベースにする
-    const defaultData = DEFAULT_CONFIG[category] ? JSON.parse(JSON.stringify(DEFAULT_CONFIG[category])) : {};
-
-    let next: any = defaultData;
-    try {
-      if (this.vfs.exists(SYSTEM_PRINCIPAL, path)) {
-        const content = await this.vfs.readFile(SYSTEM_PRINCIPAL, path);
-        const parsed = JSON.parse(content);
-        next = this._deepMerge(defaultData, parsed);
-      }
-    } catch (e) {
-      console.warn(`[ConfigManager] Failed to load or parse ${path}, using defaults.`, e);
-      next = defaultData;
-    }
+    const next = await this._mergeLayers(category, filename, this.configDirs.length);
 
     this.cache[category] = next;
     return { category, changed: !this._isEqual(previous, next) };
+  }
+
+  /**
+   * コードの既定に、層を `count` 個ぶん順に重ねた値を作る。
+   *
+   * **壊れている層は飛ばす。** その層だけを無かったことにし、そこまでに積んだ値は保つ。
+   * （層ごとに読むので「1 つ壊れたら全部既定に戻る」にはしない。）
+   */
+  private async _mergeLayers(category: string, filename: string, count: number): Promise<any> {
+    let acc = DEFAULT_CONFIG[category] ? JSON.parse(JSON.stringify(DEFAULT_CONFIG[category])) : {};
+    for (const dir of this.configDirs.slice(0, count)) {
+      const path = `${dir}/${filename}`;
+      try {
+        if (!this.vfs.exists(SYSTEM_PRINCIPAL, path)) continue;
+        const content = await this.vfs.readFile(SYSTEM_PRINCIPAL, path);
+        acc = this._deepMerge(acc, JSON.parse(content));
+      } catch (e) {
+        console.warn(`[ConfigManager] Failed to load or parse ${path}. Skipping this layer.`, e);
+      }
+    }
+    return acc;
+  }
+
+  /**
+   * `base` に重ねたときに `next` になる最小の差分。
+   *
+   * 🔴 **層に書くのは差分だけである。** 併合した全体を書くと、
+   * その時点の下位の値が写しとして固まり、**あとから既定が変わっても届かなくなる**
+   * （層に分けた意味が消える）。同じ値に戻した項目は、差分から落ちて「上書きしていない」に戻る。
+   */
+  private _deepDiff(base: any, next: any): any {
+    if (!this._isObject(base) || !this._isObject(next)) return next;
+    const out: any = {};
+    for (const key of Object.keys(next)) {
+      const b = base[key];
+      const n = next[key];
+      if (this._isEqual(b, n)) continue;
+      out[key] = this._isObject(b) && this._isObject(n) ? this._deepDiff(b, n) : n;
+    }
+    return out;
   }
 
   /**
@@ -192,9 +222,14 @@ export class ConfigManager {
     const changed = !this._isEqual(previous, newCategoryData);
     this.cache[category] = newCategoryData;
 
-    const path = `${this.configDir}/${String(category)}.json`;
+    // 書き先は最後の層。書くのは**その下までを重ねた値との差分だけ**。
+    const filename = `${String(category)}.json`;
+    const writeDir = this.configDirs[this.configDirs.length - 1];
+    const path = `${writeDir}/${filename}`;
+    const below = await this._mergeLayers(String(category), filename, this.configDirs.length - 1);
+    const toWrite = this._deepDiff(below, newCategoryData);
     try {
-      await this.vfs.writeFile(SYSTEM_PRINCIPAL, path, JSON.stringify(newCategoryData, null, 2), {
+      await this.vfs.writeFile(SYSTEM_PRINCIPAL, path, JSON.stringify(toWrite, null, 2), {
         overwrite: true,
         system: true,
       });
