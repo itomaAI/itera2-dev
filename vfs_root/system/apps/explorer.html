@@ -171,12 +171,63 @@
         return '📃';
       };
 
+      // ---------- 並び ----------
+      //
+      // 規則はホストの src/shell/panels/nodeOrder.ts と同じ:
+      //   重み（小さいほど先・既定 0） → ディレクトリが先 → 名前順。
+      // ここは別の実行環境なので、ホストの TS を import できない。**規則を写している**。
+      //
+      // 🔴 読む層の並びは src/config/config_layers.ts と同じ順でなければならない（後ろが勝つ）。
+      //    層を足したときは、あちらとここの両方を直す。
+      //
+      //    この一覧は **配布物をまたいだ上位集合** である。層が 1 つの配布物には
+      //    user/config が無いが、読めない層は飛ばすので害はない。
+      //    こうしてあるのは、ゲストのアプリを配布物ごとに分けないため
+      //    （分けると、片方だけ直した状態に気づけない）。
+      const CONFIG_LAYERS = ['system/config', 'user/config'];
+      const DEFAULT_SORT_WEIGHTS = { system: 100, local: 100, trash: 200 };
+      let sortWeights = null;
+
+      /**
+       * 並びの重みを読む。配信の既定に **重ねる**（置き換えない）。
+       * 読めない層は飛ばす —— 見た目の設定が欠けているだけで一覧が出ないほうが困る。
+       */
+      async function loadSortWeights() {
+        if (sortWeights) return sortWeights;
+        let merged = { ...DEFAULT_SORT_WEIGHTS };
+        for (const dir of CONFIG_LAYERS) {
+          try {
+            const conf = JSON.parse(await MetaOS.fs.read(`${dir}/appearance.json`));
+            if (conf && conf.sortWeight && typeof conf.sortWeight === 'object') {
+              merged = { ...merged, ...conf.sortWeight };
+            }
+          } catch (_) {
+            // その層が無い・壊れている。次の層へ
+          }
+        }
+        sortWeights = merged;
+        return sortWeights;
+      }
+
+      function weightOf(name, weights) {
+        const raw = weights ? weights[name] : undefined;
+        return typeof raw === 'number' && Number.isFinite(raw) ? raw : 0;
+      }
+
+      function compareEntries(a, b, weights) {
+        const wa = weightOf(a.name, weights);
+        const wb = weightOf(b.name, weights);
+        if (wa !== wb) return wa - wb;
+        if (a.kind !== b.kind) return a.kind === 'directory' ? -1 : 1;
+        return a.name.localeCompare(b.name, 'ja');
+      }
+
       // ---------- 読む ----------
       async function listDir(path) {
-        const items = await MetaOS.fs.list(path, { detail: true });
+        const [items, weights] = await Promise.all([MetaOS.fs.list(path, { detail: true }), loadSortWeights()]);
         return items
           .filter((e) => e.name !== '.keep' && !e.name.startsWith('.'))
-          .sort((a, b) => (a.kind === b.kind ? a.name.localeCompare(b.name, 'ja') : a.kind === 'directory' ? -1 : 1));
+          .sort((a, b) => compareEntries(a, b, weights));
       }
       async function loadRegistry() {
         if (registry) return registry;
