@@ -32,10 +32,13 @@
 
         const defSearch = `
 <define_tag name="web_search">
-Searches the web using a search engine (Brave, Bing, or DuckDuckGo).
+Searches the web.
 Attributes:
   - query: The search query string.
-  - engine (optional): "brave", "bing" or "duckduckgo". Default is "brave".
+  - engine (optional): "itera", "brave", "bing" or "duckduckgo". **Omit it** to let the OS choose:
+    Itera Cloud ("itera") when this build has cloud functions and you are signed in, otherwise "brave".
+    "itera" needs no API key (sign-in required). "brave" needs system/credentials/brave.json
+    (falls back to "itera" when the key is missing and the cloud is available). "duckduckgo" needs no key.
 Returns: 文字列。"N. タイトル / URL / Snippet" の並び。失敗は "[Error] …"。
 </define_tag>`;
 
@@ -102,8 +105,9 @@ Note: HTML を保存して DOMParser で解析する使い方を想定してい�
         const searchBrave = async (query) => {
           const apiKey = await readBraveKey();
           if (!apiKey) {
+            // 利用者に見える文は英語（T-0430）
             throw new Error(
-              'Brave の鍵が無い。system/credentials/brave.json に {"apiKey": "..."} を置くか、engine="duckduckgo" を使う（鍵は要らない）。',
+              'No Brave API key. Put {"apiKey": "..."} in system/credentials/brave.json, sign in to Itera Cloud (if this build has it), or use engine="duckduckgo" (no key needed).',
             );
           }
           const url = `https://api.search.brave.com/res/v1/web/search?q=${encodeURIComponent(query)}`;
@@ -298,14 +302,21 @@ Note: HTML を保存して DOMParser で解析する使い方を想定してい�
         // ================= 道具の登録 =================
         window.MetaOS.tools.register({
           name: 'web_search',
-          description: 'Searches the web using Brave, Bing or DuckDuckGo.',
+          description: 'Searches the web (Itera Cloud, Brave, Bing or DuckDuckGo).',
           definition: defSearch,
           handler: async (context) => {
             const attr = context.attributes || context;
             const query = attr.query;
             // 既定は「クラウドの関数があればそれ」。無ければ従来どおり brave。
             // 明示された engine は常に尊重する（比べたいときがあるため）。
-            const engine = attr.engine || ((await cloudReady()) ? 'itera' : 'brave');
+            let engine = attr.engine || ((await cloudReady()) ? 'itera' : 'brave');
+            // engine="brave" と明示されても、手元に鍵が無くクラウドが使えるならクラウドへ倒す。
+            // 「鍵を配らずに済ませる」がクラウドの目的なので、鍵の無い環境で brave を名指しされて
+            // 失敗するのは目的に反する（2026-09-14 山内さんの実機で踏んだ。T-0422）。
+            if (engine === 'brave' && !(await readBraveKey()) && (await cloudReady())) {
+              sendLog('No local Brave key; using Itera Cloud instead.');
+              engine = 'itera';
+            }
 
             if (!query) return '[Error] query attribute is required.';
             sendLog(`Executing search (${engine}) for: ${query}`);
