@@ -5,7 +5,7 @@
 
 import type { HostTransport } from '../ipc/HostTransport';
 import type { VfsService } from '../core/vfs/VfsService';
-import type { ConfigManager } from '../core/sys/ConfigManager';
+import type { ConfigManager, OsConfig } from '../core/sys/ConfigManager';
 import type { Role, Turn, TurnContent, TurnMeta } from '../core/state/HistoryManager';
 import type { DynamicToolRegistration, ProcessInfo } from './HostApiContract';
 import type { SpawnOptions } from '../shell/windowing/ProcessManager';
@@ -393,6 +393,33 @@ export class HostApiRouter {
     t.registerHandler('sys:get_providers', async () => {
       if (!d.shell || !d.shell.getMergedProviders) return [];
       return await d.shell.getMergedProviders();
+    });
+
+    // 設定の口（T-0431）。ゲストが system/config/*.json を直接読み書きすると、
+    //   1. 層（system/config → user/config）の規則をゲストごとに写すことになり、
+    //   2. 配信の層に書いてしまい OS 更新のたびに戻る（itera2 で実際に起きた）。
+    // 併合と差分書きは ConfigManager が 1 か所で持つ。ゲストはこの口だけを使う。
+    // 🔴 credentials は渡さない（鍵の置き場。ゲストが読む筋合いは無い）。
+    const GUEST_CONFIG_DENY = new Set(['credentials']);
+    const guestConfigCategory = (raw: unknown): string => {
+      const category = typeof raw === 'string' ? raw.trim() : '';
+      if (!category || GUEST_CONFIG_DENY.has(category) || !(category in d.configManager.get())) {
+        throw new Error(`Unknown config category: ${JSON.stringify(raw)}`);
+      }
+      return category;
+    };
+    t.registerHandler('sys:get_config', async ({ category }) => {
+      const key = guestConfigCategory(category) as keyof OsConfig;
+      const value = d.configManager.get(key);
+      return value === undefined ? {} : JSON.parse(JSON.stringify(value));
+    });
+    t.registerHandler('sys:update_config', async ({ category, updates }) => {
+      const key = guestConfigCategory(category) as keyof OsConfig;
+      if (!updates || typeof updates !== 'object' || Array.isArray(updates)) {
+        throw new Error('updates must be an object');
+      }
+      await d.configManager.update(key, updates);
+      return JSON.parse(JSON.stringify(d.configManager.get(key)));
     });
 
     t.registerHandler('sys:report_error', async (payload, sourcePid) => {
