@@ -3,7 +3,7 @@
  * Itera OS v2: OpenAI / Local (Ollama, LM Studio) API Adapter
  */
 
-import { BaseLLMAdapter, filterNestedObject, type LlmConfig } from './BaseAdapter';
+import { BaseLLMAdapter, filterNestedObject, type LlmConfig, type RelayTransport } from './BaseAdapter';
 import type { SystemLogger } from '../../state/SystemLogger';
 
 export class OpenAIAdapter extends BaseLLMAdapter {
@@ -17,29 +17,37 @@ export class OpenAIAdapter extends BaseLLMAdapter {
     baseUrl: string = 'https://api.openai.com/v1',
     config: LlmConfig = {},
     logger: SystemLogger | null = null,
+    relay: RelayTransport | null = null,
   ) {
-    super(config, logger);
+    super(config, logger, relay);
     this.apiKey = apiKey;
     this.modelName = modelName;
     this.baseUrl = baseUrl.replace(/\/$/, '');
   }
 
   async generateStream(messages: any, onChunk: (text: string) => void, signal?: AbortSignal): Promise<void> {
-    const url = `${this.baseUrl}/chat/completions`;
+    // 中継（運営の鍵）を使うときは経路を中継の /v1/chat/completions に替える（本文の形式は同じ）
+    const url = this.relay ? this.relayUrl('/v1/chat/completions') : `${this.baseUrl}/chat/completions`;
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
     };
 
-    if (this.apiKey) {
+    if (this.relay) {
+      // 利用者の鍵は使わない。中継が運営の鍵を付け直す
+      Object.assign(headers, await this.relayAuthHeaders());
+    } else if (this.apiKey) {
       headers['Authorization'] = `Bearer ${this.apiKey}`;
     }
 
-    if (this.baseUrl.includes('openrouter.ai')) {
+    if (!this.relay && this.baseUrl.includes('openrouter.ai')) {
       headers['HTTP-Referer'] = window.location.href;
       headers['X-Title'] = 'Itera OS v2';
     }
 
-    const isOpenRouterOrCustom = this.baseUrl.includes('openrouter.ai') || !this.baseUrl.includes('api.openai.com');
+    // 中継の上流は本家 OpenAI なので、素通しではなく既定の絞り込みを働かせる
+    const isOpenRouterOrCustom = this.relay
+      ? !this.relay.strictOpenAISchema
+      : this.baseUrl.includes('openrouter.ai') || !this.baseUrl.includes('api.openai.com');
 
     const OPENAI_ALLOWED_STRUCTURE = {
       temperature: null,

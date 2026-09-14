@@ -1,6 +1,25 @@
 // src/config/providers.ts
 export const PROVIDERS = [
   {
+    // 運営（この配布物のクラウド）が用意した LLM 中継。利用者は鍵を持たず、Itera Cloud のサインインで通る。
+    // 選択肢の中身（実モデル）は運営が Firestore の台帳（llmModels）で決め、`GET /models` で受け取る。
+    // 🔴 繋ぎ先（system/config/cloud.json の functionsBase）が無い配布物では一覧に出ない
+    //    （CognitiveManager.getMergedProviders が外す）。itera2-dev はそれに当たる。T-0421
+    id: 'itera',
+    name: 'Itera Cloud',
+    placeholder: '',
+    requiresUrl: false,
+    // 鍵を利用者が入力する対象ではない、という印。設定画面はこれを見て入力欄を出さない
+    managed: true,
+    defaultCapabilities: {
+      maxMediaSizeMB: 100,
+      supportedMimes: ['application/pdf', 'image/*', 'text/plain'],
+    },
+    // 選択肢はコードに書かない。取れないとき（起動直後・オフライン）は最後に取れた台帳を
+    // localStorage の控えから出す（RelayCatalogCache）。控えも無ければ空
+    models: [],
+  },
+  {
     id: 'google',
     name: 'Google (Gemini)',
     placeholder: 'AIzaSy...',

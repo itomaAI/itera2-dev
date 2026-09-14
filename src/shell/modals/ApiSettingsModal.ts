@@ -60,6 +60,8 @@ export class ApiSettingsModal {
       this.els.CONTAINER.innerHTML = '';
 
       this.providers.forEach((provider) => {
+        // 運営が鍵を持つプロバイダ（中継）には入れる欄が無い
+        if (provider.managed) return;
         const wrapper = document.createElement('div');
         wrapper.className = 'flex flex-col gap-1.5 p-3 rounded-lg bg-card/50 border border-border-main/50';
 
