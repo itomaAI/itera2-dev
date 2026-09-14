@@ -219,6 +219,19 @@
         if (appearance) return appearance;
         let weights = { ...DEFAULT_SORT_WEIGHTS };
         let icons = { ...DEFAULT_ROOT_ICONS };
+        // ホストに併合済みの設定を返す口があればそれを使う（層の規則を写さない。T-0431）。無い古いホストでは層を直接読む
+        if (MetaOS.system && MetaOS.system.getConfig) {
+          try {
+            const conf = await MetaOS.system.getConfig('appearance');
+            if (conf && conf.sortWeight && typeof conf.sortWeight === 'object')
+              weights = { ...weights, ...conf.sortWeight };
+            if (conf && conf.rootIcons && typeof conf.rootIcons === 'object') icons = { ...icons, ...conf.rootIcons };
+            appearance = { weights, icons };
+            return appearance;
+          } catch (_) {
+            // 口が失敗したら層を直接読む
+          }
+        }
         for (const dir of CONFIG_LAYERS) {
           try {
             const conf = JSON.parse(await MetaOS.fs.read(`${dir}/appearance.json`));

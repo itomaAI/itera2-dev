@@ -54,6 +54,16 @@ export interface HostApiContract {
     request: Record<string, never>;
     response: Record<string, string> | null;
   };
+  /** 併合済みの設定（層を重ねた値）。ゲストが設定ファイルを直接読むと層を写すことになる（T-0431） */
+  'sys:get_config': {
+    request: { category: string };
+    response: any;
+  };
+  /** 設定の更新。書き先は最後の層・書くのは下の層との差分だけ（ConfigManager.update と同じ規律） */
+  'sys:update_config': {
+    request: { category: string; updates: Record<string, unknown> };
+    response: any;
+  };
   'fs:get_usage': {
     request: Record<string, never>;
     response: VfsUsage;

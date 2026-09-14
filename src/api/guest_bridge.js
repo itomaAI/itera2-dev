@@ -234,7 +234,10 @@
             off: (eventName, handler) => transport.off(eventName, handler),
             capture: async (pid) => transport.requestHost('sys:capture', { pid }),
             getArgs: async () => transport.requestHost('sys:get_args', {}),
-            getProviders: async () => transport.requestHost('sys:get_providers', {})
+            getProviders: async () => transport.requestHost('sys:get_providers', {}),
+            // 設定は層（配信の既定 → 利用者の上書き）になっている。併合と書き先はホストが決める（T-0431）
+            getConfig: async (category) => transport.requestHost('sys:get_config', { category }),
+            updateConfig: async (category, updates) => transport.requestHost('sys:update_config', { category, updates })
         },
         host: {
             goHome: async () => transport.requestHost('host:go_home', {}),

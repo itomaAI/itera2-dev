@@ -568,7 +568,8 @@
 
         try {
           await App.Config.update('preferences', configs.preferences);
-          await App.FS.writeJson('system/config/llm.json', configs.llm, { overwrite: true, system: true });
+          // llm も他の設定と同じ口へ（配信の層へ直接書くと OS 更新で戻る。T-0431）
+          await App.Config.update('llm', configs.llm);
           await App.Config.update('network', configs.network);
           await App.Config.update('appearance', configs.appearance);
 

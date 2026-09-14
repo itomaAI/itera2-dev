@@ -78,11 +78,27 @@
   // ==========================================
   // System Configuration Access
   // ==========================================
+  // 設定は層になっている（配信の既定 system/config → 利用者の上書き user/config。層の数は配布物ごと）。
+  // 併合した値を返すのも、書き先（最後の層）に差分だけ書くのも **ホストの ConfigManager** の仕事なので、
+  // ゲストはホストの口（MetaOS.system.getConfig / updateConfig）を使う（T-0431）。
+  // 🔴 以前はここで system/config/<category>.json を直接読み書きしていた。2 層の配布物（itera2）では
+  //    system/config は配信の層で OS 更新のたびに上書きされるため、設定アプリで変えた値が黙って戻っていた。
+  // 口の無い古いホストでは従来どおりファイルへ落ちる（挙動を変えない）。
   const Config = {
     async get(category = 'preferences') {
+      if (global.MetaOS?.system?.getConfig) {
+        try {
+          return (await global.MetaOS.system.getConfig(category)) || {};
+        } catch (e) {
+          console.warn(`[App.Config] getConfig(${category}) failed; falling back to the file`, e);
+        }
+      }
       return await FS.readJson(`system/config/${category}.json`, {});
     },
     async update(category, updates) {
+      if (global.MetaOS?.system?.updateConfig) {
+        return (await global.MetaOS.system.updateConfig(category, updates)) || {};
+      }
       const current = await this.get(category);
       const merged = { ...current, ...updates };
       const path = `system/config/${category}.json`;

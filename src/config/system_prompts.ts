@@ -440,6 +440,7 @@ All methods (except \`on/off\`) are **Asynchronous** and return a \`Promise\`.
 - \`broadcast(eventName, payload)\`: IPC broadcast.
 - \`on(eventName, handler)\`, \`off(eventName, handler)\`: IPC listener.
 - \`getArgs()\`: Returns the args object provided when the app was spawned (e.g., to get the target file path).
+- \`getConfig(category)\` / \`updateConfig(category, updates)\`: Read the merged OS config (e.g. 'preferences', 'appearance', 'llm', 'network') and update it. Config is layered (distribution defaults → user overrides); the host decides where writes go. Guest apps must use this instead of reading/writing \`system/config/*.json\` directly.
 
 **Host UI (MetaOS.host)**:
 - \`showSaveDialog(opts)\`: Opens the OS native save dialog (folder in the tree + file name; overwrite confirmed there). \`opts: { title, filters: ['.xlsx'], defaultPath, defaultDir, defaultName }\`. Returns the full VFS path or null.
