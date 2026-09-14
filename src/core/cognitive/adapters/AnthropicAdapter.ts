@@ -3,7 +3,7 @@
  * Itera OS v2: Anthropic API Adapter
  */
 
-import { BaseLLMAdapter, filterNestedObject, type LlmConfig } from './BaseAdapter';
+import { BaseLLMAdapter, filterNestedObject, type LlmConfig, type RelayTransport } from './BaseAdapter';
 import type { SystemLogger } from '../../state/SystemLogger';
 
 export class AnthropicAdapter extends BaseLLMAdapter {
@@ -15,8 +15,9 @@ export class AnthropicAdapter extends BaseLLMAdapter {
     modelName: string = 'claude-3-5-sonnet-20241022',
     config: LlmConfig = {},
     logger: SystemLogger | null = null,
+    relay: RelayTransport | null = null,
   ) {
-    super(config, logger);
+    super(config, logger, relay);
     this.apiKey = apiKey;
     this.modelName = modelName;
   }
@@ -24,7 +25,24 @@ export class AnthropicAdapter extends BaseLLMAdapter {
   async generateStream(payloadData: any, onChunk: (text: string) => void, signal?: AbortSignal): Promise<void> {
     const { system, messages } = payloadData;
     // ブラウザから直接叩く。プロキシは挟まない（この OS はブラウザ単独で動くことを目指しているため）。
-    const url = 'https://api.anthropic.com/v1/messages';
+    // 中継（運営の鍵）を使うときだけ、経路を中継の /v1/messages に替える（本文の形式は同じ）。
+    const url = this.relay ? this.relayUrl('/v1/messages') : 'https://api.anthropic.com/v1/messages';
+
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      'anthropic-version': '2023-06-01',
+    };
+    if (this.relay) {
+      // 中継の CORS が許可するのは Authorization / Content-Type / anthropic-version / anthropic-beta の 4 つだけ
+      // （functions/src/llmProxy.ts の corsHeaders）。他のヘッダを足すと preflight で弾かれ、ブラウザからは一切通らない。
+      Object.assign(headers, await this.relayAuthHeaders());
+    } else {
+      headers['x-api-key'] = this.apiKey;
+      // ブラウザから直接叩くことへの明示的な同意。**この名前でないと CORS が開かない。**
+      // 名前が違うと Anthropic は access-control-allow-origin を返さず、
+      // ブラウザは応答を見る前に fetch を落とす（TypeError: NetworkError）。
+      headers['anthropic-dangerous-direct-browser-access'] = 'true';
+    }
 
     const ANTHROPIC_ALLOWED_STRUCTURE = {
       temperature: null,
@@ -65,15 +83,7 @@ export class AnthropicAdapter extends BaseLLMAdapter {
 
     const response = await fetch(url, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': this.apiKey,
-        'anthropic-version': '2023-06-01',
-        // ブラウザから直接叩くことへの明示的な同意。**この名前でないと CORS が開かない。**
-        // 名前が違うと Anthropic は access-control-allow-origin を返さず、
-        // ブラウザは応答を見る前に fetch を落とす（TypeError: NetworkError）。
-        'anthropic-dangerous-direct-browser-access': 'true',
-      },
+      headers: headers,
       body: JSON.stringify(payload),
       signal,
     });

@@ -21,6 +21,29 @@ export interface LlmConfig {
 }
 
 /**
+ * 中継（運営の鍵で LLM を呼ぶプロキシ。itera2 の Functions `llmProxy`）を使うときだけ渡す送信設定。
+ *
+ * 各アダプタは既定では各社の URL と鍵を内側に持っている。中継ではその 2 点だけが別物になるため、
+ * 差し替え口をここに集約する。**本文の形式は各社のまま**（中継は素通しする）。
+ *
+ * 認証は「値」ではなく「取り方」で持つ。Firebase の ID トークンは 1 時間で失効し、
+ * Engine は同じアダプタを長時間使い回すため、生成のたびに取り直す必要がある。
+ * （ミャク楽 `agent/` の `RelayTransport` と同じ形。T-0421）
+ */
+export interface RelayTransport {
+  /** 中継の基点 URL。各アダプタが自分の経路（`/v1/messages` など）を足す */
+  baseUrl: string;
+  /** 認証ヘッダの取得。呼ぶたびに取り直す。取れなければ投げる */
+  getAuthHeaders: () => Promise<Record<string, string>>;
+  /**
+   * OpenAI 形式のとき、上流が本家 OpenAI であることを示す。
+   * 中継先が本家である以上、OpenRouter / Custom 向けの「設定の素通し」は 400 を招くだけなので、
+   * 既定の絞り込みを働かせる。
+   */
+  strictOpenAISchema?: boolean;
+}
+
+/**
  * テンプレート構造に存在するキーのみをネストを含めて再帰的に抽出するヘルパー関数
  */
 export function filterNestedObject(input: any, template: Record<string, any>): Record<string, any> {
@@ -53,10 +76,31 @@ export function filterNestedObject(input: any, template: Record<string, any>): R
 export abstract class BaseLLMAdapter {
   protected config: LlmConfig;
   protected logger: SystemLogger | null;
+  /** 中継を使うときだけ非 null。null なら各社の API を直接叩く（従来どおり） */
+  protected relay: RelayTransport | null;
 
-  constructor(config: LlmConfig = {}, logger: SystemLogger | null = null) {
+  constructor(config: LlmConfig = {}, logger: SystemLogger | null = null, relay: RelayTransport | null = null) {
     this.config = config;
     this.logger = logger;
+    this.relay = relay;
+  }
+
+  /** 中継の経路を組み立てる。`path` は先頭にスラッシュを付けて渡す。 */
+  protected relayUrl(path: string): string {
+    return `${(this.relay?.baseUrl || '').replace(/\/+$/, '')}${path}`;
+  }
+
+  /**
+   * 中継へ付ける認証ヘッダ。取得できなければ**送信しない**。
+   * 未認証のまま投げても 401 が返るだけだが、利用者からは「モデルが壊れている」ようにしか見えない。
+   * ここで理由の分かる形で落とす。
+   */
+  protected async relayAuthHeaders(): Promise<Record<string, string>> {
+    const headers = this.relay ? await this.relay.getAuthHeaders() : null;
+    if (!headers || typeof headers !== 'object' || Object.keys(headers).length === 0) {
+      throw new Error('Could not get credentials for the LLM relay. Sign in to Itera Cloud again.');
+    }
+    return headers;
   }
 
   /**

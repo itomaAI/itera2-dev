@@ -3,7 +3,7 @@
  * Itera OS v2: Google Gemini API Adapter
  */
 
-import { BaseLLMAdapter, filterNestedObject, type LlmConfig } from './BaseAdapter';
+import { BaseLLMAdapter, filterNestedObject, type LlmConfig, type RelayTransport } from './BaseAdapter';
 import type { SystemLogger } from '../../state/SystemLogger';
 
 export class GeminiAdapter extends BaseLLMAdapter {
@@ -16,16 +16,25 @@ export class GeminiAdapter extends BaseLLMAdapter {
     modelName: string = 'gemini-3.6-flash',
     config: LlmConfig = {},
     logger: SystemLogger | null = null,
+    relay: RelayTransport | null = null,
   ) {
-    super(config, logger);
+    super(config, logger, relay);
     this.apiKey = apiKey;
     this.modelName = modelName;
   }
 
   async generateStream(messages: any, onChunk: (text: string) => void, signal?: AbortSignal): Promise<void> {
-    if (!this.apiKey) throw new Error('API Key is missing.');
-
-    const url = `${this.baseUrl}/${this.modelName}:streamGenerateContent?alt=sse&key=${this.apiKey}`;
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    let url: string;
+    if (this.relay) {
+      // 中継では鍵を送らない（中継が運営の鍵を付け直す）。Gemini はモデル名（別名）が URL に載る。
+      // 経路は functions/src/llmRelay.ts の GOOGLE_PATH_RE と対。
+      url = this.relayUrl(`/v1beta/models/${encodeURIComponent(this.modelName)}:streamGenerateContent?alt=sse`);
+      Object.assign(headers, await this.relayAuthHeaders());
+    } else {
+      if (!this.apiKey) throw new Error('API Key is missing.');
+      url = `${this.baseUrl}/${this.modelName}:streamGenerateContent?alt=sse&key=${this.apiKey}`;
+    }
 
     const GEMINI_ALLOWED_STRUCTURE = {
       temperature: null,
@@ -69,7 +78,7 @@ export class GeminiAdapter extends BaseLLMAdapter {
 
     const response = await fetch(url, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: headers,
       body: JSON.stringify(payload),
       signal,
     });
