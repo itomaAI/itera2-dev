@@ -153,16 +153,27 @@
       async function getPricingMap() {
         const map = {};
         try {
-          const profiles = await App.FS.readJson('system/registry/llm_profiles.json');
-          if (profiles && Array.isArray(profiles.providers)) {
-            profiles.providers.forEach((p) => {
-              if (Array.isArray(p.models)) {
-                p.models.forEach((m) => {
-                  if (m.pricing) map[m.id] = m.pricing;
-                });
-              }
-            });
+          // llm_profiles.json は層になっている（配信 → 利用者）。重ねた一覧はホストが持つ（T-0447）。
+          // 口の無い古いホストでは配信のファイルを読む
+          let providers = null;
+          if (window.MetaOS?.system?.getProviders) {
+            try {
+              providers = await MetaOS.system.getProviders();
+            } catch (e) {
+              console.warn('getProviders failed; falling back to llm_profiles.json', e);
+            }
           }
+          if (!Array.isArray(providers)) {
+            const profiles = await App.FS.readJson('system/registry/llm_profiles.json');
+            providers = profiles && Array.isArray(profiles.providers) ? profiles.providers : [];
+          }
+          providers.forEach((p) => {
+            if (Array.isArray(p.models)) {
+              p.models.forEach((m) => {
+                if (m.pricing) map[m.id] = m.pricing;
+              });
+            }
+          });
         } catch (e) {
           console.warn('Failed to load llm_profiles.json', e);
         }

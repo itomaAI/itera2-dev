@@ -237,7 +237,10 @@
             getProviders: async () => transport.requestHost('sys:get_providers', {}),
             // 設定は層（配信の既定 → 利用者の上書き）になっている。併合と書き先はホストが決める（T-0431）
             getConfig: async (category) => transport.requestHost('sys:get_config', { category }),
-            updateConfig: async (category, updates) => transport.requestHost('sys:update_config', { category, updates })
+            updateConfig: async (category, updates) => transport.requestHost('sys:update_config', { category, updates }),
+            // 登録簿（apps / services / associations）も層になっている。重ねた値と書き先はホストが決める（T-0447）
+            getRegistry: async (name) => transport.requestHost('sys:get_registry', { name }),
+            updateRegistry: async (name, id, updates) => transport.requestHost('sys:update_registry', { name, id, updates })
         },
         host: {
             goHome: async () => transport.requestHost('host:go_home', {}),

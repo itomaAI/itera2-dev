@@ -171,7 +171,7 @@ export class SystemBootstrapper {
     const cognitiveManager = new CognitiveManager(configManager, engine, logger, vfs);
     const sessionManager = new SessionManager(vfs, history, logger, toolRegistry);
     const themeService = new ThemeService(configManager, vfs);
-    const maintenanceDaemon = new MaintenanceDaemon(processManager, logger, vfs, nodeStore);
+    const maintenanceDaemon = new MaintenanceDaemon(processManager, logger, vfs, nodeStore, appRegistry);
 
     const desktop = new DesktopEnvironment(
       vfs,
@@ -226,6 +226,8 @@ export class SystemBootstrapper {
     new HostApiRouter(transport, {
       vfs,
       configManager,
+      appRegistry,
+      associations: resolver,
       processManager,
       history,
       engine,

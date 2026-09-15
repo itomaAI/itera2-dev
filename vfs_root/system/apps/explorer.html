@@ -285,8 +285,19 @@
             return dflt;
           }
         };
-        const apps = await readJson('system/registry/apps.json', []);
-        const associations = await readJson('system/registry/associations.json', { extensions: {} });
+        // 登録簿は層になっている（配信 → 利用者）。重ねた値はホストの口から受け取る（T-0447）。
+        // 口の無い古いホストでは配信のファイルを読む
+        const readRegistry = async (name, dflt) => {
+          if (MetaOS.system?.getRegistry) {
+            try {
+              const value = await MetaOS.system.getRegistry(name);
+              if (value !== undefined && value !== null) return value;
+            } catch (_) {}
+          }
+          return readJson(`system/registry/${name}.json`, dflt);
+        };
+        const apps = await readRegistry('apps', []);
+        const associations = await readRegistry('associations', { extensions: {} });
         registry = { apps: Array.isArray(apps) ? apps : [], associations: associations || { extensions: {} } };
         return registry;
       }

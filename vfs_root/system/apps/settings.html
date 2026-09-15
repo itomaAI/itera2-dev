@@ -961,7 +961,8 @@
       async function loadServices() {
         const container = DOM('services-list');
         try {
-          servicesData = await App.FS.readJson('system/registry/services.json', []);
+          // 登録簿は層になっている。重ねた値はホストから受け取る（T-0447）
+          servicesData = await App.Registry.get('services', []);
           container.innerHTML = '';
 
           if (!Array.isArray(servicesData) || servicesData.length === 0) {
@@ -1036,11 +1037,9 @@
             status.classList.remove('opacity-0');
             status.classList.add('text-warning');
             try {
-              await App.FS.writeJson('system/registry/services.json', servicesData, {
-                overwrite: true,
-                system: true,
-                silent: true,
-              });
+              // 🔴 services.json を丸ごと書かない。項目の差分だけをホストが最後の層に書く（T-0447）。
+              // 丸ごと書くと 2 層の配布物では配信の層へ落ち、OS 更新のたびに切り替えが戻る
+              await App.Registry.update('services', svc.id, { autoStart: isEnabled });
               status.textContent = 'Saved';
               status.classList.remove('text-warning');
               status.classList.add('text-success');

@@ -7,6 +7,7 @@ import type { ProcessManager } from '../windowing/ProcessManager';
 import type { SystemLogger } from '../../core/state/SystemLogger';
 import type { VfsService } from '../../core/vfs/VfsService';
 import type { NodeStore } from '../../core/vfs/NodeStore';
+import type { AppRegistry } from '../../core/sys/AppRegistry';
 import { SYSTEM_PRINCIPAL } from '../../core/vfs/types';
 
 export class MaintenanceDaemon {
@@ -14,12 +15,20 @@ export class MaintenanceDaemon {
   private logger: SystemLogger;
   private vfs: VfsService;
   private nodeStore: NodeStore;
+  private appRegistry: AppRegistry;
 
-  constructor(processManager: ProcessManager, logger: SystemLogger, vfs: VfsService, nodeStore: NodeStore) {
+  constructor(
+    processManager: ProcessManager,
+    logger: SystemLogger,
+    vfs: VfsService,
+    nodeStore: NodeStore,
+    appRegistry: AppRegistry,
+  ) {
     this.processManager = processManager;
     this.logger = logger;
     this.vfs = vfs;
     this.nodeStore = nodeStore;
+    this.appRegistry = appRegistry;
   }
 
   public async start(): Promise<void> {
@@ -39,13 +48,10 @@ export class MaintenanceDaemon {
 
   private async _startInitialDaemons(): Promise<void> {
     try {
-      let services: any[] = [];
-      const registryPath = 'system/registry/services.json';
-
-      if (this.vfs.exists(SYSTEM_PRINCIPAL, registryPath)) {
-        const content = await this.vfs.readFile(SYSTEM_PRINCIPAL, registryPath);
-        services = JSON.parse(content);
-      }
+      // 🔴 services.json を直接読まない。登録簿は層（配信 → 利用者）になっていて、
+      // 重ねた値を持つのは AppRegistry だけ。ここが直読みだと、利用者が `autoStart: false` を
+      // 自分の層に置いても配信のデーモンが起動し続ける（T-0447 で見つけた穴）。
+      const services = this.appRegistry.getAllServices();
       for (const svc of services) {
         // 新スキーマ: id が指定されており、autoStart が true のものだけを起動
         if (svc.id && svc.path && svc.autoStart) {

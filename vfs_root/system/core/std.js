@@ -112,6 +112,46 @@
   };
 
   // ==========================================
+  // Registry Access (apps / services / associations)
+  // ==========================================
+  // 登録簿も設定と同じく層になっている（配信 system/registry → 利用者 user/registry。層の数は配布物ごと）。
+  // 重ねた値を返すのも、書き先（最後の層）に項目の差分だけ書くのも **ホストの AppRegistry** の仕事なので、
+  // ゲストはホストの口（MetaOS.system.getRegistry / updateRegistry）を使う（T-0447）。
+  // 口の無い古いホストでは従来どおり system/registry/<name>.json を読み書きする（挙動を変えない）。
+  const Registry = {
+    async get(name, fallback = []) {
+      if (global.MetaOS?.system?.getRegistry) {
+        try {
+          const value = await global.MetaOS.system.getRegistry(name);
+          return value === undefined || value === null ? fallback : value;
+        } catch (e) {
+          console.warn(`[App.Registry] getRegistry(${name}) failed; falling back to the file`, e);
+        }
+      }
+      return await FS.readJson(`system/registry/${name}.json`, fallback);
+    },
+    // 1 項目だけ更新する（apps / services）。丸ごと書かない —— 丸ごと書くと配信の層の写しが固まる
+    async update(name, id, updates) {
+      if (global.MetaOS?.system?.updateRegistry) {
+        return await global.MetaOS.system.updateRegistry(name, id, updates);
+      }
+      const path = `system/registry/${name}.json`;
+      const list = await FS.readJson(path, []);
+      const entries = Array.isArray(list) ? list : [];
+      const index = entries.findIndex((e) => e && e.id === id);
+      const next = { ...(index >= 0 ? entries[index] : { id }), ...updates, id };
+      if (index >= 0) entries[index] = next;
+      else entries.push(next);
+      await global.MetaOS.fs.write(path, JSON.stringify(entries, null, 2), {
+        overwrite: true,
+        system: true,
+        silent: true,
+      });
+      return next;
+    },
+  };
+
+  // ==========================================
   // AI Cognitive Copilot
   // ==========================================
   const AI = {
@@ -122,5 +162,5 @@
     },
   };
 
-  global.App = { FS, Context, Storage, Config, AI };
+  global.App = { FS, Context, Storage, Config, Registry, AI };
 })(window);

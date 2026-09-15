@@ -10,6 +10,8 @@ import type { VfsService } from '../../core/vfs/VfsService';
 import { SYSTEM_PRINCIPAL } from '../../core/vfs/types';
 import { buildSystemPrompt } from '../../config/system_prompts';
 import { PROVIDERS } from '../../config/providers';
+import { REGISTRY_LAYERS } from '../../config/config_layers';
+import { overlayProviders } from '../../core/sys/registryMerge';
 
 import { GeminiProjector, OpenAIProjector, AnthropicProjector } from '../../core/cognitive/Projector';
 import { GeminiAdapter } from '../../core/cognitive/adapters/GeminiAdapter';
@@ -66,7 +68,17 @@ export class CognitiveManager {
   // 運営の台帳（中継の GET /models）の控え。コード側に選択肢は無い。取れないときは最後に取れた台帳だけ
   private relayCatalog = new RelayCatalogCache(localStorageStore(RELAY_CATALOG_STORAGE_KEY));
 
-  constructor(configManager: ConfigManager, engine: Engine, logger: SystemLogger, vfs: VfsService) {
+  /** llm_profiles.json を読む順。後の層が勝つ（`src/config/config_layers.ts`）。 */
+  private readonly registryDirs: readonly string[];
+
+  constructor(
+    configManager: ConfigManager,
+    engine: Engine,
+    logger: SystemLogger,
+    vfs: VfsService,
+    layers: readonly string[] = REGISTRY_LAYERS,
+  ) {
+    this.registryDirs = layers.length > 0 ? [...layers] : [...REGISTRY_LAYERS];
     this.configManager = configManager;
     this.engine = engine;
     this.logger = logger;
@@ -115,35 +127,17 @@ export class CognitiveManager {
       merged = merged.filter((p: any) => !p.managed);
     }
 
-    try {
-      if (this.vfs.exists(SYSTEM_PRINCIPAL, 'system/registry/llm_profiles.json')) {
-        const content = await this.vfs.readFile(SYSTEM_PRINCIPAL, 'system/registry/llm_profiles.json');
-        const parsed = JSON.parse(content);
-
-        if (parsed && Array.isArray(parsed.providers)) {
-          for (const vfsProv of parsed.providers) {
-            const baseProv = merged.find((p: any) => p.id === vfsProv.id);
-            if (baseProv) {
-              if (Array.isArray(vfsProv.models)) {
-                baseProv.models = vfsProv.models;
-              }
-              if (vfsProv.defaultCapabilities) {
-                baseProv.defaultCapabilities = {
-                  ...baseProv.defaultCapabilities,
-                  ...vfsProv.defaultCapabilities,
-                };
-              }
-              if (vfsProv.defaultConfig) {
-                baseProv.defaultConfig = vfsProv.defaultConfig;
-              }
-            } else {
-              merged.push(vfsProv);
-            }
-          }
-        }
+    // llm_profiles.json は登録簿の層（配信 → 利用者）を順に重ねる。壊れている層は飛ばし、
+    // そこまでに積んだ値は保つ（1 つ壊れて選択肢が全部既定に戻らないように）。T-0447
+    for (const dir of this.registryDirs) {
+      const path = `${dir}/llm_profiles.json`;
+      try {
+        if (!this.vfs.exists(SYSTEM_PRINCIPAL, path)) continue;
+        const parsed = JSON.parse(await this.vfs.readFile(SYSTEM_PRINCIPAL, path));
+        merged = overlayProviders(merged, parsed?.providers);
+      } catch (e) {
+        console.warn(`[CognitiveManager] Failed to parse ${path}. Skipping this layer.`, e);
       }
-    } catch (e) {
-      console.warn('[CognitiveManager] Failed to parse llm_profiles.json, using defaults.', e);
     }
 
     const relayProvider =

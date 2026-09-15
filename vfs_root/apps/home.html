@@ -436,7 +436,8 @@
           if (!el) return;
           let apps;
           try {
-            apps = JSON.parse(await MetaOS.fs.read('system/registry/apps.json'));
+            // 登録簿は層になっている。重ねた値はホストから受け取る（T-0447）
+            apps = await App.Registry.get('apps', null);
             if (!Array.isArray(apps)) throw new Error('目録が配列ではありません');
           } catch (e) {
             // 既定の一覧を埋め込まない。無い物を在るように見せるより、読めないと言う方がよい。
@@ -492,7 +493,8 @@
             MetaOS.system.on('vfs_mutation', (m) => {
               if (m.path.startsWith('data/')) refreshWidgets();
               // 登録した時点でホームに出る（アプリを足しても、ここを書き換えなくてよい）
-              if (m.path === 'system/registry/apps.json') renderShortcuts();
+              // どの層の目録でも（system/registry でも user/registry でも）
+              if (m.path.endsWith('/registry/apps.json')) renderShortcuts();
             });
           }
         };

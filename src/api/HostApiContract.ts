@@ -64,6 +64,16 @@ export interface HostApiContract {
     request: { category: string; updates: Record<string, unknown> };
     response: any;
   };
+  /** 併合済みの登録簿（apps / services / associations）。ゲストが登録簿を直接読むと層を写すことになる（T-0447） */
+  'sys:get_registry': {
+    request: { name: string };
+    response: any;
+  };
+  /** 登録簿の 1 項目を更新（apps / services）。書き先は最後の層・書くのは下の層との差分だけ */
+  'sys:update_registry': {
+    request: { name: string; id: string; updates: Record<string, unknown> };
+    response: any;
+  };
   'fs:get_usage': {
     request: Record<string, never>;
     response: VfsUsage;

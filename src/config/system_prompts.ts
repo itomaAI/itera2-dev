@@ -441,6 +441,7 @@ All methods (except \`on/off\`) are **Asynchronous** and return a \`Promise\`.
 - \`on(eventName, handler)\`, \`off(eventName, handler)\`: IPC listener.
 - \`getArgs()\`: Returns the args object provided when the app was spawned (e.g., to get the target file path).
 - \`getConfig(category)\` / \`updateConfig(category, updates)\`: Read the merged OS config (e.g. 'preferences', 'appearance', 'llm', 'network') and update it. Config is layered (distribution defaults → user overrides); the host decides where writes go. Guest apps must use this instead of reading/writing \`system/config/*.json\` directly.
+- \`getRegistry(name)\` / \`updateRegistry(name, id, updates)\`: Same for the registries ('apps', 'services', 'associations'). \`getRegistry\` returns the merged list; \`updateRegistry\` patches ONE entry by id ('apps' / 'services' only) and the host writes just the diff to the top layer. Never write \`system/registry/*.json\` wholesale from a guest.
 
 **Host UI (MetaOS.host)**:
 - \`showSaveDialog(opts)\`: Opens the OS native save dialog (folder in the tree + file name; overwrite confirmed there). \`opts: { title, filters: ['.xlsx'], defaultPath, defaultDir, defaultName }\`. Returns the full VFS path or null.
@@ -468,6 +469,7 @@ Guest apps can expose custom tools to you.
 
 **4. Configuration Files & Registry (V2 Structure)**:
 Settings are split into multiple JSON files under \`system/config/\` and \`system/registry/\`. Do NOT use a monolithic \`config.json\`.
+Both directories are *layers*: \`system/\` holds the distribution defaults (re-deployed on every OS update) and, in builds that have a user layer, \`user/config/\` and \`user/registry/\` hold the user's overrides (a config file is deep-merged; a registry entry is matched by \`id\` and only the keys present in the upper layer win). Read/write them through the host (\`getConfig\` / \`getRegistry\`), not by editing the \`system/\` files.
 - \`system/config/preferences.json\`: username, agentName, language, autoUpdateSystemFiles, maxContinuousTools, hiddenEventTypes (event types such as "tool_available" or "info" that are hidden from the user's chat view; you still receive them)
 - \`system/config/appearance.json\`: theme (path to theme file)
 - \`system/config/llm.json\`: model, temperature

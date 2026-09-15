@@ -69,18 +69,19 @@ export class VfsInitializer {
       }
     }
 
-    // ユーザーの自動アップデート設定を読み取る
+    // ユーザーの自動アップデート設定を読み取る。
+    // ConfigManager より前に走るので自前で読むが、層の並びは同じ（後の層が勝つ）。
+    // 配信の層だけ見ると、利用者が自分の層で切った `autoUpdateSystemFiles: false` が効かない。
     let autoUpdate = true;
-    try {
-      if (this.vfs.exists(SYSTEM_PRINCIPAL, 'system/config/preferences.json')) {
-        const prefContent = await this.vfs.readFile(SYSTEM_PRINCIPAL, 'system/config/preferences.json');
-        const pref = JSON.parse(prefContent);
-        if (pref.autoUpdateSystemFiles === false) {
-          autoUpdate = false;
-        }
+    for (const dir of CONFIG_LAYERS) {
+      const path = `${dir}/preferences.json`;
+      try {
+        if (!this.vfs.exists(SYSTEM_PRINCIPAL, path)) continue;
+        const pref = JSON.parse(await this.vfs.readFile(SYSTEM_PRINCIPAL, path));
+        if (typeof pref?.autoUpdateSystemFiles === 'boolean') autoUpdate = pref.autoUpdateSystemFiles;
+      } catch (e) {
+        // 読めない層は飛ばす（安全側＝それまでの値のまま進める）
       }
-    } catch (e) {
-      // 読み込みに失敗した場合は安全のためデフォルト(true)のまま進める
     }
 
     for (const [key, content] of Object.entries(DEFAULT_FILES)) {

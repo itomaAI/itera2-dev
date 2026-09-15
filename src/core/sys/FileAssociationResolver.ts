@@ -73,6 +73,11 @@ export class FileAssociationResolver {
     this.associations = merged;
   }
 
+  /** 層を重ねた関連付け（写し）。ゲストの口 `sys:get_registry('associations')` が返す。 */
+  getAssociations(): { extensions: Record<string, string>; mimeTypes: Record<string, string> } {
+    return JSON.parse(JSON.stringify(this.associations));
+  }
+
   /**
    * ファイル情報から、起動すべきデフォルトのアプリを解決する。
    */

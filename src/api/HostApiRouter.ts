@@ -46,9 +46,21 @@ export interface IToolRegistry {
   unregisterDynamicTool(name: string, sourcePid: string): void;
 }
 
+/** 登録簿（層を重ねた値）の口。AppRegistry / FileAssociationResolver が満たす。 */
+export interface IRegistryReader {
+  getAllApps(): any[];
+  getAllServices(): any[];
+  updateEntry(kind: 'apps' | 'services', id: string, updates: Record<string, unknown>): Promise<any>;
+}
+export interface IAssociationReader {
+  getAssociations(): any;
+}
+
 export interface RouterDeps {
   vfs: VfsService;
   configManager: ConfigManager;
+  appRegistry?: IRegistryReader;
+  associations?: IAssociationReader;
   history?: IHistoryManager;
   processManager?: IProcessManager;
   engine?: IEngine;
@@ -420,6 +432,38 @@ export class HostApiRouter {
       }
       await d.configManager.update(key, updates);
       return JSON.parse(JSON.stringify(d.configManager.get(key)));
+    });
+
+    // 登録簿の口（T-0447）。設定と同じ理由 —— ゲストが system/registry/*.json を直接読み書きすると
+    // 層の規則を写すことになり、書けば配信の層へ落ちて OS 更新で戻る（設定アプリのサービス切り替えで実際に起きうる）。
+    // 重ねるのも書き先を決めるのも AppRegistry が 1 か所で持つ。
+    // adapters.json は渡さない（層を認めていない。config_layers.ts）。
+    const clone = (v: unknown) => (v === undefined ? undefined : JSON.parse(JSON.stringify(v)));
+    t.registerHandler('sys:get_registry', async ({ name }) => {
+      switch (name) {
+        case 'apps':
+          if (!d.appRegistry) throw new Error('AppRegistry not connected');
+          return clone(d.appRegistry.getAllApps());
+        case 'services':
+          if (!d.appRegistry) throw new Error('AppRegistry not connected');
+          return clone(d.appRegistry.getAllServices());
+        case 'associations':
+          if (!d.associations) throw new Error('FileAssociationResolver not connected');
+          return clone(d.associations.getAssociations());
+        default:
+          throw new Error(`Unknown registry: ${JSON.stringify(name)}`);
+      }
+    });
+    t.registerHandler('sys:update_registry', async ({ name, id, updates }) => {
+      if (name !== 'apps' && name !== 'services') {
+        throw new Error(`Registry ${JSON.stringify(name)} cannot be updated through this call`);
+      }
+      if (!d.appRegistry) throw new Error('AppRegistry not connected');
+      if (typeof id !== 'string' || !id) throw new Error("'id' is required.");
+      if (!updates || typeof updates !== 'object' || Array.isArray(updates)) {
+        throw new Error('updates must be an object');
+      }
+      return clone(await d.appRegistry.updateEntry(name, id, updates));
     });
 
     t.registerHandler('sys:report_error', async (payload, sourcePid) => {
