@@ -33,7 +33,8 @@
         try {
           if (!window.App) return setTimeout(loadApps, 50);
 
-          const apps = await App.FS.readJson('system/registry/apps.json', []);
+          // 登録簿は層になっている。重ねた値はホストから受け取る（T-0447）
+          const apps = await App.Registry.get('apps', []);
 
           grid.innerHTML = '';
           apps.forEach((app, index) => {
