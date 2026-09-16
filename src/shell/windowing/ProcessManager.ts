@@ -488,17 +488,26 @@ export class ProcessManager {
 
   /**
    * ゲストの申告（自分の画面の URL を伝える）。前面のアプリの path と currentUri を書き換え、場所を更新する。
-   * path が '?' / '#' で始まれば base に付け足す。戻り値は新しい URI（前面が無ければ null）。
+   * path が '?' / '#' で始まれば base に付け足す。`metaos://<intent>/<path>` の完全な URI なら intent とパスに分けて受ける
+   * （そのまま前置すると `metaos://run/metaos://run/…` と二重になり、path も `metaos://…` になって resume 判定と相対パスが狂う。T-0468）。
+   * 戻り値は新しい URI（前面が無ければ null）。
    */
   public declareRoute(path: string): string | null {
     const fg = Array.from(this.processes.values()).find((p) => p.type === 'app' && p.state === 'foreground');
     if (!fg) return null;
     const oldBasePath = fg.path.split(/[?#]/)[0];
-    const newPath = path.startsWith('?') || path.startsWith('#') ? oldBasePath + path : path;
-    fg.path = newPath;
-    // 既存の URI から intent（run / open）を保つ
+    // 既存の URI から intent（run / open）を保つ。完全な URI で申告されたらそちらの intent を採る
     const intentMatch = fg.currentUri.match(/^metaos:\/\/([^/]+)/);
-    const intent = intentMatch ? intentMatch[1] : 'open';
+    let intent = intentMatch ? intentMatch[1] : 'open';
+    let declared = String(path || '');
+    const full = declared.match(/^metaos:\/\/([^/]+)\/(.*)$/);
+    if (full) {
+      intent = full[1];
+      declared = full[2];
+    }
+    const newPath =
+      declared.startsWith('?') || declared.startsWith('#') ? oldBasePath + declared : declared || oldBasePath;
+    fg.path = newPath;
     fg.currentUri = `metaos://${intent}/${newPath}`;
     this.setCurrentRoute({ pid: fg.pid, uri: fg.currentUri });
     return fg.currentUri;
