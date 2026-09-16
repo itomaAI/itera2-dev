@@ -218,7 +218,12 @@ export class DesktopEnvironment {
   }
 
   /** アドレスバー左の ← →（T-0453）。活性は履歴の変化で描き直す。ホストの UI はここだけ */
-  public bindNavHistory(nav: { back(): Promise<boolean>; forward(): Promise<boolean>; state(): { canBack: boolean; canForward: boolean }; onChange(cb: (s: { canBack: boolean; canForward: boolean }) => void): void }): void {
+  public bindNavHistory(nav: {
+    back(): Promise<boolean>;
+    forward(): Promise<boolean>;
+    state(): { canBack: boolean; canForward: boolean };
+    onChange(cb: (s: { canBack: boolean; canForward: boolean }) => void): void;
+  }): void {
     const back = document.getElementById('btn-nav-back') as HTMLButtonElement | null;
     const fwd = document.getElementById('btn-nav-forward') as HTMLButtonElement | null;
     const paint = (s: { canBack: boolean; canForward: boolean }) => {

@@ -27,7 +27,11 @@ describe('NavHistory', () => {
     h.record({ pid: 'a', uri: 'metaos://run/a.html?x=1' }); // 申告
     expect(h.state()).toMatchObject({ canBack: true, canForward: false, index: 2, length: 3 });
     h.record({ pid: 'b', uri: 'metaos://run/b.html' }); // 上限 3 → 先頭が落ちる
-    expect(h.entries.map((e) => e.uri)).toEqual(['metaos://run/a.html', 'metaos://run/a.html?x=1', 'metaos://run/b.html']);
+    expect(h.entries.map((e) => e.uri)).toEqual([
+      'metaos://run/a.html',
+      'metaos://run/a.html?x=1',
+      'metaos://run/b.html',
+    ]);
     expect(h.index).toBe(2);
     await h.go(0);
     h.record({ pid: 'c', uri: 'metaos://run/c.html' }); // 途中から新しい所へ → 後ろを捨てる
@@ -108,7 +112,9 @@ describe('NavHistory', () => {
 describe('queryFromArgs（spawn の引数を URI に写す。ProcessManager）', async () => {
   const { queryFromArgs } = await import('../windowing/ProcessManager');
   it('文字列・数・真偽だけなら ? に写す。物や配列があれば写さない。path が ? を持てば触らない', () => {
-    expect(queryFromArgs('a.html', { skill: '見積転記', view: 'new' })).toBe('?skill=%E8%A6%8B%E7%A9%8D%E8%BB%A2%E8%A8%98&view=new');
+    expect(queryFromArgs('a.html', { skill: '見積転記', view: 'new' })).toBe(
+      '?skill=%E8%A6%8B%E7%A9%8D%E8%BB%A2%E8%A8%98&view=new',
+    );
     expect(queryFromArgs('a.html', { n: 1, b: true, z: null })).toBe('?n=1&b=true');
     expect(queryFromArgs('a.html', { items: [{ estimateId: 'E1' }] })).toBe('');
     expect(queryFromArgs('a.html', {})).toBe('');

@@ -175,7 +175,9 @@ export class SystemBootstrapper {
       });
     }
     // 活性の変化をゲストにも（nav_changed）。ホストの ← → は DesktopEnvironment が購読する
-    navHistory.onChange((s) => processManager.broadcast('nav_changed', { canBack: s.canBack, canForward: s.canForward, current: s.current }));
+    navHistory.onChange((s) =>
+      processManager.broadcast('nav_changed', { canBack: s.canBack, canForward: s.canForward, current: s.current }),
+    );
 
     // 同期アダプタのホスト。実際の読み込みは DesktopEnvironment（=描画スロットの供給元）
     // の構築後に行う必要があるため、ここでは生成のみ。
