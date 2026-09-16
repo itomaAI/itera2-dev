@@ -250,12 +250,20 @@
             notify: async (message, type, duration) => transport.requestHost('host:notify', { message, type, duration }),
             copyText: async (text) => transport.requestHost('host:copy', { text }),
             openExternal: async (url) => transport.requestHost('host:open_url', { url }),
-            updateAddressBar: async (path) => transport.requestHost('host:address_bar', { path }),
+            // 非推奨（T-0453）: MetaOS.nav.declare(path) を使う。中身は同じ handler（前面アプリの場所を申告する）
+            updateAddressBar: async (path) => transport.requestHost('nav:declare', { path }),
             revealInExplorer: async (path) => transport.requestHost('host:reveal_in_explorer', { path }),
             open: async (path) => transport.requestHost('host:open_path', { path }),
             showMessageBox: async (options) => transport.requestHost('host:show_message_box', { options }),
             showLoading: async (message) => transport.requestHost('host:show_loading', { message }),
             hideLoading: async () => transport.requestHost('host:hide_loading', {})
+        },
+        // アプリをまたぐ「戻る／進む」（T-0453）。履歴はホスト（シェル）が持つ。活性の変化は system.on('nav_changed', …)
+        nav: {
+            declare: async (path) => transport.requestHost('nav:declare', { path }),
+            back: async () => transport.requestHost('nav:back', {}),
+            forward: async () => transport.requestHost('nav:forward', {}),
+            state: async () => transport.requestHost('nav:state', {})
         },
         net: {
             fetch: async (url, options = {}) => transport.requestHost('net:fetch', { url, options }),

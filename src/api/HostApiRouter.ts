@@ -28,6 +28,7 @@ export interface IProcessManager {
   reportError(pid: string, errorData: any): void;
   processes: Map<string, any>;
   _updateAddressBar(path: string): void;
+  declareRoute(path: string): string | null;
 }
 export interface IEngine {
   injectUserTurn(content: TurnContent, meta?: TurnMeta): Promise<void>;
@@ -56,9 +57,16 @@ export interface IAssociationReader {
   getAssociations(): any;
 }
 
+export interface INavHistory {
+  back(): Promise<boolean>;
+  forward(): Promise<boolean>;
+  state(): { canBack: boolean; canForward: boolean; current: { uri: string; pid: string } | null };
+}
+
 export interface RouterDeps {
   vfs: VfsService;
   configManager: ConfigManager;
+  navHistory?: INavHistory;
   appRegistry?: IRegistryReader;
   associations?: IAssociationReader;
   history?: IHistoryManager;
@@ -518,28 +526,18 @@ export class HostApiRouter {
       return await d.shell.modals.filePicker.openSave(options);
     });
 
-    t.registerHandler('host:address_bar', async ({ path }) => {
+    // ゲストの申告（自分の画面の URL）。nav.declare が正式名。host.updateAddressBar は互換（非推奨）で同じ handler（T-0453）
+    const declare = async ({ path }: { path: string }) => {
       if (!d.processManager) return false;
-      const fgApp = Array.from(d.processManager.processes.values()).find((p) => p.state === 'foreground');
-      if (fgApp) {
-        const oldBasePath = fgApp.path.split(/[?#]/)[0];
-
-        let newPath = path;
-        if (path.startsWith('?') || path.startsWith('#')) {
-          newPath = oldBasePath + path;
-        }
-
-        fgApp.path = newPath;
-
-        // 既存のURIからIntentを抽出して新しいURIを組み立てる
-        const intentMatch = fgApp.currentUri.match(/^metaos:\/\/([^\/]+)/);
-        const intent = intentMatch ? intentMatch[1] : 'open';
-
-        fgApp.currentUri = `metaos://${intent}/${newPath}`;
-        d.processManager._updateAddressBar(fgApp.currentUri);
-      }
-      return true;
-    });
+      return d.processManager.declareRoute(String(path || '')) !== null;
+    };
+    t.registerHandler('host:address_bar', declare);
+    t.registerHandler('nav:declare', declare);
+    t.registerHandler('nav:back', async () => (d.navHistory ? d.navHistory.back() : false));
+    t.registerHandler('nav:forward', async () => (d.navHistory ? d.navHistory.forward() : false));
+    t.registerHandler('nav:state', async () =>
+      d.navHistory ? d.navHistory.state() : { canBack: false, canForward: false, current: null },
+    );
 
     t.registerHandler('host:show_message_box', async ({ options }) => {
       if (window.AppUI) {

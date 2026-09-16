@@ -28,6 +28,8 @@ export interface OsConfig {
      * （T-0246。ミャク楽は tool_available と info を隠して配る）。
      */
     hiddenEventTypes?: string[];
+    /** アプリをまたぐ「戻る／進む」をブラウザの戻る・進むと連動させる（既定 true。T-0453）。妙なら false で切る */
+    navBrowserSync?: boolean;
   };
   appearance: {
     theme: string;

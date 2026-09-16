@@ -328,7 +328,7 @@
         renderList();
         await renderTree();
         try {
-          await MetaOS.host.updateAddressBar('?path=' + encodeURIComponent(cwd));
+          await MetaOS.nav.declare('?path=' + encodeURIComponent(cwd)); // 場所の申告（T-0453。戻るで前の場所へ）
         } catch (_) {}
       }
 

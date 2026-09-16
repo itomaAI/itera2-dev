@@ -36,6 +36,7 @@ import { HostApiRouter } from '../../api/HostApiRouter';
 
 // Shell Core & Services
 import { UriRouter } from './UriRouter';
+import { NavHistory } from './NavHistory';
 import { DesktopEnvironment } from './DesktopEnvironment';
 import { EventOrchestrator } from './EventOrchestrator';
 import { CognitiveManager } from '../services/CognitiveManager';
@@ -158,6 +159,26 @@ export class SystemBootstrapper {
     history.setStorageLossHandler((reason) => void StorageLossGuard.trip(`history ${reason}`));
     const uriRouter = new UriRouter('open');
 
+    // アプリをまたぐ「戻る／進む」（T-0453）。OS（ProcessManager）が持つ「現在の場所」の変化を購読して積む。
+    // 戻る・進むは記録した URI を uriRouter.dispatch に渡すだけ。ブラウザ連動は preferences.navBrowserSync（既定 true）で切れる
+    const navBrowserSync = configManager.get('preferences')?.navBrowserSync !== false;
+    const navHistory = new NavHistory({
+      navigate: (uri) => {
+        uriRouter.dispatch(uri);
+      },
+      browser: navBrowserSync && typeof window !== 'undefined' && window.history ? window.history : null,
+    });
+    processManager.on('current_route_changed', (route: { pid: string; uri: string }) => navHistory.record(route));
+    if (navBrowserSync && typeof window !== 'undefined') {
+      window.addEventListener('popstate', (e) => {
+        void navHistory.onPopState(e.state);
+      });
+    }
+    // 活性の変化をゲストにも（nav_changed）。ホストの ← → は DesktopEnvironment が購読する
+    navHistory.onChange((s) =>
+      processManager.broadcast('nav_changed', { canBack: s.canBack, canForward: s.canForward, current: s.current }),
+    );
+
     // 同期アダプタのホスト。実際の読み込みは DesktopEnvironment（=描画スロットの供給元）
     // の構築後に行う必要があるため、ここでは生成のみ。
     const syncAdapterHost = new SyncAdapterHost(vfs, configManager, processManager);
@@ -215,10 +236,13 @@ export class SystemBootstrapper {
       _openPath: (path: string) => uriRouter.dispatch(`metaos://open/${path}`),
       getMergedProviders: () => cognitiveManager.getMergedProviders(),
       processManager: processManager,
+      navHistory: navHistory,
       resolver: resolver,
       transport: transport,
       clearSession: (opts: any) => sessionManager.clearSession(opts),
     };
+
+    desktop.bindNavHistory(navHistory);
 
     // EngineコンテキストにもFacadeを注入
     engine.extraContext.shell = shellFacade;
@@ -229,6 +253,7 @@ export class SystemBootstrapper {
       appRegistry,
       associations: resolver,
       processManager,
+      navHistory,
       history,
       engine,
       toolRegistry,

@@ -22,6 +22,16 @@ export interface Process {
   currentUri: string;
 }
 
+/**
+ * 「現在の場所」（T-0453）。前面のアプリと、そのアプリが申告した URI。
+ * ブラウザに倣った 3 層のうち OS が持つ唯一の正: ①場所（ここ）／②アドレスバー（表示）／③履歴（記録）。
+ * ②③はシェルの側で 'current_route_changed' を購読する。ProcessManager は履歴を知らない。
+ */
+export interface CurrentRoute {
+  pid: string;
+  uri: string;
+}
+
 export interface SpawnOptions {
   pid?: string;
   path: string;
@@ -32,12 +42,30 @@ export interface SpawnOptions {
   currentUri?: string;
 }
 
+/**
+ * ゲストの spawn(path, { args }) は URI に引数が出ないので、値が全部 文字列／数／真偽 なら `?` に写す（T-0453）。
+ * 履歴から戻ったときに同じ引数で開けるようにするため。物や配列（pick の items など）は写せないので、そのときは path だけ。
+ * path が既に `?` を持つときは触らない。
+ */
+export function queryFromArgs(path: string, args?: Record<string, unknown>): string {
+  if (!args || /[?#]/.test(path)) return '';
+  const q = new URLSearchParams();
+  for (const [k, v] of Object.entries(args)) {
+    if (v === undefined || v === null) continue;
+    if (typeof v !== 'string' && typeof v !== 'number' && typeof v !== 'boolean') return '';
+    q.set(k, String(v));
+  }
+  const str = q.toString();
+  return str ? `?${str}` : '';
+}
+
 export class ProcessManager {
   private vfs: VfsService;
   private compiler: GuestCompiler;
   private appRegistry: AppRegistry;
   private configManager: ConfigManager;
   public processes: Map<string, Process> = new Map();
+  public currentRoute: CurrentRoute | null = null;
   private MAX_APPS = 10;
   private events: Record<string, Function[]> = {};
   private els: Record<string, HTMLElement | null> = {};
@@ -144,7 +172,7 @@ export class ProcessManager {
     const { path, forceReload = false, args, currentUri } = options;
     const { pid, type, show } = this._resolveProcessInfo(options);
 
-    const uri = currentUri || `metaos://run/${path}`;
+    const uri = currentUri || `metaos://run/${path}${queryFromArgs(path, args)}`;
     const existingProc = this.processes.get(pid);
 
     if (existingProc && existingProc.iframe) {
@@ -159,7 +187,7 @@ export class ProcessManager {
 
         if (show) {
           this._focusApp(pid);
-          this._updateAddressBar(existingProc.currentUri);
+          this.setCurrentRoute({ pid, uri: existingProc.currentUri });
         }
 
         if (this.events['process_resumed']) {
@@ -226,7 +254,7 @@ export class ProcessManager {
       // 先にフォアグラウンド/バックグラウンドの状態を確定させる
       if (show) {
         this._focusApp(pid);
-        this._updateAddressBar(uri);
+        this.setCurrentRoute({ pid, uri });
       }
 
       // 状態が確定した後にイベントを発行する
@@ -316,7 +344,7 @@ export class ProcessManager {
       if (apps.length > 0) {
         apps.sort((a, b) => b.lastActiveTime - a.lastActiveTime);
         this._focusApp(apps[0].pid);
-        this._updateAddressBar(apps[0].currentUri);
+        this.setCurrentRoute({ pid: apps[0].pid, uri: apps[0].currentUri });
       } else {
         const homePath = this.configManager.get('appearance')?.layout?.homePath || 'apps/home.html';
         this.spawn({ path: homePath, show: true });
@@ -444,6 +472,39 @@ export class ProcessManager {
     });
   }
 
+  /**
+   * 「現在の場所」を書き換える唯一の口（T-0453）。呼ぶのは spawn（新規・resume の show）・kill 後の切替・ゲストの申告（host:address_bar / nav:declare）。
+   * 同じ場所なら何もしない。変わったらアドレスバーを描き、'current_route_changed' を発する（シェルの履歴はこれを購読する）。
+   */
+  public setCurrentRoute(route: CurrentRoute): void {
+    const prev = this.currentRoute;
+    if (prev && prev.pid === route.pid && prev.uri === route.uri) return;
+    this.currentRoute = { pid: route.pid, uri: route.uri };
+    this._updateAddressBar(route.uri);
+    if (this.events['current_route_changed']) {
+      this.events['current_route_changed'].forEach((cb) => cb(this.currentRoute, prev));
+    }
+  }
+
+  /**
+   * ゲストの申告（自分の画面の URL を伝える）。前面のアプリの path と currentUri を書き換え、場所を更新する。
+   * path が '?' / '#' で始まれば base に付け足す。戻り値は新しい URI（前面が無ければ null）。
+   */
+  public declareRoute(path: string): string | null {
+    const fg = Array.from(this.processes.values()).find((p) => p.type === 'app' && p.state === 'foreground');
+    if (!fg) return null;
+    const oldBasePath = fg.path.split(/[?#]/)[0];
+    const newPath = path.startsWith('?') || path.startsWith('#') ? oldBasePath + path : path;
+    fg.path = newPath;
+    // 既存の URI から intent（run / open）を保つ
+    const intentMatch = fg.currentUri.match(/^metaos:\/\/([^/]+)/);
+    const intent = intentMatch ? intentMatch[1] : 'open';
+    fg.currentUri = `metaos://${intent}/${newPath}`;
+    this.setCurrentRoute({ pid: fg.pid, uri: fg.currentUri });
+    return fg.currentUri;
+  }
+
+  /** アドレスバーの表示だけ（②）。場所は変えない。場所を変えるのは setCurrentRoute */
   public _updateAddressBar(uri: string): void {
     if (this.els.ADDRESS_BAR) {
       (this.els.ADDRESS_BAR as HTMLInputElement).value = uri;
