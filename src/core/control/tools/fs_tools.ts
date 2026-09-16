@@ -318,6 +318,20 @@ export function registerFSTools(registry: ToolRegistry): void {
     },
   });
 
+  // ゴミ箱から元の場所へ（T-0470）。元の場所を知らない古いゴミは new_path が要る
+  registry.registerSystemTool(setId, setName, {
+    name: 'restore_file',
+    description: 'Restores a trashed entry to its original location.',
+    impl: async (params: any, context: { vfs: VfsService }) => {
+      const dest = await context.vfs.restore(
+        AGENT_PRINCIPAL,
+        params.path,
+        params.new_path ? { to: params.new_path } : {},
+      );
+      return { log: `Restored: ${params.path} -> ${dest}`, ui: `♻️ Restored ${dest}` };
+    },
+  });
+
   registry.registerSystemTool(setId, setName, {
     name: 'move_file',
     description: 'Renames or moves a file.',

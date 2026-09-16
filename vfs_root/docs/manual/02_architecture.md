@@ -34,8 +34,9 @@ The Virtual File System is organized into specific domains. Some areas are stric
 │   ├── temp/               # [Volatile Layer] User uploads and screenshots. Purged on session reset.
 │   └── themes/             # UI Themes (.json)
 │
-└── trash/                  # [Recycle Bin] (Read/Write)
-    └── ...                 # Deleted files
+└── trash/                  # [Recycle Bin] (Read/Write). Not synced — per device.
+    └── <deletedAt>_<name>  # Flat. Each entry remembers where it came from (stat().trashedFrom / deletedAt);
+                            # MetaOS.fs.restore(path) puts it back (never overwrites: "name (2).ext"). Not purged automatically.
 ```
 
 ---

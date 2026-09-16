@@ -54,7 +54,14 @@ export interface VfsNodeMeta {
   size: number;
   createdAt: number;
   updatedAt: number;
+  /** ゴミ箱へ移した時刻（`trash/<この値>_<名前>` の頭と同じ）。ゴミ箱の外では undefined */
   deletedAt?: number;
+  /**
+   * ゴミ箱へ移す前の完全なパス（T-0470）。「元に戻す」（RestoreOp）がここへ戻す。
+   * Windows の `$I`・freedesktop の `.trashinfo` の `Path=` に当たる。ゴミ箱の外では undefined。
+   * 古いゴミ（この欄が付く前に消したもの）には無いので、戻すときは `opts.to` で先を指定する。
+   */
+  trashedFrom?: string;
   mimeType?: string;
   version: number;
   hash?: string;
@@ -144,6 +151,9 @@ export interface VfsStat {
   mimeType?: string;
   version: number;
   hash?: string;
+  /** ゴミ箱の中だけ: 消した時刻と、元の場所（T-0470）。元の場所が無いものは古いゴミ */
+  deletedAt?: number;
+  trashedFrom?: string;
   /**
    * 実体が手元にあるか無いか（'stub' ＝ 無い）。**ファイル自身の性質**であり、node.meta に保存される。
    * 「同期の管轄下か」とは直交する（そちらは syncProvider を見る）。
@@ -213,6 +223,11 @@ export interface WriteOptions {
 
 export interface DeleteOptions {
   permanent?: boolean;
+}
+
+/** ゴミ箱から戻す（T-0470）。`to` を省くと node.meta.trashedFrom へ。同名があれば `名前 (2).拡張子` のように避ける */
+export interface RestoreOptions {
+  to?: string;
 }
 
 export interface MkdirOptions {}

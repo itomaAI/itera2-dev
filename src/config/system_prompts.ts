@@ -245,9 +245,16 @@ Rule:
     - By default, \`system/logs/\` and \`system/temp/\` are excluded from the search to avoid noise. To search them, explicitly specify \`path="system/logs"\` or \`path="system/temp"\`.
 </define_tag>
 <define_tag name="delete_file">
-Permanently deletes a file.
+Moves a file or directory to \`trash/\` (as \`trash/<deletedAt>_<name>\`, remembering the original path). Paths already under \`trash/\`, \`system/temp/\` or \`system/logs/\` are destroyed instead.
 Attributes:
     - path: File path.
+</define_tag>
+
+<define_tag name="restore_file">
+Restores an entry from \`trash/\` to the place it was deleted from. Missing parent folders are created; an existing file with the same name is never overwritten (the restored one becomes \`name (2).ext\`). Returns the restored path.
+Attributes:
+    - path: Path under \`trash/\` (e.g. \`trash/1758000000000_report.md\`).
+    - new_path (optional): Where to restore instead. Required for old trash entries that do not remember their original location.
 </define_tag>
 
 <define_tag name="move_file">
@@ -417,7 +424,9 @@ All methods (except \`on/off\`) are **Asynchronous** and return a \`Promise\`.
     - To write a Base64 or Data URI string as binary, you MUST explicitly specify \`{ encoding: 'base64' }\` or \`{ encoding: 'dataurl' }\` in \`opts\`.
 - \`resolveUrl(path)\` (Returns a String): In Guest Apps, relative paths (e.g., \`./image.png\`) in JS do NOT work because apps run on virtual Blob URLs. To dynamically load assets from VFS into \`img.src\` or CSS, you MUST resolve the real URL first: \`const url = await MetaOS.fs.resolveUrl('data/image.png'); img.src = url;\`. (Note: Static HTML/CSS like \`<img src="...">\` or \`url(...)\` are auto-compiled and safe to use relative paths).
 - \`delete(path, opts)\`, \`rename(oldPath, newPath, opts)\`, \`copy(srcPath, destPath, opts)\`, \`mkdir(path, opts)\`
-- \`stat(path)\`: Returns a plain object \`{ kind: 'file' | 'directory', size, ... }\` (Do NOT use Node.js \`isDirectory()\`).
+  *(\`delete\` moves to \`trash/<deletedAt>_<name>\` and records the original path; pass \`{ permanent: true }\` to destroy.)*
+- \`restore(path, opts)\`: Moves a trashed entry back to its original location (\`stat(path).trashedFrom\`) or to \`opts.to\`. Creates missing parent folders, never overwrites (a duplicate becomes \`name (2).ext\`). Returns the restored path. Fails if the original location is unknown and \`opts.to\` is not given.
+- \`stat(path)\`: Returns a plain object \`{ kind: 'file' | 'directory', size, ... }\` (Do NOT use Node.js \`isDirectory()\`). Trashed entries also carry \`deletedAt\` and \`trashedFrom\`.
 - \`list(path, opts)\`: Returns \`string[]\`. If \`opts.detail=true\`, returns an array of stat objects.
 - \`exists(path)\`: Returns boolean.
 - \`getUsage()\`: Returns \`{ used, max, reserved }\` in bytes for this device's VFS (\`used\` includes system files; user/guest writes are allowed up to \`max - reserved\`). Ratios are yours to compute.
