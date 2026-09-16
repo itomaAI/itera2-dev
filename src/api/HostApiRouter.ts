@@ -189,6 +189,19 @@ export class HostApiRouter {
       return res;
     });
 
+    // ゴミ箱から元の場所（か opts.to）へ戻す（T-0470）。戻した先のパスを返す
+    t.registerHandler('fs:restore', async ({ path, opts }, sourcePid) => {
+      const principal = getPrincipal(sourcePid);
+      const dest = await d.vfs.restore(principal, path, opts);
+      const msg = VfsEventFormatter.format({
+        actor: `App [${sourcePid}]`,
+        action: 'move',
+        items: [{ srcPath: path, destPath: dest }],
+      });
+      this._checkAndEmitEvent(opts, 'file_moved', msg);
+      return dest;
+    });
+
     t.registerHandler('fs:rename', async ({ oldPath, newPath, opts }, sourcePid) => {
       const principal = getPrincipal(sourcePid);
       const res = await d.vfs.rename(principal, oldPath, newPath, opts);

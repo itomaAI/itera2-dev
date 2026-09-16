@@ -188,6 +188,7 @@
             append: async (path, content, opts = {}) => transport.requestHost('fs:append', { path, content, opts }),
             delete: async (path, opts = {}) => transport.requestHost('fs:delete', { path, opts }),
             rename: async (oldPath, newPath, opts = {}) => transport.requestHost('fs:rename', { oldPath, newPath, opts }),
+            restore: async (path, opts = {}) => transport.requestHost('fs:restore', { path, opts }),
             copy: async (srcPath, destPath, opts = {}) => transport.requestHost('fs:copy', { srcPath, destPath, opts }),
             mkdir: async (path, opts = {}) => transport.requestHost('fs:mkdir', { path, opts }),
             stat: async (path) => transport.requestHost('fs:stat', { path }),

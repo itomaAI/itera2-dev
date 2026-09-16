@@ -336,6 +336,13 @@ export class Explorer {
             if (this.events['properties_request']) this.events['properties_request'](path);
           },
         });
+        if (this._isTrashed(path)) {
+          // ゴミ箱の中身は元の場所へ戻せる（T-0470）。元の場所を知らない古いゴミは移動先を訊く
+          actions.push({
+            label: 'Restore',
+            action: () => this._restoreBatch([path]),
+          });
+        }
         actions.push({
           label: 'Delete',
           action: () => this._confirmDeleteBatch([path]),
@@ -363,6 +370,12 @@ export class Explorer {
         label: `Download ${paths.length} items`,
         action: () => this._handleDownloadBatch(paths),
       });
+      if (paths.every((p) => this._isTrashed(p))) {
+        actions.push({
+          label: `Restore ${paths.length} items`,
+          action: () => this._restoreBatch(paths),
+        });
+      }
       actions.push({ separator: true });
       actions.push({
         label: `Delete ${paths.length} items`,
@@ -871,6 +884,66 @@ export class Explorer {
       if (window.AppUI) window.AppUI.notify(`Download failed: ${e.message}`, 'error');
     } finally {
       if (window.AppUI) window.AppUI.hideLoading();
+    }
+  }
+
+  /** trash/ の直下か（ゴミ箱に入れたものだけが元の場所を持つ。中のさらに下は親ごと戻す） */
+  private _isTrashed(path: string): boolean {
+    const p = String(path || '').replace(/^\/+/, '');
+    return p.startsWith('trash/') && !p.slice('trash/'.length).includes('/');
+  }
+
+  /**
+   * ゴミ箱から元の場所へ戻す（T-0470）。元の場所を知らないもの（古いゴミ）は、1 件ずつ戻す先を訊く。
+   * 同名があれば VFS が `名前 (2).拡張子` に避ける（上書きしない）。
+   */
+  public async _restoreBatch(paths: string[]) {
+    const normalized = this._normalizePaths(paths);
+    if (normalized.length === 0) return;
+    const restored: VfsEventItem[] = [];
+    const failures: { path: string; message: string }[] = [];
+    for (const p of normalized) {
+      try {
+        let to: string | undefined;
+        const st = this.vfs.stat(this.getActivePrincipal(), p);
+        if (!st.trashedFrom) {
+          const res = await window.AppUI?.showMessageBox({
+            title: 'Restore',
+            message: `Original location of "${st.name.replace(/^\d{13}_/, '')}" is unknown. Enter the path to restore to:`,
+            type: 'question',
+            prompt: { defaultValue: st.name.replace(/^\d{13}_/, '') },
+            buttons: [
+              { label: 'Cancel', value: null, style: 'normal', isCancel: true },
+              { label: 'Restore', value: 'restore', style: 'primary', isDefault: true },
+            ],
+          });
+          if (!res || !res.action || !String(res.value || '').trim()) continue;
+          to = String(res.value).trim();
+        }
+        const dest = await this.vfs.restore(this.getActivePrincipal(), p, to ? { to } : {});
+        restored.push({ srcPath: p, destPath: dest });
+      } catch (e: any) {
+        failures.push({ path: p, message: e?.message ?? String(e) });
+      }
+    }
+    if (window.AppUI) {
+      if (failures.length > 0) {
+        const first = failures[0];
+        window.AppUI.notify(
+          restored.length === 0
+            ? `Restore failed: ${first.message}`
+            : `Restored ${restored.length} item(s), ${failures.length} failed (e.g. ${first.path}: ${first.message})`,
+          restored.length === 0 ? 'error' : 'warning',
+        );
+      } else if (restored.length === 1) {
+        window.AppUI.notify(`Restored to ${restored[0].destPath}`, 'success');
+      } else if (restored.length > 1) {
+        window.AppUI.notify(`Restored ${restored.length} item(s)`, 'success');
+      }
+    }
+    if (restored.length > 0) {
+      const msg = VfsEventFormatter.format({ actor: 'User', action: 'move', items: restored });
+      this._emitHistory('file_moved', msg);
     }
   }
 

@@ -4,7 +4,7 @@
  */
 
 import { BaseOperation } from './BaseOperation';
-import type { Principal, VfsNode, DeleteOptions, RenameOptions, CopyOptions } from '../types';
+import type { Principal, VfsNode, DeleteOptions, RenameOptions, CopyOptions, RestoreOptions } from '../types';
 
 export class DeleteFileOp extends BaseOperation<{ path: string; opts: DeleteOptions }, string> {
   async execute(principal: Principal, args: { path: string; opts: DeleteOptions }): Promise<string> {
@@ -54,7 +54,8 @@ export class DeleteFileOp extends BaseOperation<{ path: string; opts: DeleteOpti
             name: newName,
             parentId: trashDirId!,
             flags: { ...node.flags, isTrashed: true },
-            meta: { ...node.meta, deletedAt: timestamp, version: node.meta.version + 1 },
+            // 元の場所を控える（T-0470）。「元に戻す」（RestoreOp）がここへ戻す
+            meta: { ...node.meta, deletedAt: timestamp, trashedFrom: normPath, version: node.meta.version + 1 },
           };
           tx.put(updatedNode);
           await tx.commit();
@@ -133,11 +134,19 @@ export class RenameOp extends BaseOperation<{ oldPath: string; newPath: string; 
           }
         }
 
+        // ゴミ箱の外へ改名で出すときは印を外す（T-0470。外さないと isTrashed のまま残り、CopyOp が中身として写さない）
+        const leavingTrash = node.flags.isTrashed && !normNew.startsWith('trash/') && normNew !== 'trash';
+        const meta = { ...node.meta, updatedAt: Date.now(), version: node.meta.version + 1 };
+        if (leavingTrash) {
+          delete meta.deletedAt;
+          delete meta.trashedFrom;
+        }
         const updatedNode: VfsNode = {
           ...node,
           name: newName,
           parentId: newParentId,
-          meta: { ...node.meta, updatedAt: Date.now(), version: node.meta.version + 1 },
+          flags: leavingTrash ? { ...node.flags, isTrashed: false } : node.flags,
+          meta,
         };
 
         const tx = this.createTransaction(principal);
@@ -151,6 +160,88 @@ export class RenameOp extends BaseOperation<{ oldPath: string; newPath: string; 
       return res!;
     }
   }
+}
+
+/**
+ * ゴミ箱から戻す（T-0470）。戻す先は opts.to か node.meta.trashedFrom（どちらも無ければ失敗 —— 古いゴミは元の場所を知らない）。
+ * 親が無ければ作る。同名があれば `名前 (2).拡張子` `名前 (3).拡張子` … と避ける（消さない・上書きしない）。
+ * 戻したノードは isTrashed / deletedAt / trashedFrom を外す。戻り値は戻した先のパス。
+ */
+export class RestoreOp extends BaseOperation<{ path: string; opts: RestoreOptions }, string> {
+  async execute(principal: Principal, args: { path: string; opts: RestoreOptions }): Promise<string> {
+    const { path, opts } = args;
+    const normPath = this.ctx.pathResolver.normalizePath(path);
+    if (!normPath.startsWith('trash/')) throw new Error(`Not in trash: ${normPath}`);
+
+    const id = this.ctx.pathResolver.getIdByPath(normPath);
+    if (id === undefined || id === null) throw new Error(`Not found: ${normPath}`);
+    const node = this.ctx.nodeStore.getNode(id)!;
+
+    const wanted = opts.to ? this.ctx.pathResolver.normalizePath(opts.to) : node.meta.trashedFrom;
+    if (!wanted) throw new Error(`Original location unknown: ${normPath} (specify opts.to)`);
+    if (wanted === 'trash' || wanted.startsWith('trash/')) throw new Error(`Cannot restore into trash: ${wanted}`);
+
+    const target = uniquePath(wanted, (p) => this.ctx.pathResolver.getIdByPath(p) !== undefined);
+    const parts = target.split('/');
+    const newName = parts.pop()!;
+    const newParentPath = parts.join('/');
+
+    await this.ctx.vfs._hydrateIfNeeded(principal, normPath, target);
+
+    while (true) {
+      let shouldRetry = false;
+      const newParentId = await this.ensureDir(principal, newParentPath);
+
+      const res = await this.ctx.lockManager.acquireMultiple([normPath, target], async () => {
+        if (newParentId !== null && !this.ctx.nodeStore.getNode(newParentId)) {
+          shouldRetry = true;
+          return null;
+        }
+        const curId = this.ctx.pathResolver.getIdByPath(normPath);
+        if (curId === undefined || curId === null) throw new Error(`Not found: ${normPath}`);
+        const cur = this.ctx.nodeStore.getNode(curId)!;
+        this.ctx.auth.checkNodePermission(principal, curId, 'write');
+        if (cur.parentId !== null) this.ctx.auth.checkNodePermission(principal, cur.parentId, 'write');
+        if (this.ctx.pathResolver.getIdByPath(target) !== undefined)
+          throw new Error(`Destination already exists: ${target}`);
+        this.ctx.auth.checkNodePermission(principal, newParentId, 'write');
+
+        const meta = { ...cur.meta, updatedAt: Date.now(), version: cur.meta.version + 1 };
+        delete meta.deletedAt;
+        delete meta.trashedFrom;
+        const restored: VfsNode = {
+          ...cur,
+          name: newName,
+          parentId: newParentId,
+          flags: { ...cur.flags, isTrashed: false },
+          meta,
+        };
+        const tx = this.createTransaction(principal);
+        tx.put(restored);
+        await tx.commit();
+        return target;
+      });
+
+      if (shouldRetry) continue;
+      return res!;
+    }
+  }
+}
+
+/** 同名があれば `名前 (2).拡張子` と番号を足して空いているパスにする（純粋。試験は RestoreOp と一緒） */
+export function uniquePath(path: string, exists: (p: string) => boolean): string {
+  if (!exists(path)) return path;
+  const slash = path.lastIndexOf('/');
+  const dir = slash >= 0 ? path.slice(0, slash + 1) : '';
+  const name = slash >= 0 ? path.slice(slash + 1) : path;
+  const dot = name.lastIndexOf('.');
+  const stem = dot > 0 ? name.slice(0, dot) : name;
+  const ext = dot > 0 ? name.slice(dot) : '';
+  for (let n = 2; n < 10000; n++) {
+    const candidate = `${dir}${stem} (${n})${ext}`;
+    if (!exists(candidate)) return candidate;
+  }
+  throw new Error(`Cannot find a free name for: ${path}`);
 }
 
 export class CopyOp extends BaseOperation<{ srcPath: string; destPath: string; opts: CopyOptions }, string> {

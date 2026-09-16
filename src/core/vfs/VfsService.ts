@@ -11,6 +11,7 @@ import {
   type ReadOptions,
   type WriteOptions,
   type DeleteOptions,
+  type RestoreOptions,
   type MkdirOptions,
   type RenameOptions,
   type CopyOptions,
@@ -28,7 +29,7 @@ import { VfsLockManager } from './VfsLockManager';
 import { VfsAuth } from './VfsAuth';
 import type { VfsContext } from './operations/BaseOperation';
 import { WriteFileOp, AppendFileOp, MkdirOp, CreateStubOp } from './operations/WriteOps';
-import { DeleteFileOp, RenameOp, CopyOp } from './operations/TransferOps';
+import { DeleteFileOp, RenameOp, CopyOp, RestoreOp } from './operations/TransferOps';
 import { SetAclOp, SetAclRecursiveOp } from './operations/AclOps';
 import type { ProviderManager } from './ProviderManager';
 import { VFS_HARD_LIMITS } from '../../config/constants';
@@ -155,6 +156,9 @@ export class VfsService {
       flags: JSON.parse(JSON.stringify(node.flags)),
       acl: JSON.parse(JSON.stringify(node.acl)),
     };
+    // ゴミ箱の中身だけが持つ 2 つ（T-0470）。無いものを undefined で並べない
+    if (node.meta.deletedAt !== undefined) stat.deletedAt = node.meta.deletedAt;
+    if (node.meta.trashedFrom !== undefined) stat.trashedFrom = node.meta.trashedFrom;
 
     // 「同期の管轄下か」は保存せず、ここで毎回導く（T-0352）。
     // syncState（実体の有無）とは直交する量である。
@@ -410,6 +414,11 @@ export class VfsService {
 
   async deleteFile(principal: Principal, path: string, opts: DeleteOptions = {}): Promise<string> {
     return new DeleteFileOp(this.context).execute(principal, { path, opts });
+  }
+
+  /** ゴミ箱から元の場所（か opts.to）へ戻す。戻した先のパスを返す（T-0470） */
+  async restore(principal: Principal, path: string, opts: RestoreOptions = {}): Promise<string> {
+    return new RestoreOp(this.context).execute(principal, { path, opts });
   }
 
   async rename(principal: Principal, oldPath: string, newPath: string, opts: RenameOptions = {}): Promise<string> {
