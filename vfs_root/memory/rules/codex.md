@@ -205,7 +205,7 @@ When writing Javascript for an application, use these APIs:
 
 *   **`MetaOS.fs`**: `.read()`, `.write()`, `.list()`, `.stat()` (returns plain object `{kind: 'file' | 'directory', ...}`, no `.isDirectory()` method), `.resolveUrl()`
 *   **`MetaOS.system`**: `.spawn()`, `.kill()`, `.ps()`, `.broadcast()`, `.on()`, `.getArgs()`
-*   **`MetaOS.host`**: `.openEditor()`, `.notify()`, `.updateAddressBar()`
+*   **`MetaOS.host`**: `.openEditor()`, `.notify()`, `.updateAddressBar()`（非推奨 → `MetaOS.nav.declare()`）
 *   **`MetaOS.ai`**: `.ask()`, `.task()`, `.log()`
 *   **`MetaOS.net`**: `.fetch()` (Bypasses CORS), `.download()`
 *   **`MetaOS.device`**: `.takePhoto()`, `.recordAudio()`, `.getLocation()`, `.vibrate()`

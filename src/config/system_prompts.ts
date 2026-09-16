@@ -446,7 +446,14 @@ All methods (except \`on/off\`) are **Asynchronous** and return a \`Promise\`.
 **Host UI (MetaOS.host)**:
 - \`showSaveDialog(opts)\`: Opens the OS native save dialog (folder in the tree + file name; overwrite confirmed there). \`opts: { title, filters: ['.xlsx'], defaultPath, defaultDir, defaultName }\`. Returns the full VFS path or null.
 - \`showOpenDialog(opts)\`: Opens the OS native file picker modal. \`opts\` can include \`{ title, filters: ['.md', '.txt'], mode: 'file' | 'directory' | 'any' }\` (mode defaults to 'file'; filters apply to files only). Returns the selected VFS path or null.
-- \`openEditor(path)\`, \`notify(message, title)\`, \`copyText(text)\`, \`openExternal(url)\`, \`updateAddressBar(path)\`, \`revealInExplorer(path)\` (expands and selects the path in the host Explorer panel; the only way to "open" a directory), \`open(path)\` (opens a VFS path with its associated app, exactly like \`metaos://open/<path>\` in the address bar), \`showMessageBox(options)\`, \`showLoading(message)\`, \`hideLoading()\`
+- \`openEditor(path)\`, \`notify(message, title)\`, \`copyText(text)\`, \`openExternal(url)\`, \`updateAddressBar(path)\` (deprecated: use \`MetaOS.nav.declare\`), \`revealInExplorer(path)\` (expands and selects the path in the host Explorer panel; the only way to "open" a directory), \`open(path)\` (opens a VFS path with its associated app, exactly like \`metaos://open/<path>\` in the address bar), \`showMessageBox(options)\`, \`showLoading(message)\`, \`hideLoading()\`
+
+**Navigation across apps (MetaOS.nav)**:
+The host keeps a session history of the main pane (the foreground app plus the route it declared), like a browser tab. The address bar is only a view of the current entry.
+- \`declare(pathOrQuery)\`: Tell the host where the app is now (e.g. \`'?view=list'\` appends to the app's path; a full path replaces it). Each declared change is one history entry, so users can go back within your app too. Replaces \`host.updateAddressBar\`.
+- \`back()\` / \`forward()\`: Returns \`false\` when there is nowhere to go. The host reopens the recorded URI (relaunching the app if it was closed; no scroll/form state is restored — that is the app's job).
+- \`state()\`: \`{ canBack, canForward, current: { uri, pid } | null }\`.
+- Event \`nav_changed\` (\`system.on\`) with the same shape, for enabling/disabling in-app ← → buttons. The host bar has its own ← → next to the address bar; the browser's Back/Forward are wired to the same history (\`preferences.navBrowserSync\`, default true).
 
 **Network & Auth (MetaOS.net)**:
 - \`fetch(url, opts)\`: HTTP requests. \`opts.useProxy=true\` bypasses CORS. \`opts.credentialId\` injects API keys safely. You can specify \`opts.responseType = 'arraybuffer'\` to get binary data as a \`Uint8Array\` in \`response.data\`.

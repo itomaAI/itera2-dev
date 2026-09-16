@@ -217,6 +217,20 @@ export class DesktopEnvironment {
     }, 300);
   }
 
+  /** アドレスバー左の ← →（T-0453）。活性は履歴の変化で描き直す。ホストの UI はここだけ */
+  public bindNavHistory(nav: { back(): Promise<boolean>; forward(): Promise<boolean>; state(): { canBack: boolean; canForward: boolean }; onChange(cb: (s: { canBack: boolean; canForward: boolean }) => void): void }): void {
+    const back = document.getElementById('btn-nav-back') as HTMLButtonElement | null;
+    const fwd = document.getElementById('btn-nav-forward') as HTMLButtonElement | null;
+    const paint = (s: { canBack: boolean; canForward: boolean }) => {
+      if (back) back.disabled = !s.canBack;
+      if (fwd) fwd.disabled = !s.canForward;
+    };
+    if (back) back.addEventListener('click', () => void nav.back());
+    if (fwd) fwd.addEventListener('click', () => void nav.forward());
+    nav.onChange(paint);
+    paint(nav.state());
+  }
+
   public updateAddressBar(uri: string): void {
     const addressBar = document.getElementById('preview-address-bar') as HTMLInputElement;
     if (addressBar) {

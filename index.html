@@ -207,6 +207,27 @@
               ></path>
             </svg>
           </button>
+          <!-- Back / Forward across apps (T-0453). Enabled state follows the shell's NavHistory -->
+          <button
+            id="btn-nav-back"
+            class="text-text-muted hover:text-text-main p-1 rounded hover:bg-hover transition disabled:opacity-30 disabled:hover:bg-transparent disabled:cursor-default"
+            title="Back"
+            disabled
+          >
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path>
+            </svg>
+          </button>
+          <button
+            id="btn-nav-forward"
+            class="text-text-muted hover:text-text-main p-1 rounded hover:bg-hover transition disabled:opacity-30 disabled:hover:bg-transparent disabled:cursor-default"
+            title="Forward"
+            disabled
+          >
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+            </svg>
+          </button>
           <button
             id="btn-home"
             class="text-text-muted hover:text-text-main p-1 rounded hover:bg-hover transition"
