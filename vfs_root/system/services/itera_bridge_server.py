@@ -36,7 +36,7 @@ import time
 import uuid
 from pathlib import Path
 
-VERSION = "3.6.0"
+VERSION = "3.7.0"
 # long-poll（変更があるまで応答を保留する）の上限と刻み。
 # 刻みは応答の遅れの下限になるので細かく、ただし空回りが目に見えない程度に。
 MAX_LONG_POLL_SEC = 60.0
@@ -677,6 +677,68 @@ def _run_search(scanner, query, use_regex, include, limit):
     return matches
 
 
+def _make_filtered_inotify(scanner):
+    """ignore に当たるディレクトリへ watch を張らない Inotify を作る。
+
+    watchdog の `Observer.schedule(..., recursive=True)` は木を丸ごと歩いて
+    **ディレクトリ1つにつき inotify watch を1つ**張る。ignore を渡す口が無いので、
+    scanner に渡してある一覧が監視側には一切効いていなかった（v3.6.0 まで）。
+    実測では ws_itera 配下 666,152 ディレクトリに watch を張ろうとし、
+    `fs.inotify.max_user_watches`（既定 65,536）を1プロセスで食い潰していた。
+    ignore を適用すれば 35 個で足りる。
+
+    ルートを小分けにして `schedule` を複数回呼ぶ案は採らない。schedule 1回につき
+    inotify **インスタンス**が1つ増え、今度は `max_user_instances`（既定 128）に
+    当たるため。枝刈りは1つのインスタンスの中でやる。
+    """
+    import errno
+    from watchdog.observers.inotify_c import Inotify
+
+    root = str(scanner.path)
+
+    def ignored(raw):
+        # watchdog は bytes のパスを渡してくる。判定のときだけ str に直す。
+        try:
+            p = os.fsdecode(raw)
+        except Exception:
+            return False
+        if p == root:
+            return False
+        try:
+            rel = os.path.relpath(p, root)
+        except ValueError:
+            return False
+        if rel.startswith(".."):
+            return False
+        return scanner.is_ignored(rel.replace(os.sep, "/"))
+
+    class FilteredInotify(Inotify):
+        def _add_watch(self, path, mask):
+            # 起動時の一括登録だけでなく、**後から作られたディレクトリ**もここを通る。
+            if ignored(path):
+                return -1
+            return super()._add_watch(path, mask)
+
+        def _add_dir_watch(self, path, mask, *, recursive):
+            if not os.path.isdir(path):
+                raise OSError(errno.ENOTDIR, os.strerror(errno.ENOTDIR), path)
+            self._add_watch(path, mask)
+            if not recursive:
+                return
+            for base, dirnames, _ in os.walk(path):
+                # 枝刈り。無視する木には watch を張らないだけでなく、**降りない**
+                # （node_modules を 63 万ディレクトリ歩くコストごと消える）。
+                dirnames[:] = [
+                    d for d in dirnames
+                    if not os.path.islink(os.path.join(base, d))
+                    and not ignored(os.path.join(base, d))
+                ]
+                for d in dirnames:
+                    self._add_watch(os.path.join(base, d), mask)
+
+    return FilteredInotify
+
+
 class RootWatcher:
     """ホスト側の変更検知。
 
@@ -695,6 +757,8 @@ class RootWatcher:
         self.watches = {}
         self.errors = {}
         self.error = None
+        # schedule 中だけ watchdog の内部クラスを差し替えるので、同時に走らせない。
+        self._schedule_lock = threading.Lock()
         try:
             from watchdog.observers import Observer
             from watchdog.events import FileSystemEventHandler
@@ -722,14 +786,39 @@ class RootWatcher:
         if scanner is None or not scanner.path.is_dir():
             return
         try:
-            self.watches[name] = self.observer.schedule(
-                self._handler_cls(scanner), str(scanner.path), recursive=True
-            )
+            self.watches[name] = self._schedule_filtered(scanner)
             self.errors.pop(name, None)
         except OSError as e:
             # inotify の上限などで張れないことがある。**握りつぶさず理由を残す**
             # （定期走査があるので同期そのものは続く）。
             self.errors[name] = f"監視を張れませんでした: {e}"
+
+    def _schedule_filtered(self, scanner):
+        """ignore を効かせて schedule する。
+
+        watchdog に ignore を渡す口が無いため、schedule が内部で作る Inotify を
+        **この呼び出しの間だけ**差し替える。InotifyBuffer は emitter の
+        `on_thread_start()` で作られ、それは `BaseThread.start()` が同期的に呼ぶので、
+        schedule から戻った時点で生成は終わっている（競合しない）。
+
+        差し替えられない環境（watchdog の構成違い、inotify を使わない OS）では
+        素の schedule に落ちる。その場合の挙動は従来どおりで、壊れはしない。
+        """
+        handler = self._handler_cls(scanner)
+        path = str(scanner.path)
+        try:
+            from watchdog.observers import inotify_buffer as _ib
+            filtered = _make_filtered_inotify(scanner)
+        except Exception:
+            return self.observer.schedule(handler, path, recursive=True)
+
+        with self._schedule_lock:
+            original = _ib.Inotify
+            _ib.Inotify = filtered
+            try:
+                return self.observer.schedule(handler, path, recursive=True)
+            finally:
+                _ib.Inotify = original
 
     def unwatch(self, name):
         w = self.watches.pop(name, None)
