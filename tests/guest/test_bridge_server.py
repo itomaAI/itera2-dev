@@ -8,6 +8,7 @@
 """
 
 import importlib.util
+import os
 import sys
 import time
 from concurrent.futures import ThreadPoolExecutor
@@ -134,3 +135,82 @@ def test_plain_status_never_waits(srv):
     started = time.monotonic()
     srv["client"].get("/api/status")
     assert time.monotonic() - started < 1.0
+
+
+# --------------------------------------------------------------------------
+# 監視（inotify）にも除外を効かせる
+# --------------------------------------------------------------------------
+# v3.6.0 まで、ignore は「走査」にだけ効いていて「監視」には一切効いていなかった。
+# 実機では ws_itera 配下 666,152 ディレクトリすべてに watch を張ろうとし、
+# fs.inotify.max_user_watches（既定 65,536）を1プロセスで食い潰していた
+# （実測 65,131 個）。しかも本人は無言で、巻き添えを食った別のプロセスが
+# 「No space left on device」で落ちて初めて露見する。だから試験で止める。
+
+
+def _watched_rel(mod, root, scanner):
+    """filtered な Inotify を1つ作り、実際に watch が張られた相対パスを返す。"""
+    inotify = mod._make_filtered_inotify(scanner)(os.fsencode(str(root)), recursive=True)
+    try:
+        return sorted(
+            os.path.relpath(os.fsdecode(p), str(root)).replace(os.sep, "/")
+            for p in inotify._wd_for_path
+        )
+    finally:
+        inotify.close()
+
+
+@pytest.mark.skipif(sys.platform != "linux", reason="inotify は Linux のみ")
+def test_watcher_skips_ignored_dirs(tmp_path):
+    """除外した木には watch を張らない（起動時の一括登録）。"""
+    mod = _load_module()
+    root = tmp_path / "root"
+    keep = ["src", "src/api", "docs"]
+    drop = ["node_modules", "node_modules/a", "node_modules/a/b",
+            ".git", ".git/objects", "dist", "src/__pycache__"]
+    for d in keep + drop:
+        (root / d).mkdir(parents=True, exist_ok=True)
+
+    scanner = mod.RootScanner("t", str(root), list(mod.DEFAULT_IGNORE))
+    assert _watched_rel(mod, root, scanner) == [".", "docs", "src", "src/api"]
+
+
+@pytest.mark.skipif(sys.platform != "linux", reason="inotify は Linux のみ")
+def test_watcher_skips_ignored_dirs_created_later(tmp_path):
+    """**起動後に**作られたディレクトリも、除外なら watch を張らない。
+
+    watchdog は新しいディレクトリを見つけるたびに _add_watch を呼ぶ。
+    初回の枝刈りだけでは、走り出したあとに node_modules を作られて元に戻る。
+    """
+    mod = _load_module()
+    root = tmp_path / "root"
+    (root / "src").mkdir(parents=True)
+    scanner = mod.RootScanner("t", str(root), list(mod.DEFAULT_IGNORE))
+
+    inotify = mod._make_filtered_inotify(scanner)(os.fsencode(str(root)), recursive=True)
+    try:
+        later_ok = root / "src" / "added"
+        later_ng = root / "node_modules"
+        later_ok.mkdir()
+        later_ng.mkdir()
+        mask = inotify._event_mask
+        inotify._add_watch(os.fsencode(str(later_ok)), mask)
+        inotify._add_watch(os.fsencode(str(later_ng)), mask)
+        rel = {os.path.relpath(os.fsdecode(p), str(root)).replace(os.sep, "/")
+               for p in inotify._wd_for_path}
+    finally:
+        inotify.close()
+
+    assert "src/added" in rel
+    assert "node_modules" not in rel
+
+
+@pytest.mark.skipif(sys.platform != "linux", reason="inotify は Linux のみ")
+def test_watcher_honours_per_root_ignore(tmp_path):
+    """OS 側が送ってきたルート個別の一覧も監視に効く（既定だけではない）。"""
+    mod = _load_module()
+    root = tmp_path / "root"
+    for d in ["keep", "skipme", "skipme/deep"]:
+        (root / d).mkdir(parents=True, exist_ok=True)
+
+    scanner = mod.RootScanner("t", str(root), ["skipme"])
+    assert _watched_rel(mod, root, scanner) == [".", "keep"]
