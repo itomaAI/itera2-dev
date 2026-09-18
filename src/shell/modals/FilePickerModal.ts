@@ -154,7 +154,7 @@ export class FilePickerModal {
     this.nameRow.className = 'hidden flex items-center gap-2';
     const nameLabel = document.createElement('span');
     nameLabel.className = 'text-xs text-text-muted shrink-0';
-    nameLabel.textContent = 'ファイル名';
+    nameLabel.textContent = 'File name';
     this.nameInput = document.createElement('input');
     this.nameInput.type = 'text';
     this.nameInput.className =
@@ -258,7 +258,7 @@ export class FilePickerModal {
     const full = resolveSavePath(this.saveDir, this.nameInput?.value || '', this.currentFilters);
     this.selectedPath = full;
     if (this.selectedPathDisplay) {
-      this.selectedPathDisplay.textContent = full || (this.saveDir ? `${this.saveDir}/` : 'フォルダを選んでください');
+      this.selectedPathDisplay.textContent = full || (this.saveDir ? `${this.saveDir}/` : 'Select a folder');
       this.selectedPathDisplay.classList.toggle('text-primary', !!full);
       this.selectedPathDisplay.classList.toggle('font-bold', !!full);
       this.selectedPathDisplay.classList.toggle('text-text-muted', !full);
@@ -278,8 +278,8 @@ export class FilePickerModal {
     }
     if (exists) {
       const ok = window.AppUI?.confirm
-        ? await window.AppUI.confirm(`${full} は既にあります。上書きしますか？`)
-        : window.confirm(`${full} は既にあります。上書きしますか？`);
+        ? await window.AppUI.confirm(`${full} already exists. Overwrite?`)
+        : window.confirm(`${full} already exists. Overwrite?`);
       if (!ok) return;
     }
     this.close(full);
@@ -302,7 +302,7 @@ export class FilePickerModal {
 
     const titleEl = document.getElementById('file-picker-title');
     const filtersEl = document.getElementById('file-picker-filters');
-    if (titleEl) titleEl.textContent = options?.title || '名前を付けて保存';
+    if (titleEl) titleEl.textContent = options?.title || 'Save As';
     if (filtersEl) {
       filtersEl.textContent =
         this.currentFilters.length > 0 ? 'Allowed: ' + this.currentFilters.join(', ') : 'All Files';
