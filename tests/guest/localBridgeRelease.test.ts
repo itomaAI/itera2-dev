@@ -129,7 +129,7 @@ describe('releaseVerified: 捨ててよいと確かめられたものだけ捨�
     const r = await h.release(CONN, 'ws', '');
     expect(r.released).toBe(0);
     expect(h.stubbed).toEqual([]);
-    expect(r.skipped[0]).toContain('ホストに実体が無い');
+    expect(r.skipped[0]).toContain('no contents on the host');
   });
 
   it('ハッシュが食い違うものは捨てない（VFS 側の編集を失わない）', async () => {
@@ -140,7 +140,7 @@ describe('releaseVerified: 捨ててよいと確かめられたものだけ捨�
     const r = await h.release(CONN, 'ws', '');
     expect(r.released).toBe(0);
     expect(h.stubbed).toEqual([]);
-    expect(r.skipped[0]).toContain('ハッシュ不一致');
+    expect(r.skipped[0]).toContain('hash mismatch');
   });
 
   it('確認が取れないときは中断する（「無い」と読み替えて捨てない）', async () => {
@@ -149,7 +149,7 @@ describe('releaseVerified: 捨ててよいと確かめられたものだけ捨�
       hostFiles: { 'a.txt': { hash: 'H1', size: 1 } },
       failVerifyOnCall: 1,
     });
-    await expect(h.release(CONN, 'ws', '')).rejects.toThrow('[中断]');
+    await expect(h.release(CONN, 'ws', '')).rejects.toThrow('[aborted]');
     expect(h.stubbed).toEqual([]);
   });
 

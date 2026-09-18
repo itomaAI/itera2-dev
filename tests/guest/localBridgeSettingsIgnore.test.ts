@@ -177,7 +177,7 @@ describe('設定アプリ: 保存した設定は、デーモンが読む形に�
     const h = loadSave({ scope: 'conn', conn: 'いない機械', root: null }, 'data', BASE());
     await h.saveIgnore();
     expect(h.config.connections).toHaveLength(2);
-    expect(h.alerts.join('\n')).toContain('接続が見つかりません');
+    expect(h.alerts.join('\n')).toContain('Connection not found');
     expect(h.restartHinted).toBe(false);
   });
 
