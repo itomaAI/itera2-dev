@@ -64,7 +64,7 @@ def load_state():
         data = json.loads(ROOTS_FILE.read_text(encoding="utf-8"))
     except Exception as e:
         # 壊れた設定を黙って初期化すると、利用者はルートを失ったことに気づけない。
-        raise SystemExit(f"[itera] {ROOTS_FILE} を読めません: {e}")
+        raise SystemExit(f"[itera] Cannot read {ROOTS_FILE}: {e}")
     data.setdefault("roots", {})
     data.setdefault("ignorePatterns", list(DEFAULT_IGNORE))
     # ルートごとの無視パターン。OS 側（local_bridge デーモン）が接続のたびに送ってくる
@@ -105,11 +105,11 @@ def machine_id():
         try:
             data = json.loads(MACHINE_FILE.read_text(encoding="utf-8"))
         except Exception as e:
-            raise SystemExit(f"[itera] {MACHINE_FILE} を読めません: {e}")
+            raise SystemExit(f"[itera] Cannot read {MACHINE_FILE}: {e}")
         mid = data.get("machineId")
         if isinstance(mid, str) and mid:
             return mid
-        raise SystemExit(f"[itera] {MACHINE_FILE} に machineId がありません")
+        raise SystemExit(f"[itera] {MACHINE_FILE} has no machineId")
     CONFIG_DIR.mkdir(parents=True, exist_ok=True)
     mid = str(uuid.uuid4())
     tmp = MACHINE_FILE.with_suffix(".json.tmp")
@@ -301,12 +301,12 @@ class Bridge:
     def add_root(self, path, name=None):
         p = Path(path).expanduser().resolve()
         if not p.is_dir():
-            raise ValueError(f"ディレクトリが存在しません: {p}")
+            raise ValueError(f"No such directory: {p}")
         name = name or p.name
         with _state_lock:
             existing = self.state["roots"].get(name)
             if existing and Path(existing).resolve() != p:
-                raise ValueError(f"ルート名 '{name}' は別のパスに使われています: {existing}")
+                raise ValueError(f"The root name '{name}' is already used for another path: {existing}")
             self.state["roots"][name] = str(p)
             save_state(self.state)
             self.scanners[name] = RootScanner(name, p, self.ignore_for(name))
@@ -368,7 +368,7 @@ class Bridge:
                 "rev": s.rev if s else 0,
                 # 監視が張れているか。**黙って効いていない**のがいちばん困るので必ず出す。
                 "watching": bool(self.watcher and self.watcher.is_watching(name)),
-                "watchError": self.watcher.error_of(name) if self.watcher else "変更検知は未起動です",
+                "watchError": self.watcher.error_of(name) if self.watcher else "the watcher is not running",
                 # いま効いている無視パターン。OS 側は自分の一覧と比べ、違えば送り直す。
                 # 旧サーバーはこの鍵を持たないので、OS 側は「無ければ送らない」と判断できる。
                 "ignorePatterns": list(s.ignore) if s else [],
@@ -396,12 +396,12 @@ def build_app(bridge):
         try:
             return bridge.scanner(root)
         except KeyError:
-            raise HTTPException(status_code=404, detail=f"未登録のルート: {root}")
+            raise HTTPException(status_code=404, detail=f"Unknown root: {root}")
 
     def resolve(scanner, rel):
         target = (scanner.path / rel).resolve()
         if target != scanner.path and scanner.path not in target.parents:
-            raise HTTPException(status_code=400, detail="ルート外のパスは操作できません")
+            raise HTTPException(status_code=400, detail="Paths outside the root cannot be touched")
         return target
 
     def status_payload():
@@ -454,7 +454,7 @@ def build_app(bridge):
         try:
             bridge.remove_root(name)
         except KeyError:
-            raise HTTPException(status_code=404, detail=f"未登録のルート: {name}")
+            raise HTTPException(status_code=404, detail=f"Unknown root: {name}")
         return {"ok": True}
 
     @app.get("/api/config")
@@ -465,7 +465,7 @@ def build_app(bridge):
     async def set_config(payload: dict):
         pats = payload.get("ignorePatterns")
         if not isinstance(pats, list):
-            raise HTTPException(status_code=400, detail="ignorePatterns は配列である必要があります")
+            raise HTTPException(status_code=400, detail="ignorePatterns must be an array")
         bridge.set_ignore(pats)
         return {"ok": True}
 
@@ -485,7 +485,7 @@ def build_app(bridge):
         scanner = get_scanner(root)
         pats = payload.get("ignorePatterns")
         if not isinstance(pats, list) or not all(isinstance(p, str) for p in pats):
-            raise HTTPException(status_code=400, detail="ignorePatterns は文字列の配列である必要があります")
+            raise HTTPException(status_code=400, detail="ignorePatterns must be an array of strings")
         changed = bridge.set_root_ignore(root, pats)
         if changed:
             scanner.scan()
@@ -506,7 +506,7 @@ def build_app(bridge):
         scanner = get_scanner(root)
         target = resolve(scanner, rel)
         if not target.is_file():
-            raise HTTPException(status_code=404, detail="ファイルがありません")
+            raise HTTPException(status_code=404, detail="No such file")
         return Response(content=target.read_bytes(), media_type="application/octet-stream")
 
     @app.put("/api/{root}/file/{rel:path}")
@@ -519,7 +519,7 @@ def build_app(bridge):
             current = scanner.file_hash(str(target), st)
             if current != expected:
                 # 楽観的排他。取り違えたまま上書きするより失敗させる。
-                raise HTTPException(status_code=409, detail="ホスト側が変更されています")
+                raise HTTPException(status_code=409, detail="The host copy has changed")
         body = await request.body()
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_bytes(body)
@@ -536,13 +536,13 @@ def build_app(bridge):
         if expected and target.is_file():
             current = scanner.file_hash(str(target), target.stat())
             if current != expected:
-                raise HTTPException(status_code=409, detail="ホスト側が変更されています")
+                raise HTTPException(status_code=409, detail="The host copy has changed")
         if target.is_dir():
             shutil.rmtree(target)
         elif target.exists():
             target.unlink()
         else:
-            raise HTTPException(status_code=404, detail="ファイルがありません")
+            raise HTTPException(status_code=404, detail="No such file")
         scanner.mark_deleted(rel)
         return {"ok": True}
 
@@ -569,7 +569,7 @@ def build_app(bridge):
         scanner = get_scanner(root)
         query = payload.get("query") or ""
         if not query:
-            raise HTTPException(status_code=400, detail="query は必須です")
+            raise HTTPException(status_code=400, detail="query is required")
         use_regex = bool(payload.get("regex"))
         limit = min(int(payload.get("limit") or 40), 500)
         include = payload.get("include") or ""
@@ -579,10 +579,10 @@ def build_app(bridge):
     @app.post("/api/exec")
     def api_exec(payload: dict):
         if not bridge.exec_enabled:
-            raise HTTPException(status_code=403, detail="このサーバーは --exec off で起動しています")
+            raise HTTPException(status_code=403, detail="This server was started with --exec off")
         command = (payload.get("command") or "").strip()
         if not command:
-            raise HTTPException(status_code=400, detail="command は必須です")
+            raise HTTPException(status_code=400, detail="command is required")
         timeout = min(int(payload.get("timeout") or 60), 600)
         scope = payload.get("scope") or "root"
         cwd_in = payload.get("cwd") or "."
@@ -592,9 +592,9 @@ def build_app(bridge):
             scanner = get_scanner(payload.get("root"))
             cwd = (scanner.path / cwd_in).resolve()
             if cwd != scanner.path and scanner.path not in cwd.parents:
-                raise HTTPException(status_code=400, detail="cwd がルートの外を指しています")
+                raise HTTPException(status_code=400, detail="cwd points outside the root")
         if not cwd.is_dir():
-            raise HTTPException(status_code=400, detail=f"作業ディレクトリがありません: {cwd}")
+            raise HTTPException(status_code=400, detail=f"No such working directory: {cwd}")
         started = time.time()
         try:
             proc = subprocess.run(
@@ -763,7 +763,7 @@ class RootWatcher:
             from watchdog.observers import Observer
             from watchdog.events import FileSystemEventHandler
         except ImportError:
-            self.error = "watchdog が入っていないため、変更検知は定期走査だけになります"
+            self.error = "watchdog is not installed, so changes are only picked up by the periodic scan"
             return
 
         class Handler(FileSystemEventHandler):
@@ -791,7 +791,7 @@ class RootWatcher:
         except OSError as e:
             # inotify の上限などで張れないことがある。**握りつぶさず理由を残す**
             # （定期走査があるので同期そのものは続く）。
-            self.errors[name] = f"監視を張れませんでした: {e}"
+            self.errors[name] = f"Could not start watching: {e}"
 
     def _schedule_filtered(self, scanner):
         """ignore を効かせて schedule する。
@@ -881,29 +881,29 @@ def cli_request(port, method, path, payload=None):
         with urllib.request.urlopen(req, timeout=10) as res:
             return json.loads(res.read().decode() or "{}")
     except urllib.error.URLError as e:
-        raise SystemExit(f"[itera] サーバーに接続できません ({url}): {e}")
+        raise SystemExit(f"[itera] Cannot reach the server ({url}): {e}")
 
 
 def main():
     parser = argparse.ArgumentParser(description="Itera OS Local Bridge")
     sub = parser.add_subparsers(dest="cmd")
 
-    p_serve = sub.add_parser("serve", help="サーバーを起動する")
+    p_serve = sub.add_parser("serve", help="start the server")
     p_serve.add_argument("--port", type=int, default=8001)
     p_serve.add_argument("--host", default="127.0.0.1")
-    p_serve.add_argument("--dir", action="append", default=[], help="起動時に追加するルート（複数可）")
+    p_serve.add_argument("--dir", action="append", default=[], help="root to add at startup (repeatable)")
     p_serve.add_argument("--exec", dest="exec_mode", choices=["on", "off"], default="on")
 
-    p_attach = sub.add_parser("attach", help="ルートを追加する")
+    p_attach = sub.add_parser("attach", help="add a root")
     p_attach.add_argument("dir", nargs="?", default=".")
     p_attach.add_argument("--name")
     p_attach.add_argument("--port", type=int, default=8001)
 
-    p_detach = sub.add_parser("detach", help="ルートを取り外す")
+    p_detach = sub.add_parser("detach", help="detach a root")
     p_detach.add_argument("name")
     p_detach.add_argument("--port", type=int, default=8001)
 
-    p_ls = sub.add_parser("ls", help="ルート一覧")
+    p_ls = sub.add_parser("ls", help="list the roots")
     p_ls.add_argument("--port", type=int, default=8001)
 
     args = parser.parse_args()
@@ -914,7 +914,7 @@ def main():
         bridge = Bridge(exec_enabled=getattr(args, "exec_mode", "on") == "on")
         for d in getattr(args, "dir", []):
             name = bridge.add_root(d)
-            print(f"[itera] ルート追加: {name} -> {Path(d).expanduser().resolve()}")
+            print(f"[itera] Root added: {name} -> {Path(d).expanduser().resolve()}")
         for s in bridge.scanners.values():
             s.scan()
         start_watchers(bridge)
@@ -922,25 +922,25 @@ def main():
         import uvicorn
         ident = host_identity()
         print(f"[itera] Local Bridge v{VERSION} — http://{host}:{port}")
-        print(f"[itera] 名乗り: {ident['hostname']} ({ident['user']}@{ident['platform']})")
+        print(f"[itera] Identity: {ident['hostname']} ({ident['user']}@{ident['platform']})")
         print(f"[itera] machineId: {ident['machineId']}")
-        print(f"[itera] ルート: {[r['name'] for r in bridge.describe()] or '（なし。itera attach で追加）'}")
+        print(f"[itera] Roots: {[r['name'] for r in bridge.describe()] or '(none; add one with itera attach)'}")
         for r in bridge.describe():
-            state = "監視あり" if r["watching"] else f"監視なし（{r['watchError'] or '理由不明'}）"
+            state = "watching" if r["watching"] else f"not watching ({r['watchError'] or 'reason unknown'})"
             print(f"[itera]   {r['name']}: {state}")
-        print(f"[itera] シェル実行: {'有効' if bridge.exec_enabled else '無効 (--exec off)'}")
+        print(f"[itera] Shell exec: {'enabled' if bridge.exec_enabled else 'disabled (--exec off)'}")
         uvicorn.run(build_app(bridge), host=host, port=port, log_level="warning")
         return
 
     if args.cmd == "attach":
         path = str(Path(args.dir).expanduser().resolve())
         res = cli_request(args.port, "POST", "/api/roots", {"path": path, "name": args.name})
-        print(f"[itera] 追加しました: {res.get('name')} -> {path}")
+        print(f"[itera] Added: {res.get('name')} -> {path}")
         return
 
     if args.cmd == "detach":
         cli_request(args.port, "DELETE", f"/api/roots/{args.name}")
-        print(f"[itera] 取り外しました: {args.name}")
+        print(f"[itera] Detached: {args.name}")
         return
 
     if args.cmd == "ls":

@@ -438,11 +438,11 @@
           try {
             // 登録簿は層になっている。重ねた値はホストから受け取る（T-0447）
             apps = await App.Registry.get('apps', null);
-            if (!Array.isArray(apps)) throw new Error('目録が配列ではありません');
+            if (!Array.isArray(apps)) throw new Error('The app registry is not an array');
           } catch (e) {
             // 既定の一覧を埋め込まない。無い物を在るように見せるより、読めないと言う方がよい。
             el.innerHTML =
-              '<p class="col-span-2 text-xs text-text-muted leading-relaxed">目録（system/registry/apps.json）が読めませんでした。右上の Library から開けます。</p>';
+              '<p class="col-span-2 text-xs text-text-muted leading-relaxed">Could not read the app registry (system/registry/apps.json). You can open it from Library at the top right.</p>';
             return;
           }
           const rank = (a) => (typeof a.home === 'number' ? a.home : Number.MAX_SAFE_INTEGER);

@@ -269,11 +269,11 @@
             const path = String(f).includes('/') ? String(f) : `data/apps/tasks/${f}`;
             try {
               const arr = JSON.parse(await MetaOS.fs.read(path));
-              if (!Array.isArray(arr)) throw new Error('配列ではありません');
+              if (!Array.isArray(arr)) throw new Error('not an array');
               all.push(...arr);
             } catch (e) {
               // 捨てると「タスクが無い」に見える。数えて画面に出す。
-              State.loadErrors.push(`${path}（${e.message}）`);
+              State.loadErrors.push(`${path} (${e.message})`);
             }
           }
           return all;

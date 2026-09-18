@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>ファイル</title>
+    <title>Files</title>
     <script src="/system/vendor/tw.js"></script>
     <script src="/system/core/ui.js"></script>
     <style>
@@ -36,7 +36,7 @@
           <button
             onclick="AppUI.home()"
             class="text-text-muted hover:text-text-main transition p-1 rounded hover:bg-hover"
-            title="ホームへ"
+            title="Home"
           >
             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path
@@ -47,52 +47,52 @@
               ></path>
             </svg>
           </button>
-          <span class="font-bold tracking-tight shrink-0">ファイル</span>
+          <span class="font-bold tracking-tight shrink-0">Files</span>
         </div>
         <div class="flex flex-wrap items-center gap-1" id="toolbar">
           <button
             onclick="importFiles()"
             class="text-sm px-2 py-1 rounded hover:bg-hover text-text-muted hover:text-text-main"
-            title="PC のファイルをこのフォルダに取り込む（ドラッグ&ドロップでも）"
+            title="Import files from your PC into this folder (drag &amp; drop works too)"
           >
-            ⬆ 取り込む
+            ⬆ Import
           </button>
           <button
             onclick="newFolder()"
             class="text-sm px-2 py-1 rounded hover:bg-hover text-text-muted hover:text-text-main"
           >
-            ＋ フォルダ
+            + New Folder
           </button>
           <button
             onclick="renameSelected()"
             data-needs="one"
             class="text-sm px-2 py-1 rounded hover:bg-hover text-text-muted hover:text-text-main disabled:opacity-30"
           >
-            名前の変更
+            Rename
           </button>
           <button
             onclick="trashSelected()"
             data-needs="some"
             class="text-sm px-2 py-1 rounded hover:bg-hover text-text-muted hover:text-error disabled:opacity-30"
           >
-            ゴミ箱へ
+            Move to Trash
           </button>
           <button
             onclick="askAI()"
             data-needs="some"
             class="text-sm px-2 py-1 rounded bg-primary/10 text-primary font-bold hover:bg-primary/20 disabled:opacity-30"
-            title="選んだものを AI に渡す"
+            title="Send the selection to the AI"
           >
-            ⚡ AI に渡す
+            ⚡ Send to AI
           </button>
           <button
             onclick="revealInHost()"
             id="btn-reveal"
             data-needs="one"
             class="hidden text-sm px-2 py-1 rounded hover:bg-hover text-text-muted hover:text-text-main disabled:opacity-30"
-            title="ホストのエクスプローラパネルで見る"
+            title="Reveal in the host Explorer panel"
           >
-            パネルで見る
+            Reveal in panel
           </button>
         </div>
         <input type="file" id="file-input" multiple class="hidden" />
@@ -109,9 +109,9 @@
         <div
           class="grid grid-cols-[1fr_6rem_10rem] gap-2 px-4 py-1.5 text-[11px] text-text-muted border-b border-border-main/60 shrink-0"
         >
-          <div>名前</div>
-          <div class="text-right">大きさ</div>
-          <div class="hidden sm:block">更新</div>
+          <div>Name</div>
+          <div class="text-right">Size</div>
+          <div class="hidden sm:block">Modified</div>
         </div>
         <div id="list" class="flex-1 overflow-y-auto" tabindex="0"></div>
         <div
@@ -122,7 +122,7 @@
           id="drop-hint"
           class="hidden absolute inset-0 bg-primary/10 border-4 border-dashed border-primary items-center justify-center text-primary font-bold text-lg"
         >
-          ここに落とすと取り込みます
+          Drop here to import
         </div>
       </main>
     </div>
@@ -310,7 +310,7 @@
           const st = await MetaOS.fs.stat(path);
           if (st.kind !== 'directory') path = parentOf(path);
         } catch (e) {
-          AppUI.notify(`「${path}」が見つかりません`, 'error');
+          AppUI.notify(`${path} was not found`, 'error');
           if (cwd === path) return;
           return navigate(cwd);
         }
@@ -322,7 +322,7 @@
           entries = await listDir(cwd);
         } catch (e) {
           entries = [];
-          AppUI.notify(`読めませんでした: ${e && e.message}`, 'error');
+          AppUI.notify(`Could not read it: ${e && e.message}`, 'error');
         }
         renderCrumbs();
         renderList();
@@ -358,7 +358,7 @@
         box.innerHTML = '';
         if (entries.length === 0) {
           box.innerHTML =
-            '<div class="text-center text-text-muted text-sm py-10">空のフォルダです。PC のファイルをここに落とすと取り込めます</div>';
+            '<div class="text-center text-text-muted text-sm py-10">This folder is empty. Drop files from your PC here to import them.</div>';
         }
         for (const e of entries) {
           const row = document.createElement('div');
@@ -406,7 +406,7 @@
 
       function updateStatus() {
         const n = selected.size;
-        $('status').textContent = n ? `${n} 件を選択` : `${entries.length} 件`;
+        $('status').textContent = n ? `${n} selected` : `${entries.length} items`;
         document.querySelectorAll('#toolbar [data-needs]').forEach((b) => {
           const need = b.dataset.needs;
           b.disabled = need === 'one' ? n !== 1 : n === 0;
@@ -460,12 +460,12 @@
           } else if (MetaOS.host.revealInExplorer) {
             // 画像など、ゲストに受け皿が無いものはホストのパネルへ（そこから開ける）
             await MetaOS.host.revealInExplorer(e.path);
-            AppUI.notify('この形式を開くアプリが無いので、ホストのパネルで選びました', 'info');
+            AppUI.notify('No app is associated with this type, so it was revealed in the host panel', 'info');
           } else {
-            AppUI.notify('この形式を開くアプリがありません。「AI に渡す」は使えます', 'info');
+            AppUI.notify('No app is associated with this type. You can still use Send to AI', 'info');
           }
         } catch (err) {
-          AppUI.notify(`開けませんでした: ${err && err.message}`, 'error');
+          AppUI.notify(`Could not open it: ${err && err.message}`, 'error');
         }
       }
 
@@ -473,45 +473,45 @@
         const p = [...selected][0] || cwd;
         try {
           const ok = await MetaOS.host.revealInExplorer(p);
-          if (!ok) AppUI.notify('ホストのパネルに見つかりませんでした', 'error');
+          if (!ok) AppUI.notify('Not found in the host panel', 'error');
         } catch (e) {
-          AppUI.notify(`表示できませんでした: ${e && e.message}`, 'error');
+          AppUI.notify(`Could not show it: ${e && e.message}`, 'error');
         }
       }
 
       // ---------- 変える ----------
       async function newFolder() {
-        const name = await AppUI.prompt('新しいフォルダの名前', '', '新しいフォルダ');
+        const name = await AppUI.prompt('Name of the new folder', '', 'New Folder');
         if (!name) return;
-        if (/[\/\\]/.test(name)) return AppUI.notify('名前に / は使えません', 'error');
+        if (/[\/\\]/.test(name)) return AppUI.notify('A name cannot contain /', 'error');
         const p = `${cwd}/${name.trim()}`;
         try {
-          if (await MetaOS.fs.exists(p)) return AppUI.notify('同じ名前のものがあります', 'error');
+          if (await MetaOS.fs.exists(p)) return AppUI.notify('Something with that name already exists', 'error');
           await MetaOS.fs.mkdir(p);
           await navigate(cwd, { select: p });
         } catch (e) {
-          AppUI.notify(`作れませんでした: ${e && e.message}`, 'error');
+          AppUI.notify(`Could not create it: ${e && e.message}`, 'error');
         }
       }
       async function renameSelected() {
         const p = [...selected][0];
         if (!p) return;
-        const name = await AppUI.prompt('新しい名前', basename(p), '名前の変更');
+        const name = await AppUI.prompt('New name', basename(p), 'Rename');
         if (!name || name === basename(p)) return;
-        if (/[\/\\]/.test(name)) return AppUI.notify('名前に / は使えません', 'error');
+        if (/[\/\\]/.test(name)) return AppUI.notify('A name cannot contain /', 'error');
         const np = `${parentOf(p)}/${name.trim()}`;
         try {
-          if (await MetaOS.fs.exists(np)) return AppUI.notify('同じ名前のものがあります', 'error');
+          if (await MetaOS.fs.exists(np)) return AppUI.notify('Something with that name already exists', 'error');
           await MetaOS.fs.rename(p, np);
           await navigate(cwd, { select: np });
         } catch (e) {
-          AppUI.notify(`変えられませんでした: ${e && e.message}`, 'error');
+          AppUI.notify(`Could not rename it: ${e && e.message}`, 'error');
         }
       }
       async function trashSelected() {
         const ps = [...selected];
         if (!ps.length) return;
-        const ok = await AppUI.confirm(`${ps.length} 件をゴミ箱へ移します。よろしいですか？`, 'ゴミ箱へ');
+        const ok = await AppUI.confirm(`Move ${ps.length} item(s) to Trash?`, 'Move to Trash');
         if (!ok) return;
         const failed = [];
         for (const p of ps) {
@@ -521,7 +521,7 @@
             failed.push(`${basename(p)}: ${e && e.message}`);
           }
         }
-        if (failed.length) AppUI.notify(`移せなかったものがあります:\n${failed.join('\n')}`, 'error');
+        if (failed.length) AppUI.notify(`Some items could not be moved:\n${failed.join('\n')}`, 'error');
         await navigate(cwd);
       }
 
@@ -532,7 +532,7 @@
       async function importFileList(files) {
         const list = Array.from(files || []);
         if (!list.length) return;
-        AppUI.showLoading(`${list.length} 件を取り込んでいます…`);
+        AppUI.showLoading(`Importing ${list.length} item(s)…`);
         const failed = [];
         let last = null;
         try {
@@ -540,7 +540,7 @@
             const p = `${cwd}/${f.name}`;
             try {
               if (await MetaOS.fs.exists(p)) {
-                const ok = await AppUI.confirm(`「${f.name}」は既にあります。置き換えますか？`, '取り込む');
+                const ok = await AppUI.confirm(`${f.name} already exists. Replace it?`, 'Import');
                 if (!ok) continue;
               }
               await MetaOS.fs.write(p, f, { overwrite: true });
@@ -552,8 +552,8 @@
         } finally {
           AppUI.hideLoading();
         }
-        if (failed.length) AppUI.notify(`取り込めなかったものがあります:\n${failed.join('\n')}`, 'error');
-        else AppUI.notify(`${list.length - failed.length} 件を取り込みました`, 'success');
+        if (failed.length) AppUI.notify(`Some items could not be imported:\n${failed.join('\n')}`, 'error');
+        else AppUI.notify(`Imported ${list.length - failed.length} item(s)`, 'success');
         await navigate(cwd, { select: last });
       }
       $('file-input').addEventListener('change', (ev) => {
@@ -585,27 +585,27 @@
         if (!ps.length) return;
         const files = ps.filter((p) => entries.find((e) => e.path === p && e.kind === 'file'));
         const dirs = ps.filter((p) => !files.includes(p));
-        const label = ps.length === 1 ? `「${basename(ps[0])}」` : `${ps.length} 件`;
+        const label = ps.length === 1 ? `${basename(ps[0])}` : `${ps.length} items`;
         const res = await AppUI.showMessageBox({
-          title: 'AI に渡す',
-          message: `${label}を AI に渡します。何をしてほしいか書いてください。`,
+          title: 'Send to AI',
+          message: `Send ${label} to the AI. Write what you want it to do.`,
           type: 'question',
           prompt: { defaultValue: '' },
           buttons: [
-            { label: 'やめる', value: null, style: 'normal', isCancel: true },
-            { label: '渡す', value: 'ok', style: 'primary', isDefault: true },
+            { label: 'Cancel', value: null, style: 'normal', isCancel: true },
+            { label: 'Send', value: 'ok', style: 'primary', isDefault: true },
           ],
         });
         if (!res || res.action === 'cancel' || res.action === null) return;
-        const ask = String(res.value || '').trim() || '中身を確かめて、要点をまとめてください';
-        const lines = [`次のファイルについて: ${ask}`];
+        const ask = String(res.value || '').trim() || 'Look at the contents and summarise the key points';
+        const lines = [`About the following files: ${ask}`];
         if (dirs.length)
-          lines.push(`フォルダ: ${dirs.map((d) => '`' + d + '`').join(', ')}（中身は list_files で見てください）`);
-        if (files.length) lines.push(`ファイル: ${files.map((f) => '`' + f + '`').join(', ')}`);
+          lines.push(`Folders: ${dirs.map((d) => '`' + d + '`').join(', ')} (use list_files to see what is inside)`);
+        if (files.length) lines.push(`Files: ${files.map((f) => '`' + f + '`').join(', ')}`);
         try {
           await MetaOS.ai.ask(lines.join('\n'), { attachments: files });
         } catch (e) {
-          AppUI.notify(`渡せませんでした: ${e && e.message}`, 'error');
+          AppUI.notify(`Could not send it: ${e && e.message}`, 'error');
         }
       }
 

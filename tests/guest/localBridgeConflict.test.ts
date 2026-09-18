@@ -326,14 +326,14 @@ describe('local_bridge: 衝突の退避が生き残ること（T-0069）', () =>
     expect(ok).toBe(false);
     expect(Object.keys(next)).toHaveLength(0);
     expect(Object.keys(h.stubs)).toHaveLength(0);
-    expect(h.notices.join('\n')).toContain('保留');
+    expect(h.notices.join('\n')).toContain('on hold');
   });
 
   it('通知は確かめていないことを書かない（「どちらも失われていません」と言い切らない）', async () => {
     const h = loadResolveConflict();
     await h.resolveConflict(MOUNT, REL, FULL, REMOTE, {});
     const said = h.notices.join('\n');
-    expect(said).toContain('退避');
-    expect(said).not.toContain('どちらも失われていません');
+    expect(said).toContain('stashed');
+    expect(said).not.toContain('nothing was lost');
   });
 });

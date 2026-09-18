@@ -39,7 +39,7 @@ Attributes:
     Itera Cloud ("itera") when this build has cloud functions and you are signed in, otherwise "brave".
     "itera" needs no API key (sign-in required). "brave" needs system/credentials/brave.json
     (falls back to "itera" when the key is missing and the cloud is available). "duckduckgo" needs no key.
-Returns: 文字列。"N. タイトル / URL / Snippet" の並び。失敗は "[Error] …"。
+Returns: A string listing "N. Title / URL / Snippet". Failures come back as "[Error] …".
 </define_tag>`;
 
         const defRead = `
@@ -47,21 +47,21 @@ Returns: 文字列。"N. タイトル / URL / Snippet" の並び。失敗は "[E
 Reads a web page and converts its content to Markdown, removing noise like scripts and nav bars.
 Attributes:
   - url: The URL of the web page to read.
-Returns: Markdown 文字列（20000 字で打ち切り）。失敗は "[Error] …" / "[Exception] …"。
-Note: 中身を解析したいとき（画像や表を拾う等）は、これではなく download_file で生のまま保存し、
-      スクリプトで読むこと。生の HTML を文脈に入れると溢れる。
+Returns: Markdown text (cut off at 20000 characters). Failures come back as "[Error] …" / "[Exception] …".
+Note: To analyse the contents (collect images, extract tables, ...), do not use this. Save the raw file
+      with download_file and read it from a script. Raw HTML floods the context.
 </define_tag>`;
 
         const defDownload = `
 <define_tag name="download_file">
-Downloads any URL into the VFS (image, HTML, PDF, ...). 文脈には内容を載せない。
+Downloads any URL into the VFS (image, HTML, PDF, ...). The contents never enter the context.
 Attributes:
-  - url: 取得する URL。
-  - path (optional): 保存先。省略すると "${DEFAULT_DIR}/<URL から起こした名前>"。
-                     "/" で終えるとディレクトリ扱いで、名前は URL から起こす。
-  - overwrite (optional): "true" で同名を上書きする。既定は "false"（"name-1.jpg" のように退避する）。
-Returns: "保存した: <path>（NN.N KB・<経路>）"。画像として読めたときは寸法（W×H）も付く。失敗は "[Error] …"。
-Note: HTML を保存して DOMParser で解析する使い方を想定している（画像の URL を集める・表を抜く等）。
+  - url: The URL to fetch.
+  - path (optional): Where to save it. Defaults to "${DEFAULT_DIR}/<name derived from the URL>".
+                     A path ending with "/" is treated as a directory, and the name is derived from the URL.
+  - overwrite (optional): "true" overwrites a file with the same name. The default is "false" (it saves aside as "name-1.jpg").
+Returns: "Saved: <path> (NN.N KB, <route>)". When it can be read as an image, the dimensions (W×H) are added. Failures come back as "[Error] …".
+Note: It is meant for saving HTML and parsing it with DOMParser (collecting image URLs, extracting tables, ...).
 </define_tag>`;
 
         // ================= 検索 =================
@@ -192,7 +192,7 @@ Note: HTML を保存して DOMParser で解析する使い方を想定してい�
           });
 
         const humanSize = (bytes) => {
-          if (!Number.isFinite(bytes)) return 'サイズ不明';
+          if (!Number.isFinite(bytes)) return 'unknown size';
           if (bytes < 1024) return `${bytes} B`;
           if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
           return `${(bytes / 1024 / 1024).toFixed(2)} MB`;
@@ -496,11 +496,11 @@ Note: HTML を保存して DOMParser で解析する使い方を想定してい�
               sendLog(`Downloading: ${url} -> ${target}`);
 
               let result = null,
-                route = '直接';
+                route = 'direct';
               try {
                 result = await window.MetaOS.net.download(url, target);
               } catch (e1) {
-                route = 'プロキシ経由';
+                route = 'via proxy';
                 result = await window.MetaOS.net.download(url, target, { useProxy: true });
               }
 
@@ -509,12 +509,12 @@ Note: HTML を保存して DOMParser で解析する使い方を想定してい�
               try {
                 const localUrl = await window.MetaOS.fs.resolveUrl(target);
                 const size = await probeImage(localUrl);
-                if (size) dim = `${size.w}×${size.h}・`;
+                if (size) dim = `${size.w}×${size.h}, `;
               } catch (e) {
                 /* 寸法は付かなくてよい */
               }
 
-              return `保存した: ${target}（${dim}${humanSize(result && result.size)}・${route}）`;
+              return `Saved: ${target} (${dim}${humanSize(result && result.size)}, ${route})`;
             } catch (e) {
               return `[Exception] ${e.message}`;
             }

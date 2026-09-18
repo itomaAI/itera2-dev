@@ -4,7 +4,7 @@
       "id": "google_drive",
       "name": "Google Drive",
       "path": "system/adapters/google_drive_auth.js",
-      "description": "Google Drive の 1 フォルダを drive/ にマウントする",
+      "description": "Mounts one Google Drive folder at drive/",
       "enabled": true
     }
   ]

@@ -130,7 +130,7 @@ export async function init(ctx) {
     btnSignIn.className = 'px-3 py-1.5 bg-card border border-border-main text-text-muted text-xs font-bold rounded';
     const hint = document.createElement('div');
     hint.className = 'text-[10px] text-text-muted leading-relaxed px-1';
-    hint.innerHTML = `<span class="font-mono">${CONFIG_PATH}</span> に clientId を設定してください。`;
+    hint.innerHTML = `Set clientId in <span class="font-mono">${CONFIG_PATH}</span>.`;
     ui.container.appendChild(hint);
     ui.setStatus({ state: 'error', label: 'Not Configured', detail: 'clientId missing' });
     return;

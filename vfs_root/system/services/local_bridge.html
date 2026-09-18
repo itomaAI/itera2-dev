@@ -69,7 +69,7 @@
           try {
             await MetaOS.fs.write(CONFIG_PATH, JSON.stringify(config, null, 2), { overwrite: true, silent: true });
           } catch (e) {
-            log(`設定の書き戻しに失敗: ${e.message}`);
+            log(`Could not write the settings back: ${e.message}`);
           }
         }
 
@@ -199,7 +199,7 @@
             if (!ignorePushWarned.has(key)) {
               ignorePushWarned.add(key);
               log(
-                `ホストが無視パターンを受け取れない版です (${conn.name}, v${r.version || '?'})。VFS 側だけで捨てます`,
+                `This host build cannot take ignore patterns (${conn.name}, v${r.version || '?'}). They are applied on the VFS side only`,
               );
             }
             return;
@@ -214,15 +214,17 @@
             });
             // 応答の値を見る。「送った」ではなく「効いた」を記録する。
             log(
-              `無視パターンをホストへ渡した (${conn.name}/${r.name}): ${res.count} 件、ホストの一覧 ${res.files} 件` +
-                (res.changed ? '' : '（変更なし）'),
+              `Sent the ignore patterns to the host (${conn.name}/${r.name}): ${res.count} pattern(s), ${res.files} file(s) listed on the host` +
+                (res.changed ? '' : ' (unchanged)'),
             );
             ignorePushWarned.delete(`${conn.name}/${r.name}:fail`);
           } catch (e) {
             const key = `${conn.name}/${r.name}:fail`;
             if (!ignorePushWarned.has(key)) {
               ignorePushWarned.add(key);
-              log(`無視パターンをホストへ渡せません (${conn.name}/${r.name}): ${e.message}。VFS 側だけで捨てます`);
+              log(
+                `Could not send the ignore patterns to the host (${conn.name}/${r.name}): ${e.message}. They are applied on the VFS side only`,
+              );
             }
           }
         }
@@ -285,7 +287,7 @@
             } catch (e) {
               // 壊れたアンカーを空として扱うと、全ファイルが「ローカルに新規」に見える。
               // 空にするのではなく、調停を止められるよう壊れていることを伝える。
-              log(`アンカーが壊れています (${p}): ${e.message}`);
+              log(`The anchor is broken (${p}): ${e.message}`);
               return { identity: null, entries: null, fresh: false, broken: true };
             }
           }
@@ -316,10 +318,10 @@
           if (!prev) return null;
           const now = conn.identity || {};
           if (prev.machineId && now.machineId && prev.machineId !== now.machineId) {
-            return `別の機械です（前回 ${prev.hostname || prev.machineId} / 今回 ${now.hostname || now.machineId}）`;
+            return `A different machine (before ${prev.hostname || prev.machineId} / now ${now.hostname || now.machineId})`;
           }
           if (prev.path && rootPath && prev.path !== rootPath) {
-            return `ルートの実パスが変わりました（前回 ${prev.path} / 今回 ${rootPath}）`;
+            return `The real path of the root changed (before ${prev.path} / now ${rootPath})`;
           }
           return null;
         }
@@ -333,8 +335,8 @@
           mount.halted = reason;
           clearTimeout(mount.timer);
           const msg =
-            `[Local Bridge] /${mount.mountPath} の同期を停止しました。\n${reason}\n` +
-            `意図した組み合わせであれば、アンカー ${anchorPath(mount.conn, mount.root)} を削除すると再開します。`;
+            `[Local Bridge] Syncing of /${mount.mountPath} has stopped.\n${reason}\n` +
+            `If this combination is intended, delete the anchor ${anchorPath(mount.conn, mount.root)} to resume.`;
           log(msg);
           try {
             MetaOS.host.notify(msg, 'Local Bridge');
@@ -413,9 +415,9 @@
             saved = await getJson(api(conn, `/api/${root}/file/${backupRel}`), { method: 'PUT', body: u8 });
           } catch (e) {
             notifyOnce(
-              `[Local Bridge] /${mountPath}/${rel} は両側が変更されています。` +
-                `VFS 側の退避に失敗したため、このファイルの同期を保留しました（内容はどちらも保持しています）。\n` +
-                `理由: ${e.message}`,
+              `[Local Bridge] /${mountPath}/${rel} has changed on both sides.` +
+                `The VFS copy could not be stashed, so syncing of this file is on hold (both versions are kept).\n` +
+                `Reason: ${e.message}`,
             );
             return false;
           }
@@ -437,7 +439,9 @@
               });
               backupTracked = true;
             } catch (e) {
-              log(`退避 ${backupRel} の節点を VFS に作れませんでした（次の巡回で拾い直します）: ${e.message}`);
+              log(
+                `Could not create the node for the stash ${backupRel} in the VFS (the next pass will pick it up): ${e.message}`,
+              );
             }
           }
           if (backupTracked) {
@@ -447,9 +451,9 @@
 
           // 言えるのは「サーバーが受領を返した」ところまで。確かめていないことを書かない。
           notifyOnce(
-            `[Local Bridge] /${mountPath}/${rel} は両側が変更されていました。\n` +
-              `ホスト側を採用し、VFS 側の内容はホストへ ${backupRel} として退避しました` +
-              `（サーバーの受領: ${saved ? saved.size : '?'} バイト）。`,
+            `[Local Bridge] /${mountPath}/${rel} had changed on both sides.\n` +
+              `The host copy was taken, and the VFS copy was stashed on the host as ${backupRel}` +
+              ` (the server received ${saved ? saved.size : '?'} bytes).`,
           );
           return true;
         }
@@ -516,7 +520,7 @@
           try {
             remote = await getJson(api(conn, `/api/${root}/meta`));
           } catch (e) {
-            log(`meta 取得に失敗 (${conn.name}/${root}): ${e.message}`);
+            log(`Could not fetch meta (${conn.name}/${root}): ${e.message}`);
             return;
           }
 
@@ -524,11 +528,11 @@
           const loaded = await loadAnchor(conn, root);
 
           if (loaded.broken) {
-            return halt(mount, 'アンカーが壊れているため調停を中止しました。');
+            return halt(mount, 'Reconciliation stopped because the anchor is broken.');
           }
           const mismatch = identityMismatch(loaded.identity, conn, mount.rootPath);
           if (mismatch) {
-            return halt(mount, `同一性が食い違うため調停を中止しました。${mismatch}`);
+            return halt(mount, `Reconciliation stopped because of an identity mismatch. ${mismatch}`);
           }
 
           const anchor = loaded.entries;
@@ -541,8 +545,8 @@
           if (isDegenerateListing(Object.keys(remote).length, anchorCount)) {
             return halt(
               mount,
-              `リモート一覧が空です（アンカーには ${anchorCount} 件）。` +
-                `走査の失敗と区別できないため、何も消さずに停止しました。`,
+              `The remote listing is empty (the anchor holds ${anchorCount} entries).` +
+                `That cannot be told apart from a failed scan, so nothing was deleted and it stopped.`,
             );
           }
 
@@ -641,8 +645,8 @@
                     //   流れ、実体の無いファイルを読もうとして延々と失敗する。アンカーは残して再試行する。
                     notifyVanishOnce(
                       full,
-                      `[Local Bridge] /${full} はホスト側に存在しませんが、VFS から削除できませんでした。\n` +
-                        `理由: ${e.message}`,
+                      `[Local Bridge] /${full} does not exist on the host, but it could not be deleted from the VFS.\n` +
+                        `Reason: ${e.message}`,
                     );
                   }
                 } else {
@@ -652,8 +656,8 @@
                   delete next[rel];
                   notifyVanishOnce(
                     full,
-                    `[Local Bridge] /${full} はホスト側から消えていますが、VFS 側に未送信の変更があります。\n` +
-                      `消さずにホストへ復活させます。不要であれば VFS 側で削除してください。`,
+                    `[Local Bridge] /${full} is gone on the host, but the VFS copy has changes that were never sent.\n` +
+                      `It is restored to the host instead of being deleted. Delete it in the VFS if you do not need it.`,
                   );
                 }
                 continue;
@@ -726,7 +730,7 @@
                 continue;
               }
             } catch (e) {
-              log(`項目の調停に失敗 ${conn.name}/${root}/${rel}: ${e.message}`);
+              log(`Could not reconcile the entry ${conn.name}/${root}/${rel}: ${e.message}`);
             }
           }
 
@@ -744,7 +748,7 @@
               delete next[d.rel];
               vanishNotified.delete(d.full);
             } catch (e) {
-              log(`ディレクトリの掃除に失敗 ${d.full}: ${e.message}`);
+              log(`Could not clean up the directory ${d.full}: ${e.message}`);
             }
           }
 
@@ -762,7 +766,7 @@
             try {
               await reconcile(mount);
             } catch (e) {
-              log(`調停エラー: ${e.message}`);
+              log(`Reconciliation error: ${e.message}`);
             } finally {
               mount.syncing = false;
             }
@@ -778,7 +782,7 @@
         async function withSyncPaused(mount, fn) {
           const deadline = Date.now() + 60000;
           while (mount.syncing) {
-            if (Date.now() > deadline) throw new Error('調停が終わらないため中止しました。');
+            if (Date.now() > deadline) throw new Error('Reconciliation did not finish, so it was aborted.');
             await new Promise((r) => setTimeout(r, 200));
           }
           clearTimeout(mount.timer);
@@ -844,7 +848,7 @@
           dirs.sort(deepFirst);
 
           const loaded = await loadAnchor(conn, root);
-          if (loaded.broken) throw new Error('アンカーが壊れているため掃除を中止しました。');
+          if (loaded.broken) throw new Error('Cleanup stopped because the anchor is broken.');
           const entries = { ...loaded.entries };
 
           // 無視に当たるのに VFS に居ない項目（アンカーにだけ残っている残骸）を数える。
@@ -973,7 +977,7 @@
                 });
                 return true;
               } catch (e) {
-                log(`実体取得に失敗 ${rel}: ${e.message}`);
+                log(`Could not fetch the contents of ${rel}: ${e.message}`);
                 return false;
               }
             },
@@ -985,7 +989,7 @@
           });
 
           mounts.set(mountPath, mount);
-          log(`マウント: /${mountPath}`);
+          log(`Mounted: /${mountPath}`);
           scheduleSync(mount);
         }
 
@@ -1005,7 +1009,7 @@
             try {
               state = await MetaOS.fs.getSyncState(mountPath);
             } catch (e) {
-              log(`[detach] ${mountPath}: 状態を読めませんでした（${e.message}）`);
+              log(`[detach] ${mountPath}: could not read its state (${e.message})`);
             }
           }
 
@@ -1015,7 +1019,7 @@
             await MetaOS.fs.unregisterSyncProvider(mountPath);
           } catch (e) {}
           mounts.delete(mountPath);
-          log(`アンマウント: /${mountPath}`);
+          log(`Unmounted: /${mountPath}`);
 
           if (cleanup) await cleanupDetached(mount, state);
         }
@@ -1029,7 +1033,7 @@
         async function cleanupDetached(mount, state) {
           const { mountPath, conn, root } = mount;
           if (!state) {
-            log(`[detach] ${mountPath} は状態不明のため残置しました。`);
+            log(`[detach] ${mountPath} was left in place because its state is unknown.`);
             return;
           }
           const files = Object.entries(state).filter(([, i]) => i && i.kind !== 'directory');
@@ -1038,7 +1042,7 @@
             if (!materialized.length) {
               // すべてスタブ。VFS 側にしか無い中身は1件も無いので、消しても何も失われない。
               await MetaOS.fs.delete(mountPath, { permanent: true });
-              log(`[detach] ${mountPath} を削除しました（スタブ ${files.length} 件）。`);
+              log(`[detach] ${mountPath} was removed (${files.length} stub(s)).`);
             } else {
               const stamp = new Date().toLocaleDateString('sv-SE').replace(/-/g, '');
               let dest = `${mountPath}.detached-${stamp}`;
@@ -1059,8 +1063,8 @@
               }
 
               const msg =
-                `[Local Bridge] ${mountPath} が取り外されました。実体 ${materialized.length} 件が VFS 側にあるため、` +
-                `削除せず /${dest} へ退避しました（開けなくなるスタブ ${ghosts} 件は除去）。`;
+                `[Local Bridge] ${mountPath} was detached. ${materialized.length} materialized file(s) are in the VFS, so ` +
+                `it was moved to /${dest} instead of being deleted (${ghosts} stub(s) that could no longer be opened were removed).`;
               log(msg);
               try {
                 MetaOS.host.notify(msg, 'Local Bridge');
@@ -1073,7 +1077,7 @@
               await MetaOS.fs.delete(anchorPath(conn, root), { permanent: true });
             } catch (e) {}
           } catch (e) {
-            log(`[detach] ${mountPath} の後始末に失敗: ${e.message}`);
+            log(`[detach] Could not finish the cleanup of ${mountPath}: ${e.message}`);
           }
         }
 
@@ -1108,9 +1112,9 @@
             if (list.length < 2 || dupWarned.has(id)) continue;
             dupWarned.add(id);
             const msg =
-              `同じ機械に ${list.length} 本の接続が繋がっています（` +
-              list.map((c) => `${c.name || '(名前未確定)'}=${c.serverUrl}`).join(' / ') +
-              `）。同じディレクトリを二重にマウントしていると壊れます。`;
+              `${list.length} connections point at the same machine (` +
+              list.map((c) => `${c.name || '(name not settled yet)'}=${c.serverUrl}`).join(' / ') +
+              `). Mounting the same directory twice will break things.`;
             log(msg);
             try {
               MetaOS.host.notify(msg, 'Local Bridge');
@@ -1140,8 +1144,8 @@
               warnOnce(
                 conn,
                 'machine-changed',
-                `${conn.serverUrl} の先が別の機械に変わりました（設定 ${conn.cfg.machineId} / 今回 ${mid}）。` +
-                  `マウント名は ${conn.name} のままです。同期は同一性照合で止まります。`,
+                `${conn.serverUrl} now points at a different machine (settings ${conn.cfg.machineId} / now ${mid}).` +
+                  `The mount name stays ${conn.name}. Syncing will stop at the identity check.`,
               );
             } else if (!conn.cfg.machineId) {
               conn.cfg.machineId = mid;
@@ -1154,8 +1158,8 @@
               warnOnce(
                 conn,
                 'no-name',
-                `${conn.serverUrl} のサーバーはホスト名を名乗りません（v3.1 より前）。` +
-                  `設定に name を書くか、サーバーを更新してください。マウントは保留します。`,
+                `The server at ${conn.serverUrl} does not report a host name (older than v3.1).` +
+                  `Write name in the settings, or update the server. The mount is on hold.`,
               );
               return false;
             }
@@ -1168,7 +1172,7 @@
             conn.name = name;
             conn.cfg.name = name;
             await saveConfig();
-            log(`接続名を確定: ${name} (${conn.serverUrl})`);
+            log(`Connection name settled: ${name} (${conn.serverUrl})`);
           }
 
           checkDuplicateMachines();
@@ -1230,7 +1234,7 @@
             try {
               status = await refreshConn(conn, { waitSec: conn.longPoll ? LONG_POLL_SEC : 0 });
             } catch (e) {
-              log(`巡回に失敗 (${connLabel(conn)}): ${e.message}`);
+              log(`The polling pass failed (${connLabel(conn)}): ${e.message}`);
             }
             const spent = Date.now() - started;
             // 保留してもらえた場合だけ即座に次を投げる。それ以外は間隔をあける。
@@ -1245,22 +1249,24 @@
         // ホスト側の変更検知は /api/status の rev をポーリングして行う。
 
         // ---------- 接続の解決 ----------
-        const connLabel = (c) => c.name || `(名前未確定: ${c.serverUrl})`;
+        const connLabel = (c) => c.name || `(name not settled: ${c.serverUrl})`;
 
         function resolveConn(name) {
           const ready = connections.filter((c) => c.name);
           if (name) {
             const c = connections.find((x) => x.name === name);
             if (!c)
-              throw new Error(`接続 '${name}' はありません（${connections.map(connLabel).join(', ') || 'なし'}）`);
+              throw new Error(`There is no connection '${name}' (${connections.map(connLabel).join(', ') || 'none'})`);
             return c;
           }
           if (ready.length === 1) return ready[0];
           if (!ready.length) {
-            throw new Error(`接続がまだ確立していません（${connections.map(connLabel).join(', ') || '設定なし'}）`);
+            throw new Error(
+              `No connection is established yet (${connections.map(connLabel).join(', ') || 'nothing configured'})`,
+            );
           }
           throw new Error(
-            `接続が複数あります。connection 属性で指定してください（${ready.map((c) => c.name).join(', ')}）`,
+            `There are several connections. Name one with the connection attribute (${ready.map((c) => c.name).join(', ')})`,
           );
         }
 
@@ -1269,7 +1275,7 @@
           const owned = Array.from(mounts.values()).filter((m) => m.conn === conn);
           if (owned.length === 1) return owned[0].root;
           throw new Error(
-            `ルートが複数あります。root 属性で指定してください（${owned.map((m) => m.root).join(', ') || 'なし'}）`,
+            `There are several roots. Name one with the root attribute (${owned.map((m) => m.root).join(', ') || 'none'})`,
           );
         }
 
@@ -1277,7 +1283,7 @@
         // 相手が変わっている疑いがある状態で実体化やスタブ化をすると、取り違えが確定する。
         function ensureLive(conn, root) {
           const m = mounts.get(`${MOUNT_BASE}/${conn.name}/${root}`);
-          if (m && m.halted) throw new Error(`このマウントは同期を停止しています。${m.halted}`);
+          if (m && m.halted) throw new Error(`Syncing of this mount has stopped. ${m.halted}`);
           return m;
         }
 
@@ -1316,10 +1322,10 @@ Attributes:
   - limit (optional): Max files to process (default 200).
 Behaviour:
   - stub                    => download from the host
-  - materialized, same hash => reported as "一致" (nothing to do)
+  - materialized, same hash => reported as a match (nothing to do)
   - materialized, different => treated as a conflict: the VFS copy is saved on the
                                host as <name>.conflict-<time>, then the host copy wins
-  - stash failed            => reported as "保留"; neither side is touched
+  - stash failed            => reported as "on hold"; neither side is touched
   - missing on the host     => reported; nothing is deleted
 Note: it never reports success without comparing hashes with the host.
 </define_tag>`,
@@ -1353,20 +1359,20 @@ Attributes:
               const scope = p.scope === 'host' ? 'host' : 'root';
               const root = scope === 'host' ? null : resolveRoot(conn, p.root);
               const command = (p.content || '').trim();
-              if (!command) return 'コマンドが空です。';
+              if (!command) return 'The command is empty.';
 
               if ((conn.execMode || 'ask') === 'ask') {
                 const res = await MetaOS.host.showMessageBox({
-                  title: 'ローカル実行の確認',
-                  message: `${conn.name}${root ? ' / ' + root : ' (host)'} でコマンドを実行します。`,
-                  detail: `${command}\n\ncwd: ${p.cwd || (scope === 'host' ? 'ホームディレクトリ' : 'ルート直下')}`,
+                  title: 'Confirm local execution',
+                  message: `Run a command on ${conn.name}${root ? ' / ' + root : ' (host)'}.`,
+                  detail: `${command}\n\ncwd: ${p.cwd || (scope === 'host' ? 'home directory' : 'the root itself')}`,
                   type: 'question',
                   buttons: [
-                    { label: '実行しない', value: false, style: 'normal', isCancel: true },
-                    { label: '実行する', value: true, style: 'primary', isDefault: true },
+                    { label: 'Do not run', value: false, style: 'normal', isCancel: true },
+                    { label: 'Run', value: true, style: 'primary', isDefault: true },
                   ],
                 });
-                if (!res || res.action !== true) return '[未実行] 山内さんが実行を許可しませんでした。';
+                if (!res || res.action !== true) return '[not executed] The user did not allow it.';
               }
 
               const data = await getJson(api(conn, '/api/exec'), {
@@ -1376,7 +1382,7 @@ Attributes:
               });
               return fmtExec(data);
             } catch (e) {
-              return `[エラー] ${e.message}`;
+              return `[error] ${e.message}`;
             }
           },
         });
@@ -1399,11 +1405,11 @@ Attributes:
                   limit: parseInt(p.limit) || 40,
                 }),
               });
-              if (!data.count) return `一致なし（${conn.name}/${root}, engine=${data.engine}）`;
+              if (!data.count) return `No matches (${conn.name}/${root}, engine=${data.engine})`;
               const lines = data.matches.map((m) => `${m.path}:${m.line}: ${m.text}`);
-              return `${data.count} 件（${conn.name}/${root}, engine=${data.engine}）\n` + lines.join('\n');
+              return `${data.count} match(es) (${conn.name}/${root}, engine=${data.engine})\n` + lines.join('\n');
             } catch (e) {
-              return `[エラー] ${e.message}`;
+              return `[error] ${e.message}`;
             }
           },
         });
@@ -1449,7 +1455,7 @@ Attributes:
               const targets = Object.entries(state).filter(
                 ([full, info]) => info.kind !== 'directory' && (full === target || full.startsWith(target + '/')),
               );
-              if (!targets.length) return `対象がありません: ${p.path}`;
+              if (!targets.length) return `Nothing to do: ${p.path}`;
 
               // ★ ホスト側の meta を必ず引く。
               //   以前は「実体化済みなら何もしない」で成功を返していた。しかしそれは
@@ -1502,16 +1508,16 @@ Attributes:
               }
 
               const parts = [
-                `実体化: ${done} 件`,
-                `一致: ${matched} 件`,
-                `衝突を解消: ${resolved} 件`,
-                `保留: ${held} 件`,
-                `ホストに無し: ${gone} 件`,
-                `失敗: ${failed} 件`,
+                `materialized: ${done}`,
+                `already matching: ${matched}`,
+                `conflicts resolved: ${resolved}`,
+                `on hold: ${held}`,
+                `missing on the host: ${gone}`,
+                `failed: ${failed}`,
               ];
-              return `${parts.join(' / ')}（対象 ${targets.length} 件、上限 ${limit}）`;
+              return `${parts.join(' / ')} (${targets.length} target(s), limit ${limit})`;
             } catch (e) {
-              return `[エラー] ${e.message}`;
+              return `[error] ${e.message}`;
             }
           },
         });
@@ -1553,7 +1559,9 @@ Attributes:
                 body: JSON.stringify({ paths: rels }),
               });
             } catch (e) {
-              const err = new Error(`[中断] ホスト側の確認が取れませんでした（${e.message}）。実体は残しています。`);
+              const err = new Error(
+                `[aborted] The host could not be checked (${e.message}). The materialized files are kept.`,
+              );
               err.partial = result;
               throw err;
             }
@@ -1562,11 +1570,11 @@ Attributes:
               const rel = full.substring(mountPath.length + 1);
               const v = verify.results?.[rel];
               if (!v || !v.present) {
-                result.skipped.push(`${rel}: ホストに実体が無い`);
+                result.skipped.push(`${rel}: no contents on the host`);
                 continue;
               }
               if (v.hash !== info.hash) {
-                result.skipped.push(`${rel}: ハッシュ不一致`);
+                result.skipped.push(`${rel}: hash mismatch`);
                 continue;
               }
               try {
@@ -1592,10 +1600,10 @@ Attributes:
         }
 
         function releaseSummary(r) {
-          let out = `スタブ化: ${r.released} 件 / 見送り: ${r.skipped.length} 件（対象 ${r.total} 件、解放 ${r.bytes} バイト）`;
+          let out = `released: ${r.released} / skipped: ${r.skipped.length} (of ${r.total}; ${r.bytes} bytes freed)`;
           if (r.skipped.length)
             out +=
-              '\n見送りの理由:\n' +
+              '\nWhy they were skipped:\n' +
               r.skipped
                 .slice(0, 20)
                 .map((s) => '  - ' + s)
@@ -1612,12 +1620,12 @@ Attributes:
               const conn = resolveConn(p.connection);
               const root = resolveRoot(conn, p.root);
               const r = await releaseVerified(conn, root, p.path);
-              if (!r.total) return `スタブ化できる実体がありません: ${p.path}`;
+              if (!r.total) return `There is nothing materialized to release: ${p.path}`;
               return releaseSummary(r);
             } catch (e) {
-              const head = e.message.startsWith('[') ? e.message : `[エラー] ${e.message}`;
+              const head = e.message.startsWith('[') ? e.message : `[error] ${e.message}`;
               return e.partial && e.partial.released
-                ? `${head}\n（中断前に ${e.partial.released} 件をスタブ化しています）`
+                ? `${head}\n(${e.partial.released} file(s) were released before it stopped)`
                 : head;
             }
           },
@@ -1639,14 +1647,14 @@ Attributes:
               const root = resolveRoot(conn, msg.root);
               const mountPath = `${MOUNT_BASE}/${conn.name}/${root}`;
               const mount = mounts.get(mountPath);
-              if (!mount) throw new Error(`マウントされていません: ${mountPath}`);
+              if (!mount) throw new Error(`Not mounted: ${mountPath}`);
               const r = await withSyncPaused(mount, () =>
                 ignoreCleanup(mount, { dryRun: !!msg.dryRun, onProgress: (p) => reply('progress', p) }),
               );
               reply('result', { ok: true, ...r });
               return;
             }
-            if (msg.action !== 'release') throw new Error(`不明な依頼: ${msg.action}`);
+            if (msg.action !== 'release') throw new Error(`Unknown request: ${msg.action}`);
             const conn = resolveConn(msg.connection);
             const root = resolveRoot(conn, msg.root);
             const r = await releaseVerified(conn, root, msg.path || '', (p) => reply('progress', p));
@@ -1679,12 +1687,14 @@ Attributes:
         for (const conn of connections) {
           const status = await refreshConn(conn);
           if (!status) {
-            summary.push(`${connLabel(conn)}: 未接続 (${conn.serverUrl}) — ${ROOT_POLL_MS / 1000}秒ごとに再確認します`);
+            summary.push(
+              `${connLabel(conn)}: not connected (${conn.serverUrl}) — retrying every ${ROOT_POLL_MS / 1000}s`,
+            );
           } else {
             const id = conn.identity || {};
-            const who = id.hostname ? `${id.hostname} / ${id.user || '?'}` : '名乗りなし（v3.1 未満のサーバー）';
+            const who = id.hostname ? `${id.hostname} / ${id.user || '?'}` : 'unnamed (server older than v3.1)';
             summary.push(
-              `${connLabel(conn)}: v${status.version} [${who}] ルート ${(status.roots || []).length} 件 / 実行 ${conn.execMode}`,
+              `${connLabel(conn)}: v${status.version} [${who}] ${(status.roots || []).length} root(s) / exec ${conn.execMode}`,
             );
           }
           // 起動時に繋がらなくても巡回は必ず仕掛ける。
@@ -1694,7 +1704,7 @@ Attributes:
         }
 
         MetaOS.ai.log(
-          'Local Bridge (daemon v3.10) 起動\n' + (summary.join('\n') || '（有効な接続がありません）'),
+          'Local Bridge (daemon v3.10) started\n' + (summary.join('\n') || '(no enabled connections)'),
           'system',
         );
       })();
