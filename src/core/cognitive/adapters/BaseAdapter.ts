@@ -11,8 +11,22 @@ import type { SystemLogger } from '../../state/SystemLogger';
  * これを超えたら通信が死んだとみなして中断する。**推論（reasoning）の最中は
  * 上流から何も届かないことがある**ため、短すぎると「考えているだけのモデル」を殺してしまう。
  * 15 秒では足りなかった（2026-08-22 / T-0073）。
+ *
+ * ★ これは「**流れている途中で切れた**」を検出するための値であって、「まだ考えている」に当ててはいけない。
+ *   思考中の無音は下の `STREAM_FIRST_CHUNK_TIMEOUT_MS` が受け持つ。
  */
 export const STREAM_IDLE_TIMEOUT_MS = 30000;
+
+/**
+ * **本文の最初の 1 文字が来るまで**に許す時間（ミリ秒）。
+ *
+ * 推論の最中は本文が来ない（Anthropic は `message_start` だけ先に届き、その後は思考が終わるまで本文が無い）。
+ * 「最初の 1 バイト」を基準にすると、バイトは来ているのに本文が無い時間を 30 秒で切ってしまうので、
+ * **基準はバイトではなく本文**にする。ミャク楽側で先に直したもの（2026-08-27 / T-0276）を揃えた（T-0492）。
+ *
+ * 中継（`llmProxy`）を挟む経路でも、関数側の上限は 1200 秒なのでこの値が先に効く。
+ */
+export const STREAM_FIRST_CHUNK_TIMEOUT_MS = 600000;
 
 export interface LlmConfig {
   temperature?: number;
@@ -121,10 +135,30 @@ export abstract class BaseLLMAdapter {
     }
   }
 
+  /**
+   * 本文（利用者に見える文字）が流れ始めたか。各アダプタが最初の `onChunk` の直前に `markContentStarted()` で立てる。
+   * `monitorStream` の入口で倒す（1 回の生成 ＝ 1 本のストリーム）。
+   */
+  protected contentStarted = false;
+  protected markContentStarted(): void {
+    this.contentStarted = true;
+  }
+
+  /**
+   * ストリームの無音を見張る。上限は 2 段。
+   *
+   *   1. **本文の最初の 1 文字が来るまで** …… `STREAM_FIRST_CHUNK_TIMEOUT_MS`（長い）
+   *   2. **本文が流れ始めたあと**           …… `STREAM_IDLE_TIMEOUT_MS`（30 秒）
+   *
+   * ★ 30 秒は「流れている途中で通信が切れた」を検出するためのもので、「まだ考えている」に当てるものではない。
+   *   Anthropic は `message_start` が先に届く（＝バイトは来る）ので、「最初の 1 バイト」を基準にすると
+   *   思考中の無音を 30 秒で切ってしまう。基準はバイトではなく**本文**にする。
+   *   本文が来るまでの間もバイトが届くたびに時計は戻す（長い上限の中で）。
+   */
   protected async *monitorStream(reader: ReadableStreamDefaultReader<Uint8Array>, signal?: AbortSignal) {
-    const idleLimitMs = STREAM_IDLE_TIMEOUT_MS;
     let idleTimeout: ReturnType<typeof setTimeout>;
-    let isIdleTimeout = false;
+    let timedOut: 'first' | 'idle' | null = null;
+    this.contentStarted = false;
 
     const onAbort = () => {
       reader.cancel(new DOMException('Aborted', 'AbortError')).catch(() => {});
@@ -133,10 +167,12 @@ export abstract class BaseLLMAdapter {
 
     const resetIdleTimeout = () => {
       clearTimeout(idleTimeout);
+      const phase: 'first' | 'idle' = this.contentStarted ? 'idle' : 'first';
+      const limitMs = phase === 'first' ? STREAM_FIRST_CHUNK_TIMEOUT_MS : STREAM_IDLE_TIMEOUT_MS;
       idleTimeout = setTimeout(() => {
-        isIdleTimeout = true;
+        timedOut = phase;
         reader.cancel(new Error('Stream Idle Timeout')).catch(() => {});
-      }, idleLimitMs);
+      }, limitMs);
     };
 
     resetIdleTimeout();
@@ -146,14 +182,23 @@ export abstract class BaseLLMAdapter {
         if (signal && signal.aborted) throw new DOMException('Aborted', 'AbortError');
         const { done, value } = await reader.read();
 
-        if (isIdleTimeout) {
-          throw new Error(`Stream Idle Timeout: No response from API for ${idleLimitMs / 1000} seconds.`);
+        if (timedOut === 'first') {
+          throw new Error(
+            `Stream Idle Timeout: No response from API for ${STREAM_FIRST_CHUNK_TIMEOUT_MS / 1000} seconds (before the first chunk).`,
+          );
+        }
+        if (timedOut === 'idle') {
+          throw new Error(`Stream Idle Timeout: No response from API for ${STREAM_IDLE_TIMEOUT_MS / 1000} seconds.`);
         }
 
         resetIdleTimeout();
 
         if (done) break;
-        if (value) yield value;
+        if (value) {
+          yield value;
+          // アダプタがこの塊を処理して本文の開始を立てたかもしれない。段が変わったなら 30 秒の時計に掛け替える
+          if (this.contentStarted) resetIdleTimeout();
+        }
       }
     } finally {
       clearTimeout(idleTimeout!);

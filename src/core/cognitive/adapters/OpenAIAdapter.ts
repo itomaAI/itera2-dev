@@ -156,6 +156,7 @@ export class OpenAIAdapter extends BaseLLMAdapter {
 
           const delta = data.choices?.[0]?.delta;
           if (delta && delta.content) {
+            this.markContentStarted();
             onChunk(delta.content);
           }
         } catch (e) {
