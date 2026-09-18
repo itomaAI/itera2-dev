@@ -102,6 +102,7 @@ export class GeminiAdapter extends BaseLLMAdapter {
           if (Array.isArray(parts)) {
             for (const part of parts) {
               if (part.text) {
+                this.markContentStarted();
                 onChunk(part.text);
               }
             }

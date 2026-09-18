@@ -133,6 +133,7 @@ export class AnthropicAdapter extends BaseLLMAdapter {
             outputTokens = data.usage.output_tokens || 0;
           } else if (eventType === 'content_block_delta') {
             if (data.delta && data.delta.type === 'text_delta') {
+              this.markContentStarted();
               onChunk(data.delta.text);
             }
           } else if (eventType === 'error') {
