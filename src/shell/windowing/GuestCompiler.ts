@@ -31,7 +31,7 @@ export class GuestCompiler {
   private _createMissingUrl(absPath: string, reason: string, blobUrls: string[]): string {
     const escaped = absPath.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
     const html =
-      `<!doctype html><html lang="ja"><head><meta charset="utf-8"><title>${reason}</title></head>` +
+      `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>${reason}</title></head>` +
       `<body style="margin:0;height:100vh;display:flex;align-items:center;justify-content:center;` +
       `background:#1e1e2e;color:#cdd6f4;font-family:system-ui,sans-serif;">` +
       `<div style="text-align:center;padding:2rem;"><div style="font-size:2rem;">404</div>` +
@@ -174,13 +174,13 @@ window.addEventListener('message', async (e) => {
 
     if (!vfs.exists(USER_PRINCIPAL, absPath)) {
       console.warn(`[GuestCompiler] File not found: ${absPath}`);
-      return this._createMissingUrl(absPath, 'ファイルが見つかりません', blobUrls);
+      return this._createMissingUrl(absPath, 'File not found', blobUrls);
     }
 
     const stat = vfs.stat(USER_PRINCIPAL, absPath);
     if (stat.kind !== 'file') {
       console.warn(`[GuestCompiler] Not a file: ${absPath}`);
-      return this._createMissingUrl(absPath, 'ファイルではありません（ディレクトリ）', blobUrls);
+      return this._createMissingUrl(absPath, 'Not a file (directory)', blobUrls);
     }
 
     const mimeType = stat.mimeType || this.getMimeType(absPath);

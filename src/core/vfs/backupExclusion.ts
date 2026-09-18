@@ -181,8 +181,8 @@ export class BackupExclusionRecorder {
       format: BACKUP_MANIFEST_FORMAT,
       createdAt: now.toISOString(),
       policy:
-        '同期プロバイダが管理する領域（ルートマウントを除く）と、マウント表に載らないスタブは、' +
-        'このバックアップに含めていない。実体は各プロバイダの同期元にあり、再接続すれば復元される。',
+        'Areas managed by a sync provider (except the root mount), and stubs that do not appear in the mount table, ' +
+        'are not included in this backup. Their contents live in the sync source of each provider and are restored on reconnect.',
       excludedMounts,
       excludedStubsOutsideMounts: { files: this.stubTotal.files, bytes: this.stubTotal.bytes, byPrefix },
       totals: {
