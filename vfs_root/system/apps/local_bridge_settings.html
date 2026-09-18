@@ -34,7 +34,7 @@
         <button
           onclick="refresh()"
           class="p-2 rounded hover:bg-hover text-text-muted hover:text-primary transition"
-          title="再読込"
+          title="Reload"
         >
           <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path
@@ -48,15 +48,15 @@
         <button
           onclick="restartDaemon()"
           class="px-3 py-2 rounded-lg border border-border-main text-sm hover:bg-hover transition"
-          title="設定の変更はデーモンを再起動すると反映されます"
+          title="Changes take effect after the daemon is restarted"
         >
-          デーモン再起動
+          Restart daemon
         </button>
         <button
           onclick="addConnection()"
           class="px-3 py-2 rounded-lg bg-primary text-text-inverted text-sm font-bold hover:bg-primary/90 shadow transition"
         >
-          ＋ 接続を追加
+          + Add connection
         </button>
       </div>
     </header>
@@ -100,7 +100,7 @@
         try {
           cfg = JSON.parse(await MetaOS.fs.read(CONFIG_PATH));
         } catch (e) {
-          alertBox('設定を読めませんでした: ' + e.message, 'error');
+          alertBox('Could not read the settings: ' + e.message, 'error');
           return false;
         }
         const next = fn(cfg);
@@ -127,7 +127,7 @@
         const url = (cfgConn.serverUrl || '').replace(/\/+$/, '');
         const out = { cfg: cfgConn, url, ok: false, status: null, error: null };
         if (cfgConn.enabled === false) {
-          out.error = '無効';
+          out.error = 'Disabled';
           return out;
         }
         try {
@@ -172,9 +172,9 @@
         const now = conn.status || {};
         if (prev) {
           if (prev.machineId && now.machineId && prev.machineId !== now.machineId) {
-            d.mismatch = `別の機械（前回 ${prev.hostname || short(prev.machineId)}）`;
+            d.mismatch = `A different machine (previously ${prev.hostname || short(prev.machineId)})`;
           } else if (prev.path && r.path && prev.path !== r.path) {
-            d.mismatch = `実パスが変わった（前回 ${prev.path}）`;
+            d.mismatch = `The real path changed (previously ${prev.path})`;
           }
         }
 
@@ -225,7 +225,7 @@
           cfg = JSON.parse(await MetaOS.fs.read(CONFIG_PATH));
         } catch (e) {
           DOM('conns').innerHTML = '';
-          alertBox('設定ファイルを読めません: ' + CONFIG_PATH, 'error');
+          alertBox('Cannot read the settings file: ' + CONFIG_PATH, 'error');
           return;
         }
         state.config = cfg;
@@ -239,7 +239,7 @@
         } catch (e) {
           state.daemon = false;
         }
-        DOM('daemonState').textContent = state.daemon ? 'デーモン稼働中' : 'デーモン停止中';
+        DOM('daemonState').textContent = state.daemon ? 'Daemon running' : 'Daemon stopped';
 
         try {
           state.mounts = (await MetaOS.fs.listMounts()).filter((m) => m.pid === DAEMON_PID).map((m) => m.mountPath);
@@ -250,7 +250,7 @@
         state.conns = await Promise.all((cfg.connections || []).map(probe));
 
         if (!state.daemon) {
-          alertBox('デーモンが動いていません。マウントは行われません。「デーモン再起動」で起動できます。', 'warn');
+          alertBox('The daemon is not running, so nothing is mounted. Use "Restart daemon" to start it.', 'warn');
         }
 
         // 同じ machineId を名乗る接続が2本以上あると、同じディレクトリを二重に同期して壊れる。
@@ -264,9 +264,9 @@
         for (const [, list] of byId) {
           if (list.length > 1) {
             alertBox(
-              `同じ機械に ${list.length} 本の接続が繋がっています（` +
+              `${list.length} connections point at the same machine (` +
                 list.map((c) => c.url).join(' / ') +
-                '）。同じディレクトリを二重にマウントしていると壊れます。',
+                '). Mounting the same directory twice will break things.',
               'error',
             );
           }
@@ -283,10 +283,10 @@
           const st = c.status;
           const name = c.cfg.name;
           const badge = c.ok
-            ? '<span class="text-success text-xs font-bold">接続中</span>'
+            ? '<span class="text-success text-xs font-bold">Connected</span>'
             : c.cfg.enabled === false
-              ? '<span class="text-text-muted text-xs">無効</span>'
-              : '<span class="text-error text-xs font-bold">未接続</span>';
+              ? '<span class="text-text-muted text-xs">Disabled</span>'
+              : '<span class="text-error text-xs font-bold">Not connected</span>';
 
           const roots = [];
           if (c.ok && Array.isArray(st.roots)) {
@@ -303,18 +303,18 @@
                 .map((d) => {
                   const mountCell = d.mountPath
                     ? `<code class="text-[0.6875rem]">/${esc(d.mountPath)}</code>` +
-                      (d.mounted ? '' : ' <span class="text-warning text-[0.6875rem]">未マウント</span>')
-                    : '<span class="text-text-muted text-[0.6875rem]">接続名の確定待ち</span>';
+                      (d.mounted ? '' : ' <span class="text-warning text-[0.6875rem]">Not mounted</span>')
+                    : '<span class="text-text-muted text-[0.6875rem]">Waiting for the connection name</span>';
                   const counts =
-                    d.stubs === null ? '—' : `スタブ ${d.stubs} / 実体 ${d.materialized}（${fmtBytes(d.bytes)}）`;
+                    d.stubs === null ? '—' : `${d.stubs} stubs / ${d.materialized} materialized (${fmtBytes(d.bytes)})`;
                   const warn = d.mismatch
-                    ? `<div class="text-error text-[0.6875rem] mt-1">同一性が食い違います: ${esc(d.mismatch)} — 同期は停止します</div>`
+                    ? `<div class="text-error text-[0.6875rem] mt-1">Identity mismatch: ${esc(d.mismatch)} — syncing is stopped</div>`
                     : '';
                   return `<tr class="border-t border-border-main/60 align-top">
                     <td class="py-2 pr-3 font-medium">${esc(d.name)}${warn}</td>
                     <td class="py-2 pr-3 text-text-muted"><code class="text-[0.6875rem]">${esc(d.hostPath || '')}</code></td>
                     <td class="py-2 pr-3">${mountCell}</td>
-                    <td class="py-2 pr-3 text-text-muted text-[0.6875rem] whitespace-nowrap" title="ホストが把握している件数。ディレクトリを含むため、右の合計とは一致しません。">${d.files} 件</td>
+                    <td class="py-2 pr-3 text-text-muted text-[0.6875rem] whitespace-nowrap" title="Counted by the host. It includes directories, so it does not match the total on the right.">${d.files} items</td>
                     <td class="py-2 pr-3 text-text-muted text-[0.6875rem] whitespace-nowrap">${counts}</td>
                     <td class="py-2 text-right">
                       <div class="flex justify-end gap-2">
@@ -325,11 +325,11 @@
                 })
                 .join('')
             : `<tr><td colspan="6" class="py-3 text-text-muted text-sm">${
-                c.ok ? 'ルートがありません（ホストで <code>itera attach &lt;DIR&gt;</code>）' : esc(c.error || '')
+                c.ok ? 'No roots (run <code>itera attach &lt;DIR&gt;</code> on the host)' : esc(c.error || '')
               }</td></tr>`;
 
           const ident = c.ok
-            ? `${esc(st.hostname || '名乗りなし')} <span class="text-text-muted">/ ${esc(st.user || '?')} / ${esc(st.platform || '?')}</span>
+            ? `${esc(st.hostname || 'unnamed')} <span class="text-text-muted">/ ${esc(st.user || '?')} / ${esc(st.platform || '?')}</span>
                <span class="text-text-muted text-[0.6875rem]">machineId ${esc(short(st.machineId))}</span>`
             : `<span class="text-text-muted">${esc(c.error || '')}</span>`;
 
@@ -337,64 +337,65 @@
             <section class="border border-border-main rounded-xl overflow-hidden">
               <div class="flex items-center justify-between px-4 py-3 border-b border-border-main">
                 <div class="flex items-center gap-3 min-w-0">
-                  <h2 class="font-bold truncate">${esc(name || '(名前未確定)')}</h2>
+                  <h2 class="font-bold truncate">${esc(name || '(name not settled yet)')}</h2>
                   ${badge}
                   <code class="text-[0.6875rem] text-text-muted truncate">${esc(c.url)}</code>
                   ${c.ok ? `<span class="text-[0.6875rem] text-text-muted">v${esc(st.version)}</span>` : ''}
                 </div>
                 <div class="flex items-center gap-2 shrink-0">
-                  <label class="text-[0.6875rem] text-text-muted">実行</label>
+                  <label class="text-[0.6875rem] text-text-muted">Exec</label>
                   <select onchange="setExecMode('${esc(c.url)}', this.value)"
                           class="bg-app border border-border-main rounded px-2 py-1 text-xs">
-                    <option value="ask" ${(c.cfg.execMode || 'ask') === 'ask' ? 'selected' : ''}>都度確認</option>
-                    <option value="auto" ${c.cfg.execMode === 'auto' ? 'selected' : ''}>自動</option>
+                    <option value="ask" ${(c.cfg.execMode || 'ask') === 'ask' ? 'selected' : ''}>Ask each time</option>
+                    <option value="auto" ${c.cfg.execMode === 'auto' ? 'selected' : ''}>Automatic</option>
                   </select>
                   ${name ? ignoreButton('conn', name, null) : ''}
                   <button onclick="toggleEnabled('${esc(c.url)}')"
                           class="px-2 py-1 rounded border border-border-main text-xs hover:bg-hover">
-                    ${c.cfg.enabled === false ? '有効化' : '無効化'}
+                    ${c.cfg.enabled === false ? 'Enable' : 'Disable'}
                   </button>
                   <button onclick="removeConnection('${esc(c.url)}')"
-                          class="px-2 py-1 rounded border border-error/40 text-error text-xs hover:bg-error/10">削除</button>
+                          class="px-2 py-1 rounded border border-error/40 text-error text-xs hover:bg-error/10">Remove</button>
                 </div>
               </div>
               <div class="px-4 py-2 text-sm border-b border-border-main/60">${ident}</div>
               <table class="w-full text-sm px-4">
                 <thead class="text-[0.6875rem] text-text-muted">
-                  <tr><th class="text-left py-2 pl-4">ルート</th><th class="text-left">ホスト側の実パス</th>
-                      <th class="text-left">マウント先</th><th class="text-left">件数</th><th class="text-left">VFS の状態</th><th></th></tr>
+                  <tr><th class="text-left py-2 pl-4">Root</th><th class="text-left">Real path on the host</th>
+                      <th class="text-left">Mounted at</th><th class="text-left">Files</th><th class="text-left">VFS state</th><th></th></tr>
                 </thead>
                 <tbody class="[&_td:first-child]:pl-4">${rootRows}</tbody>
               </table>
             </section>`);
         }
-        DOM('conns').innerHTML = parts.join('') || '<p class="text-text-muted text-sm">接続が設定されていません。</p>';
+        DOM('conns').innerHTML =
+          parts.join('') || '<p class="text-text-muted text-sm">No connections are configured.</p>';
       }
 
       function renderDist() {
         DOM('dist').innerHTML = `
           <section class="border border-border-main rounded-xl p-4">
-            <h2 class="font-bold mb-1">ホスト側サーバーの配布</h2>
+            <h2 class="font-bold mb-1">Host-side server</h2>
             <p class="text-text-muted text-sm mb-3">
-              1ファイルでサーバーと CLI を兼ねます。接続したい機械に置いて起動してください。
-              依存は <code>fastapi</code> / <code>uvicorn</code>（任意で <code>watchdog</code>）。
+              A single file that is both the server and the CLI. Put it on the machine you want to connect and start it.
+              It needs <code>fastapi</code> / <code>uvicorn</code> (and optionally <code>watchdog</code>).
             </p>
             <div class="flex flex-wrap items-center gap-2 mb-3">
               <button onclick="downloadServer()" class="px-3 py-2 rounded-lg bg-primary text-text-inverted text-sm font-bold hover:bg-primary/90">
-                itera_bridge_server.py をダウンロード
+                Download itera_bridge_server.py
               </button>
               <button onclick="copyServer()" class="px-3 py-2 rounded-lg border border-border-main text-sm hover:bg-hover">
-                本文をクリップボードへコピー
+                Copy the contents to the clipboard
               </button>
-              <span class="text-text-muted text-[0.6875rem]">ダウンロードがブロックされる環境ではコピーを使ってください</span>
+              <span class="text-text-muted text-[0.6875rem]">Use copy if downloads are blocked in your environment</span>
             </div>
             <pre class="bg-hover/50 border border-border-main rounded-lg p-3 text-[0.75rem] overflow-x-auto">python3 itera_bridge_server.py serve --port 8001
-python3 itera_bridge_server.py attach ~/projects/foo   # ルートを追加
+python3 itera_bridge_server.py attach ~/projects/foo   # add a root
 python3 itera_bridge_server.py ls
 python3 itera_bridge_server.py detach foo</pre>
             <p class="text-text-muted text-[0.6875rem] mt-2">
-              ssh 越しの機械に繋ぐときは <code>ssh -L 8002:localhost:8002 &lt;host&gt;</code> のように転送し、
-              この画面で <code>http://127.0.0.1:8002</code> を追加します。接続名はサーバーが名乗るホスト名から決まります。
+              To reach a machine over ssh, forward the port with <code>ssh -L 8002:localhost:8002 &lt;host&gt;</code> and
+              add <code>http://127.0.0.1:8002</code> here. The connection name comes from the host name the server reports.
             </p>
           </section>`;
       }
@@ -405,7 +406,7 @@ python3 itera_bridge_server.py detach foo</pre>
             return await MetaOS.fs.read(p);
           } catch (e) {}
         }
-        throw new Error('itera_bridge_server.py が見つかりません（' + SERVER_PATHS.join(' / ') + '）');
+        throw new Error('itera_bridge_server.py was not found (' + SERVER_PATHS.join(' / ') + ')');
       }
 
       async function downloadServer() {
@@ -422,16 +423,16 @@ python3 itera_bridge_server.py detach foo</pre>
             a.remove();
           }, 1000);
         } catch (e) {
-          alertBox('ダウンロードに失敗しました: ' + e.message + ' — コピーをお試しください。', 'error');
+          alertBox('Download failed: ' + e.message + ' — try copying instead.', 'error');
         }
       }
 
       async function copyServer() {
         try {
           await MetaOS.host.copyText(await serverSource());
-          MetaOS.host.notify('itera_bridge_server.py をコピーしました', 'Local Bridge');
+          MetaOS.host.notify('Copied itera_bridge_server.py', 'Local Bridge');
         } catch (e) {
-          alertBox('コピーに失敗しました: ' + e.message, 'error');
+          alertBox('Copy failed: ' + e.message, 'error');
         }
       }
 
@@ -462,7 +463,7 @@ python3 itera_bridge_server.py detach foo</pre>
         const ok = await mutateConfig((cfg) => {
           cfg.connections = cfg.connections || [];
           if (cfg.connections.some((x) => (x.serverUrl || '').replace(/\/+$/, '') === clean)) {
-            alertBox('その URL はすでに登録されています。', 'warn');
+            alertBox('That URL is already registered.', 'warn');
             return null;
           }
           // name は書かない。サーバーが名乗るホスト名をデーモンが採用して書き戻す。
@@ -474,15 +475,15 @@ python3 itera_bridge_server.py detach foo</pre>
 
       async function removeConnection(url) {
         const res = await MetaOS.host.showMessageBox({
-          title: '接続の削除',
-          message: `${url} を設定から削除しますか。`,
+          title: 'Remove connection',
+          message: `Remove ${url} from the settings?`,
           detail:
-            'VFS 側のサブツリー（local/<接続名>/…）はこの操作では消しません。' +
-            '実体化したファイルが残っている可能性があるためです。不要なら手で削除してください。',
+            'The VFS subtree (local/<connection>/…) is not deleted by this.' +
+            'Materialized files may still be there. Delete them by hand if you do not need them.',
           type: 'question',
           buttons: [
-            { label: 'やめる', value: false, style: 'normal', isCancel: true },
-            { label: '削除する', value: true, style: 'danger', isDefault: true },
+            { label: 'Cancel', value: false, style: 'normal', isCancel: true },
+            { label: 'Remove', value: true, style: 'danger', isDefault: true },
           ],
         });
         if (!res || res.action !== true) return;
@@ -497,14 +498,14 @@ python3 itera_bridge_server.py detach foo</pre>
       function notifyRestartNeeded() {
         if (restartHinted) return;
         restartHinted = true;
-        alertBox('設定を変更しました。「デーモン再起動」を押すと反映されます。', 'warn');
+        alertBox('Settings changed. Press "Restart daemon" to apply them.', 'warn');
       }
 
       async function daemonPath() {
         for (const p of DAEMON_PATHS) {
           if (await MetaOS.fs.exists(p)) return p;
         }
-        throw new Error('デーモン本体が見つかりません（' + DAEMON_PATHS.join(' / ') + '）');
+        throw new Error('The daemon itself was not found (' + DAEMON_PATHS.join(' / ') + ')');
       }
 
       async function restartDaemon() {
@@ -513,7 +514,7 @@ python3 itera_bridge_server.py detach foo</pre>
           restartHinted = false;
           setTimeout(refresh, 1500);
         } catch (e) {
-          alertBox('デーモンを起動できませんでした: ' + e.message, 'error');
+          alertBox('Could not start the daemon: ' + e.message, 'error');
         }
       }
 
@@ -555,8 +556,8 @@ python3 itera_bridge_server.py detach foo</pre>
               waiting.delete(id);
               reject(
                 new Error(
-                  'デーモンから応答がありません。停止しているか、この機能を持たない版かもしれません。' +
-                    'VFS は変わっていないはずですが、画面を更新して確かめてください。',
+                  'No reply from the daemon. It may be stopped, or it may be an older build without this feature.' +
+                    'The VFS should be unchanged, but reload this screen to make sure.',
                 ),
               );
             }, REPLY_TIMEOUT_MS);
@@ -580,7 +581,7 @@ python3 itera_bridge_server.py detach foo</pre>
         if (!state.daemon || !d.mounted || !d.materialized) return '';
         return `<button onclick="releaseAll('${esc(connName)}','${esc(d.name)}')"
                   class="px-2 py-1 rounded border border-border-main text-xs hover:bg-hover whitespace-nowrap"
-                  title="ホスト側に同じ内容があることを1件ずつ確かめてから、VFS の実体を捨てます">すべてスタブに戻す</button>`;
+                  title="Checks file by file that the host has the same contents, then drops the copy in the VFS">Release all to stubs</button>`;
       }
 
       async function releaseAll(connName, rootName) {
@@ -588,45 +589,43 @@ python3 itera_bridge_server.py detach foo</pre>
         if (!d) return;
 
         const res = await MetaOS.host.showMessageBox({
-          title: 'すべてスタブに戻す',
-          message: `${connName} / ${rootName} の実体 ${d.materialized} 件（${fmtBytes(d.bytes)}${
-            d.bytesPartial ? ' 以上' : ''
-          }）をスタブに戻しますか。`,
+          title: 'Release all to stubs',
+          message: `Release ${d.materialized} materialized file(s) of ${connName} / ${rootName} (${fmtBytes(d.bytes)}${
+            d.bytesPartial ? ' or more' : ''
+          }) back to stubs?`,
           detail:
-            'ホスト側に同じ内容（ハッシュ一致）があることを1件ずつ確かめてから、VFS の中身だけを捨てます。\n' +
-            '・ホストに無いもの、内容が食い違うものは見送ります（消しません）\n' +
-            '・確認が取れないときは中断します\n' +
-            '・スタブになったファイルは、開いたときに自動で取り直します',
+            'Each file is checked against the host (matching hash) before only the VFS copy is dropped.\n' +
+            '- Files missing on the host, or whose contents differ, are skipped (not deleted)\n' +
+            '- If the check cannot be made, the operation stops\n' +
+            '- A file that became a stub is fetched again automatically when you open it',
           type: 'question',
           buttons: [
-            { label: 'やめる', value: false, style: 'normal', isCancel: true },
-            { label: 'スタブに戻す', value: true, style: 'danger', isDefault: true },
+            { label: 'Cancel', value: false, style: 'normal', isCancel: true },
+            { label: 'Release to stubs', value: true, style: 'danger', isDefault: true },
           ],
         });
         if (!res || res.action !== true) return;
 
         state.busy = true;
-        MetaOS.host.showLoading(`確認しています… 0 / ${d.materialized}`);
+        MetaOS.host.showLoading(`Checking… 0 / ${d.materialized}`);
         try {
           const m = await requestRelease(connName, rootName, (p) => {
-            MetaOS.host.showLoading(`スタブ化 ${p.released} 件 / 確認 ${p.done} / ${p.total}`);
+            MetaOS.host.showLoading(`Released ${p.released} / checked ${p.done} / ${p.total}`);
           });
           state.busy = false;
           MetaOS.host.hideLoading();
           await refresh();
           if (!m.ok) {
             alertBox(
-              `中断しました: ${m.error}` + (m.released ? `（中断前に ${m.released} 件をスタブ化しています）` : ''),
+              `Stopped: ${m.error}` + (m.released ? ` (${m.released} file(s) were released before it stopped)` : ''),
               'error',
             );
             return;
           }
-          const head = `スタブ化 ${m.released} 件 / 見送り ${m.skippedTotal} 件（対象 ${m.total} 件、${fmtBytes(
-            m.bytes,
-          )} を解放）`;
+          const head = `Released ${m.released} / skipped ${m.skippedTotal} (of ${m.total}; ${fmtBytes(m.bytes)} freed)`;
           if (m.skippedTotal) {
             alertBox(
-              head + ' — 見送り: ' + m.skipped.slice(0, 5).join(' / ') + (m.skippedTotal > 5 ? ' ほか' : ''),
+              head + ' — skipped: ' + m.skipped.slice(0, 5).join(' / ') + (m.skippedTotal > 5 ? ' and more' : ''),
               'warn',
             );
           } else {
@@ -674,12 +673,12 @@ python3 itera_bridge_server.py detach foo</pre>
         const i = ignoreTargetIndex({ scope, conn, root });
         return `<button onclick="openIgnore(${i})"
                   class="px-2 py-1 rounded border border-border-main text-xs hover:bg-hover whitespace-nowrap"
-                  title="このルートで無視するファイルを編集します（上位の設定も見られます）">無視…</button>`;
+                  title="Edit the ignore patterns of this root (the inherited ones are shown too)">Ignore…</button>`;
       }
 
       function ignoreScopeLabel(t) {
-        if (t.scope === 'global') return 'すべての接続に効く既定';
-        if (t.scope === 'conn') return `${t.conn} — この接続のすべてのルート`;
+        if (t.scope === 'global') return 'Default for every connection';
+        if (t.scope === 'conn') return `${t.conn} — every root of this connection`;
         return `${t.conn} / ${t.root}`;
       }
 
@@ -712,16 +711,16 @@ python3 itera_bridge_server.py detach foo</pre>
         DOM('ignore').innerHTML = `
           <section class="border border-border-main rounded-xl p-4 flex flex-wrap items-center justify-between gap-3">
             <div class="min-w-0">
-              <h2 class="font-bold">無視するファイル</h2>
+              <h2 class="font-bold">Ignored files</h2>
               <p class="text-[0.6875rem] text-text-muted mt-1">
-                当てはまるものはスタブを作りません（索引が軽くなります）。
-                ルートごとの指定は<b>上の表の「無視…」</b>から開きます。
-                いま共通の既定は <b>${n} 個</b>です。
+                Matching files get no stub (this keeps the index small).
+                Per-root patterns are opened from <b>"Ignore…" in the table above</b>.
+                There are <b>${n}</b> shared defaults right now.
               </p>
             </div>
             <button onclick="openIgnore(${gi})"
                     class="px-3 py-2 rounded-lg border border-border-main text-sm hover:bg-hover whitespace-nowrap">
-              共通の既定を編集…
+              Edit the shared defaults…
             </button>
           </section>`;
       }
@@ -757,10 +756,10 @@ python3 itera_bridge_server.py detach foo</pre>
               <div class="flex items-baseline gap-2 py-1 border-t border-border-main/60 first:border-t-0">
                 <div class="text-[0.6875rem] text-text-muted w-40 shrink-0 truncate">${esc(r.label)}</div>
                 <div class="flex-1 min-w-0 text-[0.6875rem] font-mono truncate">${
-                  r.list.length ? esc(r.list.join('  ')) : '<span class="text-text-muted">（なし）</span>'
+                  r.list.length ? esc(r.list.join('  ')) : '<span class="text-text-muted">(none)</span>'
                 }</div>
                 <button onclick="openIgnore(${r.idx})"
-                        class="text-[0.6875rem] underline text-text-muted hover:text-text-main whitespace-nowrap">開く</button>
+                        class="text-[0.6875rem] underline text-text-muted hover:text-text-main whitespace-nowrap">Open</button>
               </div>`,
           )
           .join('');
@@ -772,19 +771,19 @@ python3 itera_bridge_server.py detach foo</pre>
               ? `<div class="flex flex-wrap gap-2">
                    <button onclick="countIgnored()"
                      class="px-2 py-1 rounded border border-border-main text-xs hover:bg-hover whitespace-nowrap"
-                     title="いま動いているデーモンの設定で数えます">対象を数える</button>
+                     title="Counts with the settings of the daemon that is running now">Count matches</button>
                    <button onclick="cleanupIgnored()"
                      class="px-2 py-1 rounded border border-error/40 text-error text-xs hover:bg-hover whitespace-nowrap"
-                     title="無視対象になった既存のスタブを索引から消します。ホスト側は変更しません">無視対象のスタブを掃除</button>
+                     title="Removes stubs that now match an ignore pattern from the index. The host is not touched">Clean up ignored stubs</button>
                  </div>`
-              : '<div class="text-[0.6875rem] text-text-muted">デーモンが停止しているため、数えることも掃除もできません。</div>';
+              : '<div class="text-[0.6875rem] text-text-muted">The daemon is stopped, so counting and cleaning are not possible.</div>';
 
         const hint =
           t.scope === 'global'
-            ? '「/」を含むパターンはルートからの相対パス全体に、含まないものはパスの各段に照合します（例: <code>data</code> は途中の data ディレクトリにも当たります）。'
+            ? 'A pattern that contains "/" is matched against the whole path relative to the root; one without "/" is matched against each segment (for example <code>data</code> also matches a data directory in the middle).'
             : t.scope === 'conn'
-              ? 'この接続のすべてのルートに足されます。'
-              : 'このルートだけに足されます。数える・掃除するのは<b>保存してデーモンを再起動したあと</b>の設定です。';
+              ? 'These are added to every root of this connection.'
+              : 'These are added to this root only. Counting and cleaning use the settings <b>after you save and restart the daemon</b>.';
 
         DOM('igmodal').innerHTML = `
           <div class="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -792,21 +791,21 @@ python3 itera_bridge_server.py detach foo</pre>
             <div class="relative w-full max-w-2xl max-h-full overflow-y-auto bg-app border border-border-main rounded-xl p-4 space-y-3">
               <div class="flex items-start justify-between gap-3">
                 <div class="min-w-0">
-                  <h2 class="font-bold truncate">無視するファイル — ${esc(ignoreScopeLabel(t))}</h2>
+                  <h2 class="font-bold truncate">Ignored files — ${esc(ignoreScopeLabel(t))}</h2>
                   <p class="text-[0.6875rem] text-text-muted mt-1">
-                    当てはまるものはスタブを作りません。
-                    <b>あとから足したパターンは、既にできているスタブには効きません</b>（そのために「掃除」があります）。
-                    掃除で消えるのは VFS の索引だけで、<b>ホスト側のファイルと、実体化済みのファイルは消しません。</b>
+                    Matching files get no stub.
+                    <b>A pattern you add later does not affect stubs that already exist</b> (that is what "Clean up" is for).
+                    Cleaning removes entries from the VFS index only; <b>files on the host and materialized files are kept.</b>
                   </p>
                 </div>
                 <button onclick="closeIgnore()"
-                        class="px-2 py-1 rounded border border-border-main text-xs hover:bg-hover whitespace-nowrap">閉じる</button>
+                        class="px-2 py-1 rounded border border-border-main text-xs hover:bg-hover whitespace-nowrap">Close</button>
               </div>
 
               ${
                 inherited
                   ? `<div class="border border-border-main rounded-lg p-3">
-                       <div class="text-[0.6875rem] text-text-muted mb-1">ここにも効いている（上位の設定・読み取り）</div>
+                       <div class="text-[0.6875rem] text-text-muted mb-1">Also in effect here (inherited, read-only)</div>
                        ${inherited}
                      </div>`
                   : ''
@@ -816,7 +815,7 @@ python3 itera_bridge_server.py detach foo</pre>
                 <div class="text-sm font-bold">${esc(ignoreScopeLabel(t))}</div>
                 <textarea id="ig_edit" rows="8" spellcheck="false"
                   class="w-full bg-surface border border-border-main rounded p-2 text-xs font-mono"
-                  placeholder="1行に1つ。例: data / *.png / output/tmp">${esc(ignoreLines(ignoreCurrent(t)))}</textarea>
+                  placeholder="One per line. e.g. data / *.png / output/tmp">${esc(ignoreLines(ignoreCurrent(t)))}</textarea>
                 <div class="text-[0.6875rem] text-text-muted">${hint}</div>
                 ${tools}
                 <div id="ig_msg" class="text-[0.6875rem] text-text-muted"></div>
@@ -824,9 +823,9 @@ python3 itera_bridge_server.py detach foo</pre>
 
               <div class="flex justify-end gap-2 pt-1">
                 <button onclick="closeIgnore()"
-                        class="px-3 py-2 rounded-lg border border-border-main text-sm hover:bg-hover">閉じる</button>
+                        class="px-3 py-2 rounded-lg border border-border-main text-sm hover:bg-hover">Close</button>
                 <button onclick="saveIgnore()"
-                        class="px-3 py-2 rounded-lg bg-primary text-text-inverted text-sm font-bold hover:bg-primary/90">保存</button>
+                        class="px-3 py-2 rounded-lg bg-primary text-text-inverted text-sm font-bold hover:bg-primary/90">Save</button>
               </div>
             </div>
           </div>`;
@@ -844,7 +843,7 @@ python3 itera_bridge_server.py detach foo</pre>
           }
           const c = (cfg.connections || []).find((x) => x.name === t.conn);
           if (!c) {
-            alertBox(`接続が見つかりません: ${t.conn}`, 'error');
+            alertBox(`Connection not found: ${t.conn}`, 'error');
             return null;
           }
           if (t.scope === 'conn') {
@@ -860,7 +859,8 @@ python3 itera_bridge_server.py detach foo</pre>
         // 保存された値で作り直す。画面に残った文字列ではなく、設定を読み直したものを見せる。
         renderIgnoreModal();
         const msg = DOM('ig_msg');
-        if (msg) msg.textContent = `保存しました（${patterns.length} 個）。デーモンを再起動すると効きます。`;
+        if (msg)
+          msg.textContent = `Saved (${patterns.length} pattern(s)). They take effect after you restart the daemon.`;
       }
 
       async function askIgnoreCount(t) {
@@ -873,14 +873,14 @@ python3 itera_bridge_server.py detach foo</pre>
         const t = igScope;
         const msg = DOM('ig_msg');
         if (!t || t.scope !== 'root' || !msg) return;
-        msg.textContent = '数えています…';
+        msg.textContent = 'Counting…';
         try {
           const m = await askIgnoreCount(t);
           msg.textContent =
-            `対象 ${m.total} 件（スタブ ${m.stubs} / ディレクトリ ${m.dirs} / アンカーだけに残るもの ${m.anchorOnly}）` +
-            ` — 実体化済みで触らないもの ${m.keptTotal} 件`;
+            `${m.total} match(es) (stubs ${m.stubs} / directories ${m.dirs} / anchor-only ${m.anchorOnly})` +
+            ` — ${m.keptTotal} materialized file(s) left untouched`;
         } catch (e) {
-          msg.textContent = `数えられませんでした: ${e.message}`;
+          msg.textContent = `Could not count: ${e.message}`;
         }
       }
 
@@ -892,47 +892,47 @@ python3 itera_bridge_server.py detach foo</pre>
         try {
           pre = await askIgnoreCount(t);
         } catch (e) {
-          alertBox(`対象を数えられませんでした: ${e.message}`, 'error');
+          alertBox(`Could not count the matches: ${e.message}`, 'error');
           return;
         }
         if (!pre.total) {
-          alertBox(`${t.conn} / ${t.root} に掃除の対象はありません。`, 'info');
+          alertBox(`Nothing to clean up in ${t.conn} / ${t.root}.`, 'info');
           return;
         }
 
         const res = await MetaOS.host.showMessageBox({
-          title: '無視対象のスタブを掃除',
-          message: `${t.conn} / ${t.root} の ${pre.total} 件を VFS の索引から消しますか。`,
+          title: 'Clean up ignored stubs',
+          message: `Remove ${pre.total} entry/entries of ${t.conn} / ${t.root} from the VFS index?`,
           detail:
-            '消えるのは VFS の索引（スタブ）とアンカーの項目だけです。ホスト側のファイルは変更しません。\n' +
-            `・実体化済みのファイル ${pre.keptTotal} 件は消しません\n` +
-            '・パターンを外せば、次の走査でスタブとして戻ります',
+            'Only entries in the VFS index (stubs) and in the anchor are removed. Files on the host are not changed.\n' +
+            `- ${pre.keptTotal} materialized file(s) are kept\n` +
+            '- Remove the pattern and they come back as stubs on the next scan',
           type: 'question',
           buttons: [
-            { label: 'やめる', value: false, style: 'normal', isCancel: true },
-            { label: '掃除する', value: true, style: 'danger', isDefault: true },
+            { label: 'Cancel', value: false, style: 'normal', isCancel: true },
+            { label: 'Clean up', value: true, style: 'danger', isDefault: true },
           ],
         });
         if (!res || res.action !== true) return;
 
         state.busy = true;
-        MetaOS.host.showLoading(`掃除しています… 0 / ${pre.total}`);
+        MetaOS.host.showLoading(`Cleaning up… 0 / ${pre.total}`);
         try {
           const m = await requestDaemon('ignore_cleanup', { connection: t.conn, root: t.root, dryRun: false }, (p) =>
-            MetaOS.host.showLoading(`掃除しています… ${p.done} / ${p.total}`),
+            MetaOS.host.showLoading(`Cleaning up… ${p.done} / ${p.total}`),
           );
           state.busy = false;
           MetaOS.host.hideLoading();
           await refresh();
           if (!m.ok) {
-            alertBox(`掃除できませんでした: ${m.error}`, 'error');
+            alertBox(`Could not clean up: ${m.error}`, 'error');
             return;
           }
-          const head = `${m.removed} 件を索引から消しました（対象 ${m.total} 件、実体化済みで残したもの ${m.keptTotal} 件）。`;
+          const head = `Removed ${m.removed} entry/entries from the index (of ${m.total}; ${m.keptTotal} materialized file(s) kept).`;
           const msg = DOM('ig_msg');
           if (msg) msg.textContent = head;
           if (m.failed && m.failed.length) {
-            alertBox(`${head} 消せなかったもの: ${m.failed.slice(0, 3).join(' / ')}`, 'warn');
+            alertBox(`${head} Could not remove: ${m.failed.slice(0, 3).join(' / ')}`, 'warn');
           } else {
             alertBox(head, 'info');
           }

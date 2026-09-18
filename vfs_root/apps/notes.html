@@ -176,7 +176,7 @@
             id="btn-outline"
             onclick="toggleOutline()"
             class="hidden text-text-muted hover:text-primary p-1.5 rounded transition"
-            title="目次"
+            title="Outline"
           >
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h10M4 18h13"></path>
@@ -533,7 +533,7 @@
             });
           }
         } catch (e) {
-          body.innerHTML = `<div class="text-error p-3 border border-error/40 rounded bg-error/10">描画に失敗しました: ${MD.escape(e && e.message)}</div>`;
+          body.innerHTML = `<div class="text-error p-3 border border-error/40 rounded bg-error/10">Failed to render: ${MD.escape(e && e.message)}</div>`;
         }
       }
 
@@ -560,7 +560,7 @@
           btn.classList.toggle('hidden', !outlineHasItems);
           btn.classList.toggle('text-primary', outlineOn);
           btn.classList.toggle('text-text-muted', !outlineOn);
-          btn.title = outlineOn ? '目次を隠す' : '目次を出す';
+          btn.title = outlineOn ? 'Hide outline' : 'Show outline';
         }
       }
 

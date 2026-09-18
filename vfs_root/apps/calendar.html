@@ -233,9 +233,9 @@
           let events;
           try {
             events = JSON.parse(raw);
-            if (!Array.isArray(events)) throw new Error('配列ではありません');
+            if (!Array.isArray(events)) throw new Error('not an array');
           } catch (e) {
-            throw new Error(`${path} が読めません（${e.message}）`);
+            throw new Error(`Could not read ${path} (${e.message})`);
           }
           return events.sort((a, b) => String(a.date).localeCompare(String(b.date)));
         },
@@ -339,7 +339,7 @@
           err.classList.add('hidden');
         } catch (e) {
           State.events = [];
-          err.textContent = `この月の予定を読み込めませんでした: ${e.message}`;
+          err.textContent = `Could not load the events for this month: ${e.message}`;
           err.classList.remove('hidden');
         }
 
