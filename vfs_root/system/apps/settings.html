@@ -155,42 +155,6 @@
               </p>
             </div>
 
-            <div>
-              <label class="block text-xs font-bold text-text-muted uppercase mb-1.5">CORS Proxy URL</label>
-              <input
-                type="text"
-                id="config-network-proxyUrl"
-                data-category="network"
-                data-key="proxyUrl"
-                class="w-full font-mono bg-card border border-border-main rounded-lg px-3 py-2 text-sm text-text-main focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/30 transition shadow-inner"
-                placeholder="https://corsproxy.io/?"
-              />
-              <p class="text-[10px] text-text-muted mt-1.5 opacity-80">
-                Prefix used when 'useProxy' is true. Example: http://localhost:8080/?
-              </p>
-            </div>
-
-            <div class="flex items-center gap-3 bg-card/50 p-3 rounded-lg border border-border-main/50">
-              <input
-                type="checkbox"
-                id="config-network-allowCredentialsWithProxy"
-                data-category="network"
-                data-key="allowCredentialsWithProxy"
-                class="w-4 h-4 rounded border-border-main text-primary focus:ring-primary cursor-pointer"
-              />
-              <div>
-                <label
-                  for="config-network-allowCredentialsWithProxy"
-                  class="block text-xs font-bold text-text-main cursor-pointer"
-                  >Allow Credentials with Proxy</label
-                >
-                <p class="text-[10px] text-text-muted mt-0.5">
-                  ⚠️ Enable this ONLY if you are using a trusted local proxy. Sending API keys to public proxies is
-                  dangerous.
-                </p>
-              </div>
-            </div>
-
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label class="block text-xs font-bold text-text-muted uppercase mb-1.5">Provider</label>
@@ -230,6 +194,23 @@
               </div>
               <div class="flex flex-wrap gap-2 mb-3" id="cap-badges"></div>
               <div id="cap-pricing" class="text-[10px] text-text-muted font-mono flex gap-4"></div>
+            </div>
+
+            <div class="flex items-center gap-3 bg-card/50 p-3 rounded-lg border border-border-main/50">
+              <input
+                type="checkbox"
+                id="ui-thinking-tag"
+                class="w-4 h-4 rounded border-border-main text-primary focus:ring-primary cursor-pointer"
+              />
+              <div>
+                <label for="ui-thinking-tag" class="block text-xs font-bold text-text-main cursor-pointer"
+                  >Thinking Tag</label
+                >
+                <p class="text-[10px] text-text-muted mt-0.5">
+                  Let the agent think out loud in a &lt;thinking&gt; block before acting. Turn this off for providers
+                  that reject prompts asking for explicit reasoning.
+                </p>
+              </div>
             </div>
 
             <!-- Advanced Model Parameters (Accordion) -->
@@ -288,6 +269,64 @@
                 ></textarea>
               </div>
             </details>
+          </div>
+        </section>
+
+        <!-- Network -->
+        <section class="bg-panel rounded-2xl border border-border-main p-6 shadow-sm">
+          <div class="flex items-center gap-3 mb-6 pb-4 border-b border-border-main/50">
+            <div class="w-8 h-8 rounded-full bg-primary/20 text-primary flex items-center justify-center">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9"
+                ></path>
+              </svg>
+            </div>
+            <div>
+              <h2 class="text-sm font-bold uppercase tracking-wider text-text-main">Network</h2>
+              <p class="text-xs text-text-muted">Outbound requests and the CORS proxy.</p>
+            </div>
+          </div>
+
+          <div class="space-y-6">
+            <div>
+              <label class="block text-xs font-bold text-text-muted uppercase mb-1.5">CORS Proxy URL</label>
+              <input
+                type="text"
+                id="config-network-proxyUrl"
+                data-category="network"
+                data-key="proxyUrl"
+                class="w-full font-mono bg-card border border-border-main rounded-lg px-3 py-2 text-sm text-text-main focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/30 transition shadow-inner"
+                placeholder="https://corsproxy.io/?"
+              />
+              <p class="text-[10px] text-text-muted mt-1.5 opacity-80">
+                Prefix used when 'useProxy' is true. Example: http://localhost:8080/?
+              </p>
+            </div>
+
+            <div class="flex items-center gap-3 bg-card/50 p-3 rounded-lg border border-border-main/50">
+              <input
+                type="checkbox"
+                id="config-network-allowCredentialsWithProxy"
+                data-category="network"
+                data-key="allowCredentialsWithProxy"
+                class="w-4 h-4 rounded border-border-main text-primary focus:ring-primary cursor-pointer"
+              />
+              <div>
+                <label
+                  for="config-network-allowCredentialsWithProxy"
+                  class="block text-xs font-bold text-text-main cursor-pointer"
+                  >Allow Credentials with Proxy</label
+                >
+                <p class="text-[10px] text-text-muted mt-0.5">
+                  ⚠️ Enable this ONLY if you are using a trusted local proxy. Sending API keys to public proxies is
+                  dangerous.
+                </p>
+              </div>
+            </div>
           </div>
         </section>
 
@@ -693,6 +732,11 @@
           jsonTextarea.addEventListener('input', validateAndSaveLlmJson);
         }
 
+        const thinkingTagToggle = DOM('ui-thinking-tag');
+        if (thinkingTagToggle) {
+          thinkingTagToggle.addEventListener('change', saveLlmConfig);
+        }
+
         updateModelDatalist();
         populateTextareaFromConfig(configs.llm);
       }
@@ -762,9 +806,13 @@
 
       function populateTextareaFromConfig(llmConfig) {
         if (!llmConfig) return;
-        const { model, ...extraParams } = llmConfig;
+        const { model, thinkingTag, ...extraParams } = llmConfig;
         const textarea = DOM('ui-llm-json-textarea');
         const badge = DOM('llm-json-badge');
+
+        // OS 内部のスイッチであって API の引数ではない。持ち主をチェック箱だけにし、JSON の箱には出さない。
+        const thinkingTagEl = DOM('ui-thinking-tag');
+        if (thinkingTagEl) thinkingTagEl.checked = thinkingTag !== false;
 
         if (textarea) {
           if (Object.keys(extraParams).length > 0) {
@@ -895,6 +943,10 @@
             } catch (e) {}
           }
         }
+
+        // 設定の更新はディープマージなので、鍵は「書かないこと」では消せない。常に明示的に書く。
+        const thinkingTagEl = DOM('ui-thinking-tag');
+        newLlmConfig.thinkingTag = thinkingTagEl ? thinkingTagEl.checked : true;
 
         configs.llm = newLlmConfig;
 
