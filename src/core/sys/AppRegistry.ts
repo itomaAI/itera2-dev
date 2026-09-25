@@ -84,15 +84,23 @@ export class AppRegistry {
   }
 
   private async _load(): Promise<void> {
-    this.apps.clear();
-    this.services.clear();
+    // 🔴 新しい表に積んでから一度に差し替える（T-0540）。
+    // 以前は this.apps を空にしてから await しながら詰め直していたので、読み込みの途中に
+    // getAllApps() を呼ぶと空や途中の一覧が返った。updateEntry は自分の書き込みの VFS イベントで
+    // もう一度 _load が走るため、registry_changed を受けて読み直したランチャーが空の一覧を描いていた
+    // （2026-09-25 実機）。途中の状態で比べると、告知の判定（_notifyIfChanged）も狂う。
+    const apps = new Map<string, AppManifest>();
+    const services = new Map<string, ServiceManifest>();
 
     // 層を順に重ねる。同じ id は、後の層が持っている鍵だけ勝つ（registryMerge.ts）。
     // 壊れている層は飛ばし、そこまでに積んだ内容は保つ（1 つ壊れて全部消えると OS が立たない）。
     for (const dir of this.registryDirs) {
-      await this._loadInto(`${dir}/apps.json`, this.apps);
-      await this._loadInto(`${dir}/services.json`, this.services);
+      await this._loadInto(`${dir}/apps.json`, apps);
+      await this._loadInto(`${dir}/services.json`, services);
     }
+
+    this.apps = apps;
+    this.services = services;
 
     console.log(`[AppRegistry] Loaded ${this.apps.size} apps.`);
     console.log(`[AppRegistry] Loaded ${this.services.size} services.`);
