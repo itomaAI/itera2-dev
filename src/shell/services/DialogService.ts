@@ -132,7 +132,8 @@ export class DialogService {
     }
   }
 
-  public showLoading(message: string = t('dialog.loading')): void {
+  // 既定の文は状態の飾りなので英語に固定する（T-0546）
+  public showLoading(message: string = 'Processing...'): void {
     let overlay = document.getElementById('__itera-loading-overlay');
     if (!overlay) {
       overlay = document.createElement('div');

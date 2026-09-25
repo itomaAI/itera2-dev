@@ -22,7 +22,6 @@ export const EN = {
   'dialog.alert.title': 'System Alert',
   'dialog.confirm.title': 'Confirmation',
   'dialog.prompt.title': 'Input Required',
-  'dialog.loading': 'Processing...',
   'dialog.conflict.title': 'Item Already Exists',
   'dialog.conflict.message': 'An item named "{name}" already exists in this location.',
   'dialog.conflict.detailFolder': 'Do you want to merge the folders? Files with the same names will be replaced.',
@@ -33,7 +32,6 @@ export const EN = {
   'dialog.conflict.applyToAll': 'Do this for all current conflicts',
 
   // ---- shell (header, sidebar, status)
-  'shell.boot.initializing': 'Initializing Itera OS v2...',
   'shell.header.tagline': 'REAL Architecture',
   'shell.cloudSync': 'Cloud Sync',
   'shell.cloudSyncWithDetail': 'Cloud Sync — {detail}',
@@ -56,12 +54,10 @@ export const EN = {
   'shell.reload': 'Reload',
   'shell.recentApps': 'Recent Apps',
   'shell.toggleChat': 'Toggle Chat',
-  'shell.compiling': 'Compiling...',
   'shell.statusbar.runtime': 'Itera Runtime (V2)',
 
   // ---- shell (chat panel chrome)
   'chat.agentLabel': 'Itera Agent',
-  'chat.modelLoading': 'Loading...',
   'chat.fullscreen': 'Fullscreen',
   'chat.apiKeys': 'API Keys',
   'chat.clearHistory': 'Clear History',
@@ -74,7 +70,6 @@ export const EN = {
   'systemModal.export': 'Export',
   'systemModal.import': 'Import',
   'systemModal.diagnostics': 'Diagnostics & Recovery',
-  'systemModal.persistenceChecking': 'Storage persistence: checking…',
   'systemModal.fsck': 'Check & Repair VFS (fsck)',
   'systemModal.backupIndex': 'Backup Index',
   'systemModal.restoreIndex': 'Restore Index',
@@ -365,7 +360,6 @@ export const EN = {
   // ---- activity monitor
   'monitor.title': 'Activity Monitor',
   'monitor.subtitle': 'Real-time Process List',
-  'monitor.autoUpdating': 'Auto-updating (1s)',
   'monitor.killAll': 'Kill All Daemons',
   'monitor.killAllMessage': 'Are you sure you want to terminate all background daemons?',
   'monitor.killAllConfirm': 'Kill All',
@@ -399,7 +393,6 @@ export const EN = {
   'sync.status.noAdapters': 'No Adapters',
   'sync.status.connected': 'Connected',
   'sync.status.connectedN': '{count} Connected',
-  'sync.status.connecting': 'Connecting...',
   'sync.status.error': 'Error',
   'chat.exitFullscreen': 'Exit fullscreen (Esc)',
 
