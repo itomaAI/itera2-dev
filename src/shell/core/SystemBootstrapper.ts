@@ -318,8 +318,6 @@ export class SystemBootstrapper {
     cognitiveManager.setStatusCallback((modelString) => {
       const statusEl = document.getElementById('model-status');
       if (!statusEl) return;
-      // 起動中の「Loading...」は訳すが、モデル名は訳さない。印を外さないと、言語を切り替えたときに Loading... へ戻る
-      statusEl.removeAttribute('data-i18n');
       statusEl.textContent = modelString;
     });
 

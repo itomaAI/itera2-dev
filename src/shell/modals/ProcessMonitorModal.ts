@@ -76,7 +76,7 @@ export class ProcessMonitorModal {
 
     const statusText = document.createElement('div');
     statusText.className = 'text-xs font-mono text-text-muted flex items-center gap-2';
-    statusText.innerHTML = `<span class="w-2 h-2 rounded-full bg-success animate-pulse"></span> <span data-i18n="monitor.autoUpdating">${escapeHtml(t('monitor.autoUpdating'))}</span>`;
+    statusText.innerHTML = `<span class="w-2 h-2 rounded-full bg-success animate-pulse"></span> Auto-updating (1s)`;
 
     const btnKillAll = document.createElement('button');
     btnKillAll.className =
