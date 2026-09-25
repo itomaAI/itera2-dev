@@ -98,3 +98,37 @@ describe('FileAssociationResolver.onChange', () => {
     expect(n).toBe(1);
   });
 });
+
+describe('AppRegistry: 読み込みの途中でも一覧が欠けない', () => {
+  it('getAllApps during a reload returns the previous full list, never a partial one', async () => {
+    const files: Record<string, string> = {
+      [`${SYS}/apps.json`]: JSON.stringify([
+        { id: 'a', name: 'a', icon: 'x', path: 'a.html' },
+        { id: 'b', name: 'b', icon: 'x', path: 'b.html' },
+      ]),
+    };
+    let gate: (() => void) | null = null;
+    const vfs = {
+      exists: (_p: any, path: string) => path in files,
+      readFile: async (_p: any, path: string) => {
+        if (gate === null && path.endsWith('apps.json')) {
+          // 2 回目以降の読み込みを止めておき、その間に読む
+          await new Promise<void>((r) => (gate = r));
+        }
+        return files[path];
+      },
+      writeFile: async () => {},
+    } as any;
+    const bus = new VfsEventBus();
+    const reg = new AppRegistry(vfs, bus, [SYS]);
+    gate = () => {}; // 最初の読み込みは止めない
+    await reg.loadAll();
+    gate = null;
+
+    bus.publish({ action: 'MUTATE', path: `${SYS}/apps.json` } as any);
+    bus.flushNow();
+    await tick();
+    expect(reg.getAllApps().map((x) => x.id)).toEqual(['a', 'b']);
+    (gate as unknown as () => void)();
+  });
+});
