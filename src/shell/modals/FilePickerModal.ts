@@ -7,6 +7,7 @@ import type { VfsService } from '../../core/vfs/VfsService';
 import type { Principal } from '../../core/vfs/types';
 import { TreeView } from '../panels/TreeView';
 import { LABEL_KICKER } from '../styles/typography';
+import { t, escapeHtml } from '../../i18n/i18n';
 
 /** 何を選ばせるか。既定は 'file'（従来どおり） */
 export type PickerMode = 'file' | 'directory' | 'any';
@@ -122,8 +123,8 @@ export class FilePickerModal {
     titleContainer.innerHTML = `
       <div class="text-2xl shrink-0">📂</div>
       <div>
-        <h2 id="file-picker-title" class="font-bold text-text-main text-base leading-tight">Select a File</h2>
-        <div id="file-picker-filters" class="${LABEL_KICKER} text-text-muted mt-0.5">All Files</div>
+        <h2 id="file-picker-title" class="font-bold text-text-main text-base leading-tight">${escapeHtml(t('filePicker.selectFile'))}</h2>
+        <div id="file-picker-filters" class="${LABEL_KICKER} text-text-muted mt-0.5">${escapeHtml(t('filePicker.allFiles'))}</div>
       </div>
     `;
 
@@ -147,14 +148,14 @@ export class FilePickerModal {
     this.selectedPathDisplay = document.createElement('div');
     this.selectedPathDisplay.className =
       'text-xs font-mono text-text-muted truncate bg-panel px-2 py-1.5 rounded border border-border-main';
-    this.selectedPathDisplay.textContent = 'No file selected';
+    this.selectedPathDisplay.textContent = t('filePicker.noFileSelected');
 
     // 保存のときだけ出す名前の欄
     this.nameRow = document.createElement('div');
     this.nameRow.className = 'hidden flex items-center gap-2';
     const nameLabel = document.createElement('span');
     nameLabel.className = 'text-xs text-text-muted shrink-0';
-    nameLabel.textContent = 'File name';
+    nameLabel.textContent = t('filePicker.fileName');
     this.nameInput = document.createElement('input');
     this.nameInput.type = 'text';
     this.nameInput.className =
@@ -172,13 +173,13 @@ export class FilePickerModal {
     const btnCancel = document.createElement('button');
     btnCancel.className =
       'px-4 py-2 rounded-lg text-xs font-bold text-text-muted hover:text-text-main hover:bg-hover transition';
-    btnCancel.textContent = 'Cancel';
+    btnCancel.textContent = t('common.cancel');
     btnCancel.onclick = () => this.close(null);
 
     this.btnOpen = document.createElement('button');
     this.btnOpen.className =
       'px-6 py-2 rounded-lg text-xs font-bold bg-primary text-white hover:bg-primary/90 shadow transition disabled:opacity-50 disabled:cursor-not-allowed';
-    this.btnOpen.textContent = 'Open';
+    this.btnOpen.textContent = t('common.open');
     this.btnOpen.disabled = true;
     this.btnOpen.onclick = () => {
       if (this.saving) {
@@ -234,7 +235,7 @@ export class FilePickerModal {
         // 種類違い（フォルダを選ぼうとした等）は黙って無視する。
         // 拡張子で弾いたときだけは、なぜ選べないのか分からないので知らせる。
         if (kind === 'file' && this.currentFilters.length > 0) {
-          if (window.AppUI) window.AppUI.notify('Invalid file type selected.', 'warning');
+          if (window.AppUI) window.AppUI.notify(t('filePicker.invalidType'), 'warning');
         }
         return;
       }
@@ -258,7 +259,7 @@ export class FilePickerModal {
     const full = resolveSavePath(this.saveDir, this.nameInput?.value || '', this.currentFilters);
     this.selectedPath = full;
     if (this.selectedPathDisplay) {
-      this.selectedPathDisplay.textContent = full || (this.saveDir ? `${this.saveDir}/` : 'Select a folder');
+      this.selectedPathDisplay.textContent = full || (this.saveDir ? `${this.saveDir}/` : t('filePicker.selectAFolder'));
       this.selectedPathDisplay.classList.toggle('text-primary', !!full);
       this.selectedPathDisplay.classList.toggle('font-bold', !!full);
       this.selectedPathDisplay.classList.toggle('text-text-muted', !full);
@@ -278,8 +279,8 @@ export class FilePickerModal {
     }
     if (exists) {
       const ok = window.AppUI?.confirm
-        ? await window.AppUI.confirm(`${full} already exists. Overwrite?`)
-        : window.confirm(`${full} already exists. Overwrite?`);
+        ? await window.AppUI.confirm(t('filePicker.overwrite', { path: full }))
+        : window.confirm(t('filePicker.overwrite', { path: full }));
       if (!ok) return;
     }
     this.close(full);
@@ -302,12 +303,14 @@ export class FilePickerModal {
 
     const titleEl = document.getElementById('file-picker-title');
     const filtersEl = document.getElementById('file-picker-filters');
-    if (titleEl) titleEl.textContent = options?.title || 'Save As';
+    if (titleEl) titleEl.textContent = options?.title || t('filePicker.saveAs');
     if (filtersEl) {
       filtersEl.textContent =
-        this.currentFilters.length > 0 ? 'Allowed: ' + this.currentFilters.join(', ') : 'All Files';
+        this.currentFilters.length > 0
+          ? t('filePicker.allowed', { list: this.currentFilters.join(', ') })
+          : t('filePicker.allFiles');
     }
-    if (this.btnOpen) this.btnOpen.textContent = 'Save';
+    if (this.btnOpen) this.btnOpen.textContent = t('common.save');
     this.nameRow?.classList.remove('hidden');
     if (this.nameInput) this.nameInput.value = defaultName;
     this._updateSaveState();
@@ -333,14 +336,18 @@ export class FilePickerModal {
 
     this.saving = false;
     this.nameRow?.classList.add('hidden');
-    if (this.btnOpen) this.btnOpen.textContent = 'Open';
+    if (this.btnOpen) this.btnOpen.textContent = t('common.open');
     this.selectedPath = null;
     this.currentFilters = options?.filters || [];
     this.currentMode = options?.mode || 'file';
-    const noun = this.currentMode === 'directory' ? 'folder' : this.currentMode === 'any' ? 'item' : 'file';
 
     if (this.selectedPathDisplay) {
-      this.selectedPathDisplay.textContent = `No ${noun} selected`;
+      this.selectedPathDisplay.textContent =
+        this.currentMode === 'directory'
+          ? t('filePicker.noFolderSelected')
+          : this.currentMode === 'any'
+            ? t('filePicker.noItemSelected')
+            : t('filePicker.noFileSelected');
       this.selectedPathDisplay.classList.remove('text-primary', 'font-bold');
       this.selectedPathDisplay.classList.add('text-text-muted');
     }
@@ -352,19 +359,19 @@ export class FilePickerModal {
     if (titleEl) {
       const fallback =
         this.currentMode === 'directory'
-          ? 'Select a Folder'
+          ? t('filePicker.selectFolder')
           : this.currentMode === 'any'
-            ? 'Select an Item'
-            : 'Select a File';
+            ? t('filePicker.selectItem')
+            : t('filePicker.selectFile');
       titleEl.textContent = options?.title || fallback;
     }
     if (filtersEl) {
       filtersEl.textContent =
         this.currentMode === 'directory'
-          ? 'Folders only'
+          ? t('filePicker.foldersOnly')
           : this.currentFilters.length > 0
-            ? 'Allowed: ' + this.currentFilters.join(', ')
-            : 'All Files';
+            ? t('filePicker.allowed', { list: this.currentFilters.join(', ') })
+            : t('filePicker.allFiles');
     }
 
     // ツリーの最新状態を描画

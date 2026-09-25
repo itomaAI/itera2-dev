@@ -15,6 +15,7 @@
 
 import type { SyncAdapterHost, SyncAdapterManifest, SyncAdapterStatus } from '../services/SyncAdapterHost';
 import { LABEL_KICKER } from '../styles/typography';
+import { t, escapeHtml } from '../../i18n/i18n';
 
 export class SyncModal {
   private adapterHost: SyncAdapterHost;
@@ -90,8 +91,8 @@ export class SyncModal {
           </svg>
         </div>
         <div>
-          <h2 class="font-bold text-text-main text-base leading-tight">Cloud Sync</h2>
-          <div class="${LABEL_KICKER} text-text-muted mt-0.5">Sync Providers</div>
+          <h2 class="font-bold text-text-main text-base leading-tight" data-i18n="sync.title">${escapeHtml(t('sync.title'))}</h2>
+          <div class="${LABEL_KICKER} text-text-muted mt-0.5" data-i18n="sync.subtitle">${escapeHtml(t('sync.subtitle'))}</div>
         </div>
       </div>
     `;
@@ -112,11 +113,11 @@ export class SyncModal {
 
     this.statusLabel = document.createElement('div');
     this.statusLabel.className = 'text-xs font-bold text-text-muted uppercase tracking-wider mb-1';
-    this.statusLabel.textContent = 'Local Mode Only';
+    this.statusLabel.textContent = t('sync.localOnly');
 
     this.statusDetail = document.createElement('div');
     this.statusDetail.className = 'text-sm font-bold text-text-main truncate';
-    this.statusDetail.textContent = 'Not Signed In';
+    this.statusDetail.textContent = t('sync.notSignedIn');
 
     statusBox.appendChild(this.statusLabel);
     statusBox.appendChild(this.statusDetail);
@@ -128,7 +129,7 @@ export class SyncModal {
     this.emptyNotice.className =
       'text-xs text-text-muted text-center py-6 border border-dashed border-border-main rounded-lg leading-relaxed';
     this.emptyNotice.innerHTML =
-      'No sync adapters installed.<br /><span class="font-mono">system/registry/adapters.json</span>';
+      `<span data-i18n="sync.noAdapters">${escapeHtml(t('sync.noAdapters'))}</span><br /><span class="font-mono">system/registry/adapters.json</span>`;
 
     // 起動時に既に生成済みのスロットを流し込む
     for (const slot of this.slots.values()) {
@@ -166,8 +167,8 @@ export class SyncModal {
     this.statusLabel.className = `text-xs font-bold uppercase tracking-wider mb-1 ${
       colorByState[s.state] || 'text-text-muted'
     }`;
-    this.statusLabel.textContent = s.label || (s.state === 'connected' ? 'Cloud Sync Active' : 'Local Mode Only');
-    this.statusDetail.textContent = s.detail || (s.state === 'connected' ? 'Online' : 'Not Signed In');
+    this.statusLabel.textContent = s.label || (s.state === 'connected' ? t('sync.active') : t('sync.localOnly'));
+    this.statusDetail.textContent = s.detail || (s.state === 'connected' ? t('sync.online') : t('sync.notSignedIn'));
   }
 
   open(): void {
