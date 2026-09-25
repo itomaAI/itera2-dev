@@ -15,6 +15,18 @@ interface CachedAsset {
   version: number;
 }
 
+/**
+ * 生成した blob URL に、要求に付いていた `?query` / `#hash` をどう載せるか（T-0542）。
+ * 載せるのは `#hash` だけ。**`?query` を付けた blob URL を Firefox は読まない**
+ * （Firefox 156 で実測: iframe は load が来ないまま止まり、fetch は NetworkError。`#hash` は読める）。
+ * blob URL の照合は fragment だけを除いて行う仕様なので、query が付くと別の URL として引けなくなる。
+ * ゲストへの引数は `__ITERA_ARGS__` で渡しており、ゲストは `location.search` を読まない。
+ * `x.js?v=2` のような資源の query も、中身は同じファイルなので捨ててよい。
+ */
+export function blobUrlWith(blobUrl: string, _search: string, hash: string): string {
+  return blobUrl + hash;
+}
+
 export class GuestCompiler {
   private assetCache: Map<string, CachedAsset> = new Map();
 
@@ -192,9 +204,9 @@ window.addEventListener('message', async (e) => {
     if (!isHtml && !isCss) {
       const cached = this.assetCache.get(absPath);
       if (cached && cached.version === stat.updatedAt) {
-        const urlWithQuery = cached.url + search + hash;
-        visited.set(visitKey, urlWithQuery);
-        return urlWithQuery;
+        const urlWithHash = blobUrlWith(cached.url, search, hash);
+        visited.set(visitKey, urlWithHash);
+        return urlWithHash;
       }
     }
 
@@ -235,7 +247,7 @@ window.addEventListener('message', async (e) => {
       }
     }
 
-    const finalUrl = fileUrl + search + hash;
+    const finalUrl = blobUrlWith(fileUrl, search, hash);
     visited.set(visitKey, finalUrl);
     return finalUrl;
   }
