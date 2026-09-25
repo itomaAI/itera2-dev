@@ -24,7 +24,7 @@
     "id": "loom",
     "name": "Loom",
     "icon": "\ud83e\uddf5",
-    "path": "apps/loom.html",
+    "path": "system/apps/loom.html",
     "description": "\u30d7\u30ed\u30b8\u30a7\u30af\u30c8\u306e\u7cfb\u8b5c\u3068\u3001\u305d\u306e\u4e0b\u306e\u4ed5\u4e8b\uff08\u3042\u306a\u305f\u3068 AI \u306e\u5171\u540c\u4f5c\u696d\u306e\u677f\uff09",
     "home": 1
   },

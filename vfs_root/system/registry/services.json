@@ -30,5 +30,13 @@
     "path": "system/services/web_search.html",
     "description": "Provides web_search / read_webpage / download_file tools to the AI.",
     "autoStart": true
+  },
+  {
+    "id": "loom_daemon",
+    "name": "Loom",
+    "icon": "🧵",
+    "path": "system/services/loom.html",
+    "description": "Keeps a hash-checked index of the Loom board (data/apps/loom/*.md) and serializes every write to it. The Loom app draws; this daemon reads and writes. Provides loom_list / loom_search / loom_tree / loom_update / loom_append / loom_create / loom_status to the AI.",
+    "autoStart": true
   }
 ]

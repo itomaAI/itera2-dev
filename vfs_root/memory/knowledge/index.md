@@ -43,7 +43,9 @@ This is the absolute physical layout of your universe.
     the app does not need to be running).
 *   **How you work with it: `memory/rules/loom.md`. Read it before you touch a card.**
 *   Notation (the canonical spec): `docs/manual/loom_notation.md` — User guide: `docs/manual/loom.md`
-*   Pick up your turn with:
+*   Pick up your turn with `<loom_list status="mine" />` (the Loom daemon, `system/services/loom.html`;
+    tools: `loom_list` / `loom_search` / `loom_tree` / `loom_update` / `loom_append` / `loom_create` / `loom_status`,
+    see `docs/manual/loom_daemon.md`). If the daemon is not running, fall back to
     `<search query="^status: (todo|doing)" path="data/apps/loom" regex="true" context="0" />`
     (`todo` / `doing` are yours; `inbox` / `blocked` / `review` / `paused` belong to the user.)
 *   Two containers: **projects** hold intent (a viewpoint that is never "done") and **knowledge**;
