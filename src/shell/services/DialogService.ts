@@ -3,6 +3,8 @@
  * Itera OS v2: Host Native Dialog Service
  */
 
+import { t } from '../../i18n/i18n';
+
 export interface DialogResult<T> {
   action: T;
   value?: string;
@@ -96,10 +98,14 @@ export class DialogService {
     toast.innerHTML = `
       <div style="display: flex; align-items: center; gap: 0.5rem; flex: 1;">
         <div style="width:3px; height:100%; min-height:1.25rem; background:${color}; border-radius:1px; flex-shrink:0;"></div>
-        <span>${message}</span>
+        <span data-toast-message></span>
       </div>
       <button class="text-text-muted hover:text-text-main transition flex-shrink-0" style="padding: 2px; line-height: 1;">✕</button>
     `;
+
+    // 文は textContent で置く（呼び出し側の文・訳文を HTML として解釈しない。T-0545）
+    const messageEl = toast.querySelector('[data-toast-message]');
+    if (messageEl) messageEl.textContent = message;
 
     const closeBtn = toast.querySelector('button');
     const closeToast = () => {
@@ -126,7 +132,7 @@ export class DialogService {
     }
   }
 
-  public showLoading(message: string = 'Processing...'): void {
+  public showLoading(message: string = t('dialog.loading')): void {
     let overlay = document.getElementById('__itera-loading-overlay');
     if (!overlay) {
       overlay = document.createElement('div');
@@ -152,36 +158,36 @@ export class DialogService {
     }
   }
 
-  public alert(message: string, title: string = 'System Alert'): Promise<void> {
+  public alert(message: string, title: string = t('dialog.alert.title')): Promise<void> {
     return this.showMessageBox<void>({
       title,
       message,
       type: 'warning',
-      buttons: [{ label: 'OK', value: undefined as any, style: 'primary', isDefault: true }],
+      buttons: [{ label: t('common.ok'), value: undefined as any, style: 'primary', isDefault: true }],
     }).then(() => undefined);
   }
 
-  public confirm(message: string, title: string = 'Confirmation'): Promise<boolean> {
+  public confirm(message: string, title: string = t('dialog.confirm.title')): Promise<boolean> {
     return this.showMessageBox<boolean>({
       title,
       message,
       type: 'question',
       buttons: [
-        { label: 'Cancel', value: false, style: 'normal', isCancel: true },
-        { label: 'OK', value: true, style: 'primary', isDefault: true },
+        { label: t('common.cancel'), value: false, style: 'normal', isCancel: true },
+        { label: t('common.ok'), value: true, style: 'primary', isDefault: true },
       ],
     }).then((res) => res.action);
   }
 
-  public prompt(message: string, defaultValue: string = '', title: string = 'Input Required'): Promise<string | null> {
+  public prompt(message: string, defaultValue: string = '', title: string = t('dialog.prompt.title')): Promise<string | null> {
     return this.showMessageBox<string | null>({
       title,
       message,
       type: 'question',
       prompt: { defaultValue },
       buttons: [
-        { label: 'Cancel', value: null, style: 'normal', isCancel: true },
-        { label: 'OK', value: 'ok' as any, style: 'primary', isDefault: true },
+        { label: t('common.cancel'), value: null, style: 'normal', isCancel: true },
+        { label: t('common.ok'), value: 'ok' as any, style: 'primary', isDefault: true },
       ],
     }).then((res) => {
       if (res.action === 'ok' && res.value !== undefined) {
@@ -192,29 +198,29 @@ export class DialogService {
   }
 
   public async showConflictDialog(itemName: string, isDirectory: boolean): Promise<DialogResult<ConflictAction>> {
-    const actionName = isDirectory ? 'Merge' : 'Replace';
+    const actionName = isDirectory ? t('dialog.conflict.merge') : t('dialog.conflict.replace');
     const detailMsg = isDirectory
-      ? 'Do you want to merge the folders? Files with the same names will be replaced.'
-      : 'Do you want to replace it with the one you are moving?';
+      ? t('dialog.conflict.detailFolder')
+      : t('dialog.conflict.detailFile');
 
     const buttons: MessageBoxOptions<ConflictAction>['buttons'] = [
-      { label: 'Cancel', value: 'cancel', style: 'normal', isCancel: true },
-      { label: 'Skip', value: 'skip', style: 'normal' },
+      { label: t('common.cancel'), value: 'cancel', style: 'normal', isCancel: true },
+      { label: t('common.skip'), value: 'skip', style: 'normal' },
     ];
 
     if (!isDirectory) {
-      buttons.push({ label: 'Keep Both', value: 'keep_both', style: 'normal' });
+      buttons.push({ label: t('dialog.conflict.keepBoth'), value: 'keep_both', style: 'normal' });
     }
 
     buttons.push({ label: actionName, value: isDirectory ? 'merge' : 'replace', style: 'primary', isDefault: true });
 
     return await this.showMessageBox<ConflictAction>({
-      title: 'Item Already Exists',
-      message: `An item named "${itemName}" already exists in this location.`,
+      title: t('dialog.conflict.title'),
+      message: t('dialog.conflict.message', { name: itemName }),
       detail: detailMsg,
       type: 'warning',
       checkbox: {
-        label: 'Do this for all current conflicts',
+        label: t('dialog.conflict.applyToAll'),
         defaultChecked: false,
       },
       buttons,
@@ -252,7 +258,10 @@ export class DialogService {
         iconColor = 'text-primary';
       }
 
-      header.innerHTML = `${icon ? `<span class="${iconColor}">${icon}</span>` : ''}<span class="font-bold text-sm text-text-main">${options.title}</span>`;
+      header.innerHTML = `${icon ? `<span class="${iconColor}">${icon}</span>` : ''}<span class="font-bold text-sm text-text-main" data-dialog-title></span>`;
+      // 題は textContent で置く（訳文・ゲストの文を HTML として解釈しない。T-0545）
+      const titleEl = header.querySelector('[data-dialog-title]');
+      if (titleEl) titleEl.textContent = options.title;
 
       // Body
       const body = document.createElement('div');
@@ -368,7 +377,11 @@ export class DialogService {
 
       if (!cancelBtnEl && options.buttons.length > 0) {
         cancelBtnEl = Array.from(footer.querySelectorAll('button')).find(
-          (b) => b.textContent?.toLowerCase() === 'cancel',
+          // 呼び出し側（ゲストの showMessageBox）が isCancel を付けていないときの救済。英語の Cancel と今の言語の Cancel の両方を見る
+          (b) => {
+            const label = b.textContent?.trim().toLowerCase();
+            return label === 'cancel' || label === t('common.cancel').toLowerCase();
+          },
         ) as HTMLButtonElement | null;
       }
 

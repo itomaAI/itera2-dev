@@ -37,6 +37,8 @@ import type { SyncAdapterHost, SyncAdapterStatus } from '../services/SyncAdapter
 // Services
 import { LpmlRenderer } from '../services/LpmlRenderer';
 import { PanelLayout } from './PanelLayout';
+import { t } from '../../i18n/i18n';
+import { bindText } from '../../i18n/staticTexts';
 
 export class DesktopEnvironment {
   // Components
@@ -132,7 +134,9 @@ export class DesktopEnvironment {
         disconnected: 'text-text-muted hover:text-text-main',
       };
       btn.className = `${base} ${accentByState[summary.state] || accentByState.disconnected}`;
-      btn.setAttribute('title', summary.detail ? `Cloud Sync — ${summary.detail}` : 'Cloud Sync');
+      // 属性に印を付けておけば、言語を切り替えたときにも当て直される（staticTexts）
+      if (summary.detail) bindText(btn, 'shell.cloudSyncWithDetail', { detail: summary.detail }, 'title');
+      else bindText(btn, 'shell.cloudSync', undefined, 'title');
     });
   }
 
@@ -203,7 +207,7 @@ export class DesktopEnvironment {
 
     if (statusEl) {
       statusEl.classList.remove('opacity-0');
-      statusEl.textContent = 'Saved';
+      bindText(statusEl, 'shell.saved');
       statusEl.className = 'text-[0.625rem] text-success italic transition-opacity';
     }
 
@@ -367,23 +371,22 @@ export class DesktopEnvironment {
       this.isSudoMode = false;
       this.activePrincipal = USER_PRINCIPAL;
       this._updateSudoUI();
-      if (window.AppUI) window.AppUI.notify('System privileges disabled.', 'info');
+      if (window.AppUI) window.AppUI.notify(t('shell.sudo.disabled'), 'info');
     } else {
       const res = await window.AppUI?.showMessageBox({
-        title: 'Enable Sudo Mode',
-        message:
-          'WARNING: Enabling System Privileges (Sudo) allows you to modify or delete core OS files.\n\nIncorrect actions may break the system. Are you sure you want to proceed?',
+        title: t('shell.sudo.dialogTitle'),
+        message: t('shell.sudo.dialogMessage'),
         type: 'warning',
         buttons: [
-          { label: 'Cancel', value: false, style: 'normal', isCancel: true },
-          { label: 'Enable Sudo', value: true, style: 'danger', isDefault: true },
+          { label: t('common.cancel'), value: false, style: 'normal', isCancel: true },
+          { label: t('shell.sudo.confirm'), value: true, style: 'danger', isDefault: true },
         ],
       });
       if (res && res.action) {
         this.isSudoMode = true;
         this.activePrincipal = SYSTEM_PRINCIPAL;
         this._updateSudoUI();
-        if (window.AppUI) window.AppUI.notify('System privileges enabled.', 'warning');
+        if (window.AppUI) window.AppUI.notify(t('shell.sudo.enabled'), 'warning');
       }
     }
   }
@@ -395,12 +398,12 @@ export class DesktopEnvironment {
     if (this.isSudoMode) {
       btn.classList.add('text-error', 'bg-error/10');
       btn.classList.remove('text-text-muted', 'hover:text-warning');
-      btn.title = 'Disable System Privileges';
+      bindText(btn, 'shell.sudo.disable', undefined, 'title');
       btn.innerHTML = `<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 11V7a4 4 0 118 0m-4 8v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2z"></path></svg>`;
     } else {
       btn.classList.remove('text-error', 'bg-error/10');
       btn.classList.add('text-text-muted', 'hover:text-warning');
-      btn.title = 'Enable System Privileges';
+      bindText(btn, 'shell.sudo.enable', undefined, 'title');
       btn.innerHTML = `<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>`;
     }
   }

@@ -34,3 +34,10 @@ export const REGISTRY_LAYERS: readonly string[] = ['system/registry'];
 export function writeLayerOf(layers: readonly string[]): string {
   return layers[layers.length - 1];
 }
+
+/**
+ * 言語ファイル（`<dir>/<言語>.json`）を読む順。**後の層が勝つ**。その下に英語（ホストの TS）がある。
+ * 設定の層とは独立に固定する（P-0046 2026-09-25 山内さん）。itera2-dev は既定で `user/` を持たないが、
+ * `user/locales` を作ればそこが効く。書き込みはしない（読むだけ）。
+ */
+export const LOCALE_LAYERS: readonly string[] = ['system/locales', 'user/locales'];
