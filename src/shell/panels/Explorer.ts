@@ -11,6 +11,7 @@ import { VfsEventFormatter, type VfsEventItem } from '../../core/vfs/VfsEventFor
 import { TreeView } from './TreeView';
 import JSZip from 'jszip';
 import { triggerBrowserDownload } from '../../utils/download';
+import { t } from '../../i18n/i18n';
 
 declare global {
   interface Window {
@@ -111,7 +112,7 @@ export class Explorer {
         const defaultApp = this.resolver.resolveDefault(stat);
         if (this.events['open_file']) this.events['open_file'](path, defaultApp);
       } catch (e: any) {
-        if (window.AppUI) window.AppUI.notify(`Cannot open file: ${e.message}`, 'error');
+        if (window.AppUI) window.AppUI.notify(t('explorer.cannotOpenFile', { reason: e.message }), 'error');
       }
     });
 
@@ -155,13 +156,14 @@ export class Explorer {
 
   private async _promptCreate(type: 'file' | 'folder', parentPath: string = '') {
     const res = await window.AppUI?.showMessageBox({
-      title: `New ${type === 'folder' ? 'Folder' : 'File'}`,
-      message: `Enter name for the new ${type}:`,
+      title: type === 'folder' ? t('explorer.create.titleFolder') : t('explorer.create.titleFile'),
+      message: type === 'folder' ? t('explorer.create.messageFolder') : t('explorer.create.messageFile'),
       type: 'question',
+      // 既定の名前はファイル名（データ）なので訳さない。パスに非 ASCII を持ち込まない（T-0545）
       prompt: { defaultValue: type === 'folder' ? 'New Folder' : 'Untitled' },
       buttons: [
-        { label: 'Cancel', value: null, style: 'normal', isCancel: true },
-        { label: 'Create', value: 'create', style: 'primary', isDefault: true },
+        { label: t('common.cancel'), value: null, style: 'normal', isCancel: true },
+        { label: t('explorer.create.confirm'), value: 'create', style: 'primary', isDefault: true },
       ],
     });
 
@@ -222,23 +224,23 @@ export class Explorer {
 
       if (isDir) {
         actions.push({
-          label: 'New File',
+          label: t('explorer.menu.newFile'),
           action: () => this._promptCreate('file', path),
         });
         actions.push({
-          label: 'New Folder',
+          label: t('explorer.menu.newFolder'),
           action: () => this._promptCreate('folder', path),
         });
         actions.push({ separator: true });
         actions.push({
-          label: 'Upload File Here...',
+          label: t('explorer.menu.uploadFileHere'),
           action: () => {
             this.currentUploadTarget = path;
             if (this.els.INPUT_FILE) this.els.INPUT_FILE.click();
           },
         });
         actions.push({
-          label: 'Upload Folder Here...',
+          label: t('explorer.menu.uploadFolderHere'),
           action: () => {
             this.currentUploadTarget = path;
             const folderInput = document.createElement('input');
@@ -261,7 +263,8 @@ export class Explorer {
         const resolvedApps = this.resolver.resolveAllAvailable(stat);
         if (resolvedApps.length > 0) {
           const defaultApp = resolvedApps[0];
-          const defaultLabel = defaultApp.appId === 'HostRunner' ? '🖥️ Run as App' : `Open in ${defaultApp.appName}`;
+          const defaultLabel =
+            defaultApp.appId === 'HostRunner' ? t('explorer.menu.runAsApp') : t('explorer.menu.openIn', { app: defaultApp.appName });
           actions.push({
             label: defaultLabel,
             action: () => {
@@ -272,7 +275,7 @@ export class Explorer {
           // `.html` or `.js` の場合、デーモンとして起動を追加
           if (path.endsWith('.html') || path.endsWith('.js')) {
             actions.push({
-              label: '⚙️ Run as Daemon',
+              label: t('explorer.menu.runAsDaemon'),
               action: () => {
                 if (this.events['spawn_daemon']) this.events['spawn_daemon'](path);
               },
@@ -280,7 +283,7 @@ export class Explorer {
           }
 
           resolvedApps.slice(1).forEach((app) => {
-            const fallbackLabel = app.appId === 'HostRunner' ? ' ↳ 🖥️ Run as App' : ` ↳ ${app.appName}`;
+            const fallbackLabel = app.appId === 'HostRunner' ? t('explorer.menu.fallbackRunAsApp') : ` ↳ ${app.appName}`;
             actions.push({
               label: fallbackLabel,
               action: () => {
@@ -293,21 +296,21 @@ export class Explorer {
       }
 
       actions.push({
-        label: 'Add to Context',
+        label: t('explorer.menu.addToContext'),
         action: () => {
           if (this.events['add_to_context']) this.events['add_to_context']([path]);
         },
       });
       actions.push({
-        label: 'Copy Path',
+        label: t('explorer.menu.copyPath'),
         action: () => {
           navigator.clipboard
             .writeText(path)
             .then(() => {
-              if (window.AppUI) window.AppUI.notify('Path copied to clipboard', 'success');
+              if (window.AppUI) window.AppUI.notify(t('explorer.pathCopied'), 'success');
             })
             .catch((err) => {
-              if (window.AppUI) window.AppUI.notify(`Failed to copy: ${err.message}`, 'error');
+              if (window.AppUI) window.AppUI.notify(t('explorer.copyFailed', { reason: err.message }), 'error');
             });
         },
       });
@@ -315,23 +318,23 @@ export class Explorer {
 
       if (path !== '') {
         actions.push({
-          label: 'Duplicate',
+          label: t('explorer.menu.duplicate'),
           action: () => this._handleDuplicateBatch([path]),
         });
         actions.push({
-          label: 'Rename',
+          label: t('explorer.menu.rename'),
           action: () => this._promptRename(path),
         });
         actions.push({
-          label: 'Move',
+          label: t('explorer.menu.move'),
           action: () => this._promptMoveBatch([path]),
         });
         actions.push({
-          label: 'Download',
+          label: t('explorer.menu.download'),
           action: () => this._handleDownloadBatch([path]),
         });
         actions.push({
-          label: 'Properties',
+          label: t('explorer.menu.properties'),
           action: () => {
             if (this.events['properties_request']) this.events['properties_request'](path);
           },
@@ -339,12 +342,12 @@ export class Explorer {
         if (this._isTrashed(path)) {
           // ゴミ箱の中身は元の場所へ戻せる（T-0470）。元の場所を知らない古いゴミは移動先を訊く
           actions.push({
-            label: 'Restore',
+            label: t('explorer.menu.restore'),
             action: () => this._restoreBatch([path]),
           });
         }
         actions.push({
-          label: 'Delete',
+          label: t('explorer.menu.delete'),
           action: () => this._confirmDeleteBatch([path]),
           danger: true,
         });
@@ -352,33 +355,33 @@ export class Explorer {
     } else if (paths.length > 1) {
       // 複数選択時のメニュー
       actions.push({
-        label: 'Add to Context',
+        label: t('explorer.menu.addToContext'),
         action: () => {
           if (this.events['add_to_context']) this.events['add_to_context'](paths);
         },
       });
       actions.push({ separator: true });
       actions.push({
-        label: `Duplicate ${paths.length} items`,
+        label: t('explorer.menu.duplicateN', { count: paths.length }),
         action: () => this._handleDuplicateBatch(paths),
       });
       actions.push({
-        label: `Move ${paths.length} items`,
+        label: t('explorer.menu.moveN', { count: paths.length }),
         action: () => this._promptMoveBatch(paths),
       });
       actions.push({
-        label: `Download ${paths.length} items`,
+        label: t('explorer.menu.downloadN', { count: paths.length }),
         action: () => this._handleDownloadBatch(paths),
       });
       if (paths.every((p) => this._isTrashed(p))) {
         actions.push({
-          label: `Restore ${paths.length} items`,
+          label: t('explorer.menu.restoreN', { count: paths.length }),
           action: () => this._restoreBatch(paths),
         });
       }
       actions.push({ separator: true });
       actions.push({
-        label: `Delete ${paths.length} items`,
+        label: t('explorer.menu.deleteN', { count: paths.length }),
         action: () => this._confirmDeleteBatch(paths),
         danger: true,
       });
@@ -431,9 +434,9 @@ export class Explorer {
 
     const needsLoading = isFolder || files.length > 1;
     if (needsLoading && window.AppUI) {
-      window.AppUI.showLoading(`Uploading ${files.length} items...`);
+      window.AppUI.showLoading(t('explorer.upload.progress', { count: files.length }));
     } else if (window.AppUI) {
-      window.AppUI.notify(`Uploading ${files.length} items...`, 'info');
+      window.AppUI.notify(t('explorer.upload.progress', { count: files.length }), 'info');
     }
 
     try {
@@ -451,12 +454,12 @@ export class Explorer {
           uploadedPaths.push(fullPath);
         } catch (err: any) {
           console.error(`[Explorer] Upload failed for ${fullPath}:`, err);
-          if (window.AppUI) window.AppUI.notify(`Upload failed for ${file.name}: ${err.message}`, 'error');
+          if (window.AppUI) window.AppUI.notify(t('explorer.upload.failedFor', { name: file.name, reason: err.message }), 'error');
         }
       }
 
       if (uploadedPaths.length > 0) {
-        if (window.AppUI) window.AppUI.notify(`Upload complete: ${uploadedPaths.length} items`, 'success');
+        if (window.AppUI) window.AppUI.notify(t('explorer.upload.complete', { count: uploadedPaths.length }), 'success');
         const items: VfsEventItem[] = uploadedPaths.map((p) => ({ srcPath: p }));
         const msg = VfsEventFormatter.format({
           actor: 'User',
@@ -522,9 +525,9 @@ export class Explorer {
           if (file) firstItemName = file.name;
         }
       }
-      const sourceName = items.length > 1 ? `${firstItemName} and others` : firstItemName;
+      const sourceName = items.length > 1 ? t('explorer.upload.sourceAndOthers', { name: firstItemName }) : firstItemName;
 
-      if (window.AppUI) window.AppUI.notify('Analyzing files for upload...', 'info');
+      if (window.AppUI) window.AppUI.notify(t('explorer.upload.analyzing'), 'info');
 
       const promises: Promise<File[]>[] = [];
       for (let i = 0; i < items.length; i++) {
@@ -540,7 +543,7 @@ export class Explorer {
       if (filesToUpload.length > 0) {
         await this._batchWriteFiles(filesToUpload, sourceName);
       } else {
-        if (window.AppUI) window.AppUI.notify('No files found to upload.', 'warning');
+        if (window.AppUI) window.AppUI.notify(t('explorer.upload.noneFound'), 'warning');
       }
     });
   }
@@ -581,9 +584,9 @@ export class Explorer {
 
     const needsLoading = files.length > 1;
     if (needsLoading && window.AppUI) {
-      window.AppUI.showLoading(`Uploading ${files.length} items...`);
+      window.AppUI.showLoading(t('explorer.upload.progress', { count: files.length }));
     } else if (window.AppUI) {
-      window.AppUI.notify(`Starting upload: ${files.length} files from "${sourceName}"`, 'info');
+      window.AppUI.notify(t('explorer.upload.starting', { count: files.length, source: sourceName }), 'info');
     }
 
     try {
@@ -627,12 +630,12 @@ export class Explorer {
           uploadedPaths.push(targetPath);
         } catch (err: any) {
           console.error(`[Explorer] Import failed: ${targetPath}`, err);
-          if (window.AppUI) window.AppUI.notify(`Import failed for ${file.name}: ${err.message}`, 'error');
+          if (window.AppUI) window.AppUI.notify(t('explorer.upload.importFailedFor', { name: file.name, reason: err.message }), 'error');
         }
       }
 
       if (uploadedPaths.length > 0) {
-        if (window.AppUI) window.AppUI.notify(`Upload complete: ${uploadedPaths.length} items uploaded.`, 'success');
+        if (window.AppUI) window.AppUI.notify(t('explorer.upload.completeUploaded', { count: uploadedPaths.length }), 'success');
         const items: VfsEventItem[] = uploadedPaths.map((p) => ({ srcPath: p }));
         const msg = VfsEventFormatter.format({
           actor: 'User',
@@ -641,7 +644,7 @@ export class Explorer {
         });
         this._emitHistory('file_created', msg);
       } else {
-        if (window.AppUI) window.AppUI.notify('No files were uploaded.', 'info');
+        if (window.AppUI) window.AppUI.notify(t('explorer.upload.noneUploaded'), 'info');
       }
     } finally {
       if (needsLoading && window.AppUI) {
@@ -695,13 +698,13 @@ export class Explorer {
     const parentPath = path.substring(0, path.lastIndexOf('/'));
 
     const res = await window.AppUI?.showMessageBox({
-      title: 'Rename',
-      message: `Enter new name for the item:`,
+      title: t('explorer.rename.title'),
+      message: t('explorer.rename.message'),
       type: 'question',
       prompt: { defaultValue: fileName },
       buttons: [
-        { label: 'Cancel', value: null, style: 'normal', isCancel: true },
-        { label: 'Rename', value: 'rename', style: 'primary', isDefault: true },
+        { label: t('common.cancel'), value: null, style: 'normal', isCancel: true },
+        { label: t('common.rename'), value: 'rename', style: 'primary', isDefault: true },
       ],
     });
 
@@ -769,7 +772,7 @@ export class Explorer {
     const normalized = this._normalizePaths(paths);
     if (normalized.length === 0) return;
 
-    if (window.AppUI) window.AppUI.showLoading(`Duplicating ${normalized.length} items...`);
+    if (window.AppUI) window.AppUI.showLoading(t('explorer.duplicate.progress', { count: normalized.length }));
     let successCount = 0;
     try {
       for (const p of normalized) {
@@ -813,12 +816,12 @@ export class Explorer {
           return;
         }
       } catch (e: any) {
-        if (window.AppUI) window.AppUI.notify(`Download failed: ${e.message}`, 'error');
+        if (window.AppUI) window.AppUI.notify(t('explorer.download.failed', { reason: e.message }), 'error');
         return;
       }
     }
 
-    if (window.AppUI) window.AppUI.showLoading(`Compressing ${normalized.length} item(s)...`);
+    if (window.AppUI) window.AppUI.showLoading(t('explorer.download.compressing', { count: normalized.length }));
     try {
       const zip = new JSZip();
       let errorCount = 0;
@@ -878,10 +881,10 @@ export class Explorer {
       this._emitHistory('project_exported', `User downloaded ${normalized.length} items as ${zipName}`);
 
       if (errorCount > 0 && window.AppUI) {
-        window.AppUI.notify(`Download complete, but ${errorCount} files failed to read.`, 'warning');
+        window.AppUI.notify(t('explorer.download.partial', { count: errorCount }), 'warning');
       }
     } catch (e: any) {
-      if (window.AppUI) window.AppUI.notify(`Download failed: ${e.message}`, 'error');
+      if (window.AppUI) window.AppUI.notify(t('explorer.download.failed', { reason: e.message }), 'error');
     } finally {
       if (window.AppUI) window.AppUI.hideLoading();
     }
@@ -908,13 +911,13 @@ export class Explorer {
         const st = this.vfs.stat(this.getActivePrincipal(), p);
         if (!st.trashedFrom) {
           const res = await window.AppUI?.showMessageBox({
-            title: 'Restore',
-            message: `Original location of "${st.name.replace(/^\d{13}_/, '')}" is unknown. Enter the path to restore to:`,
+            title: t('explorer.restore.title'),
+            message: t('explorer.restore.unknownOrigin', { name: st.name.replace(/^\d{13}_/, '') }),
             type: 'question',
             prompt: { defaultValue: st.name.replace(/^\d{13}_/, '') },
             buttons: [
-              { label: 'Cancel', value: null, style: 'normal', isCancel: true },
-              { label: 'Restore', value: 'restore', style: 'primary', isDefault: true },
+              { label: t('common.cancel'), value: null, style: 'normal', isCancel: true },
+              { label: t('explorer.menu.restore'), value: 'restore', style: 'primary', isDefault: true },
             ],
           });
           if (!res || !res.action || !String(res.value || '').trim()) continue;
@@ -931,14 +934,19 @@ export class Explorer {
         const first = failures[0];
         window.AppUI.notify(
           restored.length === 0
-            ? `Restore failed: ${first.message}`
-            : `Restored ${restored.length} item(s), ${failures.length} failed (e.g. ${first.path}: ${first.message})`,
+            ? t('explorer.restore.failed', { reason: first.message })
+            : t('explorer.restore.partial', {
+                restored: restored.length,
+                failed: failures.length,
+                path: first.path,
+                reason: first.message,
+              }),
           restored.length === 0 ? 'error' : 'warning',
         );
       } else if (restored.length === 1) {
-        window.AppUI.notify(`Restored to ${restored[0].destPath}`, 'success');
+        window.AppUI.notify(t('explorer.restore.doneTo', { path: restored[0].destPath ?? '' }), 'success');
       } else if (restored.length > 1) {
-        window.AppUI.notify(`Restored ${restored.length} item(s)`, 'success');
+        window.AppUI.notify(t('explorer.restore.done', { count: restored.length }), 'success');
       }
     }
     if (restored.length > 0) {
@@ -952,17 +960,17 @@ export class Explorer {
     if (normalized.length === 0) return;
 
     const res = await window.AppUI?.showMessageBox({
-      title: 'Delete Items',
-      message: `Are you sure you want to delete ${normalized.length} item(s)?`,
+      title: t('explorer.delete.title'),
+      message: t('explorer.delete.message', { count: normalized.length }),
       type: 'warning',
       buttons: [
-        { label: 'Cancel', value: false, style: 'normal', isCancel: true },
-        { label: 'Delete', value: true, style: 'danger', isDefault: true },
+        { label: t('common.cancel'), value: false, style: 'normal', isCancel: true },
+        { label: t('common.delete'), value: true, style: 'danger', isDefault: true },
       ],
     });
 
     if (res && res.action) {
-      if (window.AppUI) window.AppUI.showLoading(`Deleting ${normalized.length} items...`);
+      if (window.AppUI) window.AppUI.showLoading(t('explorer.delete.progress', { count: normalized.length }));
       const deletedItems: VfsEventItem[] = [];
       const failures: { path: string; message: string }[] = [];
       try {
@@ -980,10 +988,15 @@ export class Explorer {
         if (failures.length > 0 && window.AppUI) {
           const first = failures[0];
           if (deletedItems.length === 0) {
-            window.AppUI.notify(`Delete failed: ${first.message}`, 'error');
+            window.AppUI.notify(t('explorer.delete.failed', { reason: first.message }), 'error');
           } else {
             window.AppUI.notify(
-              `Deleted ${deletedItems.length} item(s), ${failures.length} failed (e.g. ${first.path}: ${first.message})`,
+              t('explorer.delete.partial', {
+                deleted: deletedItems.length,
+                failed: failures.length,
+                path: first.path,
+                reason: first.message,
+              }),
               'warning',
             );
           }
@@ -1007,7 +1020,9 @@ export class Explorer {
     if (normalized.length === 0) return;
 
     if (window.AppUI)
-      window.AppUI.showLoading(`${mode === 'move' ? 'Moving' : 'Copying'} ${normalized.length} items...`);
+      window.AppUI.showLoading(
+        t(mode === 'move' ? 'explorer.move.progress' : 'explorer.copy.progress', { count: normalized.length }),
+      );
     let applyToAllAction: string | null = null;
     let successCount = 0;
     const processedItems: VfsEventItem[] = [];
@@ -1020,7 +1035,7 @@ export class Explorer {
         if (srcPath === newPath) continue;
 
         if (destFolder && (destFolder === srcPath || destFolder.startsWith(srcPath + '/'))) {
-          if (window.AppUI) window.AppUI.notify(`Skipped ${fileName}: Cannot move into itself.`, 'error');
+          if (window.AppUI) window.AppUI.notify(t('explorer.move.skippedIntoItself', { name: fileName }), 'error');
           continue;
         }
 
@@ -1036,7 +1051,9 @@ export class Explorer {
             if (window.AppUI) window.AppUI.hideLoading();
             const res = await window.AppUI?.showConflictDialog(fileName, isDir);
             if (window.AppUI)
-              window.AppUI.showLoading(`${mode === 'move' ? 'Moving' : 'Copying'} ${normalized.length} items...`);
+              window.AppUI.showLoading(
+        t(mode === 'move' ? 'explorer.move.progress' : 'explorer.copy.progress', { count: normalized.length }),
+      );
 
             if (!res || res.action === 'cancel') {
               break;
@@ -1083,7 +1100,7 @@ export class Explorer {
             processedItems.push({ srcPath, destPath: newPath });
             successCount++;
           } catch (e: any) {
-            if (window.AppUI) window.AppUI.notify(`Replace failed: ${e.message}`, 'error');
+            if (window.AppUI) window.AppUI.notify(t('explorer.move.replaceFailed', { reason: e.message }), 'error');
           }
           continue;
         }
@@ -1125,11 +1142,11 @@ export class Explorer {
       }
     }
 
-    const title = normalized.length === 1 ? 'Move Item' : 'Move Items';
+    const title = normalized.length === 1 ? t('explorer.move.titleOne') : t('explorer.move.titleMany');
     const message =
       normalized.length === 1
-        ? `Enter destination folder path for "${normalized[0].split('/').pop()}":`
-        : `Enter destination folder path for ${normalized.length} items:`;
+        ? t('explorer.move.messageOne', { name: normalized[0].split('/').pop() || '' })
+        : t('explorer.move.messageMany', { count: normalized.length });
 
     const res = await window.AppUI?.showMessageBox({
       title: title,
@@ -1137,8 +1154,8 @@ export class Explorer {
       type: 'question',
       prompt: { defaultValue: defaultPath },
       buttons: [
-        { label: 'Cancel', value: null, style: 'normal', isCancel: true },
-        { label: 'Move', value: 'move', style: 'primary', isDefault: true },
+        { label: t('common.cancel'), value: null, style: 'normal', isCancel: true },
+        { label: t('explorer.menu.move'), value: 'move', style: 'primary', isDefault: true },
       ],
     });
 
@@ -1153,7 +1170,7 @@ export class Explorer {
   }
 
   private async _mergeDirectory(srcPath: string, destPath: string, keepOriginal: boolean = false) {
-    if (window.AppUI) window.AppUI.showLoading('Merging directories...');
+    if (window.AppUI) window.AppUI.showLoading(t('explorer.merge.progress'));
 
     let applyToAllAction: string | null = null;
 
@@ -1213,7 +1230,7 @@ export class Explorer {
       }
       this._emitHistory('folder_merged', `User merged folder: ${srcPath} into ${destPath}`);
     } catch (e: any) {
-      if (window.AppUI) window.AppUI.notify(`Merge failed: ${e.message}`, 'error');
+      if (window.AppUI) window.AppUI.notify(t('explorer.merge.failed', { reason: e.message }), 'error');
     } finally {
       if (window.AppUI) window.AppUI.hideLoading();
     }

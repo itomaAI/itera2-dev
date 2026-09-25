@@ -14,9 +14,21 @@ import { triggerBrowserDownload } from '../../utils/download';
 import type { FilesArtifact } from '../../core/types/tools';
 import hljs from 'highlight.js/lib/common';
 import { LABEL_STREAM } from '../styles/typography';
+import { t, escapeHtml } from '../../i18n/i18n';
+import { bindText } from '../../i18n/staticTexts';
 
-/** files 枠の文言（T-0344）。製品側で言葉を変えるならここだけ */
-const FILES_LABELS = { open: 'Open', download: 'Download', missing: 'Not found' };
+/** files 枠の文言（T-0344）。描くときに今の言語で引く（T-0545） */
+const FILES_LABELS = {
+  get open() {
+    return t('chat.files.open');
+  },
+  get download() {
+    return t('chat.files.download');
+  },
+  get missing() {
+    return t('chat.files.missing');
+  },
+};
 const FILES_BTN =
   'shrink-0 px-2 py-0.5 rounded border border-border-main bg-panel text-text-main text-[0.833em] hover:bg-hover transition';
 
@@ -333,7 +345,7 @@ export class ChatPanel {
     //   点滅する ● のマークアップは壊れない。これが無かったため、
     //   「innerHTML を触らない」＝「常に Thinking... のまま」になっていた（T-0028）。
     if (processing && this.els.AI_TYPING_LABEL) {
-      this.els.AI_TYPING_LABEL.textContent = mode === 'processing' ? 'Processing...' : 'Thinking...';
+      bindText(this.els.AI_TYPING_LABEL, mode === 'processing' ? 'chat.processing' : 'chat.thinking');
     }
   }
 
@@ -695,12 +707,12 @@ export class ChatPanel {
     btn.onclick = async (e) => {
       e.stopPropagation();
       const res = await window.AppUI?.showMessageBox({
-        title: 'Delete Message',
-        message: 'Are you sure you want to delete this message from the history?',
+        title: t('chat.deleteMessage.title'),
+        message: t('chat.deleteMessage.message'),
         type: 'warning',
         buttons: [
-          { label: 'Cancel', value: false, style: 'normal', isCancel: true },
-          { label: 'Delete', value: true, style: 'danger', isDefault: true },
+          { label: t('common.cancel'), value: false, style: 'normal', isCancel: true },
+          { label: t('common.delete'), value: true, style: 'danger', isDefault: true },
         ],
       });
       if (res && res.action && this.events['delete_turn']) {
@@ -774,10 +786,10 @@ export class ChatPanel {
   private _buildFilesBody(artifact: FilesArtifact): HTMLElement {
     const body = document.createElement('div');
     if (artifact.title) {
-      const t = document.createElement('div');
-      t.className = 'font-bold mb-1';
-      t.textContent = artifact.title;
-      body.appendChild(t);
+      const titleEl = document.createElement('div');
+      titleEl.className = 'font-bold mb-1';
+      titleEl.textContent = artifact.title;
+      body.appendChild(titleEl);
     }
     const list = document.createElement('div');
     list.className = 'flex flex-col gap-1';
@@ -836,7 +848,7 @@ export class ChatPanel {
       const blob = await this.vfs.readBlob(this.getActivePrincipal(), path);
       triggerBrowserDownload(blob, name);
     } catch (e: any) {
-      if ((window as any).AppUI) (window as any).AppUI.notify(`Cannot download: ${e.message}`, 'error');
+      if ((window as any).AppUI) (window as any).AppUI.notify(t('chat.cannotDownload', { reason: e.message }), 'error');
     }
   }
 
@@ -847,7 +859,7 @@ export class ChatPanel {
     if (!this.vfs) {
       const div = document.createElement('div');
       div.className = 'text-xs text-text-muted italic border border-border-main p-2 rounded mt-2';
-      div.textContent = `[Loading media: ${mediaObj.path}]`;
+      div.textContent = t('chat.media.loading', { path: mediaObj.path });
       container.appendChild(div);
       return;
     }
@@ -855,7 +867,7 @@ export class ChatPanel {
     // 読み込み中のプレースホルダー
     const loadingDiv = document.createElement('div');
     loadingDiv.className = 'text-xs text-text-muted italic p-2 mt-2';
-    loadingDiv.textContent = 'Loading image...';
+    loadingDiv.textContent = t('chat.media.loadingImage');
     container.appendChild(loadingDiv);
 
     try {
@@ -869,7 +881,7 @@ export class ChatPanel {
         const div = document.createElement('div');
         div.className =
           'flex items-center gap-2 text-xs text-text-muted bg-error/10 border border-error/20 p-2 rounded mt-2';
-        div.innerHTML = `<span class="text-error">⚠️</span> <span class="line-through opacity-70">${mediaObj.path}</span> <span class="text-[0.625rem] ml-auto">(File not found)</span>`;
+        div.innerHTML = `<span class="text-error">⚠️</span> <span class="line-through opacity-70">${mediaObj.path}</span> <span class="text-[0.625rem] ml-auto">${escapeHtml(t('chat.media.fileNotFound'))}</span>`;
         container.appendChild(div);
       }
     } catch (e: any) {
@@ -877,7 +889,7 @@ export class ChatPanel {
       console.error('Failed to render media from VFS:', e);
       const div = document.createElement('div');
       div.className = 'text-xs text-error p-2';
-      div.textContent = `Error loading image: ${e.message}`;
+      div.textContent = t('chat.media.loadError', { reason: e.message });
       container.appendChild(div);
     }
   }
@@ -924,17 +936,17 @@ export class ChatPanel {
       img.className =
         'h-24 rounded border border-border-main cursor-pointer hover:opacity-80 bg-app mt-2 object-contain';
       img.onclick = () => {
-        if (this.events['preview_request']) this.events['preview_request']('Image Preview', src, mime, path);
+        if (this.events['preview_request']) this.events['preview_request'](t('chat.media.imagePreview'), src, mime, path);
       };
       container.appendChild(img);
     } else {
       const div = document.createElement('div');
       div.className =
         'flex items-center gap-3 p-3 mt-2 rounded border border-border-main bg-card max-w-xs hover:bg-hover transition select-none cursor-pointer';
-      div.innerHTML = `<div class="text-2xl">📄</div><div class="flex flex-col overflow-hidden"><span class="text-xs text-text-main font-bold font-mono uppercase truncate">${mime}</span><span class="text-[0.625rem] text-text-muted truncate">BINARY DATA</span></div>`;
+      div.innerHTML = `<div class="text-2xl">📄</div><div class="flex flex-col overflow-hidden"><span class="text-xs text-text-main font-bold font-mono uppercase truncate">${mime}</span><span class="text-[0.625rem] text-text-muted truncate">${escapeHtml(t('chat.media.binaryData'))}</span></div>`;
       div.onclick = () => {
         if (this.events['preview_request']) {
-          this.events['preview_request']('Attachment', src, mime, path);
+          this.events['preview_request'](t('chat.media.attachment'), src, mime, path);
         }
       };
       container.appendChild(div);

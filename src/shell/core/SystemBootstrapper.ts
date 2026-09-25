@@ -368,6 +368,8 @@ export class SystemBootstrapper {
       desktop.panels.explorer.setRootIcons(config.appearance?.rootIcons);
     });
     desktop.panels.chat.renderHistory(history.get());
+    // 言語を切り替えたら会話欄の枠の文（ボタン・読み込み中の表示など）を描き直す。本文は訳さない（T-0545）
+    i18n.onChange(() => desktop.panels.chat.renderHistory(history.get()));
     desktop.updateStorageUI(vfs.getUsage());
 
     await cognitiveManager.refreshEngineConfig();
