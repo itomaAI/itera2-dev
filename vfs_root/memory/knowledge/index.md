@@ -9,7 +9,8 @@ This is the absolute physical layout of your universe.
 
 *   **`apps/`**
     *   User-facing applications (HTML/JS/CSS).
-    *   Examples: `apps/tasks.html`, `apps/notes.html`.
+    *   Apps made by the user or by you. The built-in apps (Home, Notes, Tasks, Calendar, Loom) are in `system/apps/`
+        (read-only, updated with the OS). To change one, copy it here and repoint its registry entry (`docs/manual/05_customization.md`).
 *   **`data/`**
     *   The user's personal data and documents.
     *   Examples: `data/notes/`, `data/tasks/`.

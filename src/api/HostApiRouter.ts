@@ -568,7 +568,7 @@ export class HostApiRouter {
     });
     t.registerHandler('host:go_home', async () => {
       if (!d.processManager) return false;
-      const homePath = d.configManager.get('appearance')?.layout?.homePath || 'apps/home.html';
+      const homePath = d.configManager.homePath();
       await d.processManager.spawn({ path: homePath, show: true });
       if (d.shell) d.shell._closeMobileDrawers();
       return true;

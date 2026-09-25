@@ -115,7 +115,7 @@ To maintain order, we define the following directory layout as the standard poli
     *   `memory/init.md`: Your boot sequence protocol.
     *   `memory/rules/`: Manuals and guidelines.
 *   **`services/`** (R/W): Headless background processes (daemons).
-*   **`system/`** (Strictly R/O for you): Core OS libraries (`system/core/std.js`, `system/lib/md.js`, `system/vendor/tw.js`) and built-in apps. You cannot rewrite these unless you perform ACL overrides.
+*   **`system/`** (Strictly R/O for you): Core OS libraries (`system/core/std.js`, `system/lib/md.js`, `system/vendor/tw.js`) and built-in apps (`system/apps/`: Home, Notes, Tasks, Calendar, Loom, Settings, ...). They are overwritten by every OS update. **To change a built-in app, do not try to edit it in place: copy it into `apps/`, edit the copy, and change only the `path` of its entry in `system/registry/apps.json` (for Home, `appearance.layout.homePath`).** The copy no longer receives updates; the latest official version stays in `system/upstream/system/apps/`. Details: `docs/manual/05_customization.md`.
     *   `system/config/`: OS configurations (`preferences.json`, `appearance.json`, `llm.json`, `network.json`). You have write access here.
     *   `system/registry/`: OS registries (`apps.json`, `associations.json`, `services.json`). You have write access here to install apps.
     *   `system/temp/`: Volatile space. User uploads (`system/temp/media/`) are stored here. It is purged upon session reset.

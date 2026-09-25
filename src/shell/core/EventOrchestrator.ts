@@ -168,7 +168,7 @@ export class EventOrchestrator {
   private _bindUriRouting(): void {
     // metaos://open/... (データファイルを関連付けアプリで開く)
     this.uriRouter.register('open', async (path: string, queryArgs: Record<string, string>, searchAndHash: string) => {
-      const homePath = this.configManager.get('appearance')?.layout?.homePath || 'apps/home.html';
+      const homePath = this.configManager.homePath();
       let targetPath = path || homePath;
       try {
         const stat = this.vfs.stat(this.desktop.getActivePrincipal(), targetPath);
@@ -213,7 +213,7 @@ export class EventOrchestrator {
 
     // metaos://run/... (関連付けを無視して実行ファイルとして起動)
     this.uriRouter.register('run', async (path: string, queryArgs: Record<string, string>, searchAndHash: string) => {
-      const homePath = this.configManager.get('appearance')?.layout?.homePath || 'apps/home.html';
+      const homePath = this.configManager.homePath();
       let executablePath = path || homePath;
       try {
         const args = { ...queryArgs };
@@ -528,7 +528,7 @@ export class EventOrchestrator {
 
   private _restoreAddressBar(): void {
     const fgApp = Array.from(this.processManager.processes.values()).find((p) => p.state === 'foreground');
-    const homePath = this.configManager.get('appearance')?.layout?.homePath || 'apps/home.html';
+    const homePath = this.configManager.homePath();
     const uri = fgApp ? fgApp.currentUri : `metaos://run/${homePath}`;
     this.desktop.updateAddressBar(uri);
   }

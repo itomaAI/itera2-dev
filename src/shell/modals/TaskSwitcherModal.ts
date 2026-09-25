@@ -87,7 +87,7 @@ export class TaskSwitcherModal {
         'snap-center shrink-0 w-28 sm:w-36 flex flex-col items-center gap-3 transition-transform hover:scale-105 group relative';
 
       const basePath = app.path.split(/[?#]/)[0];
-      const homePath = this.configManager.get('appearance')?.layout?.homePath || 'apps/home.html';
+      const homePath = this.configManager.homePath();
 
       // レジストリからアプリ情報を検索してアイコンや名前をリッチにする
       let appName = basePath.split('/').pop()?.replace('.html', '') || 'App';
