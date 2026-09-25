@@ -296,5 +296,23 @@
         }
     };
 
+    // テーマの追随（T-0539）。OS がアプリへ入れた <style id="itera-guest-theme"> は OS の持ち物なので、
+    // 差し替えも OS の部品（このブリッジ）が受け持つ。アプリの中身には触らない（ui.js を使わないアプリにも効く）。
+    // theme_changed はテーマの持ち主（ホストの ThemeService）が当て終えてから来るので、そのとき取り直す。
+    // 立て続けに来たら最後の 1 回だけを当てる（応答の順が入れ替わっても古い CSS で上書きしない）。
+    let themeSeq = 0;
+    transport.on('theme_changed', async () => {
+        const el = document.getElementById('itera-guest-theme');
+        if (!el) return;
+        const seq = ++themeSeq;
+        try {
+            const css = await transport.requestHost('sys:get_theme_css', {});
+            if (seq !== themeSeq || typeof css !== 'string') return;
+            el.textContent = css;
+        } catch (e) {
+            console.warn('[Itera] Could not refresh the theme', e);
+        }
+    });
+
     console.log("[Itera] MetaOS Bridge v2 Initialized (PID: " + MY_PID + ")");
 })(window);

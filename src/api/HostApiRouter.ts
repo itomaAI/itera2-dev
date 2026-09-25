@@ -11,6 +11,7 @@ import type { DynamicToolRegistration, ProcessInfo } from './HostApiContract';
 import type { SpawnOptions } from '../shell/windowing/ProcessManager';
 import { USER_PRINCIPAL } from '../core/vfs/types';
 import { VfsEventFormatter } from '../core/vfs/VfsEventFormatter';
+import { buildGuestThemeCss } from '../shell/windowing/guestThemeCss';
 import { base64ToBlob, blobToDataUrl, dataUrlToBlob } from '../utils/binary';
 
 // 依存モジュールのダックタイピング・インターフェース (未実装モジュール用)
@@ -454,6 +455,9 @@ export class HostApiRouter {
       await d.configManager.update(key, updates);
       return JSON.parse(JSON.stringify(d.configManager.get(key)));
     });
+    // 起動中のアプリがテーマを取り直す口（T-0539）。theme_changed を受けたブリッジが呼ぶ。
+    // 起動時の焼き込み（GuestCompiler）と同じ関数で作る。
+    t.registerHandler('sys:get_theme_css', async () => buildGuestThemeCss());
 
     // 登録簿の口（T-0447）。設定と同じ理由 —— ゲストが system/registry/*.json を直接読み書きすると
     // 層の規則を写すことになり、書けば配信の層へ落ちて OS 更新で戻る（設定アプリのサービス切り替えで実際に起きうる）。

@@ -8,6 +8,7 @@ import { USER_PRINCIPAL } from '../../core/vfs/types';
 import { GuestBridgeBuilder } from '../../api/GuestBridgeBuilder';
 import { HtmlToImageBuilder } from './HtmlToImageBuilder';
 import { resolveRelativePath } from '../../utils/path';
+import { buildGuestThemeCss, GUEST_THEME_STYLE_ID } from './guestThemeCss';
 
 interface CachedAsset {
   url: string;
@@ -240,50 +241,7 @@ window.addEventListener('message', async (e) => {
   }
 
   private _generateThemeInjection(): string {
-    const root = document.documentElement;
-    const styles = getComputedStyle(root);
-    const vars = [
-      '--c-bg-app',
-      '--c-bg-panel',
-      '--c-bg-card',
-      '--c-bg-hover',
-      '--c-bg-overlay',
-      '--c-border-main',
-      '--c-border-highlight',
-      '--c-text-main',
-      '--c-text-muted',
-      '--c-text-inverted',
-      '--c-text-system',
-      '--c-text-tag-attr',
-      '--c-text-tag-content',
-      '--c-accent-primary',
-      '--c-accent-success',
-      '--c-accent-warning',
-      '--c-accent-error',
-      '--c-tag-thinking',
-      '--c-tag-plan',
-      '--c-tag-report',
-      '--c-tag-error',
-      '--font-sans',
-      '--font-mono',
-    ];
-
-    let css = ':root {\n';
-    vars.forEach((v) => {
-      const val = styles.getPropertyValue(v).trim();
-      if (val) css += `  ${v}: ${val};\n`;
-    });
-
-    const fontSize = root.style.fontSize || '16px';
-    css += `  font-size: ${fontSize};\n`;
-    css += '}';
-
-    if (root.getAttribute('data-animations') === 'false') {
-      css +=
-        '\n* { animation-duration: 0.001ms !important; transition-duration: 0.001ms !important; scroll-behavior: auto !important; }';
-    }
-
-    return `<style id="itera-guest-theme">${css}</style>`;
+    return `<style id="${GUEST_THEME_STYLE_ID}">${buildGuestThemeCss()}</style>`;
   }
 
   private async _processHtmlDependencies(
