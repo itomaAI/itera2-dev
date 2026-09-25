@@ -15,7 +15,6 @@ import type { FilesArtifact } from '../../core/types/tools';
 import hljs from 'highlight.js/lib/common';
 import { LABEL_STREAM } from '../styles/typography';
 import { t, escapeHtml } from '../../i18n/i18n';
-import { bindText } from '../../i18n/staticTexts';
 
 /** files 枠の文言（T-0344）。描くときに今の言語で引く（T-0545） */
 const FILES_LABELS = {
@@ -345,7 +344,8 @@ export class ChatPanel {
     //   点滅する ● のマークアップは壊れない。これが無かったため、
     //   「innerHTML を触らない」＝「常に Thinking... のまま」になっていた（T-0028）。
     if (processing && this.els.AI_TYPING_LABEL) {
-      bindText(this.els.AI_TYPING_LABEL, mode === 'processing' ? 'chat.processing' : 'chat.thinking');
+      // 状態の飾りは英語に固定する（T-0546。訳の対象外）
+      this.els.AI_TYPING_LABEL.textContent = mode === 'processing' ? 'Processing...' : 'Thinking...';
     }
   }
 

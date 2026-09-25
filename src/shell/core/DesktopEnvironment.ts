@@ -207,7 +207,8 @@ export class DesktopEnvironment {
 
     if (statusEl) {
       statusEl.classList.remove('opacity-0');
-      bindText(statusEl, 'shell.saved');
+      // 状態の飾りは英語に固定する（T-0546。訳の対象外）
+      statusEl.textContent = 'Saved';
       statusEl.className = 'text-[0.625rem] text-success italic transition-opacity';
     }
 
