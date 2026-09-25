@@ -91,7 +91,7 @@
               />
             </div>
             <div class="md:col-span-2">
-              <label class="block text-xs font-bold text-text-muted uppercase mb-1.5">Language</label>
+              <label class="block text-xs font-bold text-text-muted uppercase mb-1.5">AI Response Language</label>
               <input
                 type="text"
                 list="pref-language-list"
@@ -357,26 +357,19 @@
             <h3 class="text-xs font-bold text-text-main uppercase tracking-wider mb-4">Behavior & Localization</h3>
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
-                <label class="block text-xs font-bold text-text-muted uppercase mb-1.5">UI Locale (HTML Lang)</label>
-                <input
-                  type="text"
-                  list="locale-list"
+                <label class="block text-xs font-bold text-text-muted uppercase mb-1.5">Interface Language</label>
+                <!-- 並びは実在する言語ファイルから作る（loadLocales）。AI の応答言語（上の Language）とは別（P-0046 / T-0545） -->
+                <select
                   id="config-app-locale"
                   data-category="appearance"
                   data-key="locale"
                   class="w-full bg-card border border-border-main rounded-lg px-3 py-2 text-sm text-text-main focus:outline-none focus:border-primary transition"
-                  placeholder="en"
-                />
-                <datalist id="locale-list">
+                >
                   <option value="en">English</option>
-                  <option value="ja">Japanese (日本語)</option>
-                  <option value="zh-Hans">Chinese Simplified (简体中文)</option>
-                  <option value="zh-Hant">Chinese Traditional (繁體中文)</option>
-                  <option value="ko">Korean (한국어)</option>
-                  <option value="es">Spanish (Español)</option>
-                  <option value="fr">French (Français)</option>
-                  <option value="de">German (Deutsch)</option>
-                </datalist>
+                </select>
+                <p class="text-[10px] text-text-muted mt-1">
+                  OS menus, dialogs and notifications. Language files live in system/locales and user/locales.
+                </p>
               </div>
               <div class="flex items-center gap-3 md:pt-6">
                 <input
@@ -581,7 +574,7 @@
           DOM('config-network-proxyUrl').value = configs.network.proxyUrl || '';
           DOM('config-network-allowCredentialsWithProxy').checked = !!configs.network.allowCredentialsWithProxy;
 
-          DOM('config-app-locale').value = configs.appearance.locale || 'en';
+          await loadLocales(configs.appearance.locale || 'en');
           DOM('config-app-homepath').value = configs.appearance.layout?.homePath || 'system/apps/home.html';
           DOM('config-app-uifont').value = configs.appearance.typography?.uiFont || 'system-ui';
           DOM('config-app-monofont').value = configs.appearance.typography?.monoFont || 'monospace';
@@ -955,6 +948,55 @@
       }
 
       // --- Themes ---
+      /**
+       * UI の言語の一覧（P-0046 / T-0545）。英語はホストに入っているので常に出す。
+       * ほかは system/locales と user/locales に実在する <言語>.json から作る（名前は meta.name）。
+       * 両方にあれば 1 つにまとめる（user の方は配信の訳を上書きするだけで、別の言語ではない）。
+       * 設定の値が一覧に無ければ（ファイルを消した・手で書いた）、その値も残して選べるようにする。
+       */
+      async function loadLocales(current) {
+        const select = DOM('config-app-locale');
+        const LOCALE_DIRS = ['system/locales', 'user/locales'];
+        const found = new Map([['en', 'English']]);
+        for (const dir of LOCALE_DIRS) {
+          let files = [];
+          try {
+            files = await MetaOS.fs.list(dir);
+          } catch (e) {
+            continue;
+          }
+          for (const f of files) {
+            if (!String(f).endsWith('.json')) continue;
+            const path = String(f).includes('/') ? String(f) : `${dir}/${f}`;
+            const code = path
+              .split('/')
+              .pop()
+              .replace(/\.json$/, '');
+            let name = found.get(code) || code;
+            try {
+              const meta = JSON.parse(await MetaOS.fs.read(path)).meta || {};
+              if (meta.name)
+                name =
+                  meta.englishName && meta.englishName !== meta.name ? `${meta.name} (${meta.englishName})` : meta.name;
+            } catch (e) {
+              /* 読めないファイルは名前を付けずに並べる（選べばホストは英語に落ちる） */
+            }
+            found.set(code, name);
+          }
+        }
+        if (current && !found.has(current)) found.set(current, current);
+        const codes = [...found.keys()].sort((a, b) => (a === 'en' ? -1 : b === 'en' ? 1 : a.localeCompare(b)));
+        select.replaceChildren(
+          ...codes.map((code) => {
+            const opt = document.createElement('option');
+            opt.value = code;
+            opt.textContent = found.get(code);
+            return opt;
+          }),
+        );
+        select.value = current || 'en';
+      }
+
       async function loadThemes() {
         const container = DOM('theme-list');
         container.innerHTML = '';

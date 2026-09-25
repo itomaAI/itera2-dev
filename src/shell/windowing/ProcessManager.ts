@@ -9,6 +9,7 @@ import type { ConfigManager } from '../../core/sys/ConfigManager';
 import { USER_PRINCIPAL } from '../../core/vfs/types';
 import { GuestCompiler } from './GuestCompiler';
 import { resolveRelativePath } from '../../utils/path';
+import { t, escapeHtml } from '../../i18n/i18n';
 
 export interface Process {
   pid: string;
@@ -291,14 +292,14 @@ export class ProcessManager {
         // srcdoc は独立した文書なので、ホストの :root に定義した CSS 変数は
         // 継承されない。解決済みの値を埋め込む必要がある。
         const uiFont = getComputedStyle(document.documentElement).getPropertyValue('--font-sans').trim() || 'system-ui';
-        iframe.srcdoc = `<div style="color:#888; padding:20px; font-family:${uiFont}, system-ui, sans-serif;">No ${path} found.</div>`;
+        iframe.srcdoc = `<div style="color:#888; padding:20px; font-family:${uiFont}, system-ui, sans-serif;">${escapeHtml(t('process.notFound', { path }))}</div>`;
       }
 
       console.log(`[ProcessManager] Spawned [${pid}] (Type:${type}, Show:${show}) -> ${path}`);
     } catch (e) {
       console.error(`[ProcessManager] Spawn error (${pid}):`, e);
       if (type === 'app' && window.AppUI) {
-        window.AppUI.notify(`Failed to launch ${path}`, 'error');
+        window.AppUI.notify(t('process.launchFailed', { path }), 'error');
       }
     } finally {
       if (show && this.els.LOADER) {

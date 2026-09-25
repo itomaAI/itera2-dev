@@ -31,6 +31,7 @@ import type { VfsService } from '../../core/vfs/VfsService';
 import type { ConfigManager } from '../../core/sys/ConfigManager';
 import type { ProcessManager } from '../windowing/ProcessManager';
 import { SYSTEM_PRINCIPAL } from '../../core/vfs/types';
+import { t } from '../../i18n/i18n';
 
 /** アダプタが報告する接続状態 */
 export type SyncAdapterState = 'disconnected' | 'connecting' | 'connected' | 'error';
@@ -204,7 +205,7 @@ export class SyncAdapterHost {
       if (blobUrl) URL.revokeObjectURL(blobUrl);
       this.adapters.set(manifest.id, {
         manifest,
-        status: { state: 'error', label: 'Load failed', detail: String((e as Error)?.message || e) },
+        status: { state: 'error', label: t('sync.status.loadFailed'), detail: String((e as Error)?.message || e) },
         blobUrl: '',
       });
     }
@@ -217,24 +218,28 @@ export class SyncAdapterHost {
    */
   private _summarize(): SyncAdapterStatus {
     const all = this.getAdapters();
-    if (all.length === 0) return { state: 'disconnected', label: 'No Adapters' };
+    if (all.length === 0) return { state: 'disconnected', label: t('sync.status.noAdapters') };
 
     const connected = all.filter((a) => a.status.state === 'connected');
     if (connected.length > 0) {
       const first = connected[0];
       return {
         state: 'connected',
-        label: connected.length === 1 ? first.status.label || 'Connected' : `${connected.length} Connected`,
+        label:
+          connected.length === 1
+            ? first.status.label || t('sync.status.connected')
+            : t('sync.status.connectedN', { count: connected.length }),
         detail: connected.length === 1 ? first.status.detail : connected.map((a) => a.manifest.name).join(', '),
         accentClass: first.status.accentClass,
       };
     }
-    if (all.some((a) => a.status.state === 'connecting')) return { state: 'connecting', label: 'Connecting...' };
+    if (all.some((a) => a.status.state === 'connecting'))
+      return { state: 'connecting', label: t('sync.status.connecting') };
 
     const errored = all.find((a) => a.status.state === 'error');
-    if (errored) return { state: 'error', label: 'Error', detail: errored.status.detail };
+    if (errored) return { state: 'error', label: t('sync.status.error'), detail: errored.status.detail };
 
-    return { state: 'disconnected', label: 'Local Mode Only', detail: 'Not Signed In' };
+    return { state: 'disconnected', label: t('sync.localOnly'), detail: t('sync.notSignedIn') };
   }
 
   private _emitStatus(): void {

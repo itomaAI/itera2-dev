@@ -9,6 +9,8 @@ import type { ProcessManager } from '../windowing/ProcessManager';
 import type { AppRegistry } from '../../core/sys/AppRegistry';
 import type { ConfigManager } from '../../core/sys/ConfigManager';
 import { LABEL_KICKER } from '../styles/typography';
+import { t, escapeHtml } from '../../i18n/i18n';
+import { bindText } from '../../i18n/staticTexts';
 
 export class ProcessMonitorModal {
   private processManager: ProcessManager;
@@ -51,8 +53,8 @@ export class ProcessMonitorModal {
       <div class="flex items-center gap-3">
         <div class="w-8 h-8 rounded-lg bg-primary/20 text-primary flex items-center justify-center text-lg">📊</div>
         <div>
-          <h2 class="font-bold text-text-main text-base leading-tight">Activity Monitor</h2>
-          <div class="${LABEL_KICKER} text-text-muted mt-0.5">Real-time Process List</div>
+          <h2 class="font-bold text-text-main text-base leading-tight" data-i18n="monitor.title">${escapeHtml(t('monitor.title'))}</h2>
+          <div class="${LABEL_KICKER} text-text-muted mt-0.5" data-i18n="monitor.subtitle">${escapeHtml(t('monitor.subtitle'))}</div>
         </div>
       </div>
     `;
@@ -74,20 +76,20 @@ export class ProcessMonitorModal {
 
     const statusText = document.createElement('div');
     statusText.className = 'text-xs font-mono text-text-muted flex items-center gap-2';
-    statusText.innerHTML = `<span class="w-2 h-2 rounded-full bg-success animate-pulse"></span> Auto-updating (1s)`;
+    statusText.innerHTML = `<span class="w-2 h-2 rounded-full bg-success animate-pulse"></span> <span data-i18n="monitor.autoUpdating">${escapeHtml(t('monitor.autoUpdating'))}</span>`;
 
     const btnKillAll = document.createElement('button');
     btnKillAll.className =
       'px-4 py-2 rounded-lg text-xs font-bold text-error hover:text-white border border-error/50 hover:bg-error transition';
-    btnKillAll.innerText = 'Kill All Daemons';
+    bindText(btnKillAll, 'monitor.killAll');
     btnKillAll.onclick = async () => {
       const res = await window.AppUI?.showMessageBox({
-        title: 'Kill All Daemons',
-        message: 'Are you sure you want to terminate all background daemons?',
+        title: t('monitor.killAll'),
+        message: t('monitor.killAllMessage'),
         type: 'warning',
         buttons: [
-          { label: 'Cancel', value: false, style: 'normal', isCancel: true },
-          { label: 'Kill All', value: true, style: 'danger', isDefault: true },
+          { label: t('common.cancel'), value: false, style: 'normal', isCancel: true },
+          { label: t('monitor.killAllConfirm'), value: true, style: 'danger', isDefault: true },
         ],
       });
 
@@ -125,7 +127,7 @@ export class ProcessMonitorModal {
     this.listContainer.innerHTML = '';
 
     if (processes.length === 0) {
-      this.listContainer.innerHTML = `<div class="flex items-center justify-center h-32 text-sm text-text-muted">No processes running.</div>`;
+      this.listContainer.innerHTML = `<div class="flex items-center justify-center h-32 text-sm text-text-muted">${escapeHtml(t('monitor.empty'))}</div>`;
       return;
     }
 

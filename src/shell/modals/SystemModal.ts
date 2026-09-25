@@ -15,6 +15,8 @@ import {
   classifyForBackup,
   normalizeMountPaths,
 } from '../../core/vfs/backupExclusion';
+import { t } from '../../i18n/i18n';
+import { bindText } from '../../i18n/staticTexts';
 
 const DOM_IDS = {
   MODAL: 'system-modal',
@@ -72,13 +74,12 @@ export class SystemModal {
     if (this.els.BTN_RESET) {
       this.els.BTN_RESET.onclick = async () => {
         const res = await window.AppUI?.showMessageBox({
-          title: 'Factory Reset',
-          message:
-            'WARNING: This will permanently delete ALL files and settings.\n\nAre you absolutely sure you want to proceed?',
+          title: t('systemModal.reset.title'),
+          message: t('systemModal.reset.message'),
           type: 'error',
           buttons: [
-            { label: 'Cancel', value: false, style: 'normal', isDefault: true },
-            { label: 'Reset System', value: true, style: 'danger' },
+            { label: t('common.cancel'), value: false, style: 'normal', isDefault: true },
+            { label: t('systemModal.reset.confirm'), value: true, style: 'danger' },
           ],
         });
         if (res && res.action) {
@@ -117,15 +118,14 @@ export class SystemModal {
     try {
       const persisted = navigator.storage && navigator.storage.persisted ? await navigator.storage.persisted() : null;
       if (persisted === true) {
-        el.textContent = "Storage persistence: granted — the browser will not evict this site's data.";
+        bindText(el, 'systemModal.persistenceGranted');
       } else if (persisted === false) {
-        el.textContent =
-          "Storage persistence: not granted — the browser may evict this site's data under storage pressure. Export a backup regularly.";
+        bindText(el, 'systemModal.persistenceDenied');
       } else {
-        el.textContent = 'Storage persistence: unknown.';
+        bindText(el, 'systemModal.persistenceUnknown');
       }
     } catch {
-      el.textContent = 'Storage persistence: unknown.';
+      bindText(el, 'systemModal.persistenceUnknown');
     }
   }
 
@@ -135,7 +135,7 @@ export class SystemModal {
 
   // --- ZIP Export ---
   private async _handleExport() {
-    if (window.AppUI) window.AppUI.showLoading('Creating Backup...');
+    if (window.AppUI) window.AppUI.showLoading(t('systemModal.backup.creating'));
 
     try {
       const zip = new JSZip();
@@ -192,16 +192,19 @@ export class SystemModal {
 
       const skipped = manifest.totals.excludedFiles;
       const skippedNote =
-        skipped > 0 ? ` Skipped ${skipped} provider-managed files (see ${BACKUP_MANIFEST_FILENAME}).` : '';
+        skipped > 0 ? t('systemModal.backup.skippedNote', { count: skipped, manifest: BACKUP_MANIFEST_FILENAME }) : '';
 
       if (errorCount > 0) {
         if (window.AppUI)
-          window.AppUI.notify(`Backup Exported, but ${errorCount} files failed to read.${skippedNote}`, 'warning');
+          window.AppUI.notify(
+            t('systemModal.backup.exportedWithErrors', { count: errorCount, note: skippedNote }),
+            'warning',
+          );
       } else {
-        if (window.AppUI) window.AppUI.notify(`Backup Exported.${skippedNote}`, 'success');
+        if (window.AppUI) window.AppUI.notify(t('systemModal.backup.exported', { note: skippedNote }), 'success');
       }
     } catch (e: any) {
-      if (window.AppUI) window.AppUI.notify(`Export failed: ${e.message}`, 'error');
+      if (window.AppUI) window.AppUI.notify(t('systemModal.backup.exportFailed', { reason: e.message }), 'error');
     } finally {
       if (window.AppUI) window.AppUI.hideLoading();
     }
@@ -214,12 +217,12 @@ export class SystemModal {
     if (!file) return;
 
     const res = await window.AppUI?.showMessageBox({
-      title: 'Restore Backup',
-      message: `CAUTION: This will ERASE all current files and restore from "${file.name}".\n\nAre you sure you want to continue?`,
+      title: t('systemModal.restore.title'),
+      message: t('systemModal.restore.message', { name: file.name }),
       type: 'warning',
       buttons: [
-        { label: 'Cancel', value: false, style: 'normal', isDefault: true },
-        { label: 'Restore', value: true, style: 'danger' },
+        { label: t('common.cancel'), value: false, style: 'normal', isDefault: true },
+        { label: t('systemModal.restore.confirm'), value: true, style: 'danger' },
       ],
     });
     if (!res || !res.action) {
@@ -227,7 +230,7 @@ export class SystemModal {
       return;
     }
 
-    if (window.AppUI) window.AppUI.showLoading('Restoring Backup...');
+    if (window.AppUI) window.AppUI.showLoading(t('systemModal.restore.progress'));
 
     try {
       // 一旦全消去 (System権限)
@@ -266,11 +269,11 @@ export class SystemModal {
 
       await Promise.all(promises);
 
-      if (window.AppUI) window.AppUI.notify(`Restore Complete: ${count} files. Reloading...`, 'success');
+      if (window.AppUI) window.AppUI.notify(t('systemModal.restore.complete', { count }), 'success');
       setTimeout(() => window.location.reload(), 1500);
     } catch (err: any) {
       console.error(err);
-      if (window.AppUI) window.AppUI.notify(`Restore Failed: ${err.message}`, 'error');
+      if (window.AppUI) window.AppUI.notify(t('systemModal.restore.failed', { reason: err.message }), 'error');
     } finally {
       input.value = '';
       if (window.AppUI) window.AppUI.hideLoading();
@@ -279,26 +282,26 @@ export class SystemModal {
 
   // --- Diagnostics & Repair ---
   private async _handleRepair() {
-    if (window.AppUI) window.AppUI.showLoading('Checking VFS Consistency...');
+    if (window.AppUI) window.AppUI.showLoading(t('systemModal.fsck.progress'));
     try {
       const fsck = new VfsFsck(this.nodeStore, this.contentStore);
       const report = await fsck.runRepair();
 
-      let msg = 'File system is clean. No errors found.';
+      let msg = t('systemModal.fsck.clean');
       if (report.totalErrorsFixed > 0) {
-        msg =
-          `Repaired ${report.totalErrorsFixed} issues:\n` +
-          `- Circular References: ${report.circularReferencesFixed}\n` +
-          `- Orphans Rescued: ${report.orphansRescued}\n` +
-          `- Missing Contents Fixed: ${report.missingContentsFixed}\n` +
-          `- Dangling Contents Rescued: ${report.danglingContentsRescued}\n\n` +
-          `Check '.lost+found' folder in root if files were rescued.`;
+        msg = t('systemModal.fsck.repaired', {
+          total: report.totalErrorsFixed,
+          circular: report.circularReferencesFixed,
+          orphans: report.orphansRescued,
+          missing: report.missingContentsFixed,
+          dangling: report.danglingContentsRescued,
+        });
         if (window.AppUI) window.AppUI.notify(msg, 'warning');
       } else {
         if (window.AppUI) window.AppUI.notify(msg, 'success');
       }
     } catch (e: any) {
-      if (window.AppUI) window.AppUI.notify(`Repair failed: ${e.message}`, 'error');
+      if (window.AppUI) window.AppUI.notify(t('systemModal.fsck.failed', { reason: e.message }), 'error');
     } finally {
       if (window.AppUI) window.AppUI.hideLoading();
       this.close();
@@ -318,9 +321,9 @@ export class SystemModal {
       a.click();
       document.body.removeChild(a);
       setTimeout(() => URL.revokeObjectURL(url), 100);
-      if (window.AppUI) window.AppUI.notify('Index Backup Exported', 'success');
+      if (window.AppUI) window.AppUI.notify(t('systemModal.index.exported'), 'success');
     } catch (e: any) {
-      if (window.AppUI) window.AppUI.notify(`Index backup failed: ${e.message}`, 'error');
+      if (window.AppUI) window.AppUI.notify(t('systemModal.index.exportFailed', { reason: e.message }), 'error');
     }
   }
 
@@ -330,12 +333,12 @@ export class SystemModal {
     if (!file) return;
 
     const res = await window.AppUI?.showMessageBox({
-      title: 'Restore Index',
-      message: `CAUTION: This will overwrite your entire file system index with "${file.name}".\nAre you sure you want to proceed?`,
+      title: t('systemModal.index.restoreTitle'),
+      message: t('systemModal.index.restoreMessage', { name: file.name }),
       type: 'warning',
       buttons: [
-        { label: 'Cancel', value: false, style: 'normal', isDefault: true, isCancel: true },
-        { label: 'Restore Index', value: true, style: 'danger' },
+        { label: t('common.cancel'), value: false, style: 'normal', isDefault: true, isCancel: true },
+        { label: t('systemModal.index.restoreConfirm'), value: true, style: 'danger' },
       ],
     });
     if (!res || !res.action) {
@@ -343,7 +346,7 @@ export class SystemModal {
       return;
     }
 
-    if (window.AppUI) window.AppUI.showLoading('Restoring Index...');
+    if (window.AppUI) window.AppUI.showLoading(t('systemModal.index.restoring'));
     try {
       const text = await new Promise<string>((resolve, reject) => {
         const reader = new FileReader();
@@ -353,11 +356,11 @@ export class SystemModal {
       });
 
       await this.nodeStore.importIndex(text);
-      if (window.AppUI) window.AppUI.notify('Index restored. Reloading system...', 'success');
+      if (window.AppUI) window.AppUI.notify(t('systemModal.index.restored'), 'success');
       setTimeout(() => window.location.reload(), 1500);
     } catch (err: any) {
       console.error(err);
-      if (window.AppUI) window.AppUI.notify(`Index Restore Failed: ${err.message}`, 'error');
+      if (window.AppUI) window.AppUI.notify(t('systemModal.index.restoreFailed', { reason: err.message }), 'error');
     } finally {
       input.value = '';
       if (window.AppUI) window.AppUI.hideLoading();

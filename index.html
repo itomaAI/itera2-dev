@@ -26,7 +26,9 @@
     <!-- Boot Loader -->
     <div id="boot-loader" class="fixed inset-0 z-[9999] bg-app flex flex-col items-center justify-center">
       <div class="loader mb-4 w-10 h-10 border-4 border-t-primary"></div>
-      <div class="text-sm text-text-muted font-mono animate-pulse">Initializing Itera OS v2...</div>
+      <div class="text-sm text-text-muted font-mono animate-pulse" data-i18n="shell.boot.initializing">
+        Initializing Itera OS v2...
+      </div>
     </div>
 
     <!-- Header (Keys button removed) -->
@@ -36,7 +38,12 @@
       <div class="flex items-center gap-2">
         <img src="/assets/icon.svg" class="w-6 h-6 rounded shadow-lg shadow-black/20" alt="Logo" />
         <h1 class="font-bold text-text-main tracking-wide text-sm">
-          Itera <span class="text-[0.625rem] font-normal text-text-muted ml-1 hidden sm:inline">REAL Architecture</span>
+          Itera
+          <span
+            class="text-[0.625rem] font-normal text-text-muted ml-1 hidden sm:inline"
+            data-i18n="shell.header.tagline"
+            >REAL Architecture</span
+          >
         </h1>
       </div>
     </header>
@@ -59,12 +66,17 @@
             <div
               class="w-2 h-2 rounded-full bg-success animate-pulse shadow-[0_0_4px_rgba(var(--c-accent-success),0.5)] shrink-0"
             ></div>
-            <span class="text-xs font-bold text-text-main tracking-wide truncate min-w-0">System Online</span>
+            <span
+              class="text-xs font-bold text-text-main tracking-wide truncate min-w-0"
+              data-i18n="shell.status.online"
+              >System Online</span
+            >
           </div>
           <div class="flex items-center gap-1 shrink-0">
             <button
               id="btn-cloud-sync"
               title="Cloud Sync"
+              data-i18n-title="shell.cloudSync"
               class="p-1.5 text-text-muted hover:text-text-main hover:bg-hover rounded transition"
             >
               <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -80,6 +92,7 @@
             <button
               id="btn-sudo"
               title="Enable System Privileges"
+              data-i18n-title="shell.sudo.enable"
               class="p-1.5 text-text-muted hover:text-warning hover:bg-hover rounded transition"
             >
               <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -94,6 +107,7 @@
             <button
               id="btn-settings"
               title="System Management"
+              data-i18n-title="shell.systemManagement"
               class="p-1.5 text-text-muted hover:text-text-main hover:bg-hover rounded transition"
             >
               <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -117,7 +131,9 @@
         <!-- Storage & Actions -->
         <div class="py-3 px-4 border-b border-border-main bg-panel/50 flex flex-col gap-1.5 shrink-0">
           <div class="flex justify-between items-baseline text-[0.625rem]">
-            <span class="font-bold text-text-muted uppercase tracking-wider truncate">Storage</span>
+            <span class="font-bold text-text-muted uppercase tracking-wider truncate" data-i18n="shell.storage"
+              >Storage</span
+            >
             <span id="storage-usage-text" class="font-mono text-text-muted shrink-0 whitespace-nowrap"
               >0.0 / 1024.0 MB</span
             >
@@ -130,11 +146,17 @@
             ></div>
           </div>
           <div class="flex justify-between items-center h-5 mt-0.5">
-            <span id="save-status" class="text-[0.625rem] text-success italic opacity-0 transition-opacity">Saved</span>
+            <span
+              id="save-status"
+              class="text-[0.625rem] text-success italic opacity-0 transition-opacity"
+              data-i18n="shell.saved"
+              >Saved</span
+            >
             <div class="flex gap-1">
               <button
                 id="btn-new-file"
                 title="New File"
+                data-i18n-title="shell.newFile"
                 class="w-5 h-5 flex items-center justify-center text-text-muted hover:text-text-main hover:bg-hover rounded transition"
               >
                 <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -149,6 +171,7 @@
               <button
                 id="btn-new-folder"
                 title="New Folder"
+                data-i18n-title="shell.newFolder"
                 class="w-5 h-5 flex items-center justify-center text-text-muted hover:text-text-main hover:bg-hover rounded transition"
               >
                 <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -164,6 +187,7 @@
               <button
                 id="btn-upload-file"
                 title="Upload File"
+                data-i18n-title="shell.uploadFile"
                 class="w-5 h-5 flex items-center justify-center text-text-muted hover:text-text-main hover:bg-hover rounded transition"
               >
                 <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -197,6 +221,7 @@
             id="btn-toggle-explorer"
             class="hidden md:inline-flex text-text-muted hover:text-text-main p-1 rounded hover:bg-hover transition"
             title="Toggle Explorer"
+            data-i18n-title="shell.toggleExplorer"
           >
             <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path
@@ -212,6 +237,7 @@
             id="btn-nav-back"
             class="text-text-muted hover:text-text-main p-1 rounded hover:bg-hover transition disabled:opacity-30 disabled:hover:bg-transparent disabled:cursor-default"
             title="Back"
+            data-i18n-title="shell.nav.back"
             disabled
           >
             <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -222,6 +248,7 @@
             id="btn-nav-forward"
             class="text-text-muted hover:text-text-main p-1 rounded hover:bg-hover transition disabled:opacity-30 disabled:hover:bg-transparent disabled:cursor-default"
             title="Forward"
+            data-i18n-title="shell.nav.forward"
             disabled
           >
             <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -232,6 +259,7 @@
             id="btn-home"
             class="text-text-muted hover:text-text-main p-1 rounded hover:bg-hover transition"
             title="Home"
+            data-i18n-title="shell.home"
           >
             <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path
@@ -246,6 +274,7 @@
             id="btn-refresh"
             class="text-text-muted hover:text-text-main p-1 rounded hover:bg-hover transition"
             title="Reload"
+            data-i18n-title="shell.reload"
           >
             <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path
@@ -261,6 +290,7 @@
             id="btn-tasks"
             class="text-text-muted hover:text-text-main p-1 rounded hover:bg-hover transition"
             title="Recent Apps"
+            data-i18n-title="shell.recentApps"
           >
             <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path
@@ -301,6 +331,7 @@
             id="btn-toggle-chat"
             class="hidden md:inline-flex text-text-muted hover:text-text-main p-1 rounded hover:bg-hover transition"
             title="Toggle Chat"
+            data-i18n-title="shell.toggleChat"
           >
             <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path
@@ -320,7 +351,9 @@
           >
             <div class="text-center">
               <div class="loader mx-auto mb-3"></div>
-              <span class="text-xs text-text-muted font-medium tracking-wide">Compiling...</span>
+              <span class="text-xs text-text-muted font-medium tracking-wide" data-i18n="shell.compiling"
+                >Compiling...</span
+              >
             </div>
           </div>
 
@@ -343,7 +376,7 @@
                   id="btn-save-editor"
                   class="text-[0.625rem] font-bold bg-primary hover:bg-primary/80 px-3 py-1 rounded text-white transition shadow-sm border border-primary/50"
                 >
-                  Save
+                  <span data-i18n="common.save">Save</span>
                 </button>
                 <button
                   id="btn-close-editor"
@@ -384,9 +417,11 @@
               <span
                 class="block w-1.5 h-1.5 rounded-full bg-success/50 shadow-[0_0_4px_rgba(var(--c-accent-success),0.5)]"
               ></span>
-              Ready
+              <span data-i18n="shell.statusbar.ready">Ready</span>
             </span>
-            <span class="hidden sm:inline-block text-[0.625rem] text-text-muted border-l border-border-main pl-3"
+            <span
+              class="hidden sm:inline-block text-[0.625rem] text-text-muted border-l border-border-main pl-3"
+              data-i18n="shell.statusbar.runtime"
               >Itera Runtime (V2)</span
             >
           </div>
@@ -404,12 +439,15 @@
         <!-- Chat Header (Added Keys & Clear buttons here) -->
         <div class="h-10 border-b border-border-main flex items-center justify-between px-3 bg-panel shrink-0">
           <div class="flex items-center gap-2 min-w-0">
-            <span class="text-[0.625rem] font-bold text-text-muted uppercase tracking-wider truncate min-w-0"
+            <span
+              class="text-[0.625rem] font-bold text-text-muted uppercase tracking-wider truncate min-w-0"
+              data-i18n="chat.agentLabel"
               >Itera Agent</span
             >
             <span
               id="model-status"
               class="text-[0.625rem] px-1.5 py-0.5 rounded bg-primary/10 text-primary border border-primary/20"
+              data-i18n="chat.modelLoading"
               >Loading...</span
             >
           </div>
@@ -417,6 +455,7 @@
             <button
               id="btn-chat-fullscreen"
               title="Fullscreen"
+              data-i18n-title="chat.fullscreen"
               class="hidden md:inline-flex text-text-muted hover:text-primary p-1 rounded hover:bg-hover transition"
             >
               <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -431,6 +470,7 @@
             <button
               id="btn-api-keys"
               title="API Keys"
+              data-i18n-title="chat.apiKeys"
               class="text-text-muted hover:text-primary p-1 rounded hover:bg-hover transition"
             >
               <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -445,6 +485,7 @@
             <button
               id="btn-clear-chat"
               title="Clear History"
+              data-i18n-title="chat.clearHistory"
               class="text-text-muted hover:text-error p-1 rounded hover:bg-hover transition"
             >
               <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -465,7 +506,7 @@
         <div id="chat-composer" class="p-3 bg-panel border-t border-border-main pb-20 md:pb-3">
           <div id="file-preview-area" class="mb-2 hidden flex flex-wrap gap-2"></div>
           <div id="ai-typing" class="text-xs text-primary mb-2 hidden flex items-center gap-1">
-            <span class="animate-pulse">●</span> <span id="ai-typing-label">Thinking...</span>
+            <span class="animate-pulse">●</span> <span id="ai-typing-label" data-i18n="chat.thinking">Thinking...</span>
           </div>
           <div
             class="relative bg-app border border-border-main rounded-lg focus-within:border-primary focus-within:ring-1 focus-within:ring-primary transition shadow-inner"
@@ -475,11 +516,13 @@
               rows="3"
               class="w-full bg-transparent border-none text-sm text-text-main focus:ring-0 focus:outline-none p-3 pb-10 resize-none"
               placeholder="Instructions... (Ctrl+Enter)"
+              data-i18n-placeholder="chat.inputPlaceholder"
             ></textarea>
             <div class="absolute bottom-2 left-2 right-2 flex justify-between items-center">
               <label
                 class="cursor-pointer text-text-muted hover:text-text-main p-1.5 rounded hover:bg-hover transition"
                 title="Attach file"
+                data-i18n-title="chat.attachFile"
               >
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path
@@ -539,7 +582,7 @@
             d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"
           ></path>
         </svg>
-        <span class="text-[0.625rem]">Files</span>
+        <span class="text-[0.625rem]" data-i18n="shell.mobile.files">Files</span>
       </button>
       <button
         id="mobile-nav-view"
@@ -553,7 +596,7 @@
             d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"
           ></path>
         </svg>
-        <span class="text-[0.625rem]">View</span>
+        <span class="text-[0.625rem]" data-i18n="shell.mobile.view">View</span>
       </button>
       <button
         id="mobile-nav-chat"
@@ -567,7 +610,7 @@
             d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
           ></path>
         </svg>
-        <span class="text-[0.625rem]">Chat</span>
+        <span class="text-[0.625rem]" data-i18n="shell.mobile.chat">Chat</span>
       </button>
     </nav>
 
@@ -605,7 +648,7 @@
                 d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
               ></path>
             </svg>
-            System Management
+            <span data-i18n="systemModal.title">System Management</span>
           </h3>
           <button
             id="btn-close-system"
@@ -616,7 +659,9 @@
         </div>
         <div class="p-5 space-y-4">
           <div class="bg-card p-4 rounded-lg border border-border-main">
-            <h4 class="text-xs font-bold text-text-muted uppercase tracking-wider mb-2">Full Backup (ZIP)</h4>
+            <h4 class="text-xs font-bold text-text-muted uppercase tracking-wider mb-2" data-i18n="systemModal.backup">
+              Full Backup (ZIP)
+            </h4>
             <div class="flex gap-2">
               <button
                 id="btn-sys-export"
@@ -630,7 +675,7 @@
                     d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
                   ></path>
                 </svg>
-                Export
+                <span data-i18n="systemModal.export">Export</span>
               </button>
               <button
                 id="btn-sys-import"
@@ -644,15 +689,22 @@
                     d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"
                   ></path>
                 </svg>
-                Import
+                <span data-i18n="systemModal.import">Import</span>
               </button>
               <input type="file" id="input-sys-import" accept=".zip" class="hidden" />
             </div>
           </div>
 
           <div class="bg-card p-4 rounded-lg border border-border-main">
-            <h4 class="text-xs font-bold text-text-muted uppercase tracking-wider mb-2">Diagnostics & Recovery</h4>
-            <p id="sys-storage-status" class="text-xs text-text-muted mb-2">Storage persistence: checking…</p>
+            <h4
+              class="text-xs font-bold text-text-muted uppercase tracking-wider mb-2"
+              data-i18n="systemModal.diagnostics"
+            >
+              Diagnostics & Recovery
+            </h4>
+            <p id="sys-storage-status" class="text-xs text-text-muted mb-2" data-i18n="systemModal.persistenceChecking">
+              Storage persistence: checking…
+            </p>
             <button
               id="btn-sys-repair"
               class="w-full mb-2 bg-panel hover:bg-hover border border-border-main text-text-main text-sm py-2 rounded transition flex items-center justify-center gap-2 shadow-sm"
@@ -671,18 +723,20 @@
                   d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
                 ></path>
               </svg>
-              Check & Repair VFS (fsck)
+              <span data-i18n="systemModal.fsck">Check & Repair VFS (fsck)</span>
             </button>
             <div class="flex gap-2">
               <button
                 id="btn-sys-backup-index"
                 class="flex-1 bg-panel hover:bg-hover border border-border-main text-text-main text-xs py-2 rounded transition shadow-sm"
+                data-i18n="systemModal.backupIndex"
               >
                 Backup Index
               </button>
               <button
                 id="btn-sys-restore-index"
                 class="flex-1 bg-panel hover:bg-hover border border-border-main text-text-main text-xs py-2 rounded transition shadow-sm"
+                data-i18n="systemModal.restoreIndex"
               >
                 Restore Index
               </button>
@@ -691,13 +745,16 @@
           </div>
 
           <div class="bg-error/10 p-4 rounded-lg border border-error/20">
-            <h4 class="text-xs font-bold text-error uppercase tracking-wider mb-2">Danger Zone</h4>
-            <p class="text-xs text-text-muted mb-3 leading-relaxed">
+            <h4 class="text-xs font-bold text-error uppercase tracking-wider mb-2" data-i18n="systemModal.dangerZone">
+              Danger Zone
+            </h4>
+            <p class="text-xs text-text-muted mb-3 leading-relaxed" data-i18n="systemModal.dangerDescription">
               This will permanently delete all files, settings, and apps from the system.
             </p>
             <button
               id="btn-sys-reset"
               class="w-full bg-error hover:bg-error/90 text-white text-sm font-bold py-2 rounded shadow transition"
+              data-i18n="systemModal.factoryReset"
             >
               Factory Reset
             </button>
@@ -724,7 +781,7 @@
                 d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4v-4l5.659-5.659A6 6 0 1121 9z"
               ></path>
             </svg>
-            API Keys
+            <span data-i18n="apiKeys.title">API Keys</span>
           </h3>
           <button
             id="btn-close-api-modal"
@@ -740,12 +797,14 @@
           <button
             id="btn-cancel-api-modal"
             class="px-4 py-2 rounded-lg text-sm font-medium text-text-muted hover:text-text-main hover:bg-hover transition border border-transparent hover:border-border-main"
+            data-i18n="common.cancel"
           >
             Cancel
           </button>
           <button
             id="btn-save-api-modal"
             class="px-5 py-2 rounded-lg text-sm font-bold bg-primary text-white hover:bg-primary/90 shadow transition"
+            data-i18n="apiKeys.save"
           >
             Save Keys
           </button>
@@ -766,7 +825,10 @@
           ✕
         </button>
       </div>
-      <h2 class="text-white text-xl font-bold mb-8 tracking-widest uppercase shadow-black drop-shadow-md">
+      <h2
+        class="text-white text-xl font-bold mb-8 tracking-widest uppercase shadow-black drop-shadow-md"
+        data-i18n="taskSwitcher.title"
+      >
         Recent Apps
       </h2>
       <div

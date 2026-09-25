@@ -2,6 +2,7 @@
  * src/shell/modals/EditorModal.ts
  * Itera OS v2: Host Code Editor Modal (Fallback UI)
  */
+import { t } from '../../i18n/i18n';
 
 const DOM_IDS = {
   OVERLAY: 'editor-overlay',
@@ -53,7 +54,7 @@ export class EditorModal {
   open(path: string, content: string): void {
     // Binary Guard
     if (path.match(/\.(png|jpg|jpeg|gif|webp|svg|ico|pdf|zip|mp3|mp4|webm|ogg)$/i)) {
-      if (window.AppUI) window.AppUI.notify('Binary file editing is not supported.', 'warning');
+      if (window.AppUI) window.AppUI.notify(t('editor.binaryNotSupported'), 'warning');
       return;
     }
 
@@ -191,7 +192,7 @@ export class EditorModal {
       const btn = this.els.BTN_SAVE;
       const originalText = btn.textContent;
       const cls = ok ? 'bg-success' : 'bg-error';
-      btn.textContent = ok ? 'Saved!' : 'Failed';
+      btn.textContent = ok ? t('editor.saved') : t('editor.saveFailed');
       btn.classList.remove('bg-primary');
       btn.classList.add(cls);
 

@@ -13,6 +13,8 @@ import { USER_PRINCIPAL } from '../core/vfs/types';
 import { VfsEventFormatter } from '../core/vfs/VfsEventFormatter';
 import { buildGuestThemeCss } from '../shell/windowing/guestThemeCss';
 import { base64ToBlob, blobToDataUrl, dataUrlToBlob } from '../utils/binary';
+// この中では t が transport を指す（register の中の `const t = this.transport`）ので、文の関数は別名にする
+import { t as tr } from '../i18n/i18n';
 
 // 依存モジュールのダックタイピング・インターフェース (未実装モジュール用)
 export interface IHistoryManager {
@@ -672,12 +674,12 @@ export class HostApiRouter {
       if (window.AppUI) {
         const res = await window.AppUI.showMessageBox({
           title: providerId,
-          message: instructions || `Paste access token for '${providerId}':`,
+          message: instructions || tr('oauth.pasteToken', { provider: providerId }),
           type: 'question',
           prompt: { defaultValue: '' },
           buttons: [
-            { label: 'Cancel', value: null, style: 'normal' },
-            { label: 'Save Token', value: 'save', style: 'primary', isDefault: true },
+            { label: tr('common.cancel'), value: null, style: 'normal', isCancel: true },
+            { label: tr('oauth.saveToken'), value: 'save', style: 'primary', isDefault: true },
           ],
         });
 

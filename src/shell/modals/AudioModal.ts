@@ -2,6 +2,7 @@
  * src/shell/modals/AudioModal.ts
  * Itera OS v2: Audio Recording Modal
  */
+import { t, escapeHtml } from '../../i18n/i18n';
 
 export interface AudioOptions {
   maxDurationMs?: number;
@@ -57,12 +58,12 @@ export class AudioModal {
       const btnCancel = document.createElement('button');
       btnCancel.className =
         'bg-card hover:bg-hover text-text-muted hover:text-text-main px-6 py-3 rounded-xl font-bold border border-border-main transition';
-      btnCancel.innerText = 'Cancel';
+      btnCancel.innerText = t('common.cancel');
 
       const btnStop = document.createElement('button');
       btnStop.className =
         'bg-error hover:bg-error/80 text-white px-8 py-3 rounded-xl font-bold shadow-lg transition flex items-center gap-2';
-      btnStop.innerHTML = `<div class="w-3 h-3 bg-white rounded-sm"></div> Stop & Save`;
+      btnStop.innerHTML = `<div class="w-3 h-3 bg-white rounded-sm"></div> ${escapeHtml(t('audio.stopAndSave'))}`;
 
       controls.appendChild(btnCancel);
       controls.appendChild(btnStop);

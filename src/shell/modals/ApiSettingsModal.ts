@@ -4,6 +4,7 @@
  */
 
 import type { CognitiveManager } from '../services/CognitiveManager';
+import { t, escapeHtml } from '../../i18n/i18n';
 
 const DOM_IDS = {
   MODAL: 'api-settings-modal',
@@ -39,7 +40,7 @@ export class ApiSettingsModal {
 
   private async _ensureInit() {
     if (!this.hasRendered && this.els.CONTAINER) {
-      this.els.CONTAINER.innerHTML = '<div class="text-center text-text-muted text-xs p-4">Loading providers...</div>';
+      this.els.CONTAINER.innerHTML = `<div class="text-center text-text-muted text-xs p-4">${escapeHtml(t('apiKeys.loading'))}</div>`;
 
       try {
         this.providers = await this.cognitiveManager.getMergedProviders();
@@ -125,7 +126,7 @@ export class ApiSettingsModal {
 
     localStorage.setItem('itera_llm_secrets', JSON.stringify(secrets));
     if (this.events['secrets_updated']) this.events['secrets_updated'](secrets);
-    if (window.AppUI) window.AppUI.notify('API Keys saved.', 'success');
+    if (window.AppUI) window.AppUI.notify(t('apiKeys.saved'), 'success');
   }
 
   async open() {

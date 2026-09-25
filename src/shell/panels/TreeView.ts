@@ -12,6 +12,7 @@ import {
   type RootIcons,
   type SortWeights,
 } from './nodeOrder';
+import { t, i18n, escapeHtml } from '../../i18n/i18n';
 
 export class TreeView {
   private container: HTMLElement;
@@ -215,8 +216,8 @@ export class TreeView {
 
     if (targetDiv) {
       const sizeKB = (mutation.node.meta.size / 1024).toFixed(1) + ' KB';
-      const updated = new Date(mutation.node.meta.updatedAt).toLocaleString();
-      targetDiv.title = `Size: ${sizeKB}\nUpdated: ${updated}`;
+      const updated = i18n.formatDate(mutation.node.meta.updatedAt);
+      targetDiv.title = t('tree.tooltip', { size: sizeKB, updated });
 
       const name = mutation.node.name;
       const path = mutation.path;
@@ -339,8 +340,8 @@ export class TreeView {
     if (isMountPoint) div.dataset.mount = '1';
 
     const sizeKB = meta ? (meta.size / 1024).toFixed(1) + ' KB' : '0 KB';
-    const updated = meta ? new Date(meta.updatedAt || meta.updated_at).toLocaleString() : '';
-    div.title = `Size: ${sizeKB}\nUpdated: ${updated}`;
+    const updated = meta ? i18n.formatDate(meta.updatedAt || meta.updated_at) : '';
+    div.title = t('tree.tooltip', { size: sizeKB, updated });
 
     div.draggable = true;
     div.addEventListener('dragstart', (e) => this._handleDragStart(e, path));
@@ -437,7 +438,7 @@ export class TreeView {
    */
   private _getSyncIndicator(isVirtual: boolean, isStub: boolean): string {
     if (!isVirtual) return '';
-    const title = isStub ? 'Synced (content is on the host)' : 'Synced';
+    const title = escapeHtml(isStub ? t('tree.syncedStub') : t('tree.synced'));
     return `<span class="ml-1 text-primary text-[0.625rem]" title="${title}">☁️</span>`;
   }
 

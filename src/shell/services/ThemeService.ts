@@ -68,9 +68,8 @@ export class ThemeService {
     try {
       const root = document.documentElement;
 
-      // 1. Typography, Layout, and Locale
-      const locale = appearance.locale || 'en';
-      document.documentElement.lang = locale;
+      // 1. Typography and Layout
+      // （<html lang> は LocaleService が持つ。P-0046 / T-0545）
 
       // Inter は同梱していないため既定にしない（宣言しても読み込まれず、
       // Inter が入っている端末でだけ字面が変わる）。

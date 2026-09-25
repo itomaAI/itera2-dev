@@ -8,6 +8,8 @@ import type { AppRegistry } from '../../core/sys/AppRegistry';
 import type { UriRouter } from '../core/UriRouter';
 import type { Principal, VfsStat } from '../../core/vfs/types';
 import { LABEL_KICKER } from '../styles/typography';
+import { t, escapeHtml } from '../../i18n/i18n';
+import { bindText } from '../../i18n/staticTexts';
 
 export interface CommandItem {
   id: string;
@@ -69,7 +71,7 @@ export class CommandPaletteModal {
 
     this.input = document.createElement('input');
     this.input.type = 'text';
-    this.input.placeholder = 'Search files, apps, or ask AI...';
+    bindText(this.input, 'palette.placeholder', undefined, 'placeholder');
     this.input.className =
       'w-full bg-transparent border-none py-5 text-xl font-bold text-text-main focus:outline-none placeholder-text-muted/50';
     this.input.setAttribute('spellcheck', 'false');
@@ -87,9 +89,9 @@ export class CommandPaletteModal {
     footer.className = 'px-5 py-3 border-t border-border-main bg-card flex items-center justify-between shrink-0';
     footer.innerHTML = `
       <div class="text-[0.625rem] text-text-muted font-bold tracking-wider flex items-center gap-4">
-        <span><kbd class="bg-panel px-1.5 py-0.5 rounded border border-border-main font-mono text-text-main shadow-sm">↑</kbd> <kbd class="bg-panel px-1.5 py-0.5 rounded border border-border-main font-mono text-text-main shadow-sm">↓</kbd> Navigate</span>
-        <span><kbd class="bg-panel px-1.5 py-0.5 rounded border border-border-main font-mono text-text-main shadow-sm">Enter</kbd> Select</span>
-        <span><kbd class="bg-panel px-1.5 py-0.5 rounded border border-border-main font-mono text-text-main shadow-sm">Esc</kbd> Close</span>
+        <span><kbd class="bg-panel px-1.5 py-0.5 rounded border border-border-main font-mono text-text-main shadow-sm">↑</kbd> <kbd class="bg-panel px-1.5 py-0.5 rounded border border-border-main font-mono text-text-main shadow-sm">↓</kbd> <span data-i18n="palette.navigate">${escapeHtml(t('palette.navigate'))}</span></span>
+        <span><kbd class="bg-panel px-1.5 py-0.5 rounded border border-border-main font-mono text-text-main shadow-sm">Enter</kbd> <span data-i18n="palette.select">${escapeHtml(t('palette.select'))}</span></span>
+        <span><kbd class="bg-panel px-1.5 py-0.5 rounded border border-border-main font-mono text-text-main shadow-sm">Esc</kbd> <span data-i18n="palette.close">${escapeHtml(t('palette.close'))}</span></span>
       </div>
       <div class="${LABEL_KICKER} text-text-muted font-bold">Itera OS</div>
     `;
@@ -179,24 +181,24 @@ export class CommandPaletteModal {
     // System commands
     items.push({
       id: 'sys-settings',
-      title: 'System Settings',
-      subtitle: 'Preferences, Theme, LLM, Network',
+      title: t('palette.settings.title'),
+      subtitle: t('palette.settings.subtitle'),
       icon: '⚙️',
       score: 100,
       action: () => this.uriRouter.dispatch('metaos://system/settings'),
     });
     items.push({
       id: 'sys-api-keys',
-      title: 'API Keys',
-      subtitle: 'Manage LLM API Secrets',
+      title: t('palette.apiKeys.title'),
+      subtitle: t('palette.apiKeys.subtitle'),
       icon: '🔑',
       score: 99,
       action: () => this.uriRouter.dispatch('metaos://system/api_keys'),
     });
     items.push({
       id: 'sys-monitor',
-      title: 'Activity Monitor',
-      subtitle: 'View background processes',
+      title: t('palette.monitor.title'),
+      subtitle: t('palette.monitor.subtitle'),
       icon: '📊',
       score: 98,
       action: () => this.uriRouter.dispatch('metaos://system/monitor'),
@@ -208,7 +210,7 @@ export class CommandPaletteModal {
       items.push({
         id: `app-${app.id}`,
         title: app.name,
-        subtitle: `App • ${app.path}`,
+        subtitle: t('palette.appSubtitle', { path: app.path }),
         icon: app.icon || '📱',
         score: 90,
         action: () => this.uriRouter.dispatch(`metaos://run/${app.path}`),
@@ -237,28 +239,32 @@ export class CommandPaletteModal {
     const sysCmds = [
       {
         id: 'sys-settings',
-        title: 'System Settings',
-        sub: 'Preferences, Theme, LLM, Network',
+        title: t('palette.settings.title'),
+        sub: t('palette.settings.subtitle'),
+        en: 'System Settings Preferences, Theme, LLM, Network',
         icon: '⚙️',
         uri: 'metaos://system/settings',
       },
       {
         id: 'sys-api-keys',
-        title: 'API Keys',
-        sub: 'Manage LLM API Secrets',
+        title: t('palette.apiKeys.title'),
+        sub: t('palette.apiKeys.subtitle'),
+        en: 'API Keys Manage LLM API Secrets',
         icon: '🔑',
         uri: 'metaos://system/api_keys',
       },
       {
         id: 'sys-monitor',
-        title: 'Activity Monitor',
-        sub: 'View background processes',
+        title: t('palette.monitor.title'),
+        sub: t('palette.monitor.subtitle'),
+        en: 'Activity Monitor View background processes',
         icon: '📊',
         uri: 'metaos://system/monitor',
       },
     ];
     sysCmds.forEach((cmd) => {
-      const score = scoreMatch(cmd.title + ' ' + cmd.sub, queryTerms);
+      // 英語の名前でも当たるようにする（言語を切り替えても「settings」で出る）
+      const score = scoreMatch(`${cmd.title} ${cmd.sub} ${cmd.en}`, queryTerms);
       if (score > 0) {
         items.push({
           id: cmd.id,
@@ -279,7 +285,7 @@ export class CommandPaletteModal {
         items.push({
           id: `app-${app.id}`,
           title: app.name,
-          subtitle: `App • ${app.path}`,
+          subtitle: t('palette.appSubtitle', { path: app.path }),
           icon: app.icon || '📱',
           score: score + 40,
           action: () => this.uriRouter.dispatch(`metaos://run/${app.path}`),
@@ -306,7 +312,7 @@ export class CommandPaletteModal {
         items.push({
           id: `file-${stat.id}`,
           title: stat.name,
-          subtitle: `File • /${stat.path}`,
+          subtitle: t('palette.fileSubtitle', { path: stat.path }),
           icon: icon,
           score: score,
           action: () => this.uriRouter.dispatch(`metaos://open/${stat.path}`),
@@ -317,8 +323,8 @@ export class CommandPaletteModal {
     // 4. AI Ask
     items.push({
       id: 'ai-ask',
-      title: `Ask AI: "${this.input!.value.trim()}"`,
-      subtitle: 'Itera Agent',
+      title: t('palette.askAi', { query: this.input!.value.trim() }),
+      subtitle: t('palette.askAiSubtitle'),
       icon: '✨',
       score: 1000, // 常にトップに出す
       action: () => {
@@ -334,7 +340,7 @@ export class CommandPaletteModal {
     this.listContainer.innerHTML = '';
 
     if (this.currentItems.length === 0) {
-      this.listContainer.innerHTML = `<div class="p-4 text-center text-sm text-text-muted">No results found.</div>`;
+      this.listContainer.innerHTML = `<div class="p-4 text-center text-sm text-text-muted">${escapeHtml(t('palette.noResults'))}</div>`;
       return;
     }
 
@@ -350,8 +356,8 @@ export class CommandPaletteModal {
       el.innerHTML = `
         <div class="${iconClass}">${item.icon}</div>
         <div class="flex flex-col min-w-0">
-          <div class="text-sm font-bold truncate ${titleClass}">${item.title}</div>
-          <div class="text-[0.625rem] font-mono truncate opacity-80 ${isSelected ? 'text-white/80' : 'text-text-muted'}">${item.subtitle}</div>
+          <div class="text-sm font-bold truncate ${titleClass}">${escapeHtml(item.title)}</div>
+          <div class="text-[0.625rem] font-mono truncate opacity-80 ${isSelected ? 'text-white/80' : 'text-text-muted'}">${escapeHtml(item.subtitle)}</div>
         </div>
         ${isSelected ? '<div class="ml-auto text-xs opacity-70">↵</div>' : ''}
       `;

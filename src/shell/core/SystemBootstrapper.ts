@@ -55,6 +55,9 @@ import { StorageLossGuard } from '../../core/sys/StorageLossGuard';
 import { instanceGuard } from '../../core/sys/InstanceGuard';
 import { LocalReset } from '../../core/sys/LocalReset';
 import { VfsFsck } from '../../core/vfs/VfsFsck';
+import { LocaleService } from '../services/LocaleService';
+import { t } from '../../i18n/i18n';
+import { i18n } from '../../i18n/i18n';
 
 export class SystemBootstrapper {
   public static async boot(): Promise<void> {
@@ -74,6 +77,14 @@ export class SystemBootstrapper {
 
     const dialogService = new DialogService();
     window.AppUI = dialogService;
+
+    // 覆いの文は部品（core/sys。ミャク楽と同じ中身）の外から差し込む。言語が切り替われば差し替える（T-0545）
+    const applyGuardTexts = () => {
+      instanceGuard.overlayText = { title: t('guard.movedTab.title'), body: t('guard.movedTab.body') };
+      StorageLossGuard.overlayText = { title: t('guard.storageLost.title'), body: t('guard.storageLost.body') };
+    };
+    applyGuardTexts();
+    i18n.onChange(applyGuardTexts);
 
     // 起動失敗画面で「工場出荷状態に戻す」が押されていれば、DB 接続もデーモンも無いこの時点で消す（T-0381）。
     await LocalReset.enforceAtBoot();
@@ -154,7 +165,6 @@ export class SystemBootstrapper {
     StorageLossGuard.onTrip(haltAllProcesses);
 
     // 別のタブが「Use this tab」を押したら、全プロセスを止めて鍵を渡し、読み込み直して待機中のタブになる（T-0384）。
-    // 覆いの文は部品の既定（英語）のまま。
     instanceGuard.onHandover(haltAllProcesses);
     nodeStore.setStorageLossHandler((reason) => void StorageLossGuard.trip(`vfs ${reason}`));
     history.setStorageLossHandler((reason) => void StorageLossGuard.trip(`history ${reason}`));
@@ -189,6 +199,8 @@ export class SystemBootstrapper {
     const cognitiveManager = new CognitiveManager(configManager, engine, logger, vfs);
     const sessionManager = new SessionManager(vfs, history, logger, toolRegistry);
     const themeService = new ThemeService(configManager, vfs);
+    // UI の言語（appearance.locale）。英語はホストにあり、VFS の言語ファイルを上に重ねる（P-0046 / T-0545）
+    const localeService = new LocaleService(configManager, vfs, eventBus);
     const maintenanceDaemon = new MaintenanceDaemon(processManager, logger, vfs, nodeStore, appRegistry);
 
     const desktop = new DesktopEnvironment(
@@ -305,7 +317,10 @@ export class SystemBootstrapper {
 
     cognitiveManager.setStatusCallback((modelString) => {
       const statusEl = document.getElementById('model-status');
-      if (statusEl) statusEl.textContent = modelString;
+      if (!statusEl) return;
+      // 起動中の「Loading...」は訳すが、モデル名は訳さない。印を外さないと、言語を切り替えたときに Loading... へ戻る
+      statusEl.removeAttribute('data-i18n');
+      statusEl.textContent = modelString;
     });
 
     themeService.setOnThemeAppliedCallback((payload) => {
@@ -316,6 +331,7 @@ export class SystemBootstrapper {
     // ルーティングとイベントの活性化
     orchestrator.bindAll();
     themeService.start();
+    localeService.start();
     // OS の状態の告知（config_changed / theme_changed）。反応するかはアプリが決める（T-0539）
     // nav_changed もここから出る（活性の変化。ホストの ← → は DesktopEnvironment が別に購読する）
     wireOsAnnouncements({
@@ -329,6 +345,8 @@ export class SystemBootstrapper {
     cognitiveManager.start(); // llm.json の変更でアダプタを作り直す（入口では作り直さない。T-0313）
 
     // 初期化タスクの実行
+    // 言語は起動の最初から控え（localStorage）で当たっている。ここで VFS の言語ファイルから読み直して確定する
+    await localeService.load();
     await themeService.applyAppearance(configManager.get('appearance') || { theme: 'system/themes/dark.json' });
     // チャットに描かないイベントの種類（preferences.hiddenEventTypes。既定 []、ミャク楽は tool_available/info を隠して配る）
     //
@@ -350,6 +368,8 @@ export class SystemBootstrapper {
       desktop.panels.explorer.setRootIcons(config.appearance?.rootIcons);
     });
     desktop.panels.chat.renderHistory(history.get());
+    // 言語を切り替えたら会話欄の枠の文（ボタン・読み込み中の表示など）を描き直す。本文は訳さない（T-0545）
+    i18n.onChange(() => desktop.panels.chat.renderHistory(history.get()));
     desktop.updateStorageUI(vfs.getUsage());
 
     await cognitiveManager.refreshEngineConfig();
@@ -372,30 +392,32 @@ export class SystemBootstrapper {
         action: 'storage_loss',
         message: `Reloaded after local storage was removed underneath a running session (${storageLoss}).`,
       });
-      dialogService.notify(
-        'Browser storage was cleared while Itera was running, so it was reloaded. Local files and chat history on this device are gone unless you have a backup or a sync target.',
-        'warning',
-      );
+      dialogService.notify(t('notice.storageLost'), 'warning');
     }
 
     // 起動失敗画面からの消去・修復の結果を 1 度だけ伝える（黙って消すと障害に見える）
     const resetNotice = LocalReset.consumeNotice();
     if (resetNotice) {
+      const reason = String((resetNotice as any).reason ?? '');
+      const fixed = Number((resetNotice as any).fixed ?? 0);
+      // ログは英語に固定する（AI も読む）。通知だけを今の言語で出す（T-0545）
       const text = {
-        reset_done: ['Local data has been reset to factory state.', 'warning'],
+        reset_done: ['Local data has been reset to factory state.', t('notice.resetDone'), 'warning'],
         reset_failed: [
-          `Could not erase local data. Close other tabs and try again: ${(resetNotice as any).reason}`,
+          `Could not erase local data. Close other tabs and try again: ${reason}`,
+          t('notice.resetFailed', { reason }),
           'error',
         ],
-        repair_clean: ['Repair ran, but no problems were found in the file system.', 'info'],
+        repair_clean: ['Repair ran, but no problems were found in the file system.', t('notice.repairClean'), 'info'],
         repaired: [
-          `Repaired the file system (${(resetNotice as any).fixed} issues). Rescued files are in .lost+found.`,
+          `Repaired the file system (${fixed} issues). Rescued files are in .lost+found.`,
+          t('notice.repaired', { count: fixed }),
           'warning',
         ],
-        repair_failed: [`Repair failed: ${(resetNotice as any).reason}`, 'error'],
-      }[resetNotice.kind] as [string, string];
+        repair_failed: [`Repair failed: ${reason}`, t('notice.repairFailed', { reason }), 'error'],
+      }[resetNotice.kind] as [string, string, string];
       logger.log('system', { action: 'local_reset', message: `${resetNotice.kind}: ${text[0]}` });
-      dialogService.notify(text[0], text[1]);
+      dialogService.notify(text[1], text[2]);
     }
 
     logger.log('system', {

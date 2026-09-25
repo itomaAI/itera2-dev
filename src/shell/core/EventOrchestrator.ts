@@ -16,6 +16,7 @@ import type { VfsEventBus } from '../../core/vfs/VfsEventBus';
 import type { ConfigManager } from '../../core/sys/ConfigManager';
 import { VfsEventFormatter } from '../../core/vfs/VfsEventFormatter';
 import { isProbablyText, TEXT_SNIFF_BYTES } from '../../core/sys/textDetect';
+import { t } from '../../i18n/i18n';
 
 /**
  * ターン終了時に待機表示をどうするか。── T-0028
@@ -161,7 +162,7 @@ export class EventOrchestrator {
     try {
       this.uriRouter.dispatch(`metaos://open/${p}`);
     } catch (e: any) {
-      if (window.AppUI) window.AppUI.notify(`Cannot open: ${e.message}`, 'error');
+      if (window.AppUI) window.AppUI.notify(t('notify.cannotOpen', { reason: e.message }), 'error');
     }
   }
 
@@ -206,7 +207,7 @@ export class EventOrchestrator {
           });
         }
       } catch (e: any) {
-        if (window.AppUI) window.AppUI.notify(`Cannot open: ${e.message}`, 'error');
+        if (window.AppUI) window.AppUI.notify(t('notify.cannotOpen', { reason: e.message }), 'error');
         this._restoreAddressBar();
       }
     });
@@ -225,7 +226,7 @@ export class EventOrchestrator {
           currentUri: fullUri,
         });
       } catch (e: any) {
-        if (window.AppUI) window.AppUI.notify(`Cannot run: ${e.message}`, 'error');
+        if (window.AppUI) window.AppUI.notify(t('notify.cannotRun', { reason: e.message }), 'error');
         this._restoreAddressBar();
       }
     });
@@ -236,7 +237,7 @@ export class EventOrchestrator {
         await this._openInEditorOrViewer(path);
         this.desktop.closeMobileDrawers();
       } catch (e: any) {
-        if (window.AppUI) window.AppUI.notify(`File not found: ${e.message}`, 'error');
+        if (window.AppUI) window.AppUI.notify(t('notify.fileNotFound', { reason: e.message }), 'error');
       }
       this._restoreAddressBar();
     });
@@ -248,7 +249,7 @@ export class EventOrchestrator {
         this.desktop.modals.media.open(path, blob);
         this.desktop.closeMobileDrawers();
       } catch (e: any) {
-        if (window.AppUI) window.AppUI.notify(`File not found: ${e.message}`, 'error');
+        if (window.AppUI) window.AppUI.notify(t('notify.fileNotFound', { reason: e.message }), 'error');
       }
       this._restoreAddressBar();
     });
@@ -263,7 +264,7 @@ export class EventOrchestrator {
       } else if (target === 'monitor') {
         this.desktop.modals.processMonitor.open();
       } else {
-        if (window.AppUI) window.AppUI.notify(`Unknown system modal: ${target}`, 'warning');
+        if (window.AppUI) window.AppUI.notify(t('notify.unknownSystemModal', { name: target }), 'warning');
       }
       this._restoreAddressBar();
       this.desktop.closeMobileDrawers();
@@ -307,11 +308,7 @@ export class EventOrchestrator {
       return;
     }
     this.desktop.modals.media.open(path, blob);
-    if (window.AppUI)
-      window.AppUI.notify(
-        'Not a text file, so it is not opened in the editor. Download it and open it with an app on your device.',
-        'info',
-      );
+    if (window.AppUI) window.AppUI.notify(t('notify.notTextFile'), 'info');
   }
 
   private _bindExplorerEvents(): void {
@@ -369,9 +366,9 @@ export class EventOrchestrator {
           type: 'daemon',
           show: false,
         });
-        if (window.AppUI) window.AppUI.notify(`Spawned ${path} as daemon`, 'success');
+        if (window.AppUI) window.AppUI.notify(t('notify.daemonSpawned', { path }), 'success');
       } catch (e: any) {
-        if (window.AppUI) window.AppUI.notify(`Failed to spawn daemon: ${e.message}`, 'error');
+        if (window.AppUI) window.AppUI.notify(t('notify.daemonSpawnFailed', { reason: e.message }), 'error');
       }
     });
   }
@@ -390,12 +387,12 @@ export class EventOrchestrator {
 
     chat.on('clear', async () => {
       const res = await window.AppUI?.showMessageBox({
-        title: 'Clear Chat History',
-        message: 'Are you sure you want to clear the chat history and media cache?',
+        title: t('chat.clear.title'),
+        message: t('chat.clear.message'),
         type: 'warning',
         buttons: [
-          { label: 'Cancel', value: false, style: 'normal', isCancel: true },
-          { label: 'Clear History', value: true, style: 'danger', isDefault: true },
+          { label: t('common.cancel'), value: false, style: 'normal', isCancel: true },
+          { label: t('chat.clear.confirm'), value: true, style: 'danger', isDefault: true },
         ],
       });
       if (res && res.action) {
@@ -423,7 +420,7 @@ export class EventOrchestrator {
           const blob = await this.vfs.readBlob(this.desktop.getActivePrincipal(), path);
           this.desktop.modals.media.open(path.split('/').pop() || name, blob, mime);
         } catch (e: any) {
-          if (window.AppUI) window.AppUI.notify(`Cannot open media: ${e.message}`, 'error');
+          if (window.AppUI) window.AppUI.notify(t('notify.cannotOpenMedia', { reason: e.message }), 'error');
         }
       } else if (src.startsWith('data:')) {
         const parts = src.split(',');
@@ -513,7 +510,7 @@ export class EventOrchestrator {
         this.desktop.panels.chat.appendTurn(turn);
         return true;
       } catch (e: any) {
-        if (window.AppUI) window.AppUI.notify(`Save failed: ${e.message}`, 'error');
+        if (window.AppUI) window.AppUI.notify(t('notify.saveFailed', { reason: e.message }), 'error');
         return false;
       }
     });
@@ -600,7 +597,7 @@ export class EventOrchestrator {
         }
       } catch (e: any) {
         console.error(`[EventOrchestrator] Failed to save upload: ${path}`, e);
-        if (window.AppUI) window.AppUI.notify(`Failed to save attachment: ${e.message}`, 'error');
+        if (window.AppUI) window.AppUI.notify(t('notify.attachmentSaveFailed', { reason: e.message }), 'error');
         return;
       }
     }

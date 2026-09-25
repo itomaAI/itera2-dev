@@ -6,6 +6,11 @@
 import type { VfsService } from '../../core/vfs/VfsService';
 import { USER_PRINCIPAL, type AccessControlList, type VfsStat, type Principal } from '../../core/vfs/types';
 import { LABEL_KICKER } from '../styles/typography';
+import { t, escapeHtml, i18n, type MessageKey } from '../../i18n/i18n';
+import { bindText } from '../../i18n/staticTexts';
+
+/** innerHTML の雛形に訳文を埋める（必ずエスケープする。T-0545） */
+const h = (key: MessageKey, params?: Record<string, string | number>) => escapeHtml(t(key, params));
 
 export class PropertiesModal {
   private vfs: VfsService;
@@ -45,7 +50,7 @@ export class PropertiesModal {
       <div id="prop-icon" class="text-2xl shrink-0">📄</div>
       <div class="min-w-0">
         <h2 id="prop-title" class="font-bold text-text-main text-base leading-tight truncate">File.txt</h2>
-        <div class="${LABEL_KICKER} text-text-muted mt-0.5">Properties</div>
+        <div class="${LABEL_KICKER} text-text-muted mt-0.5" data-i18n="properties.title">${h('properties.title')}</div>
       </div>
     `;
 
@@ -62,8 +67,8 @@ export class PropertiesModal {
     const tabsHeader = document.createElement('div');
     tabsHeader.className = 'flex border-b border-border-main bg-panel shrink-0';
     tabsHeader.innerHTML = `
-      <button id="tab-btn-general" class="flex-1 py-2 text-xs font-bold text-primary border-b-2 border-primary transition">General</button>
-      <button id="tab-btn-permissions" class="flex-1 py-2 text-xs font-bold text-text-muted hover:text-text-main border-b-2 border-transparent transition">Permissions</button>
+      <button id="tab-btn-general" class="flex-1 py-2 text-xs font-bold text-primary border-b-2 border-primary transition" data-i18n="properties.tab.general">${h('properties.tab.general')}</button>
+      <button id="tab-btn-permissions" class="flex-1 py-2 text-xs font-bold text-text-muted hover:text-text-main border-b-2 border-transparent transition" data-i18n="properties.tab.permissions">${h('properties.tab.permissions')}</button>
     `;
 
     // Content Area
@@ -91,13 +96,13 @@ export class PropertiesModal {
     const btnCancel = document.createElement('button');
     btnCancel.className =
       'px-4 py-2 rounded-lg text-xs font-bold text-text-muted hover:text-text-main hover:bg-hover transition';
-    btnCancel.textContent = 'Cancel';
+    bindText(btnCancel, 'common.cancel');
     btnCancel.onclick = () => this.close();
 
     const btnSave = document.createElement('button');
     btnSave.className =
       'px-4 py-2 rounded-lg text-xs font-bold bg-primary text-white hover:bg-primary/90 shadow transition';
-    btnSave.textContent = 'Apply Changes';
+    bindText(btnSave, 'properties.apply');
     btnSave.onclick = () => this._savePermissions();
 
     footer.appendChild(btnCancel);
@@ -153,7 +158,7 @@ export class PropertiesModal {
       this.overlay?.classList.remove('hidden');
       this.isOpen = true;
     } catch (e: any) {
-      if (window.AppUI) window.AppUI.notify(`Cannot open properties: ${e.message}`, 'error');
+      if (window.AppUI) window.AppUI.notify(t('properties.cannotOpen', { reason: e.message }), 'error');
     }
   }
 
@@ -184,25 +189,26 @@ export class PropertiesModal {
     document.getElementById('prop-title')!.textContent = s.name;
 
     const sizeStr = s.kind === 'directory' ? '--' : s.size < 1024 ? `${s.size} B` : `${(s.size / 1024).toFixed(2)} KB`;
-    const cDate = new Date(s.createdAt).toLocaleString();
-    const uDate = new Date(s.updatedAt).toLocaleString();
+    const cDate = escapeHtml(i18n.formatDate(s.createdAt));
+    const uDate = escapeHtml(i18n.formatDate(s.updatedAt));
+    const kind = s.kind === 'directory' ? h('properties.kind.directory') : h('properties.kind.file');
 
     const tGen = document.getElementById('tab-general')!;
     tGen.innerHTML = `
       <div class="grid grid-cols-[100px_1fr] gap-y-3 gap-x-2 text-xs">
-        <div class="text-text-muted font-bold">Kind:</div>
-        <div class="truncate capitalize">${s.kind} ${s.mimeType ? `(${s.mimeType})` : ''}</div>
+        <div class="text-text-muted font-bold">${h('properties.kind')}</div>
+        <div class="truncate">${kind} ${s.mimeType ? `(${s.mimeType})` : ''}</div>
 
-        <div class="text-text-muted font-bold">Size:</div>
+        <div class="text-text-muted font-bold">${h('properties.size')}</div>
         <div class="truncate">${sizeStr}</div>
 
-        <div class="text-text-muted font-bold">Where:</div>
+        <div class="text-text-muted font-bold">${h('properties.where')}</div>
         <div class="truncate font-mono bg-card px-2 py-0.5 rounded border border-border-main" title="/${s.path}">/${s.path}</div>
 
-        <div class="text-text-muted font-bold">Created:</div>
+        <div class="text-text-muted font-bold">${h('properties.created')}</div>
         <div class="truncate">${cDate}</div>
 
-        <div class="text-text-muted font-bold">Modified:</div>
+        <div class="text-text-muted font-bold">${h('properties.modified')}</div>
         <div class="truncate">${uDate}</div>
       </div>
     `;
@@ -232,7 +238,7 @@ export class PropertiesModal {
     const currentOwnerStr = `${acl.owner.type}:${acl.owner.id}`;
 
     let html = `
-      <div class="text-xs text-text-muted mb-2">Control who can access or modify this item.</div>
+      <div class="text-xs text-text-muted mb-2">${h('properties.perm.intro')}</div>
       
       <div class="space-y-4 flex-1">
     `;
@@ -241,24 +247,24 @@ export class PropertiesModal {
       html += `
         <div class="bg-error/10 border border-error/30 rounded-lg p-3 mb-2">
           <div class="flex items-center gap-2 mb-2">
-            <span class="text-error font-bold">🔒 Advanced (Sudo)</span>
+            <span class="text-error font-bold">${h('properties.perm.advanced')}</span>
           </div>
           
           <label class="flex items-center justify-between w-full mb-3">
-            <span class="text-xs font-bold text-text-main">Owner</span>
+            <span class="text-xs font-bold text-text-main">${h('properties.perm.owner')}</span>
             <select id="perm-owner" class="bg-panel border border-border-main rounded text-xs p-1 text-text-main focus:outline-none focus:border-primary">
-              <option value="system:kernel" ${currentOwnerStr === 'system:kernel' ? 'selected' : ''}>System (kernel)</option>
-              <option value="user:local_user" ${currentOwnerStr === 'user:local_user' ? 'selected' : ''}>User (local_user)</option>
-              <option value="agent:Itera_AI" ${currentOwnerStr === 'agent:Itera_AI' ? 'selected' : ''}>Agent (Itera_AI)</option>
+              <option value="system:kernel" ${currentOwnerStr === 'system:kernel' ? 'selected' : ''}>${h('properties.perm.ownerSystem')}</option>
+              <option value="user:local_user" ${currentOwnerStr === 'user:local_user' ? 'selected' : ''}>${h('properties.perm.ownerUser')}</option>
+              <option value="agent:Itera_AI" ${currentOwnerStr === 'agent:Itera_AI' ? 'selected' : ''}>${h('properties.perm.ownerAgent')}</option>
             </select>
           </label>
 
           <label class="flex items-center justify-between w-full">
-            <span class="text-xs font-bold text-text-main">Local User</span>
+            <span class="text-xs font-bold text-text-main">${h('properties.perm.localUser')}</span>
             <select id="perm-user" class="bg-panel border border-border-main rounded text-xs p-1 text-text-main focus:outline-none focus:border-primary">
-              <option value="read_write" ${userLevel === 'read_write' ? 'selected' : ''}>Read & Write</option>
-              <option value="read" ${userLevel === 'read' ? 'selected' : ''}>Read Only</option>
-              <option value="none" ${userLevel === 'none' ? 'selected' : ''}>No Access</option>
+              <option value="read_write" ${userLevel === 'read_write' ? 'selected' : ''}>${h('properties.perm.readWrite')}</option>
+              <option value="read" ${userLevel === 'read' ? 'selected' : ''}>${h('properties.perm.readOnly')}</option>
+              <option value="none" ${userLevel === 'none' ? 'selected' : ''}>${h('properties.perm.noAccess')}</option>
             </select>
           </label>
         </div>
@@ -271,14 +277,14 @@ export class PropertiesModal {
             <div class="flex items-center gap-2">
               <span class="text-lg">🤖</span>
               <div>
-                <div class="font-bold text-text-main">AI Agent</div>
-                <div class="text-[0.625rem] text-text-muted">Autonomous modifications</div>
+                <div class="font-bold text-text-main">${h('properties.perm.aiAgent')}</div>
+                <div class="text-[0.625rem] text-text-muted">${h('properties.perm.aiAgentDescription')}</div>
               </div>
             </div>
             <select id="perm-ai" class="bg-panel border border-border-main rounded text-xs p-1 text-text-main focus:outline-none focus:border-primary">
-              <option value="read_write" ${aiLevel === 'read_write' ? 'selected' : ''}>Read & Write</option>
-              <option value="read" ${aiLevel === 'read' ? 'selected' : ''}>Read Only</option>
-              <option value="none" ${aiLevel === 'none' ? 'selected' : ''}>No Access</option>
+              <option value="read_write" ${aiLevel === 'read_write' ? 'selected' : ''}>${h('properties.perm.readWrite')}</option>
+              <option value="read" ${aiLevel === 'read' ? 'selected' : ''}>${h('properties.perm.readOnly')}</option>
+              <option value="none" ${aiLevel === 'none' ? 'selected' : ''}>${h('properties.perm.noAccess')}</option>
             </select>
           </label>
         </div>
@@ -288,14 +294,14 @@ export class PropertiesModal {
             <div class="flex items-center gap-2">
               <span class="text-lg">🌐</span>
               <div>
-                <div class="font-bold text-text-main">Guest Apps</div>
-                <div class="text-[0.625rem] text-text-muted">Any installed application</div>
+                <div class="font-bold text-text-main">${h('properties.perm.guestApps')}</div>
+                <div class="text-[0.625rem] text-text-muted">${h('properties.perm.guestAppsDescription')}</div>
               </div>
             </div>
             <select id="perm-guest" class="bg-panel border border-border-main rounded text-xs p-1 text-text-main focus:outline-none focus:border-primary">
-              <option value="read_write" ${guestLevel === 'read_write' ? 'selected' : ''}>Read & Write</option>
-              <option value="read" ${guestLevel === 'read' ? 'selected' : ''}>Read Only</option>
-              <option value="none" ${guestLevel === 'none' ? 'selected' : ''}>No Access</option>
+              <option value="read_write" ${guestLevel === 'read_write' ? 'selected' : ''}>${h('properties.perm.readWrite')}</option>
+              <option value="read" ${guestLevel === 'read' ? 'selected' : ''}>${h('properties.perm.readOnly')}</option>
+              <option value="none" ${guestLevel === 'none' ? 'selected' : ''}>${h('properties.perm.noAccess')}</option>
             </select>
           </label>
         </div>
@@ -306,7 +312,7 @@ export class PropertiesModal {
       html += `
         <div class="mt-4 flex items-center gap-2 bg-warning/10 p-2 rounded border border-warning/30 text-warning">
           <input type="checkbox" id="perm-recursive" class="w-4 h-4 rounded border-warning/50 text-warning focus:ring-warning cursor-pointer">
-          <label for="perm-recursive" class="text-xs font-bold cursor-pointer">Apply to enclosed items</label>
+          <label for="perm-recursive" class="text-xs font-bold cursor-pointer">${h('properties.perm.recursive')}</label>
         </div>
       `;
     }
@@ -368,16 +374,16 @@ export class PropertiesModal {
 
     try {
       if (isRecursive) {
-        if (window.AppUI) window.AppUI.showLoading('Applying permissions...');
+        if (window.AppUI) window.AppUI.showLoading(t('properties.perm.applying'));
         await this.vfs.setAclRecursive(this.activePrincipal, this.currentPath, newAcl);
       } else {
         await this.vfs.setAcl(this.activePrincipal, this.currentPath, newAcl);
       }
 
-      if (window.AppUI) window.AppUI.notify('Permissions updated', 'success');
+      if (window.AppUI) window.AppUI.notify(t('properties.perm.updated'), 'success');
       this.close();
     } catch (e: any) {
-      if (window.AppUI) window.AppUI.notify(`Failed to save: ${e.message}`, 'error');
+      if (window.AppUI) window.AppUI.notify(t('properties.perm.saveFailed', { reason: e.message }), 'error');
     } finally {
       if (isRecursive && window.AppUI) {
         window.AppUI.hideLoading();
