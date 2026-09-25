@@ -640,6 +640,13 @@
             clearTimeout(timer);
             timer = setTimeout(() => navigate(cwd), 200);
           });
+          // 登録簿（アプリ・関連付け）は一度読んだら持ち続けている。変わったら捨てて描き直す（T-0540）
+          MetaOS.system.on('registry_changed', (payload) => {
+            const names = Array.isArray(payload && payload.registries) ? payload.registries : [];
+            if (!names.includes('apps') && !names.includes('associations')) return;
+            registry = null;
+            navigate(cwd);
+          });
           MetaOS.system.on('route_changed', (payload) => {
             if (payload && payload.args && payload.args.path) navigate(payload.args.path);
           });

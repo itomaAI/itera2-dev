@@ -36,6 +36,12 @@ export interface ServiceManifest {
   autoStart?: boolean;
 }
 
+/**
+ * 値が実際に変わった登録簿の名前（'apps' / 'services'）を受け取る（T-0540）。
+ * ファイルが書かれただけで中身が同じなら呼ばれない（ConfigManager の onUpdate と同じ規律。T-0304）。
+ */
+export type RegistryChangeListener = (changed: ReadonlySet<WritableRegistryKind>) => void;
+
 export class AppRegistry {
   private vfs: VfsService;
   private apps: Map<string, AppManifest> = new Map();
@@ -43,7 +49,9 @@ export class AppRegistry {
 
   /** 読む順。後の層が勝つ（`src/config/config_layers.ts`）。 */
   private readonly registryDirs: readonly string[];
-  private listeners: (() => void)[] = [];
+  private listeners: RegistryChangeListener[] = [];
+  /** 最後に知らせた（または最初に読んだ）ときの値。「変わったか」はこれと比べる。読む前は null */
+  private published: Record<WritableRegistryKind, string> | null = null;
 
   constructor(vfs: VfsService, eventBus: VfsEventBus, layers: readonly string[] = REGISTRY_LAYERS) {
     this.vfs = vfs;
@@ -58,13 +66,21 @@ export class AppRegistry {
     eventBus.subscribe((events) => {
       const isUpdated = events.some((e) => watched.has(e.path));
       if (isUpdated) {
-        this._load().then(() => this._notify());
+        this._load().then(() => this._notifyIfChanged());
       }
     });
   }
 
   async loadAll(): Promise<void> {
     await this._load();
+    this.published = this._snapshot();
+  }
+
+  private _snapshot(): Record<WritableRegistryKind, string> {
+    return {
+      apps: JSON.stringify(this.getAllApps()),
+      services: JSON.stringify(this.getAllServices()),
+    };
   }
 
   private async _load(): Promise<void> {
@@ -168,7 +184,7 @@ export class AppRegistry {
       system: true,
     });
     await this._load();
-    this._notify();
+    this._notifyIfChanged();
     return kind === 'apps' ? this.apps.get(id) : this.services.get(id);
   }
 
@@ -188,14 +204,33 @@ export class AppRegistry {
     return this.services.get(serviceId);
   }
 
-  onChange(callback: () => void): () => void {
+  /** 値が変わった登録簿の名前を受け取る。戻り値を呼ぶと外れる */
+  onChange(callback: RegistryChangeListener): () => void {
     this.listeners.push(callback);
     return () => {
       this.listeners = this.listeners.filter((cb) => cb !== callback);
     };
   }
 
-  private _notify(): void {
-    this.listeners.forEach((cb) => cb());
+  /**
+   * 「値が変わったか」は、旧値と新値を同時に持つここでしか判定できない（T-0304）。
+   * 並びも含めて比べる（ランチャーやホームは登録簿の順に並べるので、順が変わるのは見た目の変化）。
+   */
+  private _notifyIfChanged(): void {
+    const next = this._snapshot();
+    const prev = this.published;
+    this.published = next;
+    if (!prev) return; // まだ一度も読んでいない＝知らせる相手にとっての「前」が無い
+    const changed = new Set<WritableRegistryKind>();
+    if (prev.apps !== next.apps) changed.add('apps');
+    if (prev.services !== next.services) changed.add('services');
+    if (changed.size === 0) return;
+    for (const cb of [...this.listeners]) {
+      try {
+        cb(changed);
+      } catch (e) {
+        console.warn('[AppRegistry] A listener failed', e);
+      }
+    }
   }
 }
