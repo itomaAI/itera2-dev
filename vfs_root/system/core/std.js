@@ -109,6 +109,26 @@
       });
       return merged;
     },
+    /**
+     * 区分 category の値が変わったら callback(新しい値, 変わった区分の一覧) を呼ぶ（T-0539）。
+     * ホストは値が実際に変わった区分だけを config_changed で告げる。値は載っていないので、ここで読み直す
+     * （層を重ねた値を返すのはホストだけ）。戻り値を呼ぶと購読をやめる。
+     */
+    onChange(category, callback) {
+      const sys = global.MetaOS?.system;
+      if (!sys?.on || typeof callback !== 'function') return () => {};
+      const handler = async (payload) => {
+        const categories = Array.isArray(payload?.categories) ? payload.categories : [];
+        if (!categories.includes(category)) return;
+        try {
+          callback(await Config.get(category), categories);
+        } catch (e) {
+          console.warn(`[App.Config] onChange(${category}) failed`, e);
+        }
+      };
+      sys.on('config_changed', handler);
+      return () => sys.off?.('config_changed', handler);
+    },
   };
 
   // ==========================================

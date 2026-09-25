@@ -98,6 +98,22 @@ if (window.MetaOS) {
 }
 ```
 
+### Following OS Settings (`config_changed` / `theme_changed`)
+The OS does not know your app. It only announces that its own state changed; whether and how to react is up to you.
+
+*   **`theme_changed`** (`{}`): sent after the host has applied a new theme. The bridge swaps the theme CSS the OS injected into your app (`<style id="itera-guest-theme">`), so anything styled with the theme colors (`bg-app`, `text-main`, ... from `ui.js`) follows immediately. You do not need to write anything.
+*   **`config_changed`** (`{ categories: [...] }`): sent when the merged value of a config category actually changed (rewriting the same value is not announced). The values are not included; read them again with `getConfig`. `std.js` wraps this:
+
+```html
+<script>
+    App.Config.onChange('appearance', (appearance) => {
+        document.documentElement.lang = appearance.locale || 'en';
+    });
+</script>
+```
+
+Both events go to every running app and daemon. Apps that ignore them keep working as before (the new values apply when they are reopened).
+
 ## 4. Exposing Dynamic Tools to the AI
 
 Guest apps can expose custom JS functions to the AI using `MetaOS.tools.register()`.

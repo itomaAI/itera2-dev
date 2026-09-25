@@ -66,8 +66,12 @@ export class NavHistory {
     }
   }
 
-  onChange(cb: (s: NavState) => void): void {
+  /** 戻り値を呼ぶと外れる */
+  onChange(cb: (s: NavState) => void): () => void {
     this.listeners.push(cb);
+    return () => {
+      this.listeners = this.listeners.filter((x) => x !== cb);
+    };
   }
 
   state(): NavState {

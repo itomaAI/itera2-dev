@@ -65,6 +65,11 @@ export interface HostApiContract {
     response: any;
   };
   /** 併合済みの登録簿（apps / services / associations）。ゲストが登録簿を直接読むと層を写すことになる（T-0447） */
+  /** 起動中のアプリへ配るテーマの CSS（ホストで計算済みの変数）。theme_changed を受けたブリッジが取り直す（T-0539） */
+  'sys:get_theme_css': {
+    request: Record<string, never>;
+    response: string;
+  };
   'sys:get_registry': {
     request: { name: string };
     response: any;

@@ -17,6 +17,7 @@ export class ThemeService {
   private configManager: ConfigManager;
   private vfs: VfsService;
   private onThemeApplied: ((payload: ThemeAppliedPayload) => void) | null = null;
+  private appliedListeners = new Set<() => void>();
 
   constructor(configManager: ConfigManager, vfs: VfsService) {
     this.configManager = configManager;
@@ -25,6 +26,18 @@ export class ThemeService {
 
   public setOnThemeAppliedCallback(callback: (payload: ThemeAppliedPayload) => void): void {
     this.onThemeApplied = callback;
+  }
+
+  /**
+   * テーマを当て終えたら呼ぶ（T-0539）。戻り値を呼ぶと外れる。
+   * テーマは設定の値ではなくここが導いたもの（CSS 変数）なので、「変わった」と言えるのは当て終えた後だけである。
+   * 設定の告知（config_changed の appearance）の時点では、ホストの変数がまだ古いことがある。
+   */
+  public onApplied(callback: () => void): () => void {
+    this.appliedListeners.add(callback);
+    return () => {
+      this.appliedListeners.delete(callback);
+    };
   }
 
   public start(): void {
@@ -39,6 +52,19 @@ export class ThemeService {
   }
 
   public async applyAppearance(appearance: any): Promise<void> {
+    await this._applyAppearance(appearance);
+    // 途中で抜けた場合（テーマのファイルが無い・壊れている）も告げる。
+    // 字の大きさ・字体・アニメーションはその前に当たっているので、変わっている可能性がある。
+    for (const cb of [...this.appliedListeners]) {
+      try {
+        cb();
+      } catch (e) {
+        console.warn('[ThemeService] A listener failed', e);
+      }
+    }
+  }
+
+  private async _applyAppearance(appearance: any): Promise<void> {
     try {
       const root = document.documentElement;
 

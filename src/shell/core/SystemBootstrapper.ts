@@ -42,6 +42,7 @@ import { EventOrchestrator } from './EventOrchestrator';
 import { CognitiveManager } from '../services/CognitiveManager';
 import { SessionManager } from '../services/SessionManager';
 import { ThemeService } from '../services/ThemeService';
+import { wireOsAnnouncements } from './OsAnnouncer';
 import { MaintenanceDaemon } from '../services/MaintenanceDaemon';
 import { DialogService } from '../services/DialogService';
 import { VfsEventRecorder } from '../services/VfsEventRecorder';
@@ -174,10 +175,6 @@ export class SystemBootstrapper {
         void navHistory.onPopState(e.state);
       });
     }
-    // 活性の変化をゲストにも（nav_changed）。ホストの ← → は DesktopEnvironment が購読する
-    navHistory.onChange((s) =>
-      processManager.broadcast('nav_changed', { canBack: s.canBack, canForward: s.canForward, current: s.current }),
-    );
 
     // 同期アダプタのホスト。実際の読み込みは DesktopEnvironment（=描画スロットの供給元）
     // の構築後に行う必要があるため、ここでは生成のみ。
@@ -319,6 +316,14 @@ export class SystemBootstrapper {
     // ルーティングとイベントの活性化
     orchestrator.bindAll();
     themeService.start();
+    // OS の状態の告知（config_changed / theme_changed）。反応するかはアプリが決める（T-0539）
+    // nav_changed もここから出る（活性の変化。ホストの ← → は DesktopEnvironment が別に購読する）
+    wireOsAnnouncements({
+      configManager,
+      themeService,
+      navHistory,
+      broadcast: (name, payload) => processManager.broadcast(name, payload),
+    });
     cognitiveManager.start(); // llm.json の変更でアダプタを作り直す（入口では作り直さない。T-0313）
 
     // 初期化タスクの実行
