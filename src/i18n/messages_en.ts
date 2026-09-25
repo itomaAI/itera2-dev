@@ -58,9 +58,6 @@ export const EN = {
   'shell.toggleChat': 'Toggle Chat',
   'shell.compiling': 'Compiling...',
   'shell.statusbar.runtime': 'Itera Runtime (V2)',
-  'shell.mobile.files': 'Files',
-  'shell.mobile.view': 'View',
-  'shell.mobile.chat': 'Chat',
 
   // ---- shell (chat panel chrome)
   'chat.agentLabel': 'Itera Agent',
