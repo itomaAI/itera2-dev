@@ -151,7 +151,7 @@ export class ProcessMonitorModal {
         }
       } else {
         const basePath = proc.path.split(/[?#]/)[0];
-        const homePath = this.configManager.get('appearance')?.layout?.homePath || 'apps/home.html';
+        const homePath = this.configManager.homePath();
         const appInfo = this.appRegistry.getAllApps().find((a) => a.path === basePath);
         if (appInfo) {
           displayName = appInfo.name;

@@ -355,7 +355,7 @@ export class SystemBootstrapper {
     await syncAdapterHost.loadAll();
 
     // ダッシュボードの起動
-    const homePath = configManager.get('appearance')?.layout?.homePath || 'apps/home.html';
+    const homePath = configManager.homePath();
     await processManager.spawn({ path: homePath, show: true });
 
     // 前回、動作中にブラウザのデータが消されて読み込み直したなら、1 度だけ伝える（黙って戻すと障害に見える）

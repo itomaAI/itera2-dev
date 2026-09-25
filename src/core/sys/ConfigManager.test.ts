@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { ConfigManager } from './ConfigManager';
+import { ConfigManager, DEFAULT_HOME_PATH } from './ConfigManager';
 import { VfsEventBus } from '../vfs/VfsEventBus';
 
 /**
@@ -166,5 +166,31 @@ describe('ConfigManager: 値が変わったときだけ知らせる', () => {
     await touch(bus, `${CONFIG}/preferences.json`);
 
     expect(notified).toBe(1);
+  });
+});
+
+describe('ConfigManager.homePath: ホームの既定は 1 か所（T-0316 / T-0533）', () => {
+  const boot = async (files: Record<string, string>) => {
+    const cm = new ConfigManager(makeVfs(files), new VfsEventBus());
+    await cm.loadAll();
+    return cm;
+  };
+
+  it('設定が無ければ既定（system/apps/home.html）', async () => {
+    const cm = await boot({});
+    expect(cm.homePath()).toBe(DEFAULT_HOME_PATH);
+    expect(DEFAULT_HOME_PATH).toBe('system/apps/home.html');
+  });
+
+  it('設定があればそれを使う（自分用のコピーを指せる）', async () => {
+    const cm = await boot({
+      [`${CONFIG}/appearance.json`]: JSON.stringify({ layout: { homePath: 'apps/home.html' } }),
+    });
+    expect(cm.homePath()).toBe('apps/home.html');
+  });
+
+  it('空文字（設定画面で欄を空にした）なら既定へ落とす', async () => {
+    const cm = await boot({ [`${CONFIG}/appearance.json`]: JSON.stringify({ layout: { homePath: '  ' } }) });
+    expect(cm.homePath()).toBe(DEFAULT_HOME_PATH);
   });
 });

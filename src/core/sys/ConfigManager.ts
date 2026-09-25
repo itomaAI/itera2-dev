@@ -64,6 +64,9 @@ export interface OsConfig {
   [category: string]: any;
 }
 
+/** ホーム画面の既定。**ここが唯一の置き場**（読む側は `ConfigManager.homePath()` を使う。T-0316 / T-0533） */
+export const DEFAULT_HOME_PATH = 'system/apps/home.html';
+
 const DEFAULT_CONFIG: OsConfig = {
   preferences: {
     username: 'User',
@@ -84,7 +87,7 @@ const DEFAULT_CONFIG: OsConfig = {
       systemFont: 'mono',
       systemFontSize: '12',
     },
-    layout: { animations: true, homePath: 'apps/home.html' },
+    layout: { animations: true, homePath: DEFAULT_HOME_PATH },
   },
   llm: { model: 'gemini-3.6-flash' },
   network: {
@@ -218,6 +221,16 @@ export class ConfigManager {
 
   private _notify(changed: Set<string>): void {
     this.listeners.forEach((cb) => cb(this.cache, changed));
+  }
+
+  /**
+   * ホーム画面のパス。**既定値はここ（DEFAULT_CONFIG）だけが持つ**（T-0316 / T-0533）。
+   * 以前は読む側 11 か所がそれぞれ `|| 'apps/home.html'` を持ち、既定を変えると黙って食い違った。
+   * 設定が空文字のとき（設定画面で欄を空にしたとき）も既定へ落とす。
+   */
+  homePath(): string {
+    const v = this.cache.appearance?.layout?.homePath;
+    return typeof v === 'string' && v.trim() ? v.trim() : DEFAULT_HOME_PATH;
   }
 
   get(): OsConfig;

@@ -7,7 +7,7 @@
   },
   "layout": {
     "animations": true,
-    "homePath": "apps/home.html"
+    "homePath": "system/apps/home.html"
   },
   "locale": "en"
 }

@@ -403,7 +403,7 @@
                     data-category="appearance"
                     data-key="layout.homePath"
                     class="flex-1 bg-card border border-border-main rounded-lg px-3 py-2 text-sm text-text-main focus:outline-none focus:border-primary transition font-mono shadow-inner"
-                    placeholder="apps/home.html"
+                    placeholder="system/apps/home.html"
                   />
                   <button
                     onclick="pickHomeApp()"
@@ -414,10 +414,10 @@
                   </button>
                 </div>
                 <datalist id="homepath-list">
-                  <option value="apps/home.html">Dashboard</option>
+                  <option value="system/apps/home.html">Dashboard</option>
                   <option value="system/apps/launcher.html">Library (App Launcher)</option>
-                  <option value="apps/tasks.html">Tasks</option>
-                  <option value="apps/notes.html">Notes</option>
+                  <option value="system/apps/tasks.html">Tasks</option>
+                  <option value="system/apps/notes.html">Notes</option>
                 </datalist>
                 <p class="text-[10px] text-text-muted mt-1.5 opacity-80">
                   The path to the app that loads when starting the OS or pressing Home.
@@ -582,7 +582,7 @@
           DOM('config-network-allowCredentialsWithProxy').checked = !!configs.network.allowCredentialsWithProxy;
 
           DOM('config-app-locale').value = configs.appearance.locale || 'en';
-          DOM('config-app-homepath').value = configs.appearance.layout?.homePath || 'apps/home.html';
+          DOM('config-app-homepath').value = configs.appearance.layout?.homePath || 'system/apps/home.html';
           DOM('config-app-uifont').value = configs.appearance.typography?.uiFont || 'system-ui';
           DOM('config-app-monofont').value = configs.appearance.typography?.monoFont || 'monospace';
           DOM('config-app-fontsize').value = configs.appearance.typography?.fontSize || 'medium';

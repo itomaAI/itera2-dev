@@ -110,14 +110,14 @@ export class ProcessManager {
             currentUri: targetProc.currentUri,
           });
         } else {
-          const homePath = this.configManager.get('appearance')?.layout?.homePath || 'apps/home.html';
+          const homePath = this.configManager.homePath();
           this.spawn({ path: homePath, show: true, forceReload: true });
         }
       };
     }
     if (this.els.BTN_HOME) {
       this.els.BTN_HOME.onclick = () => {
-        const homePath = this.configManager.get('appearance')?.layout?.homePath || 'apps/home.html';
+        const homePath = this.configManager.homePath();
         this.spawn({ path: homePath, show: true });
       };
     }
@@ -142,7 +142,7 @@ export class ProcessManager {
         if (!pid) pid = foundSvc.id;
         if (!type) type = 'daemon';
       } else {
-        const homePath = this.configManager.get('appearance')?.layout?.homePath || 'apps/home.html';
+        const homePath = this.configManager.homePath();
         if (basePath === homePath) {
           if (!pid) pid = 'home';
           if (!type) type = 'app';
@@ -346,7 +346,7 @@ export class ProcessManager {
         this._focusApp(apps[0].pid);
         this.setCurrentRoute({ pid: apps[0].pid, uri: apps[0].currentUri });
       } else {
-        const homePath = this.configManager.get('appearance')?.layout?.homePath || 'apps/home.html';
+        const homePath = this.configManager.homePath();
         this.spawn({ path: homePath, show: true });
       }
     }

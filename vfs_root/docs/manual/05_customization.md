@@ -47,7 +47,7 @@ The list of apps shown in the **Library** (Launcher). If you build a new app, ad
         "id": "tasks",
         "name": "Tasks",
         "icon": "✅",
-        "path": "apps/tasks.html",
+        "path": "system/apps/tasks.html",
         "description": "Manage daily to-dos"
     }
 ]
@@ -66,7 +66,7 @@ it is registered** — you never edit `home.html` to add one. Two optional keys 
         "id": "tasks",
         "name": "Tasks",
         "icon": "✅",
-        "path": "apps/tasks.html",
+        "path": "system/apps/tasks.html",
         "description": "Manage daily to-dos",
         "home": 3
     }
@@ -103,6 +103,21 @@ Defines background services and whether they should start silently when the OS b
     }
 ]
 ```
+
+### Making a built-in app your own
+
+The built-in apps (Home, Notes, Tasks, Calendar, Loom, Settings, ...) live in `system/apps/`.
+That folder is **read-only** (for you and for the AI) and is **overwritten by every OS update**, so the apps keep improving.
+To change one, make your own copy and point the registry at it:
+
+1. Copy it into your space, e.g. `system/apps/notes.html` → `apps/notes.html`, and edit the copy.
+2. In `system/registry/apps.json`, change only the `path` of that entry to your copy (`"path": "apps/notes.html"`).
+   For Home, set `appearance.layout.homePath` in `system/config/appearance.json` instead.
+3. Nothing else changes: the app id stays the same, so file associations and links that use the id keep working,
+   and the app's data stays where it was (`data/apps/...`).
+
+Your copy no longer receives updates. The latest official version is always in `system/upstream/system/apps/`,
+so you (or the AI) can compare and merge by hand. To go back, point `path` at `system/apps/...` again.
 
 ## 3. Creating Custom Themes (`system/themes/`)
 

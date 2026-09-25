@@ -3,7 +3,7 @@
     "id": "notes",
     "name": "Notes",
     "icon": "\ud83d\udcdd",
-    "path": "apps/notes.html",
+    "path": "system/apps/notes.html",
     "description": "Markdown text editor",
     "fileHandlers": [
       {
@@ -32,7 +32,7 @@
     "id": "tasks",
     "name": "Tasks",
     "icon": "\u2705",
-    "path": "apps/tasks.html",
+    "path": "system/apps/tasks.html",
     "description": "Manage daily to-dos",
     "home": 3
   },
@@ -40,7 +40,7 @@
     "id": "calendar",
     "name": "Calendar",
     "icon": "\ud83d\udcc5",
-    "path": "apps/calendar.html",
+    "path": "system/apps/calendar.html",
     "description": "Monthly calendar and events",
     "home": 4
   },
