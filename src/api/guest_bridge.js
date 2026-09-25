@@ -314,5 +314,34 @@
         }
     });
 
+    // <html lang> の追随（P-0046 / T-0545）。アプリが自分で lang を書いていれば触らない（アプリの持ち物）。
+    // 書いていないアプリにだけ、OS の UI の言語（appearance.locale）を入れ、切り替わったら追随する。
+    // 入れたことは data-itera-lang で覚える（アプリが後から自分で書いた lang と区別するため）。
+    const rootEl = document.documentElement;
+    const osOwnsLang = !!rootEl && (!rootEl.hasAttribute('lang') || rootEl.hasAttribute('data-itera-lang'));
+    const syncLang = async () => {
+        if (!osOwnsLang) return;
+        try {
+            const appearance = await transport.requestHost('sys:get_config', { category: 'appearance' });
+            let locale = String((appearance && appearance.locale) || 'en');
+            try {
+                locale = Intl.getCanonicalLocales(locale)[0] || locale;
+            } catch (e) {
+                /* 読めない名前はそのまま */
+            }
+            rootEl.setAttribute('lang', locale);
+            rootEl.setAttribute('data-itera-lang', '');
+        } catch (e) {
+            console.warn('[Itera] Could not read the UI language', e);
+        }
+    };
+    if (osOwnsLang) {
+        void syncLang();
+        transport.on('config_changed', (payload) => {
+            const categories = payload && Array.isArray(payload.categories) ? payload.categories : [];
+            if (categories.includes('appearance')) void syncLang();
+        });
+    }
+
     console.log("[Itera] MetaOS Bridge v2 Initialized (PID: " + MY_PID + ")");
 })(window);

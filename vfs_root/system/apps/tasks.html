@@ -604,15 +604,29 @@
         }
       }
 
+      // UI の言語は OS の appearance.locale（AI の応答言語 preferences.language とは別。P-0046 / T-0545）。
+      // このアプリが持つ訳は日本語と英語だけ。それ以外の言語は英語で出す。
+      const applyLocale = (appearance) => {
+        const locale = String((appearance && appearance.locale) || 'en');
+        LOCALE = /^ja(-|$)/i.test(locale) ? 'ja-JP' : 'en-US';
+        document.documentElement.lang = LOCALE === 'ja-JP' ? 'ja' : 'en';
+        DOM('role-note').textContent = t('role');
+      };
+
       // Init
       (async () => {
         try {
-          const prefs = await App.Config.get('preferences');
-          if (/^(ja|japanese)/i.test(String(prefs.language || ''))) LOCALE = 'ja-JP';
-        } catch (e) {}
-        DOM('role-note').textContent = t('role');
+          applyLocale(await App.Config.get('appearance'));
+        } catch (e) {
+          applyLocale(null);
+        }
         await adoptLegacyTasks();
         render();
+        // OS の言語が変わったら、開いたままでも描き直す（config_changed。T-0539）
+        App.Config.onChange('appearance', (appearance) => {
+          applyLocale(appearance);
+          render();
+        });
       })();
     </script>
   </body>

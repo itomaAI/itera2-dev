@@ -215,7 +215,9 @@
           .replace(/>/g, '&gt;');
 
       // 表示の言語。設定が日本語ならこちらに合わせる（既定は英語のまま）。
+      // 文（終日・他 N 件など）は日本語と英語だけを持つ。日付と曜日は OS の言語そのもので書く（Intl）
       let LOCALE = 'en-US';
+      let DATE_LOCALE = 'en';
 
       // --- Domain API ---
       const CalendarAPI = {
@@ -327,7 +329,7 @@
         const monthKey = `${year}-${String(month + 1).padStart(2, '0')}`;
         const todayStr = new Date().toISOString().slice(0, 10);
 
-        DOM('month-label').textContent = State.currentDate.toLocaleDateString(LOCALE, {
+        DOM('month-label').textContent = State.currentDate.toLocaleDateString(DATE_LOCALE, {
           month: 'long',
           year: 'numeric',
         });
@@ -416,12 +418,12 @@
         State.modalDate = dateStr;
         const targetDate = new Date(dateStr + 'T00:00:00'); // Prevent timezone shift
 
-        DOM('modal-date-display').textContent = targetDate.toLocaleDateString(LOCALE, {
+        DOM('modal-date-display').textContent = targetDate.toLocaleDateString(DATE_LOCALE, {
           month: 'long',
           day: 'numeric',
           year: 'numeric',
         });
-        DOM('modal-weekday-display').textContent = targetDate.toLocaleDateString(LOCALE, { weekday: 'long' });
+        DOM('modal-weekday-display').textContent = targetDate.toLocaleDateString(DATE_LOCALE, { weekday: 'long' });
         DOM('modal-target-date').value = dateStr;
 
         const dayEvents = State.events.filter((i) => i.date === dateStr);
@@ -617,14 +619,45 @@
         'ja-JP': ['日', '月', '火', '水', '木', '金', '土'],
         'en-US': ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'],
       };
+      /** 日曜始まりの 7 つの曜日を、その言語の短い名前で。読めない言語なら表に落ちる */
+      const weekdayNames = () => {
+        if (LOCALE === 'ja-JP') return WEEKDAYS['ja-JP'];
+        try {
+          const fmt = new Intl.DateTimeFormat(DATE_LOCALE, { weekday: 'short' });
+          // 2023-01-01 は日曜
+          return Array.from({ length: 7 }, (_, i) => fmt.format(new Date(2023, 0, 1 + i)));
+        } catch (e) {
+          return WEEKDAYS['en-US'];
+        }
+      };
+
+      // UI の言語は OS の appearance.locale（AI の応答言語 preferences.language とは別。P-0046 / T-0545）
+      const applyLocale = (appearance) => {
+        const locale = String((appearance && appearance.locale) || 'en');
+        try {
+          DATE_LOCALE = Intl.getCanonicalLocales(locale)[0] || 'en';
+        } catch (e) {
+          DATE_LOCALE = 'en';
+        }
+        LOCALE = /^ja(-|$)/i.test(DATE_LOCALE) ? 'ja-JP' : 'en-US';
+        document.documentElement.lang = DATE_LOCALE;
+        DOM('weekday-row').innerHTML = weekdayNames()
+          .map((d) => `<div>${esc(d)}</div>`)
+          .join('');
+      };
 
       // --- Boot ---
       (async () => {
         try {
-          const prefs = await App.Config.get('preferences');
-          if (/^(ja|japanese)/i.test(String(prefs.language || ''))) LOCALE = 'ja-JP';
-        } catch (e) {}
-        DOM('weekday-row').innerHTML = (WEEKDAYS[LOCALE] || WEEKDAYS['en-US']).map((d) => `<div>${d}</div>`).join('');
+          applyLocale(await App.Config.get('appearance'));
+        } catch (e) {
+          applyLocale(null);
+        }
+        // OS の言語が変わったら、開いたままでも描き直す（config_changed。T-0539）
+        App.Config.onChange('appearance', (appearance) => {
+          applyLocale(appearance);
+          render();
+        });
 
         await adoptLegacyEvents();
         await render();
