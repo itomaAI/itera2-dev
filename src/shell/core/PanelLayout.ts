@@ -7,6 +7,7 @@
  * - 開閉と幅は localStorage に残す（端末ごとの見え方なので VFS の設定には入れない）
  * - チャットの全画面（`.chat-full`）は中央の上に重ねるだけ。中央は再レイアウトされない。保存しない
  */
+import { bindText } from '../../i18n/staticTexts';
 
 const STORAGE_KEY = 'itera.layout.v1';
 const MD = 768;
@@ -129,7 +130,7 @@ export class PanelLayout {
     BTN_EXPLORER?.classList.toggle('text-primary', this.state.explorer);
     BTN_CHAT?.classList.toggle('text-primary', this.state.chat);
     BTN_FULL?.classList.toggle('text-primary', this.fullscreen);
-    if (BTN_FULL) BTN_FULL.title = this.fullscreen ? 'Exit fullscreen (Esc)' : 'Fullscreen';
+    if (BTN_FULL) bindText(BTN_FULL, this.fullscreen ? 'chat.exitFullscreen' : 'chat.fullscreen', undefined, 'title');
     this._updateFullLeft();
   }
 

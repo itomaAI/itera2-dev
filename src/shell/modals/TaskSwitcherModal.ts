@@ -6,6 +6,7 @@
 import type { ProcessManager } from '../windowing/ProcessManager';
 import type { AppRegistry } from '../../core/sys/AppRegistry';
 import type { ConfigManager } from '../../core/sys/ConfigManager';
+import { t, escapeHtml } from '../../i18n/i18n';
 
 const DOM_IDS = {
   MODAL: 'task-switcher-modal',
@@ -75,7 +76,7 @@ export class TaskSwitcherModal {
       .sort((a, b) => b.lastActiveTime - a.lastActiveTime);
 
     if (apps.length === 0) {
-      grid.innerHTML = '<div class="text-white/50 text-center w-full mt-10 text-sm">No recent apps</div>';
+      grid.innerHTML = `<div class="text-white/50 text-center w-full mt-10 text-sm">${escapeHtml(t('taskSwitcher.empty'))}</div>`;
       return;
     }
 

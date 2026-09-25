@@ -353,6 +353,29 @@ export const EN = {
   'sync.noAdapters': "No sync adapters installed.",
   'sync.active': "Cloud Sync Active",
   'sync.online': "Online",
+
+  // ---- media, recorder, editor, misc
+  'audio.stopAndSave': "Stop & Save",
+  'apiKeys.loading': "Loading providers...",
+  'apiKeys.saved': "API Keys saved.",
+  'media.previewNotAvailable': "Preview Not Available",
+  'media.unknownType': "Unknown Type",
+  'media.downloadFile': "Download File",
+  'taskSwitcher.empty': "No recent apps",
+  'editor.binaryNotSupported': "Binary file editing is not supported.",
+  'editor.saved': "Saved!",
+  'editor.saveFailed': "Failed",
+  'process.notFound': "No {path} found.",
+  'process.launchFailed': "Failed to launch {path}",
+  'guest.fileNotFound': "File not found",
+  'guest.notAFile': "Not a file (directory)",
+  'sync.status.loadFailed': "Load failed",
+  'sync.status.noAdapters': "No Adapters",
+  'sync.status.connected': "Connected",
+  'sync.status.connectedN': "{count} Connected",
+  'sync.status.connecting': "Connecting...",
+  'sync.status.error': "Error",
+  'chat.exitFullscreen': "Exit fullscreen (Esc)",
   // @@END
 } as const satisfies Record<string, string | { one?: string; other: string; zero?: string; two?: string; few?: string; many?: string }>;
 

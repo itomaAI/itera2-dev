@@ -2,6 +2,7 @@
  * src/shell/modals/MediaViewer.ts
  * Itera OS v2: Host Media Viewer Modal (Fallback UI)
  */
+import { t, escapeHtml } from '../../i18n/i18n';
 
 const DOM_IDS = {
   OVERLAY: 'media-overlay',
@@ -116,14 +117,14 @@ export class MediaViewer {
 
     div.innerHTML = `
       <div class="text-4xl mb-4">📦</div>
-      <div class="text-lg font-bold text-text-main mb-2">Preview Not Available</div>
-      <div class="text-sm text-text-muted mb-6 font-mono">${mime || 'Unknown Type'}</div>
+      <div class="text-lg font-bold text-text-main mb-2">${escapeHtml(t('media.previewNotAvailable'))}</div>
+      <div class="text-sm text-text-muted mb-6 font-mono">${escapeHtml(mime || t('media.unknownType'))}</div>
     `;
 
     const btn = document.createElement('button');
     btn.className =
       'bg-primary hover:bg-primary/80 text-white px-4 py-2 rounded text-sm transition flex items-center gap-2';
-    btn.innerHTML = 'Download File';
+    btn.textContent = t('media.downloadFile');
     btn.onclick = () => {
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');

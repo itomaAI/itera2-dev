@@ -2,6 +2,7 @@
  * src/shell/modals/CameraModal.ts
  * Itera OS v2: Camera Capture Modal
  */
+import { t } from '../../i18n/i18n';
 
 export interface CameraOptions {
   facingMode?: string;
@@ -45,7 +46,7 @@ export class CameraModal {
       const btnCancel = document.createElement('button');
       btnCancel.className =
         'bg-panel hover:bg-hover text-text-main px-6 py-3 rounded-full font-bold shadow-lg border border-border-main transition';
-      btnCancel.innerText = 'Cancel';
+      btnCancel.innerText = t('common.cancel');
 
       const btnCapture = document.createElement('button');
       btnCapture.className =
