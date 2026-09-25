@@ -35,7 +35,6 @@ export const EN = {
   // ---- shell (header, sidebar, status)
   'shell.boot.initializing': 'Initializing Itera OS v2...',
   'shell.header.tagline': 'REAL Architecture',
-  'shell.status.online': 'System Online',
   'shell.cloudSync': 'Cloud Sync',
   'shell.cloudSyncWithDetail': 'Cloud Sync — {detail}',
   'shell.sudo.enable': 'Enable System Privileges',
@@ -47,8 +46,6 @@ export const EN = {
   'shell.sudo.enabled': 'System privileges enabled.',
   'shell.sudo.disabled': 'System privileges disabled.',
   'shell.systemManagement': 'System Management',
-  'shell.storage': 'Storage',
-  'shell.saved': 'Saved',
   'shell.newFile': 'New File',
   'shell.newFolder': 'New Folder',
   'shell.uploadFile': 'Upload File',
@@ -60,7 +57,6 @@ export const EN = {
   'shell.recentApps': 'Recent Apps',
   'shell.toggleChat': 'Toggle Chat',
   'shell.compiling': 'Compiling...',
-  'shell.statusbar.ready': 'Ready',
   'shell.statusbar.runtime': 'Itera Runtime (V2)',
   'shell.mobile.files': 'Files',
   'shell.mobile.view': 'View',
@@ -72,7 +68,6 @@ export const EN = {
   'chat.fullscreen': 'Fullscreen',
   'chat.apiKeys': 'API Keys',
   'chat.clearHistory': 'Clear History',
-  'chat.thinking': 'Thinking...',
   'chat.inputPlaceholder': 'Instructions... (Ctrl+Enter)',
   'chat.attachFile': 'Attach file',
 
@@ -156,7 +151,6 @@ export const EN = {
   'chat.clear.confirm': 'Clear History',
 
   // ---- chat panel
-  'chat.processing': 'Processing...',
   'chat.files.open': 'Open',
   'chat.files.download': 'Download',
   'chat.files.missing': 'Not found',
