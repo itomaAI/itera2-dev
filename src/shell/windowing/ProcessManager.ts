@@ -59,6 +59,26 @@ export function queryFromArgs(path: string, args?: Record<string, unknown>): str
   return str ? `?${str}` : '';
 }
 
+/**
+ * path に付いた `?query` を args へ移す（T-0542）。`#hash` は path に残す。
+ * ゲストが `nav.declare('?view=history')` で場所を申告すると、プロセスの path は `x.html?view=history` になる。
+ * それをそのまま起動し直す（アドレスバーの再読み込み・ゲストの `spawn('x.html?a=1')`）と、
+ * コンパイラは blob URL に query を付けていた（Firefox では開けない）うえ、query の中身はゲストに届かなかった。
+ * query の値は args より優先する（申告された場所が、起動したときの引数より新しい）。
+ */
+export function moveQueryToArgs(
+  path: string,
+  args?: Record<string, string>,
+): { path: string; args?: Record<string, string> } {
+  const hashIdx = path.indexOf('#');
+  const beforeHash = hashIdx === -1 ? path : path.slice(0, hashIdx);
+  const hash = hashIdx === -1 ? '' : path.slice(hashIdx);
+  const qIdx = beforeHash.indexOf('?');
+  if (qIdx === -1) return { path, args };
+  const fromQuery = Object.fromEntries(new URLSearchParams(beforeHash.slice(qIdx + 1)));
+  return { path: beforeHash.slice(0, qIdx) + hash, args: { ...(args || {}), ...fromQuery } };
+}
+
 export class ProcessManager {
   private vfs: VfsService;
   private compiler: GuestCompiler;
@@ -169,10 +189,12 @@ export class ProcessManager {
    * プロセスを起動、またはバックグラウンドにあるアプリをフォアグラウンドに引き出す
    */
   async spawn(options: SpawnOptions): Promise<void> {
-    const { path, forceReload = false, args, currentUri } = options;
+    const { path: rawPath, forceReload = false, args: rawArgs, currentUri } = options;
     const { pid, type, show } = this._resolveProcessInfo(options);
 
-    const uri = currentUri || `metaos://run/${path}${queryFromArgs(path, args)}`;
+    const uri = currentUri || `metaos://run/${rawPath}${queryFromArgs(rawPath, rawArgs)}`;
+    // 起動に使う path には query を残さない（T-0542）
+    const { path, args } = moveQueryToArgs(rawPath, rawArgs);
     const existingProc = this.processes.get(pid);
 
     if (existingProc && existingProc.iframe) {

@@ -122,3 +122,29 @@ describe('queryFromArgs（spawn の引数を URI に写す。ProcessManager）',
     expect(queryFromArgs('a.html?x=1', { y: '2' })).toBe('');
   });
 });
+
+describe('moveQueryToArgs（起動する path の ?query を args へ移す。ProcessManager・T-0542）', async () => {
+  const { moveQueryToArgs } = await import('../windowing/ProcessManager');
+  it('query を args に移し、path からは外す', () => {
+    expect(moveQueryToArgs('apps/s.html?skill=%E8%A6%8B%E7%A9%8D&view=history')).toEqual({
+      path: 'apps/s.html',
+      args: { skill: '見積', view: 'history' },
+    });
+  });
+  it('query の値が起動時の args より優先し、query に無いものは残す', () => {
+    expect(moveQueryToArgs('apps/s.html?view=history', { skill: 'x', view: 'new' })).toEqual({
+      path: 'apps/s.html',
+      args: { skill: 'x', view: 'history' },
+    });
+  });
+  it('#hash は path に残す', () => {
+    expect(moveQueryToArgs('apps/s.html?a=1#sec')).toEqual({ path: 'apps/s.html#sec', args: { a: '1' } });
+  });
+  it('query が無ければ何もしない（args も同じ物のまま）', () => {
+    const args = { a: '1' };
+    const r = moveQueryToArgs('apps/s.html#sec', args);
+    expect(r.path).toBe('apps/s.html#sec');
+    expect(r.args).toBe(args);
+    expect(moveQueryToArgs('apps/s.html')).toEqual({ path: 'apps/s.html', args: undefined });
+  });
+});
