@@ -322,6 +322,8 @@ export class SystemBootstrapper {
       configManager,
       themeService,
       navHistory,
+      appRegistry,
+      associations: resolver,
       broadcast: (name, payload) => processManager.broadcast(name, payload),
     });
     cognitiveManager.start(); // llm.json の変更でアダプタを作り直す（入口では作り直さない。T-0313）

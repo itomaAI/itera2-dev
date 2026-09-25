@@ -23,6 +23,9 @@ export class FileAssociationResolver {
   private vfs: VfsService;
   private appRegistry: AppRegistry;
   private associations: any = { extensions: {}, mimeTypes: {} };
+  private listeners: Array<() => void> = [];
+  /** 最後に知らせた（または最初に読んだ）ときの値。読む前は null（T-0540） */
+  private published: string | null = null;
 
   /** 読む順。後の層が勝つ（`src/config/config_layers.ts`）。 */
   private readonly registryDirs: readonly string[];
@@ -71,6 +74,27 @@ export class FileAssociationResolver {
     }
 
     this.associations = merged;
+
+    // 値が変わったときだけ知らせる（T-0540。判定は旧値と新値を持つここに置く）
+    const next = JSON.stringify(merged);
+    const prev = this.published;
+    this.published = next;
+    if (prev === null || prev === next) return;
+    for (const cb of [...this.listeners]) {
+      try {
+        cb();
+      } catch (e) {
+        console.warn('[FileAssociationResolver] A listener failed', e);
+      }
+    }
+  }
+
+  /** 関連付けの値が変わったら呼ぶ。戻り値を呼ぶと外れる（T-0540） */
+  onChange(callback: () => void): () => void {
+    this.listeners.push(callback);
+    return () => {
+      this.listeners = this.listeners.filter((cb) => cb !== callback);
+    };
   }
 
   /** 層を重ねた関連付け（写し）。ゲストの口 `sys:get_registry('associations')` が返す。 */

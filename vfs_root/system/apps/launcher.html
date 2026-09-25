@@ -31,7 +31,7 @@
       async function loadApps() {
         const grid = document.getElementById('app-grid');
         try {
-          if (!window.App) return setTimeout(loadApps, 50);
+          if (!window.App) return new Promise((r) => setTimeout(() => loadApps().then(r), 50));
 
           // 登録簿は層になっている。重ねた値はホストから受け取る（T-0447）
           const apps = await App.Registry.get('apps', []);
@@ -70,7 +70,16 @@
         `;
       document.head.appendChild(style);
 
-      document.readyState === 'loading' ? document.addEventListener('DOMContentLoaded', loadApps) : loadApps();
+      // 登録簿が変わったら並べ直す（T-0540。アプリを足したり消したりしても開き直さなくてよい）
+      let followingRegistry = false;
+      async function boot() {
+        await loadApps();
+        if (followingRegistry || !window.App?.Registry?.onChange) return;
+        followingRegistry = true;
+        App.Registry.onChange('apps', () => loadApps());
+      }
+
+      document.readyState === 'loading' ? document.addEventListener('DOMContentLoaded', boot) : boot();
     </script>
   </body>
 </html>

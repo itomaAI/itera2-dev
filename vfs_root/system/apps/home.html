@@ -492,10 +492,13 @@
           if (window.MetaOS && MetaOS.system.on) {
             MetaOS.system.on('vfs_mutation', (m) => {
               if (m.path.startsWith('data/')) refreshWidgets();
-              // 登録した時点でホームに出る（アプリを足しても、ここを書き換えなくてよい）
-              // どの層の目録でも（system/registry でも user/registry でも）
-              if (m.path.endsWith('/registry/apps.json')) renderShortcuts();
             });
+          }
+          // 登録した時点でホームに出る（アプリを足しても、ここを書き換えなくてよい）。
+          // 以前は vfs_mutation で登録簿のファイルのパスを見張っていた。いまは持ち主（ホスト）が
+          // 「値が変わった」ときだけ registry_changed を告げる（T-0540）
+          if (window.App?.Registry?.onChange) {
+            App.Registry.onChange('apps', () => renderShortcuts());
           }
         };
 

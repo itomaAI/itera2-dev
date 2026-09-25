@@ -169,6 +169,25 @@
       });
       return next;
     },
+    /**
+     * 登録簿 name（'apps' / 'services' / 'associations'）の値が変わったら callback(新しい値, 変わった名前の一覧) を呼ぶ（T-0540）。
+     * ホストは registry_changed で名前だけを告げる。値は載っていないので、ここで読み直す。戻り値を呼ぶと購読をやめる。
+     */
+    onChange(name, callback, fallback = []) {
+      const sys = global.MetaOS?.system;
+      if (!sys?.on || typeof callback !== 'function') return () => {};
+      const handler = async (payload) => {
+        const registries = Array.isArray(payload?.registries) ? payload.registries : [];
+        if (!registries.includes(name)) return;
+        try {
+          callback(await Registry.get(name, fallback), registries);
+        } catch (e) {
+          console.warn(`[App.Registry] onChange(${name}) failed`, e);
+        }
+      };
+      sys.on('registry_changed', handler);
+      return () => sys.off?.('registry_changed', handler);
+    },
   };
 
   // ==========================================

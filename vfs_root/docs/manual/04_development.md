@@ -112,7 +112,9 @@ The OS does not know your app. It only announces that its own state changed; whe
 </script>
 ```
 
-Both events go to every running app and daemon. Apps that ignore them keep working as before (the new values apply when they are reopened).
+*   **`registry_changed`** (`{ registries: ['apps' | 'services' | 'associations', ...] }`): sent when a merged registry actually changed (an app or daemon was added, removed or edited). Read it again with `getRegistry`, or use `App.Registry.onChange('apps', (apps) => ...)`.
+
+These events go to every running app and daemon. Apps that ignore them keep working as before (the new values apply when they are reopened).
 
 ## 4. Exposing Dynamic Tools to the AI
 

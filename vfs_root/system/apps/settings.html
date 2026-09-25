@@ -960,13 +960,33 @@
         container.innerHTML = '';
 
         try {
-          const files = await MetaOS.fs.list('system/themes');
-          const themeFiles = files.filter((f) => f.endsWith('.json')).sort();
+          // 配信のテーマ（system/themes）に、利用者のテーマ（user/themes）を並べる（T-0541）。
+          // ThemeService は appearance.theme のパスをそのまま読むので、どちらに置いたものでも当たる。
+          // user/themes は無くてよい（itera2-dev は既定で user/ が無い。作れば出る）。
+          const THEME_DIRS = [
+            { dir: 'system/themes', author: 'System' },
+            { dir: 'user/themes', author: 'User' },
+          ];
+          const themeFiles = [];
+          for (const { dir, author } of THEME_DIRS) {
+            let files = [];
+            try {
+              files = await MetaOS.fs.list(dir);
+            } catch (e) {
+              if (dir === 'system/themes') throw e;
+              continue;
+            }
+            files
+              .filter((f) => f.endsWith('.json'))
+              .map((f) => (f.includes('/') ? f : `${dir}/${f}`))
+              .sort()
+              .forEach((path) => themeFiles.push({ path, author }));
+          }
 
-          for (const path of themeFiles) {
+          for (const { path, author } of themeFiles) {
             try {
               const themeData = JSON.parse(await MetaOS.fs.read(path));
-              const meta = themeData.meta || { name: path.split('/').pop().replace('.json', ''), author: 'System' };
+              const meta = themeData.meta || { name: path.split('/').pop().replace('.json', ''), author };
               const isActive = configs.appearance.theme === path;
 
               const bg = themeData.colors?.bg?.app || '#1a1b26';
