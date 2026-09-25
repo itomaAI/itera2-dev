@@ -13,14 +13,11 @@ export const EN = {
   // ---- common
   'common.ok': "OK",
   'common.cancel': "Cancel",
-  'common.close': "Close",
   'common.save': "Save",
   'common.delete': "Delete",
   'common.rename': "Rename",
   'common.open': "Open",
   'common.skip': "Skip",
-  'common.yes': "Yes",
-  'common.no': "No",
 
   // ---- dialog
   'dialog.alert.title': "System Alert",
@@ -376,6 +373,10 @@ export const EN = {
   'sync.status.connecting': "Connecting...",
   'sync.status.error': "Error",
   'chat.exitFullscreen': "Exit fullscreen (Esc)",
+
+  // ---- oauth dialog
+  'oauth.pasteToken': "Paste access token for '{provider}':",
+  'oauth.saveToken': "Save Token",
   // @@END
 } as const satisfies Record<string, string | { one?: string; other: string; zero?: string; two?: string; few?: string; many?: string }>;
 
