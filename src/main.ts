@@ -47,7 +47,8 @@ async function runBoot(loader: HTMLElement | null): Promise<void> {
           danger: true,
           description: t('boot.action.factoryResetDescription'),
           confirm: () =>
-            window.confirm(t('boot.action.factoryResetConfirm')) && window.confirm(t('boot.action.factoryResetConfirmFinal')),
+            window.confirm(t('boot.action.factoryResetConfirm')) &&
+            window.confirm(t('boot.action.factoryResetConfirmFinal')),
           run: () => {
             LocalReset.requestFactoryReset();
             window.location.reload();

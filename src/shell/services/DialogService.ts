@@ -179,7 +179,11 @@ export class DialogService {
     }).then((res) => res.action);
   }
 
-  public prompt(message: string, defaultValue: string = '', title: string = t('dialog.prompt.title')): Promise<string | null> {
+  public prompt(
+    message: string,
+    defaultValue: string = '',
+    title: string = t('dialog.prompt.title'),
+  ): Promise<string | null> {
     return this.showMessageBox<string | null>({
       title,
       message,
@@ -199,9 +203,7 @@ export class DialogService {
 
   public async showConflictDialog(itemName: string, isDirectory: boolean): Promise<DialogResult<ConflictAction>> {
     const actionName = isDirectory ? t('dialog.conflict.merge') : t('dialog.conflict.replace');
-    const detailMsg = isDirectory
-      ? t('dialog.conflict.detailFolder')
-      : t('dialog.conflict.detailFile');
+    const detailMsg = isDirectory ? t('dialog.conflict.detailFolder') : t('dialog.conflict.detailFile');
 
     const buttons: MessageBoxOptions<ConflictAction>['buttons'] = [
       { label: t('common.cancel'), value: 'cancel', style: 'normal', isCancel: true },

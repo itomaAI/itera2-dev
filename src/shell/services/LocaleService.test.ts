@@ -9,7 +9,9 @@ import type { ConfigUpdateListener } from '../../core/sys/ConfigManager';
  * 英語（ホスト）← system/locales ← user/locales。言語の鎖（ja → ja-JP）は一般から個別へ。
  */
 function makeEnv(files: Record<string, unknown>, locale = 'ja') {
-  const store = new Map<string, string>(Object.entries(files).map(([k, v]) => [k, typeof v === 'string' ? v : JSON.stringify(v)]));
+  const store = new Map<string, string>(
+    Object.entries(files).map(([k, v]) => [k, typeof v === 'string' ? v : JSON.stringify(v)]),
+  );
   const vfs: any = {
     exists: (_p: any, path: string) => store.has(path) || [...store.keys()].some((k) => k.startsWith(`${path}/`)),
     readFile: async (_p: any, path: string) => {

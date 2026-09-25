@@ -188,8 +188,7 @@ export class I18n {
    */
   set(locale: string, overlay: Messages): boolean {
     const next = { locale: canonicalLocale(locale), messages: sanitizeMessages(overlay) };
-    const same =
-      next.locale === this._locale && JSON.stringify(next.messages) === JSON.stringify(this.overlay);
+    const same = next.locale === this._locale && JSON.stringify(next.messages) === JSON.stringify(this.overlay);
     if (same) return false;
     this._locale = next.locale;
     this.overlay = next.messages;

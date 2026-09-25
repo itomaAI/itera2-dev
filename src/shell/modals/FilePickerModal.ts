@@ -259,7 +259,8 @@ export class FilePickerModal {
     const full = resolveSavePath(this.saveDir, this.nameInput?.value || '', this.currentFilters);
     this.selectedPath = full;
     if (this.selectedPathDisplay) {
-      this.selectedPathDisplay.textContent = full || (this.saveDir ? `${this.saveDir}/` : t('filePicker.selectAFolder'));
+      this.selectedPathDisplay.textContent =
+        full || (this.saveDir ? `${this.saveDir}/` : t('filePicker.selectAFolder'));
       this.selectedPathDisplay.classList.toggle('text-primary', !!full);
       this.selectedPathDisplay.classList.toggle('font-bold', !!full);
       this.selectedPathDisplay.classList.toggle('text-text-muted', !full);

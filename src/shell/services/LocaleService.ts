@@ -16,7 +16,14 @@ import type { VfsService } from '../../core/vfs/VfsService';
 import type { VfsEventBus } from '../../core/vfs/VfsEventBus';
 import { SYSTEM_PRINCIPAL } from '../../core/vfs/types';
 import { LOCALE_LAYERS } from '../../config/config_layers';
-import { i18n as defaultI18n, canonicalLocale, localeChain, sanitizeMessages, type I18n, type Messages } from '../../i18n/i18n';
+import {
+  i18n as defaultI18n,
+  canonicalLocale,
+  localeChain,
+  sanitizeMessages,
+  type I18n,
+  type Messages,
+} from '../../i18n/i18n';
 
 export interface LocaleFileMeta {
   name?: string;
@@ -60,7 +67,10 @@ export class LocaleService {
     });
     this.eventBus.subscribe((mutations) => {
       const touched = mutations.some(
-        (m) => typeof m.path === 'string' && m.path.endsWith('.json') && this.layers.some((dir) => m.path.startsWith(`${dir}/`)),
+        (m) =>
+          typeof m.path === 'string' &&
+          m.path.endsWith('.json') &&
+          this.layers.some((dir) => m.path.startsWith(`${dir}/`)),
       );
       if (touched) void this.load();
     });

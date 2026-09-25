@@ -968,11 +968,16 @@
           for (const f of files) {
             if (!String(f).endsWith('.json')) continue;
             const path = String(f).includes('/') ? String(f) : `${dir}/${f}`;
-            const code = path.split('/').pop().replace(/\.json$/, '');
+            const code = path
+              .split('/')
+              .pop()
+              .replace(/\.json$/, '');
             let name = found.get(code) || code;
             try {
               const meta = JSON.parse(await MetaOS.fs.read(path)).meta || {};
-              if (meta.name) name = meta.englishName && meta.englishName !== meta.name ? `${meta.name} (${meta.englishName})` : meta.name;
+              if (meta.name)
+                name =
+                  meta.englishName && meta.englishName !== meta.name ? `${meta.name} (${meta.englishName})` : meta.name;
             } catch (e) {
               /* 読めないファイルは名前を付けずに並べる（選べばホストは英語に落ちる） */
             }

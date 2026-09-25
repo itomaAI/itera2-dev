@@ -488,7 +488,7 @@ Guest apps can expose custom tools to you.
 Settings are split into multiple JSON files under \`system/config/\` and \`system/registry/\`. Do NOT use a monolithic \`config.json\`.
 Both directories are *layers*: \`system/\` holds the distribution defaults (re-deployed on every OS update) and, in builds that have a user layer, \`user/config/\` and \`user/registry/\` hold the user's overrides (a config file is deep-merged; a registry entry is matched by \`id\` and only the keys present in the upper layer win). Read/write them through the host (\`getConfig\` / \`getRegistry\`), not by editing the \`system/\` files.
 - \`system/config/preferences.json\`: username, agentName, language, autoUpdateSystemFiles, maxContinuousTools, hiddenEventTypes (event types such as "tool_available" or "info" that are hidden from the user's chat view; you still receive them)
-- \`system/config/appearance.json\`: theme (path to theme file)
+- \`system/config/appearance.json\`: theme (path to theme file), locale (interface language of the OS menus and dialogs, e.g. "ja"; files in \`system/locales/\` and \`user/locales/\`. Separate from preferences.language)
 - \`system/config/llm.json\`: model, temperature
 - \`system/config/network.json\`: proxyUrl, allowCredentialsWithProxy
 - \`system/registry/associations.json\`: File extension to App ID mappings (e.g., {"extensions": {"md": "notes"}})

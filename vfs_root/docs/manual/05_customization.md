@@ -31,8 +31,34 @@ This directory holds the dynamic configuration of your OS environment.
       "temperature": 1.0
     }
     ```
-*   **`appearance.json`**: Controls the visual layout and active theme path.
+*   **`appearance.json`**: Controls the visual layout, the active theme path and the interface language (`locale`, e.g. `"ja"`).
+    The interface language is separate from `preferences.language`, which is the language the AI answers in.
 *   **`network.json`**: Configures the CORS proxy URL.
+
+### Interface Language (`system/locales/`)
+
+The OS menus, dialogs and notifications follow `appearance.locale`. Pick it in **Settings → Interface Language**.
+
+*   English is built into the host, so the OS works even with no language files at all.
+*   Other languages are JSON files named after the language: `system/locales/ja.json`, `zh-Hans.json`, ...
+    Shipped: `ja`, `zh-Hans`, `zh-Hant`, `ko`, `es`, `fr`, `de`.
+*   Files are layered: `system/locales/<lang>.json`, then `user/locales/<lang>.json` on top (create `user/locales/` if it does not exist).
+    A key missing from both falls back to English. A more specific tag wins over a general one (`ja-JP.json` over `ja.json`).
+*   Edits apply immediately, without a reload.
+*   To change a few words, do not edit `system/locales` (OS updates overwrite it). Put only the keys you want to change in `user/locales/<lang>.json`:
+
+```json
+{
+  "meta": { "name": "日本語", "englishName": "Japanese" },
+  "messages": {
+    "explorer.menu.addToContext": "AI に渡す"
+  }
+}
+```
+
+Translations are plain text (HTML is not interpreted). `{name}` marks a value filled in by the OS; keep it as is.
+Plural forms use the keys of `Intl.PluralRules` (`{ "one": "...", "other": "..." }`).
+The AI-facing text (tool results, error details, event logs) stays in English on purpose.
 
 ## 2. System Registries (`system/registry/`)
 

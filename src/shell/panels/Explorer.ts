@@ -264,7 +264,9 @@ export class Explorer {
         if (resolvedApps.length > 0) {
           const defaultApp = resolvedApps[0];
           const defaultLabel =
-            defaultApp.appId === 'HostRunner' ? t('explorer.menu.runAsApp') : t('explorer.menu.openIn', { app: defaultApp.appName });
+            defaultApp.appId === 'HostRunner'
+              ? t('explorer.menu.runAsApp')
+              : t('explorer.menu.openIn', { app: defaultApp.appName });
           actions.push({
             label: defaultLabel,
             action: () => {
@@ -283,7 +285,8 @@ export class Explorer {
           }
 
           resolvedApps.slice(1).forEach((app) => {
-            const fallbackLabel = app.appId === 'HostRunner' ? t('explorer.menu.fallbackRunAsApp') : ` ↳ ${app.appName}`;
+            const fallbackLabel =
+              app.appId === 'HostRunner' ? t('explorer.menu.fallbackRunAsApp') : ` ↳ ${app.appName}`;
             actions.push({
               label: fallbackLabel,
               action: () => {
@@ -454,12 +457,14 @@ export class Explorer {
           uploadedPaths.push(fullPath);
         } catch (err: any) {
           console.error(`[Explorer] Upload failed for ${fullPath}:`, err);
-          if (window.AppUI) window.AppUI.notify(t('explorer.upload.failedFor', { name: file.name, reason: err.message }), 'error');
+          if (window.AppUI)
+            window.AppUI.notify(t('explorer.upload.failedFor', { name: file.name, reason: err.message }), 'error');
         }
       }
 
       if (uploadedPaths.length > 0) {
-        if (window.AppUI) window.AppUI.notify(t('explorer.upload.complete', { count: uploadedPaths.length }), 'success');
+        if (window.AppUI)
+          window.AppUI.notify(t('explorer.upload.complete', { count: uploadedPaths.length }), 'success');
         const items: VfsEventItem[] = uploadedPaths.map((p) => ({ srcPath: p }));
         const msg = VfsEventFormatter.format({
           actor: 'User',
@@ -525,7 +530,8 @@ export class Explorer {
           if (file) firstItemName = file.name;
         }
       }
-      const sourceName = items.length > 1 ? t('explorer.upload.sourceAndOthers', { name: firstItemName }) : firstItemName;
+      const sourceName =
+        items.length > 1 ? t('explorer.upload.sourceAndOthers', { name: firstItemName }) : firstItemName;
 
       if (window.AppUI) window.AppUI.notify(t('explorer.upload.analyzing'), 'info');
 
@@ -630,12 +636,17 @@ export class Explorer {
           uploadedPaths.push(targetPath);
         } catch (err: any) {
           console.error(`[Explorer] Import failed: ${targetPath}`, err);
-          if (window.AppUI) window.AppUI.notify(t('explorer.upload.importFailedFor', { name: file.name, reason: err.message }), 'error');
+          if (window.AppUI)
+            window.AppUI.notify(
+              t('explorer.upload.importFailedFor', { name: file.name, reason: err.message }),
+              'error',
+            );
         }
       }
 
       if (uploadedPaths.length > 0) {
-        if (window.AppUI) window.AppUI.notify(t('explorer.upload.completeUploaded', { count: uploadedPaths.length }), 'success');
+        if (window.AppUI)
+          window.AppUI.notify(t('explorer.upload.completeUploaded', { count: uploadedPaths.length }), 'success');
         const items: VfsEventItem[] = uploadedPaths.map((p) => ({ srcPath: p }));
         const msg = VfsEventFormatter.format({
           actor: 'User',
@@ -1052,8 +1063,8 @@ export class Explorer {
             const res = await window.AppUI?.showConflictDialog(fileName, isDir);
             if (window.AppUI)
               window.AppUI.showLoading(
-        t(mode === 'move' ? 'explorer.move.progress' : 'explorer.copy.progress', { count: normalized.length }),
-      );
+                t(mode === 'move' ? 'explorer.move.progress' : 'explorer.copy.progress', { count: normalized.length }),
+              );
 
             if (!res || res.action === 'cancel') {
               break;

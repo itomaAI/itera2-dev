@@ -308,8 +308,7 @@ export class EventOrchestrator {
       return;
     }
     this.desktop.modals.media.open(path, blob);
-    if (window.AppUI)
-      window.AppUI.notify(t('notify.notTextFile'), 'info');
+    if (window.AppUI) window.AppUI.notify(t('notify.notTextFile'), 'info');
   }
 
   private _bindExplorerEvents(): void {

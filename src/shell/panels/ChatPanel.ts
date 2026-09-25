@@ -936,7 +936,8 @@ export class ChatPanel {
       img.className =
         'h-24 rounded border border-border-main cursor-pointer hover:opacity-80 bg-app mt-2 object-contain';
       img.onclick = () => {
-        if (this.events['preview_request']) this.events['preview_request'](t('chat.media.imagePreview'), src, mime, path);
+        if (this.events['preview_request'])
+          this.events['preview_request'](t('chat.media.imagePreview'), src, mime, path);
       };
       container.appendChild(img);
     } else {

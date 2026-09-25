@@ -408,11 +408,7 @@ export class SystemBootstrapper {
           t('notice.resetFailed', { reason }),
           'error',
         ],
-        repair_clean: [
-          'Repair ran, but no problems were found in the file system.',
-          t('notice.repairClean'),
-          'info',
-        ],
+        repair_clean: ['Repair ran, but no problems were found in the file system.', t('notice.repairClean'), 'info'],
         repaired: [
           `Repaired the file system (${fixed} issues). Rescued files are in .lost+found.`,
           t('notice.repaired', { count: fixed }),

@@ -128,8 +128,7 @@ export class SyncModal {
     this.emptyNotice = document.createElement('div');
     this.emptyNotice.className =
       'text-xs text-text-muted text-center py-6 border border-dashed border-border-main rounded-lg leading-relaxed';
-    this.emptyNotice.innerHTML =
-      `<span data-i18n="sync.noAdapters">${escapeHtml(t('sync.noAdapters'))}</span><br /><span class="font-mono">system/registry/adapters.json</span>`;
+    this.emptyNotice.innerHTML = `<span data-i18n="sync.noAdapters">${escapeHtml(t('sync.noAdapters'))}</span><br /><span class="font-mono">system/registry/adapters.json</span>`;
 
     // 起動時に既に生成済みのスロットを流し込む
     for (const slot of this.slots.values()) {

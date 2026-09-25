@@ -196,7 +196,10 @@ export class SystemModal {
 
       if (errorCount > 0) {
         if (window.AppUI)
-          window.AppUI.notify(t('systemModal.backup.exportedWithErrors', { count: errorCount, note: skippedNote }), 'warning');
+          window.AppUI.notify(
+            t('systemModal.backup.exportedWithErrors', { count: errorCount, note: skippedNote }),
+            'warning',
+          );
       } else {
         if (window.AppUI) window.AppUI.notify(t('systemModal.backup.exported', { note: skippedNote }), 'success');
       }

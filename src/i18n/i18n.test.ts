@@ -121,7 +121,9 @@ describe('言語の名前', () => {
 
 describe('escapeHtml', () => {
   it('HTML の記号を消す', () => {
-    expect(escapeHtml(`<img src=x onerror="a('b')">&`)).toBe('&lt;img src=x onerror=&quot;a(&#39;b&#39;)&quot;&gt;&amp;');
+    expect(escapeHtml(`<img src=x onerror="a('b')">&`)).toBe(
+      '&lt;img src=x onerror=&quot;a(&#39;b&#39;)&quot;&gt;&amp;',
+    );
   });
 });
 

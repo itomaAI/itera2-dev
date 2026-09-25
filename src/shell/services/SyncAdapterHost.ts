@@ -233,7 +233,8 @@ export class SyncAdapterHost {
         accentClass: first.status.accentClass,
       };
     }
-    if (all.some((a) => a.status.state === 'connecting')) return { state: 'connecting', label: t('sync.status.connecting') };
+    if (all.some((a) => a.status.state === 'connecting'))
+      return { state: 'connecting', label: t('sync.status.connecting') };
 
     const errored = all.find((a) => a.status.state === 'error');
     if (errored) return { state: 'error', label: t('sync.status.error'), detail: errored.status.detail };

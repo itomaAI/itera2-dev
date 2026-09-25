@@ -106,11 +106,17 @@ The OS does not know your app. It only announces that its own state changed; whe
 
 ```html
 <script>
-    App.Config.onChange('appearance', (appearance) => {
-        document.documentElement.lang = appearance.locale || 'en';
-    });
+    // The interface language is appearance.locale (not preferences.language, which is the AI's language)
+    const applyLocale = (appearance) => render(appearance.locale || 'en');
+    App.Config.get('appearance').then(applyLocale);
+    App.Config.onChange('appearance', applyLocale);
 </script>
 ```
+
+*   **Your app's text belongs to your app.** The OS translates only its own UI; it never reaches into an app.
+    Keep your own strings in the app and choose them from `appearance.locale`.
+*   **`<html lang>`**: if your HTML does not declare `lang`, the bridge sets it to the OS language and keeps it in sync.
+    If you declare it, the OS leaves it alone.
 
 *   **`registry_changed`** (`{ registries: ['apps' | 'services' | 'associations', ...] }`): sent when a merged registry actually changed (an app or daemon was added, removed or edited). Read it again with `getRegistry`, or use `App.Registry.onChange('apps', (apps) => ...)`.
 
