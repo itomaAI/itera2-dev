@@ -3,198 +3,312 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Dashboard</title>
-    <!-- Tailwind CSS -->
+    <title>Home</title>
     <script src="/system/vendor/tw.js"></script>
-
-    <!-- System Libraries -->
-    <!-- パスは新しいディレクトリ構造（system/core/）に合わせています -->
     <script src="/system/core/ui.js"></script>
     <script src="/system/core/std.js"></script>
+    <style>
+      @keyframes fadeInUp {
+        from {
+          opacity: 0;
+          transform: translateY(8px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+      .fade {
+        animation: fadeInUp 0.4s ease-out forwards;
+      }
+      .thin::-webkit-scrollbar {
+        width: 6px;
+      }
+      .thin::-webkit-scrollbar-thumb {
+        background: rgba(127, 127, 127, 0.25);
+        border-radius: 3px;
+      }
+      .thin::-webkit-scrollbar-track {
+        background: transparent;
+      }
+      /* 使用量のバー。塗りの色は JS が付け替える */
+      .bar {
+        position: relative;
+        height: 6px;
+        border-radius: 3px;
+        overflow: hidden;
+      }
+      .bar > .fill {
+        height: 100%;
+        border-radius: 3px;
+        transition: width 0.4s ease;
+      }
+      .chip {
+        display: inline-block;
+        font-size: 10px;
+        font-weight: 700;
+        line-height: 1;
+        padding: 4px 6px;
+        border-radius: 6px;
+        white-space: nowrap;
+        min-width: 52px;
+        text-align: center;
+      }
+      /* 3 列とも fr で持つ。画面幅が変わったとき 3 列が同じ比率で伸び縮みする */
+      #main {
+        display: grid;
+        grid-template-columns: minmax(0, 1.2fr) minmax(0, 2.8fr) minmax(0, 1.7fr);
+      }
+      /* 狭いとき: 列を減らし、#main 全体をスクロールさせる（高さ固定のままだと行が押し潰される） */
+      @media (max-width: 1180px) {
+        #main {
+          grid-template-columns: minmax(0, 1fr) minmax(0, 2.4fr);
+          overflow-y: auto;
+          grid-auto-rows: max-content;
+        }
+        #right {
+          grid-column: 1 / -1;
+          overflow: visible;
+        }
+        #app-list {
+          max-height: 40vh;
+        }
+        #loom-body {
+          max-height: 70vh;
+        }
+      }
+      @media (max-width: 800px) {
+        #main {
+          grid-template-columns: minmax(0, 1fr);
+        }
+        #right {
+          grid-column: auto;
+        }
+      }
+    </style>
   </head>
-  <body class="bg-app text-text-main h-screen p-6 overflow-hidden flex flex-col select-none">
-    <!-- Header / Greeting -->
-    <header class="mb-8 flex justify-between items-end shrink-0 animate-fade-in-up">
+  <body class="bg-app text-text-main h-screen flex flex-col overflow-hidden select-none font-sans px-6 pt-6 pb-5 gap-5">
+    <!--
+      ホーム。3 列: 左＝アプリとシステム（会話の長さ・容量・Local Bridge）／中＝Loom（誰の番か）／右＝カレンダー・タスク・メモ・日誌。
+      データの正はすべてファイル（板・登録簿・usage ログ・tasks/events/notes）で、ここは読んで描くだけ。
+      書くのはタスクの完了・編集・削除だけ。
+    -->
+    <header class="flex justify-between items-end shrink-0 fade">
       <div>
-        <h1 id="greeting" class="text-3xl font-bold text-text-main tracking-tight">Welcome Back</h1>
-        <p id="date-display" class="text-text-muted font-mono text-sm mt-1 opacity-80">Loading...</p>
+        <h1 id="greeting" class="text-2xl md:text-3xl font-bold tracking-tight">Welcome</h1>
+        <p id="date-display" class="text-text-muted font-mono text-xs md:text-sm mt-1 opacity-80">…</p>
       </div>
       <div class="text-right flex items-center gap-6">
-        <!-- Weather Widget (Injected by JS) -->
-        <div id="weather-display" class="hidden md:flex flex-col items-end mr-4 text-text-main">
+        <div id="weather-display" class="hidden md:flex flex-col items-end mr-2">
           <div class="w-16 h-8 bg-card rounded animate-pulse"></div>
         </div>
-
-        <!-- Clock & Status -->
         <div>
-          <div id="clock-display" class="text-4xl font-light text-primary font-mono tracking-widest drop-shadow-sm">
+          <div
+            id="clock-display"
+            class="text-3xl md:text-4xl font-light text-primary font-mono tracking-widest drop-shadow-sm"
+          >
             00:00
           </div>
           <div class="flex items-center justify-end gap-2 mt-1">
             <div class="w-2 h-2 rounded-full bg-success animate-pulse shadow-[0_0_8px_rgba(0,255,100,0.6)]"></div>
-            <span class="text-[10px] text-text-muted uppercase tracking-wider font-bold">System Online</span>
+            <span
+              id="model-display"
+              class="text-[10px] text-text-muted tracking-wider font-mono"
+              title="The model the AI is using now"
+              >System Online</span
+            >
           </div>
         </div>
       </div>
     </header>
 
-    <!-- Main Grid -->
-    <main class="flex-1 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 overflow-y-auto pb-10">
-      <!-- Widget: Quick Launcher -->
-      <section
-        class="bg-panel rounded-2xl p-5 border border-border-main shadow-lg flex flex-col gap-4 hover:border-primary/30 transition-colors"
-      >
-        <div class="flex items-center justify-between mb-1">
-          <h2 class="text-sm font-bold text-text-muted uppercase tracking-wider flex items-center gap-2">
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                stroke-width="2"
-                d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"
-              ></path>
-            </svg>
-            Apps
-          </h2>
-          <!-- V2: ランチャーはシステムアプリ領域へ移動 -->
-          <button
-            onclick="AppUI.go('system/apps/launcher.html')"
-            class="text-xs font-medium text-text-muted hover:text-text-main transition flex items-center gap-1 group"
-          >
-            Library <span class="group-hover:translate-x-0.5 transition-transform">→</span>
-          </button>
-        </div>
-
-        <!-- ショートカットは system/registry/apps.json から組み立てる（T-0188）。ここに直書きしない -->
-        <div id="app-grid" class="grid grid-cols-2 gap-3"></div>
-
-        <!-- Quick Actions Footer -->
-        <div class="mt-auto pt-2 border-t border-border-main flex gap-2 justify-end">
-          <button
-            onclick="MetaOS.ai.task('Create a new quick note.', null, { silent: false })"
-            class="p-1.5 text-text-muted hover:text-primary hover:bg-primary/10 rounded transition"
-            title="Quick AI Task"
-          >
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                stroke-width="2"
-                d="M13 10V3L4 14h7v7l9-11h-7z"
-              ></path>
-            </svg>
-          </button>
-          <button
-            onclick="AppUI.go('system/apps/tasks.html')"
-            class="p-1.5 text-text-muted hover:text-primary hover:bg-primary/10 rounded transition"
-            title="New Task"
-          >
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
-            </svg>
-          </button>
-        </div>
-      </section>
-
-      <!-- Widget: Recent Tasks -->
-      <section
-        class="bg-panel rounded-2xl p-5 border border-border-main shadow-lg flex flex-col hover:border-primary/30 transition-colors"
-      >
-        <div class="flex items-center justify-between mb-4">
-          <h2 class="text-sm font-bold text-text-muted uppercase tracking-wider flex items-center gap-2">
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                stroke-width="2"
-                d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"
-              ></path>
-            </svg>
-            Active Tasks
-          </h2>
-          <button
-            onclick="AppUI.go('system/apps/tasks.html')"
-            class="text-xs font-medium text-text-muted hover:text-text-main transition flex items-center gap-1 group"
-          >
-            View All <span class="group-hover:translate-x-0.5 transition-transform">→</span>
-          </button>
-        </div>
-        <div id="widget-tasks" class="flex-1 space-y-2 overflow-y-auto pr-1">
-          <!-- Injected via JS -->
-          <div class="animate-pulse flex space-x-2">
-            <div class="h-4 bg-card rounded w-3/4"></div>
+    <main id="main" class="flex-1 min-h-0 gap-5 fade" style="animation-delay: 0.05s">
+      <!-- 左: アプリとシステム -->
+      <aside class="flex flex-col gap-5 min-h-0">
+        <section class="bg-panel rounded-2xl border border-border-main shadow-sm flex flex-col min-h-0 flex-1 p-4">
+          <div class="flex items-center justify-between mb-2 shrink-0">
+            <h2 class="text-xs font-bold text-text-muted uppercase tracking-wider">Apps</h2>
+            <button
+              data-open-app="launcher"
+              class="text-[10px] font-medium text-text-muted hover:text-text-main transition"
+            >
+              Library →
+            </button>
           </div>
-        </div>
-      </section>
+          <!-- 登録簿（apps）から組む。home:false は出さない、home:<数値> は先頭へ（T-0188）。ここに直書きしない -->
+          <div id="app-list" class="flex-1 min-h-0 overflow-y-auto thin -mx-1 px-1 space-y-0.5"></div>
+        </section>
 
-      <!-- Widget: Recent Notes -->
-      <section
-        class="bg-panel rounded-2xl p-5 border border-border-main shadow-lg flex flex-col hover:border-primary/30 transition-colors md:col-span-2 lg:col-span-1"
-      >
-        <div class="flex items-center justify-between mb-4">
-          <h2 class="text-sm font-bold text-text-muted uppercase tracking-wider flex items-center gap-2">
+        <section class="bg-panel rounded-2xl border border-border-main shadow-sm shrink-0 p-4 text-sm">
+          <h2 class="text-xs font-bold text-text-muted uppercase tracking-wider mb-3">System</h2>
+
+          <div id="ctx-box" class="px-2 py-1.5 -mx-2" title="How long the current conversation is">
+            <div class="flex justify-between items-baseline mb-1.5">
+              <span class="text-text-muted">Context</span>
+              <span id="ctx-num" class="font-mono text-text-main">…</span>
+            </div>
+            <div class="bar bg-card"><div class="fill bg-primary" id="ctx-fill" style="width: 0%"></div></div>
+            <div id="ctx-sub" class="text-[10px] text-text-muted mt-1 font-mono"></div>
+          </div>
+
+          <button
+            id="vfs-btn"
+            class="w-full text-left rounded-lg hover:bg-hover px-2 py-1.5 -mx-2 transition mt-2"
+            title="Storage used on this device. Click to open the trash."
+          >
+            <div class="flex justify-between items-baseline mb-1.5">
+              <span class="text-text-muted">Storage</span>
+              <span id="vfs-num" class="font-mono text-text-main">…</span>
+            </div>
+            <div class="bar bg-card"><div class="fill bg-primary" id="vfs-fill" style="width: 0%"></div></div>
+          </button>
+
+          <div class="mt-3 pt-3 border-t border-border-main">
+            <div class="flex justify-between items-baseline mb-1.5">
+              <span class="text-text-muted">Local Bridge</span>
+              <button
+                data-open-app="local_bridge_settings"
+                id="bridge-sum"
+                class="font-mono text-text-muted hover:text-text-main transition"
+                title="Open the Local Bridge settings"
+              >
+                …
+              </button>
+            </div>
+            <div id="bridge-list" class="space-y-0.5"></div>
+          </div>
+        </section>
+      </aside>
+
+      <!-- 中: Loom -->
+      <section class="bg-panel rounded-2xl border border-border-main shadow-sm flex flex-col min-h-0 p-5">
+        <div class="flex items-center justify-between mb-3 shrink-0">
+          <h2 class="text-xs font-bold text-text-muted uppercase tracking-wider flex items-center gap-2">
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                stroke-width="2"
-                d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
-              ></path>
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h10"></path>
             </svg>
-            Recent Notes
+            Loom
+            <span id="loom-sum" class="font-mono normal-case tracking-normal font-normal"></span>
           </h2>
           <button
-            onclick="AppUI.go('system/apps/notes.html')"
-            class="text-xs font-medium text-text-muted hover:text-text-main transition flex items-center gap-1 group"
+            data-open-app="loom"
+            class="text-[10px] font-medium text-text-muted hover:text-text-main transition bg-card px-2 py-1 rounded-full border border-border-main"
           >
-            View All <span class="group-hover:translate-x-0.5 transition-transform">→</span>
+            Open Loom →
           </button>
         </div>
-        <div id="widget-notes" class="flex-1 space-y-2 overflow-y-auto pr-1">
-          <!-- Injected via JS -->
-          <div class="animate-pulse space-y-2">
-            <div class="h-4 bg-card rounded w-full"></div>
-            <div class="h-4 bg-card rounded w-5/6"></div>
-          </div>
+        <div id="loom-body" class="flex-1 min-h-0 overflow-y-auto thin pr-1">
+          <div class="text-text-muted text-xs italic py-3">Reading the board…</div>
         </div>
+        <p id="loom-note" class="text-[10px] text-error mt-2 shrink-0 hidden"></p>
       </section>
+
+      <!-- 右: カレンダー・タスク・メモ -->
+      <aside id="right" class="flex flex-col gap-5 min-h-0 overflow-y-auto thin">
+        <section class="bg-panel rounded-2xl border border-border-main shadow-sm p-5 shrink-0">
+          <div class="flex items-center justify-between mb-3">
+            <h2 class="text-xs font-bold text-text-muted uppercase tracking-wider flex items-center gap-2">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
+                ></path>
+              </svg>
+              Calendar
+            </h2>
+            <div class="flex items-center gap-1 bg-card rounded-lg p-0.5 border border-border-main">
+              <button
+                id="cal-prev"
+                class="px-1.5 hover:bg-hover rounded transition text-text-muted hover:text-text-main"
+              >
+                &lt;
+              </button>
+              <span id="dash-cal-month" class="text-[10px] font-bold min-w-[72px] text-center">…</span>
+              <button
+                id="cal-next"
+                class="px-1.5 hover:bg-hover rounded transition text-text-muted hover:text-text-main"
+              >
+                &gt;
+              </button>
+            </div>
+          </div>
+          <div id="dash-cal-weekdays" class="grid grid-cols-7 gap-0.5 text-center mb-1"></div>
+          <div id="dash-cal-grid" class="grid grid-cols-7 gap-0.5 text-center"></div>
+
+          <div class="mt-3 pt-3 border-t border-border-main">
+            <div class="text-[9px] font-bold text-text-muted uppercase mb-1.5 flex justify-between items-center">
+              <span>Today</span>
+              <button data-open-app="calendar" class="hover:text-primary transition normal-case">
+                Open Calendar →
+              </button>
+            </div>
+            <div id="dash-cal-events" class="space-y-1"></div>
+          </div>
+
+          <div class="mt-3 pt-3 border-t border-border-main">
+            <div class="text-[9px] font-bold text-text-muted uppercase mb-1.5 flex justify-between items-center">
+              <span>Tasks <span id="task-sum" class="font-mono normal-case font-normal"></span></span>
+              <button data-open-app="tasks" class="hover:text-primary transition normal-case">View All →</button>
+            </div>
+            <div id="widget-tasks" class="space-y-0.5"></div>
+          </div>
+        </section>
+
+        <section class="bg-panel rounded-2xl border border-border-main shadow-sm p-5 shrink-0">
+          <div class="flex items-center justify-between mb-2">
+            <h2 class="text-xs font-bold text-text-muted uppercase tracking-wider flex items-center gap-2">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
+                ></path>
+              </svg>
+              Recent Notes
+            </h2>
+            <button
+              data-open-app="notes"
+              class="text-[10px] font-medium text-text-muted hover:text-text-main transition"
+            >
+              View All →
+            </button>
+          </div>
+          <div id="widget-notes" class="space-y-0.5"></div>
+          <div id="journals-title" class="text-[9px] font-bold text-text-muted uppercase mt-3 mb-1.5">Journal</div>
+          <div id="widget-journals" class="space-y-0.5"></div>
+        </section>
+      </aside>
     </main>
 
-    <!-- Task Edit Modal (Dashboard) -->
+    <!-- タスクの編集（右列のタスクから） -->
     <div
       id="edit-modal"
-      class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center backdrop-blur-sm"
+      class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center backdrop-blur-sm p-4"
     >
-      <div
-        class="bg-panel w-full max-w-md mx-4 rounded-xl shadow-2xl border border-border-main flex flex-col max-h-[90vh]"
-      >
+      <div class="bg-panel w-full max-w-md rounded-xl shadow-2xl border border-border-main flex flex-col max-h-full">
         <div class="p-4 border-b border-border-main flex justify-between items-center">
-          <h3 class="font-bold text-lg text-text-main">Task Details</h3>
-          <button onclick="DashTask.close()" class="text-text-muted hover:text-text-main">
-            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
-            </svg>
-          </button>
+          <h3 class="font-bold text-base">Task Details</h3>
+          <button id="edit-close" class="text-text-muted hover:text-text-main">✕</button>
         </div>
-
         <div class="p-4 space-y-4 overflow-y-auto">
           <input type="hidden" id="edit-id" />
-
           <div>
-            <label class="block text-xs font-bold text-text-muted uppercase mb-1">Task Title</label>
+            <label class="block text-xs font-bold text-text-muted uppercase mb-1">Title</label>
             <input
               type="text"
               id="edit-title"
               class="w-full bg-card border border-border-main rounded p-2 focus:border-primary focus:outline-none text-text-main"
             />
           </div>
-
           <div class="grid grid-cols-2 gap-4">
             <div>
               <label class="block text-xs font-bold text-text-muted uppercase mb-1">Priority</label>
               <select
                 id="edit-priority"
-                class="w-full bg-card border border-border-main rounded p-2 focus:border-primary focus:outline-none text-text-main"
+                class="w-full bg-card border border-border-main rounded p-2 focus:border-primary focus:outline-none text-text-main text-sm"
               >
                 <option value="low">Low</option>
                 <option value="medium">Medium</option>
@@ -210,30 +324,24 @@
               />
             </div>
           </div>
-
           <div>
             <label class="block text-xs font-bold text-text-muted uppercase mb-1">Description / Notes</label>
             <textarea
               id="edit-desc"
-              rows="4"
+              rows="3"
               class="w-full bg-card border border-border-main rounded p-2 focus:border-primary focus:outline-none text-text-main text-sm resize-none"
-              placeholder="Add details..."
             ></textarea>
           </div>
         </div>
-
-        <div class="p-4 border-t border-border-main flex justify-between items-center bg-card/50 rounded-b-xl">
-          <button onclick="DashTask.del()" class="text-error text-sm hover:underline font-medium">Delete Task</button>
+        <div class="p-4 border-t border-border-main flex justify-between items-center bg-card/30 rounded-b-xl">
+          <button id="edit-delete" class="text-error text-xs hover:underline font-medium">Delete Task</button>
           <div class="flex gap-2">
-            <button
-              onclick="DashTask.close()"
-              class="px-4 py-2 rounded-lg text-sm font-medium hover:bg-hover transition text-text-main"
-            >
+            <button id="edit-cancel" class="px-3 py-1.5 rounded-lg text-xs font-bold text-text-muted hover:bg-hover">
               Cancel
             </button>
             <button
-              onclick="DashTask.save()"
-              class="px-4 py-2 rounded-lg bg-primary text-text-inverted text-sm font-bold hover:bg-primary/90 shadow transition"
+              id="edit-save"
+              class="px-3 py-1.5 rounded-lg bg-primary text-text-inverted text-xs font-bold hover:bg-primary/90 shadow"
             >
               Save
             </button>
@@ -242,35 +350,132 @@
       </div>
     </div>
 
-    <!-- Inline Dashboard Logic -->
     <script>
       (() => {
-        const State = { userName: 'User', tasks: [] };
-        const DOM = (id) => document.getElementById(id);
+        // =====================================================================
+        // 配信物ごとに違うのはここだけ（itera2-dev: data/apps・memory/journals ／ itera2: user/appdata・agent/journals）。
+        // dev/main を取り込むとき、差分がこの 2 行に収まるようにしてある。
+        // =====================================================================
+        const APPDATA = 'data/apps';
+        const JOURNALS = 'memory/journals';
 
-        // --- Time & Greeting ---
+        const LOOM_DIR = `${APPDATA}/loom`;
+        const EVENTS_DIR = `${APPDATA}/events`;
+        const TASKS_DIR = `${APPDATA}/tasks`;
+        const NOTES_DIR = `${APPDATA}/notes`;
+        const BRIDGE_CONFIG = 'system/config/local_bridge.json'; // 端末の状態（Local Bridge の設定アプリ・デーモンと同じ場所）
+        const USAGE_DIR = 'system/logs/usage'; // ホストが 1 ターン 1 行で書く（SystemLogger）
+
+        const DOM = (id) => document.getElementById(id);
+        const esc = (v) =>
+          String(v == null ? '' : v)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+        const State = {
+          userName: '',
+          agentName: '',
+          model: '',
+          locale: 'en',
+          apps: [], // 登録簿（重ねた値）
+          tasks: [],
+        };
+        const debounce = (fn, ms) => {
+          let t;
+          return () => {
+            clearTimeout(t);
+            t = setTimeout(fn, ms);
+          };
+        };
+        const resolvePath = (item, baseDir) => {
+          const p = typeof item === 'string' ? item : item.path || item.name;
+          return p.startsWith(baseDir + '/') ? p : `${baseDir}/${p}`;
+        };
+        const readJson = async (path, fallback) => {
+          try {
+            if (!(await MetaOS.fs.exists(path))) return fallback;
+            return JSON.parse((await MetaOS.fs.read(path)) || '');
+          } catch (e) {
+            return fallback;
+          }
+        };
+        /** n 本ずつ並列に読む（全部同時だと IPC が詰まり、1 本ずつだと遅い） */
+        const readMany = async (paths, n) => {
+          const out = new Array(paths.length);
+          let i = 0;
+          const worker = async () => {
+            while (i < paths.length) {
+              const k = i++;
+              try {
+                out[k] = await MetaOS.fs.read(paths[k]);
+              } catch (e) {
+                out[k] = null;
+              }
+            }
+          };
+          await Promise.all(Array.from({ length: Math.min(n || 12, paths.length) }, worker));
+          return out;
+        };
+        const ymd = (d) =>
+          `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+        const fmtTokens = (n) =>
+          n >= 1e6
+            ? (n / 1e6).toFixed(2).replace(/0$/, '') + 'M'
+            : n >= 1000
+              ? (n / 1000).toFixed(n >= 1e5 ? 0 : 1).replace(/\.0$/, '') + 'k'
+              : String(n);
+        const fmtBytes = (b) =>
+          b >= 1 << 30
+            ? (b / (1 << 30)).toFixed(2) + ' GB'
+            : b >= 1 << 20
+              ? (b / (1 << 20)).toFixed(0) + ' MB'
+              : Math.round(b / 1024) + ' KB';
+        const paint = (fillId, ratio, cls) => {
+          const f = DOM(fillId);
+          f.style.width = `${Math.round(Math.min(1, Math.max(0, ratio)) * 100)}%`;
+          f.className = `fill ${cls}`;
+        };
+        const fmtDate = (d, opts) => {
+          try {
+            return new Intl.DateTimeFormat(State.locale, opts).format(d);
+          } catch (e) {
+            return new Intl.DateTimeFormat('en', opts).format(d);
+          }
+        };
+
+        // ---------- アプリの在りか ----------
+        // 開く先は登録簿の path を引く。利用者が既定のアプリを自分用のコピーに差し替えても（05_customization）、
+        // ホームのボタンはそのコピーを開く。登録簿に無いときだけ配信の置き場へ。
+        const appPath = (id) => {
+          const a = State.apps.find((x) => x && x.id === id && x.path);
+          return a ? a.path : `system/apps/${id}.html`;
+        };
+        const openApp = (id, args) =>
+          args ? MetaOS.system.spawn(appPath(id), { show: true, args }) : AppUI.go(appPath(id));
+        document.addEventListener('click', (ev) => {
+          const el = ev.target.closest('[data-open-app]');
+          if (el) openApp(el.dataset.openApp);
+        });
+
+        // ---------- ヘッダ ----------
         const updateClock = () => {
           const now = new Date();
           const h = now.getHours();
-          const greet = h < 12 ? 'Good Morning' : h < 18 ? 'Good Afternoon' : 'Good Evening';
-
-          DOM('clock-display').textContent = now.toLocaleTimeString('en-US', {
-            hour12: false,
-            hour: '2-digit',
-            minute: '2-digit',
-          });
-          DOM('date-display').textContent = now.toLocaleDateString('en-US', {
+          const greet = h < 5 ? 'Good Evening' : h < 12 ? 'Good Morning' : h < 18 ? 'Good Afternoon' : 'Good Evening';
+          DOM('clock-display').textContent =
+            `${String(h).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+          DOM('date-display').textContent = fmtDate(now, {
             weekday: 'long',
+            year: 'numeric',
             month: 'long',
             day: 'numeric',
           });
-          DOM('greeting').textContent = `${greet}${State.userName !== 'User' ? ', ' + State.userName : '.'}`;
+          DOM('greeting').textContent = State.userName ? `${greet}, ${State.userName}` : `${greet}.`;
         };
-
-        // --- Weather ---
         const fetchWeather = async () => {
           const el = DOM('weather-display');
-          if (!el) return;
           try {
             const { current_weather: cw } = await fetch(
               'https://api.open-meteo.com/v1/forecast?latitude=35.6895&longitude=139.6917&current_weather=true&timezone=Asia%2FTokyo',
@@ -284,114 +489,549 @@
               [82, '🌦️', 'Showers'],
               [99, '⛈️', 'Thunderstorm'],
             ];
-            const [, icon, text] = wMap.find(([maxCode]) => cw.weathercode <= maxCode) || wMap[0];
-
-            el.innerHTML = `<div class="flex flex-col items-end"><div class="flex items-center gap-2"><span class="text-xl">${icon}</span><span class="text-xl font-bold tracking-tight">${Math.round(cw.temperature)}°C</span></div><span class="text-[10px] text-text-muted uppercase tracking-wider font-bold">Tokyo • ${text}</span></div>`;
+            const [, icon, text] = wMap.find(([max]) => cw.weathercode <= max) || wMap[0];
+            el.innerHTML = `<div class="flex items-center gap-2"><span class="text-xl">${icon}</span><span class="text-xl font-bold tracking-tight">${Math.round(cw.temperature)}°C</span></div><span class="text-[10px] text-text-muted uppercase tracking-wider font-bold">Tokyo • ${text}</span>`;
           } catch {
             el.innerHTML = '<span class="text-xs text-text-muted">Weather unavailable</span>';
           }
         };
-
-        // --- Widgets ---
-        const refreshWidgets = async () => {
-          if (!window.App) return;
-
-          // Fetch Tasks Locally
-          let allTasks = [];
-          try {
-            const files = await MetaOS.fs.list('data/apps/tasks');
-            for (const f of files.filter((x) => x.endsWith('.json'))) {
-              allTasks.push(...(await App.FS.readJson(f, [])));
-            }
-          } catch (e) {}
-          State.tasks = allTasks;
-
-          const pOrder = { high: 0, medium: 1, low: 2 };
-          const pending = State.tasks
-            .filter((t) => t.status !== 'completed')
-            .sort((a, b) => (pOrder[a.priority] ?? 1) - (pOrder[b.priority] ?? 1))
-            .slice(0, 5);
-
-          DOM('widget-tasks').innerHTML = pending.length
-            ? pending
-                .map(
-                  (t) => `
-                    <div class="flex items-center gap-3 p-2 rounded hover:bg-hover transition group">
-                        <button onclick="DashTask.toggle('${t.id}')" class="shrink-0 w-3.5 h-3.5 rounded-full border-2 border-text-muted hover:border-primary flex items-center justify-center transition hover:scale-110 group-hover:border-primary/50"></button>
-                        <div class="flex-1 min-w-0 cursor-pointer" onclick="DashTask.edit('${t.id}')">
-                            <span class="text-sm truncate block ${t.priority === 'high' ? 'text-error font-medium' : 'text-text-main'}">${t.title}</span>
-                            ${t.dueDate ? `<span class="text-[10px] text-text-muted font-mono opacity-70 mt-0.5 block">${t.dueDate.slice(5)}</span>` : ''}
-                        </div>
-                    </div>`,
-                )
-                .join('')
-            : '<div class="text-text-muted text-xs italic py-2">No active tasks.</div>';
-
-          // Notes Widget
-          let notes = [];
-          try {
-            const files = await MetaOS.fs.list('data', { recursive: true, detail: true });
-            notes = files
-              .filter((f) => f.path.endsWith('.md'))
-              .sort((a, b) => b.updatedAt - a.updatedAt)
-              .slice(0, 5)
-              .map((f) => f.path);
-          } catch (e) {}
-
-          DOM('widget-notes').innerHTML = notes.length
-            ? notes
-                .map(
-                  (path) => `
-                    <div class="flex items-center gap-2 p-2 rounded hover:bg-hover transition cursor-pointer group" onclick="MetaOS.system.spawn('system/apps/notes.html', { show: true, args: { file: '${path}' } })">
-                        <svg class="w-4 h-4 text-text-muted group-hover:text-primary transition" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
-                        <span class="text-sm text-text-main truncate font-mono opacity-90">${path.split('/').pop().replace('.md', '')}</span>
-                    </div>`,
-                )
-                .join('')
-            : '<div class="text-text-muted text-xs italic py-2">No notes found.</div>';
+        const showModel = () => {
+          DOM('model-display').textContent = State.model ? State.model.replace(/^custom\//, '') : 'System Online';
         };
 
-        // --- Task Actions API ---
-        window.DashTask = {
-          edit: (id) => {
-            const t = State.tasks.find((x) => x.id === id);
-            if (!t) return;
-            ['id', 'title', 'priority', 'date', 'desc'].forEach(
-              (k) => (DOM(`edit-${k}`).value = t[k === 'date' ? 'dueDate' : k === 'desc' ? 'description' : k] || ''),
+        // ---------- アプリ（登録簿から。T-0188） ----------
+        //   home: false  … ホームに出さない
+        //   home: <数値> … 先頭へ、その数の小さい順に並べる
+        //   書かなければ … 登録簿の順のまま、数値指定の後ろに出る
+        const loadApps = async () => {
+          try {
+            // 登録簿は層になっている。重ねた値はホストから受け取る（T-0447）
+            const apps = await App.Registry.get('apps', null);
+            if (!Array.isArray(apps)) throw new Error('The app registry is not an array');
+            State.apps = apps;
+            return true;
+          } catch (e) {
+            State.apps = [];
+            return false;
+          }
+        };
+        const renderShortcuts = (ok) => {
+          const el = DOM('app-list');
+          if (!ok) {
+            // 既定の一覧を埋め込まない。無い物を在るように見せるより、読めないと言う方がよい
+            el.innerHTML =
+              '<p class="text-xs text-text-muted leading-relaxed">Could not read the app registry. You can open it from Library above.</p>';
+            return;
+          }
+          const rank = (a) => (typeof a.home === 'number' ? a.home : Number.MAX_SAFE_INTEGER);
+          const shown = State.apps
+            .filter((a) => a && a.path && a.home !== false)
+            .map((a, i) => ({ a, i }))
+            .sort((x, y) => rank(x.a) - rank(y.a) || x.i - y.i)
+            .map((x) => x.a);
+          el.innerHTML = '';
+          for (const app of shown) {
+            const b = document.createElement('button');
+            b.className =
+              'w-full flex items-center gap-2.5 px-2 py-1.5 rounded-lg hover:bg-hover transition text-left group';
+            b.title = app.description || app.name || app.id || '';
+            b.innerHTML = `<span class="text-lg w-7 text-center group-hover:scale-110 transition-transform">${esc(app.icon || '📦')}</span><span class="text-sm font-medium truncate">${esc(app.name || app.id)}</span>`;
+            b.addEventListener('click', () => AppUI.go(app.path));
+            el.appendChild(b);
+          }
+        };
+        const refreshApps = async () => renderShortcuts(await loadApps());
+
+        // ---------- 会話の長さ（usage ログから） ----------
+        const promptTokens = (row) => {
+          const t = row.tokens || {};
+          const cached = t.cached || 0;
+          const write = t.cacheWrite || 0;
+          // キャッシュを作り直したターンは cached と cacheWrite の両方に全体が入ることがある。そのときは大きい方だけ数える
+          const overlapping = cached > 0 && write > cached * 0.8;
+          const sum = (t.input || 0) + (overlapping ? Math.max(cached, write) : cached + write);
+          return sum > 0 ? sum : Math.max(0, (t.total || 0) - (t.output || 0));
+        };
+        const readUsage = async (n) => {
+          const rows = [];
+          for (let back = 0; back < 3 && rows.length < n; back++) {
+            const d = new Date(Date.now() - back * 86400000);
+            const path = `${USAGE_DIR}/${d.toISOString().slice(0, 10)}.jsonl`;
+            let text;
+            try {
+              if (!(await MetaOS.fs.exists(path))) continue;
+              text = await MetaOS.fs.read(path);
+            } catch (e) {
+              continue;
+            }
+            const lines = text.split('\n').filter((l) => l.trim());
+            for (let i = lines.length - 1; i >= 0 && rows.length < n; i--) {
+              try {
+                const o = JSON.parse(lines[i]);
+                if (o && o.tokens) rows.push(o);
+              } catch (e) {}
+            }
+          }
+          return rows;
+        };
+        /**
+         * いまのモデルの文脈の上限。モデルの一覧（llm_profiles。層を重ねた値はホストが持つ）に書いてある値だけを使う。
+         * 見つからなければ null —— 推測値は入れない（「まだ余裕がある」という誤った安心を作るので）。
+         */
+        let providersCache = null;
+        const contextLimitOf = async (model) => {
+          if (!model) return null;
+          if (!providersCache) {
+            try {
+              if (window.MetaOS?.system?.getProviders) providersCache = await MetaOS.system.getProviders();
+            } catch (e) {}
+            if (!Array.isArray(providersCache)) {
+              const profiles = await readJson('system/registry/llm_profiles.json', null);
+              providersCache = profiles && Array.isArray(profiles.providers) ? profiles.providers : [];
+            }
+          }
+          const bare = model.replace(/^[^/]+\//, '');
+          for (const p of providersCache) {
+            for (const m of (p && p.models) || []) {
+              if ((m.id === model || m.id === bare) && typeof m.contextTokens === 'number' && m.contextTokens > 0)
+                return m.contextTokens;
+            }
+          }
+          return null;
+        };
+        const loadContext = async () => {
+          const rows = await readUsage(10);
+          if (!rows.length) {
+            DOM('ctx-num').textContent = '–';
+            DOM('ctx-sub').textContent = 'No usage recorded yet';
+            paint('ctx-fill', 0, 'bg-primary');
+            return;
+          }
+          const limit = await contextLimitOf(State.model || rows[0].model);
+          // 単発の跳ね（キャッシュの作り直し）は直近 3 行の中央値で落とす
+          const med3 = (i) => {
+            const v = rows
+              .slice(i, i + 3)
+              .map(promptTokens)
+              .sort((a, b) => a - b);
+            return v.length >= 3 ? v[1] : promptTokens(rows[i]);
+          };
+          const now = med3(0);
+          const span = rows.length - 1;
+          const growth = span > 0 ? Math.round((now - med3(span)) / span) : 0;
+          DOM('ctx-num').textContent = limit ? `${fmtTokens(now)} / ${fmtTokens(limit)}` : `${fmtTokens(now)} tokens`;
+          if (limit) {
+            const r = now / limit;
+            paint('ctx-fill', r, r >= 0.85 ? 'bg-error' : r >= 0.6 ? 'bg-warning' : 'bg-primary');
+          } else {
+            paint('ctx-fill', 0, 'bg-primary');
+          }
+          const parts = [];
+          if (growth > 0) parts.push(`+${fmtTokens(growth)} / turn`);
+          if (limit && growth > 0 && now < limit) parts.push(`~${Math.floor((limit - now) / growth)} turns left`);
+          if (!limit) parts.push('limit unknown for this model');
+          DOM('ctx-sub').textContent = parts.join(' · ');
+        };
+
+        // ---------- 容量 ----------
+        const loadVfs = async () => {
+          try {
+            const u = await MetaOS.fs.getUsage();
+            if (!u || !u.max) throw new Error('no usage');
+            DOM('vfs-num').textContent = `${fmtBytes(u.used)} / ${fmtBytes(u.max)}`;
+            const full = u.used >= u.max - (u.reserved || 0);
+            paint('vfs-fill', u.used / u.max, full ? 'bg-error' : u.used / u.max > 0.85 ? 'bg-warning' : 'bg-primary');
+          } catch (e) {
+            DOM('vfs-num').textContent = '–';
+          }
+        };
+        DOM('vfs-btn').onclick = () => MetaOS.host.revealInExplorer('trash');
+
+        // ---------- Local Bridge（設定の各接続に /api/status を直接訊く。デーモンは触らない） ----------
+        const fetchJson = async (url, ms) => {
+          const ctl = new AbortController();
+          const t = setTimeout(() => ctl.abort(), ms);
+          try {
+            const r = await fetch(url, { signal: ctl.signal });
+            if (!r.ok) throw new Error(`HTTP ${r.status}`);
+            return await r.json();
+          } finally {
+            clearTimeout(t);
+          }
+        };
+        const loadBridge = async () => {
+          const cfg = await readJson(BRIDGE_CONFIG, null);
+          const conns = ((cfg && cfg.connections) || []).filter((c) => c && c.enabled !== false && c.serverUrl);
+          const el = DOM('bridge-list');
+          if (!conns.length) {
+            el.innerHTML = '<div class="text-[10px] text-text-muted">No machines connected</div>';
+            DOM('bridge-sum').textContent = 'Set up →';
+            return;
+          }
+          let mounts = [];
+          try {
+            mounts = (await MetaOS.fs.listMounts()) || [];
+          } catch (e) {}
+          const results = await Promise.all(
+            conns.map(async (c) => {
+              try {
+                return { c, st: await fetchJson(`${c.serverUrl}/api/status`, 3000) };
+              } catch (e) {
+                return { c, err: e.name === 'AbortError' ? 'No response (3 s)' : e.message };
+              }
+            }),
+          );
+          let ok = 0;
+          el.innerHTML = results
+            .map(({ c, st, err }) => {
+              const roots = (st && st.roots) || [];
+              const unwatched = roots.filter((r) => !r.watching);
+              const mounted = mounts.filter((m) => m.mountPath && m.mountPath.startsWith(`local/${c.name}/`));
+              const dead = mounted.filter((m) => m.alive === false).length;
+              let dot, text, title;
+              if (!st) {
+                dot = 'bg-text-muted';
+                text = 'offline';
+                title = err;
+              } else if (unwatched.length || dead) {
+                ok++;
+                dot = 'bg-warning';
+                text = unwatched.length ? `${unwatched.length} unwatched` : `${dead} provider stopped`;
+                title = unwatched.map((r) => `${r.name}: ${r.watchError || 'unknown reason'}`).join('\n');
+              } else {
+                ok++;
+                dot = 'bg-success';
+                text = `${roots.length} root${roots.length === 1 ? '' : 's'}`;
+                title = roots.map((r) => `${r.name} (${r.files} files)`).join('\n');
+              }
+              const host = st && st.hostname && st.hostname !== c.name ? ` · ${esc(st.hostname)}` : '';
+              return `<div class="flex items-center gap-2 py-0.5" title="${esc(title)}"><span class="w-2 h-2 rounded-full ${dot} shrink-0"></span><span class="font-mono truncate">${esc(c.name)}</span><span class="text-[10px] text-text-muted ml-auto shrink-0 whitespace-nowrap">${text}${host}</span></div>`;
+            })
+            .join('');
+          DOM('bridge-sum').textContent = `${ok}/${conns.length}`;
+        };
+
+        // ---------- Loom（Loom デーモンの写しから front matter だけ受け取る） ----------
+        // 並びは「答えを待っている → 確認を待っている → 未整理 → 中断」。上ほど利用者の一手で動く
+        const STATUS = {
+          blocked: { label: 'Blocked', cls: 'bg-error/15 text-error', ball: 'user' },
+          review: { label: 'Review', cls: 'bg-primary/15 text-primary', ball: 'user' },
+          inbox: { label: 'Inbox', cls: 'bg-warning/15 text-warning', ball: 'user' },
+          paused: { label: 'Paused', cls: 'bg-card text-text-muted', ball: 'user' },
+          doing: { label: 'Doing', cls: 'bg-success/15 text-success', ball: 'agent' },
+          todo: { label: 'To do', cls: 'bg-card text-text-main', ball: 'agent' },
+        };
+        const ORDER = Object.keys(STATUS);
+        const parseFront = (text) => {
+          const m = /^---\r?\n([\s\S]*?)\r?\n---/.exec(text || '');
+          const meta = {};
+          if (!m) return meta;
+          for (const line of m[1].split('\n')) {
+            const i = line.indexOf(':');
+            if (i <= 0 || /^\s/.test(line)) continue;
+            let v = line.slice(i + 1).trim();
+            if (/^(["']).*\1$/.test(v)) v = v.slice(1, -1);
+            meta[line.slice(0, i).trim()] = v;
+          }
+          return meta;
+        };
+        const shortDate = (iso) => {
+          const d = new Date(iso);
+          return isNaN(d) ? '' : fmtDate(d, { month: 'numeric', day: 'numeric' });
+        };
+        const loomRow = (n, today) => {
+          const st = STATUS[n.status];
+          const late = n.scheduled && n.scheduled.slice(0, 10) <= today;
+          return `<button data-loom-id="${esc(n.id)}" class="w-full text-left flex items-center gap-3 px-2 py-2 rounded-lg hover:bg-hover transition">
+              <span class="chip ${st.cls}">${st.label}</span>
+              <span class="flex-1 min-w-0">
+                <span class="block text-sm truncate">${esc(n.title || n.id)}</span>
+                <span class="block text-[10px] text-text-muted truncate"><span class="font-mono">${esc(n.id)}</span>${n.project ? ' · ' + esc(n.project) : ''}${n.scheduled ? ` · scheduled ${esc(n.scheduled.slice(5, 10))}` : ''}</span>
+              </span>
+              ${late ? '<span class="text-[10px] text-warning font-bold shrink-0" title="The scheduled date has come">⚠ Due</span>' : ''}
+              <span class="text-[10px] font-mono text-text-muted shrink-0 w-10 text-right">${shortDate(n.updated || n.created)}</span>
+            </button>`;
+        };
+        /**
+         * 板の front matter を集める。Loom デーモン（system/services/loom.html）の写しを 1 回の IPC で受け取る
+         * （デーモンは hash で写しの腐りを検出しているので、中身は正しい）。
+         * デーモンが応答しないときだけ、札を全部読む（ホームは読むだけなので、自前で読んでも書き込みの列を踏まない）。
+         */
+        let loomReq = 0;
+        let loomViaDaemon = false;
+        const loomRowsViaDaemon = () =>
+          new Promise((resolve, reject) => {
+            const rid = `home-${Date.now().toString(36)}-${++loomReq}`;
+            const off = () => {
+              try {
+                MetaOS.system.off('loom.res', on);
+              } catch (e) {}
+            };
+            const timer = setTimeout(() => {
+              off();
+              reject(new Error('timeout'));
+            }, 3000);
+            const on = (m) => {
+              if (!m || m.rid !== rid) return;
+              clearTimeout(timer);
+              off();
+              m.ok ? resolve(m.result) : reject(new Error(m.error || 'failed'));
+            };
+            MetaOS.system.on('loom.res', on);
+            MetaOS.system.broadcast('loom.req', { rid, op: 'rows', args: {} });
+          });
+        const loomReadAll = async () => {
+          if (!(await MetaOS.fs.exists(LOOM_DIR))) return { nodes: [], broken: 0, files: 0 };
+          const files = (await MetaOS.fs.list(LOOM_DIR))
+            .map((f) => resolvePath(f, LOOM_DIR))
+            .filter((p) => /\/[PT]-\d+\.md$/.test(p));
+          const texts = await readMany(files, 16);
+          const nodes = [];
+          let broken = 0;
+          texts.forEach((t) => {
+            if (t == null) return broken++;
+            const m = parseFront(t);
+            if (m.id) nodes.push(m);
+            else broken++;
+          });
+          return { nodes, broken, files: files.length };
+        };
+        const loadLoom = async () => {
+          const body = DOM('loom-body');
+          const note = DOM('loom-note');
+          let nodes = [];
+          let broken = 0;
+          try {
+            const r = await loomRowsViaDaemon();
+            nodes = (r.rows || []).map((row) => row.meta).filter((m) => m && m.id);
+            broken = (r.skips || []).length;
+            loomViaDaemon = true;
+          } catch (e) {
+            loomViaDaemon = false;
+            try {
+              ({ nodes, broken } = await loomReadAll());
+            } catch (e2) {
+              body.innerHTML = `<div class="text-text-muted text-xs italic py-3">Could not read the board (${esc(LOOM_DIR)})</div>`;
+              return;
+            }
+          }
+          const byId = new Map(nodes.map((n) => [n.id, n]));
+          // 所属は、parent を根まで遡った先のプロジェクト
+          const rootOf = (n) => {
+            let cur = n;
+            for (let i = 0; i < 50 && cur && cur.kind !== 'project'; i++) cur = byId.get(cur.parent);
+            return cur && cur.kind === 'project' ? cur : null;
+          };
+          const open = nodes
+            .filter((n) => n.kind === 'task' && STATUS[n.status])
+            .map((n) => ({ ...n, project: (rootOf(n) || {}).title || '' }))
+            .sort(
+              (a, b) =>
+                ORDER.indexOf(a.status) - ORDER.indexOf(b.status) ||
+                String(b.updated || b.created).localeCompare(String(a.updated || a.created)),
             );
+          const today = ymd(new Date());
+          const agent = State.agentName || 'AI';
+          const groups = [
+            { key: 'user', title: 'Your turn', empty: 'Nothing is waiting for you', max: 10 },
+            { key: 'agent', title: `${agent}'s turn`, empty: `${agent} has nothing in progress`, max: 14 },
+          ];
+          let html = '';
+          for (const g of groups) {
+            const list = open.filter((n) => STATUS[n.status].ball === g.key);
+            const counts = ORDER.filter((s) => STATUS[s].ball === g.key)
+              .map((s) => [s, list.filter((n) => n.status === s).length])
+              .filter(([, c]) => c);
+            html += `<div class="flex items-baseline gap-2 px-2 pt-2 pb-1 sticky top-0 bg-panel z-10">
+                <span class="text-xs font-bold">${esc(g.title)}</span><span class="text-xs font-mono text-text-muted">${list.length}</span>
+                <span class="text-[10px] text-text-muted ml-auto">${counts.map(([s, c]) => `${STATUS[s].label} ${c}`).join(' · ')}</span>
+              </div>`;
+            html += list.length
+              ? list
+                  .slice(0, g.max)
+                  .map((n) => loomRow(n, today))
+                  .join('')
+              : `<div class="text-text-muted text-xs italic px-2 py-2">${esc(g.empty)}</div>`;
+            if (list.length > g.max)
+              html += `<div class="text-[10px] text-text-muted px-2 py-1">${list.length - g.max} more — open Loom to see them</div>`;
+          }
+          body.innerHTML = html;
+          DOM('loom-sum').textContent = open.length ? `${open.length} open` : '';
+          const msgs = [];
+          if (broken) msgs.push(`${broken} card(s) could not be read (check "Census" in Loom)`);
+          if (!loomViaDaemon && nodes.length)
+            msgs.push('The Loom service did not answer, so the cards were read directly');
+          note.classList.toggle('hidden', !msgs.length);
+          note.textContent = msgs.join(' / ');
+        };
+        DOM('loom-body').addEventListener('click', async (ev) => {
+          const el = ev.target.closest('[data-loom-id]');
+          if (!el) return;
+          const id = el.dataset.loomId;
+          await openApp('loom', { id });
+          try {
+            await MetaOS.system.broadcast('loom:open', { id });
+          } catch (e) {}
+        });
+
+        // ---------- カレンダー ----------
+        const readMonthly = async (dir) => {
+          const items = [];
+          try {
+            if (!(await MetaOS.fs.exists(dir))) return items;
+            for (const f of await MetaOS.fs.list(dir)) {
+              const p = resolvePath(f, dir);
+              if (!p.endsWith('.json')) continue;
+              try {
+                const arr = JSON.parse((await MetaOS.fs.read(p)) || '[]');
+                if (Array.isArray(arr)) items.push(...arr);
+              } catch (e) {}
+            }
+          } catch (e) {}
+          return items;
+        };
+        const Cal = {
+          date: new Date(),
+          weekdays() {
+            // 2023-01-01 は日曜
+            DOM('dash-cal-weekdays').innerHTML = Array.from({ length: 7 }, (_, i) =>
+              fmtDate(new Date(2023, 0, 1 + i), { weekday: 'narrow' }),
+            )
+              .map((d) => `<div class="text-[9px] text-text-muted font-bold">${esc(d)}</div>`)
+              .join('');
+          },
+          async render() {
+            const year = this.date.getFullYear();
+            const month = this.date.getMonth();
+            const today = new Date();
+            const todayStr = ymd(today);
+            const isCur = today.getFullYear() === year && today.getMonth() === month;
+            DOM('dash-cal-month').textContent = fmtDate(new Date(year, month, 1), { year: 'numeric', month: 'short' });
+            const items = await readMonthly(EVENTS_DIR);
+            const firstDay = new Date(year, month, 1).getDay();
+            const days = new Date(year, month + 1, 0).getDate();
+            let html = '';
+            for (let i = 0; i < firstDay; i++) html += '<div class="h-8"></div>';
+            for (let d = 1; d <= days; d++) {
+              const ds = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+              const has = items.some((i) => i.date === ds);
+              const isToday = ds === todayStr;
+              const dow = (firstDay + d - 1) % 7;
+              html += `<div data-date="${ds}" class="h-8 flex items-center justify-center rounded-md cursor-pointer hover:bg-hover transition relative ${isToday ? 'bg-primary text-text-inverted font-bold shadow' : dow === 0 ? 'text-error/80' : dow === 6 ? 'text-primary/80' : ''}">
+                  <span class="text-xs">${d}</span>${has && !isToday ? '<div class="absolute bottom-0.5 w-1 h-1 rounded-full bg-primary opacity-70"></div>' : ''}
+                </div>`;
+            }
+            DOM('dash-cal-grid').innerHTML = html;
+            const todayItems = (isCur ? items.filter((i) => i.date === todayStr) : []).sort((a, b) =>
+              (a.time || '').localeCompare(b.time || ''),
+            );
+            DOM('dash-cal-events').innerHTML = todayItems.length
+              ? todayItems
+                  .map(
+                    (
+                      i,
+                    ) => `<div data-date="${todayStr}" class="flex items-center gap-2 px-1.5 py-1 rounded hover:bg-hover transition cursor-pointer text-sm">
+                      <div class="w-1.5 h-1.5 rounded-full ${i.type === 'task' ? 'bg-success' : 'bg-primary'} shrink-0"></div>
+                      <div class="font-mono opacity-70 w-11 shrink-0 text-xs">${esc(i.time || 'All day')}</div>
+                      <div class="truncate flex-1 font-medium">${esc(i.title)}</div>
+                    </div>`,
+                  )
+                  .join('')
+              : '<div class="text-xs text-text-muted italic px-1">No events today</div>';
+          },
+          move(delta) {
+            this.date.setDate(1);
+            this.date.setMonth(this.date.getMonth() + delta);
+            this.render();
+          },
+        };
+        DOM('cal-prev').onclick = () => Cal.move(-1);
+        DOM('cal-next').onclick = () => Cal.move(1);
+        for (const id of ['dash-cal-grid', 'dash-cal-events']) {
+          DOM(id).addEventListener('click', (ev) => {
+            const el = ev.target.closest('[data-date]');
+            if (el) openApp('calendar', { date: el.dataset.date });
+          });
+        }
+
+        // ---------- タスク（期限の近い順） ----------
+        const PRI = { high: 0, medium: 1, low: 2 };
+        const renderTasks = async () => {
+          State.tasks = await readMonthly(TASKS_DIR);
+          const pending = State.tasks
+            .filter((t) => t && t.status !== 'completed')
+            .sort(
+              (a, b) =>
+                (a.dueDate ? 0 : 1) - (b.dueDate ? 0 : 1) ||
+                String(a.dueDate || '').localeCompare(String(b.dueDate || '')) ||
+                (PRI[a.priority] ?? 1) - (PRI[b.priority] ?? 1),
+            );
+          const today = ymd(new Date());
+          const MAX = 8;
+          DOM('task-sum').textContent = pending.length ? `${pending.length}` : '';
+          DOM('widget-tasks').innerHTML = pending.length
+            ? pending
+                .slice(0, MAX)
+                .map(
+                  (t) => `<div class="flex items-center gap-2.5 px-1.5 py-1 rounded-lg hover:bg-hover transition group">
+                    <button data-task-toggle="${esc(t.id)}" class="shrink-0 w-4 h-4 rounded-full border-2 border-text-muted hover:border-primary transition hover:scale-110" title="Mark as done"></button>
+                    <div data-task-edit="${esc(t.id)}" class="flex-1 min-w-0 cursor-pointer">
+                      <span class="text-sm truncate block ${t.priority === 'high' ? 'text-error font-medium' : ''}">${esc(t.title)}</span>
+                    </div>
+                    ${t.dueDate ? `<span class="text-xs font-mono shrink-0 ${t.dueDate < today ? 'text-warning font-bold' : 'text-text-muted'}">${esc(String(t.dueDate).slice(5))}</span>` : ''}
+                  </div>`,
+                )
+                .join('') +
+              (pending.length > MAX
+                ? `<div class="text-[10px] text-text-muted px-1.5 py-1">${pending.length - MAX} more</div>`
+                : '')
+            : '<div class="text-text-muted text-xs italic px-1">No active tasks.</div>';
+        };
+        const Task = {
+          edit(id) {
+            const t = State.tasks.find((x) => String(x.id) === String(id));
+            if (!t) return;
+            DOM('edit-id').value = t.id;
+            DOM('edit-title').value = t.title || '';
             DOM('edit-priority').value = t.priority || 'medium';
+            DOM('edit-date').value = t.dueDate || '';
+            DOM('edit-desc').value = t.description || '';
             DOM('edit-modal').classList.remove('hidden');
           },
           close: () => DOM('edit-modal').classList.add('hidden'),
-          _updateTaskFile: async (id, fn) => {
+          /** id を持つ月のファイルを探して書き換える。id は文字列として比べる（数値の id も混ざる） */
+          async update(id, fn) {
             try {
-              const files = await MetaOS.fs.list('data/apps/tasks');
-              for (const f of files.filter((x) => x.endsWith('.json'))) {
-                let tasks = await App.FS.readJson(f, []);
-                const idx = tasks.findIndex((t) => t.id === id);
-                if (idx !== -1) {
-                  tasks = fn(tasks, idx);
-                  await App.FS.writeJson(f, tasks);
-                  return true;
-                }
+              for (const f of await MetaOS.fs.list(TASKS_DIR)) {
+                const path = resolvePath(f, TASKS_DIR);
+                if (!path.endsWith('.json')) continue;
+                let tasks = JSON.parse((await MetaOS.fs.read(path)) || '[]');
+                const idx = tasks.findIndex((t) => String(t.id) === String(id));
+                if (idx === -1) continue;
+                tasks = fn(tasks, idx);
+                await MetaOS.fs.write(path, JSON.stringify(tasks, null, 2), { overwrite: true });
+                return true;
               }
-            } catch (e) {}
+            } catch (e) {
+              console.error('[home] task update failed', e);
+            }
             return false;
           },
-          save: async () => {
-            const [id, title, priority, dueDate, description] = ['id', 'title', 'priority', 'date', 'desc'].map(
-              (k) => DOM(`edit-${k}`).value,
-            );
-            if (title.trim()) {
-              await DashTask._updateTaskFile(id, (tasks, i) => {
-                tasks[i] = { ...tasks[i], title, priority, dueDate, description };
-                return tasks;
-              });
-              DashTask.close();
-              refreshWidgets();
-            }
+          async save() {
+            const id = DOM('edit-id').value;
+            const title = DOM('edit-title').value.trim();
+            if (!title) return;
+            const priority = DOM('edit-priority').value;
+            const dueDate = DOM('edit-date').value;
+            const description = DOM('edit-desc').value;
+            await Task.update(id, (tasks, i) => {
+              tasks[i] = { ...tasks[i], title, priority, dueDate, description };
+              return tasks;
+            });
+            Task.close();
+            renderTasks();
           },
-          del: async () => {
+          async del() {
             const res = await AppUI.showMessageBox({
               title: 'Delete Task',
               message: 'Are you sure you want to delete this task permanently?',
@@ -401,107 +1041,168 @@
                 { label: 'Delete', value: true, style: 'danger', isDefault: true },
               ],
             });
-            if (res && res.action) {
-              await DashTask._updateTaskFile(DOM('edit-id').value, (tasks, i) => {
-                tasks.splice(i, 1);
-                return tasks;
-              });
-              DashTask.close();
-              refreshWidgets();
-            }
+            if (!(res && res.action)) return;
+            await Task.update(DOM('edit-id').value, (tasks, i) => {
+              tasks.splice(i, 1);
+              return tasks;
+            });
+            Task.close();
+            renderTasks();
           },
-          toggle: async (id) => {
-            await DashTask._updateTaskFile(id, (tasks, i) => {
+          async toggle(id) {
+            await Task.update(id, (tasks, i) => {
               tasks[i].status = tasks[i].status === 'completed' ? 'pending' : 'completed';
               return tasks;
             });
-            refreshWidgets();
+            renderTasks();
           },
         };
+        DOM('widget-tasks').addEventListener('click', (ev) => {
+          const tg = ev.target.closest('[data-task-toggle]');
+          if (tg) return Task.toggle(tg.dataset.taskToggle);
+          const ed = ev.target.closest('[data-task-edit]');
+          if (ed) Task.edit(ed.dataset.taskEdit);
+        });
+        DOM('edit-close').onclick = Task.close;
+        DOM('edit-cancel').onclick = Task.close;
+        DOM('edit-save').onclick = () => Task.save();
+        DOM('edit-delete').onclick = () => Task.del();
 
-        // --- ショートカット（目録から組み立てる） ---
-        // ここに直書きすると、アプリを足すたびにホームを手で直すことになる（2026-08-24 / T-0188）。
-        // 目録（system/registry/apps.json）の各項目は、任意で home を持てる:
-        //   home: false  … ホームに出さない
-        //   home: <数値> … 先頭へ、その数の小さい順に並べる
-        //   書かなければ … 目録の順のまま、数値指定の後ろに出る
-        const escHtml = (v) =>
-          String(v == null ? '' : v)
-            .replace(/&/g, '&amp;')
-            .replace(/</g, '&lt;')
-            .replace(/>/g, '&gt;');
-
-        const renderShortcuts = async () => {
-          const el = document.getElementById('app-grid');
-          if (!el) return;
-          let apps;
+        // ---------- 最近のメモ・日誌 ----------
+        const FILE_ICON =
+          '<svg class="w-4 h-4 text-text-muted group-hover:text-primary transition shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>';
+        const fileRows = (paths, kind, empty) =>
+          paths.length
+            ? paths
+                .map(
+                  (
+                    p,
+                  ) => `<div data-${kind}="${esc(p)}" class="flex items-center gap-2 px-1.5 py-1 rounded-lg hover:bg-hover transition cursor-pointer group">
+                    ${FILE_ICON}<span class="text-sm truncate">${esc(p.split('/').pop().replace(/\.md$/, ''))}</span>
+                  </div>`,
+                )
+                .join('')
+            : `<div class="text-text-muted text-xs italic px-1">${esc(empty)}</div>`;
+        const renderNotes = async () => {
+          let notes = [];
           try {
-            // 登録簿は層になっている。重ねた値はホストから受け取る（T-0447）
-            apps = await App.Registry.get('apps', null);
-            if (!Array.isArray(apps)) throw new Error('The app registry is not an array');
+            if (await MetaOS.fs.exists(NOTES_DIR)) {
+              const files = await MetaOS.fs.list(NOTES_DIR, { detail: true });
+              notes = files
+                .map((it) => ({ path: resolvePath(it, NOTES_DIR), at: (it && it.updatedAt) || 0 }))
+                .filter((x) => x.path.endsWith('.md'))
+                .sort((a, b) => b.at - a.at)
+                .slice(0, 6)
+                .map((x) => x.path);
+            }
+          } catch (e) {}
+          DOM('widget-notes').innerHTML = fileRows(notes, 'note', 'No notes yet');
+          let journals = [];
+          try {
+            if (await MetaOS.fs.exists(JOURNALS)) {
+              journals = (await MetaOS.fs.list(JOURNALS))
+                .map((f) => resolvePath(f, JOURNALS))
+                .filter((p) => /\/\d{4}-\d{2}-\d{2}\.md$/.test(p))
+                .sort((a, b) => b.localeCompare(a))
+                .slice(0, 4);
+            }
+          } catch (e) {}
+          DOM('journals-title').textContent = `${State.agentName || 'AI'}'s Journal`;
+          DOM('widget-journals').innerHTML = fileRows(journals, 'journal', 'No journal entries yet');
+        };
+        DOM('widget-notes').addEventListener('click', (ev) => {
+          const el = ev.target.closest('[data-note]');
+          if (el) openApp('notes', { file: el.dataset.note });
+        });
+        DOM('widget-journals').addEventListener('click', (ev) => {
+          const el = ev.target.closest('[data-journal]');
+          if (el) MetaOS.host.open(el.dataset.journal);
+        });
+
+        // ---------- 設定 ----------
+        const applyPreferences = (prefs) => {
+          // 「山内 隆太郎 (Ryutaro YAMAUCHI)」→「山内」。先頭の語だけで呼ぶ
+          State.userName = String((prefs && prefs.username) || '').split(/[\s(（]/)[0] || '';
+          State.agentName = String((prefs && prefs.agentName) || '').trim();
+        };
+        // 画面の言語は OS の appearance.locale（AI の応答言語 preferences.language とは別）。文言は英語のまま、日付だけ合わせる
+        const applyLocale = (appearance) => {
+          const raw = String((appearance && appearance.locale) || 'en');
+          try {
+            State.locale = Intl.getCanonicalLocales(raw)[0] || 'en';
           } catch (e) {
-            // 既定の一覧を埋め込まない。無い物を在るように見せるより、読めないと言う方がよい。
-            el.innerHTML =
-              '<p class="col-span-2 text-xs text-text-muted leading-relaxed">Could not read the app registry (system/registry/apps.json). You can open it from Library at the top right.</p>';
-            return;
+            State.locale = 'en';
           }
-          const rank = (a) => (typeof a.home === 'number' ? a.home : Number.MAX_SAFE_INTEGER);
-          const shown = apps
-            .filter((a) => a && a.path && a.home !== false)
-            .map((a, i) => ({ a, i }))
-            .sort((x, y) => rank(x.a) - rank(y.a) || x.i - y.i)
-            .map((x) => x.a);
-          el.innerHTML = '';
-          for (const app of shown) {
-            const b = document.createElement('button');
-            b.className =
-              'relative flex flex-col items-center justify-center p-4 bg-card hover:bg-hover rounded-xl transition border border-transparent hover:border-primary/50 hover:shadow-md group overflow-hidden';
-            b.title = app.description || app.name || app.id || '';
-            b.innerHTML =
-              '<div class="absolute inset-0 bg-primary/5 opacity-0 group-hover:opacity-100 transition duration-300"></div>' +
-              '<span class="text-2xl mb-1 group-hover:scale-110 transition-transform">' +
-              escHtml(app.icon || '📦') +
-              '</span>' +
-              '<span class="text-xs font-bold text-text-main text-center leading-tight">' +
-              escHtml(app.name || app.id) +
-              '</span>';
-            b.addEventListener('click', () => AppUI.go(app.path));
-            el.appendChild(b);
-          }
+          Cal.weekdays();
         };
 
-        // --- Boot Sequence ---
+        // ---------- 起動 ----------
         const boot = async () => {
-          if (!window.MetaOS) return setTimeout(boot, 50);
+          if (!window.MetaOS || !window.App) return setTimeout(boot, 50);
+          const [prefs, appearance, llm] = await Promise.all(
+            ['preferences', 'appearance', 'llm'].map((c) => App.Config.get(c).catch(() => ({}))),
+          );
+          applyPreferences(prefs);
+          applyLocale(appearance);
+          State.model = String((llm && llm.model) || '');
 
-          try {
-            // V2 API
-            const prefs = await App.Config.get('preferences');
-            State.userName = prefs.username?.split(' ')[0] === 'Ryutaro' ? 'Ryutaro' : prefs.username || 'User';
-          } catch {}
-
-          fetchWeather();
           updateClock();
-          refreshWidgets();
-          renderShortcuts();
+          showModel();
+          fetchWeather();
+          await refreshApps(); // 開く先（appPath）が登録簿を引くので先に
+          loadContext();
+          loadVfs();
+          loadBridge();
+          loadLoom();
+          Cal.render();
+          renderTasks();
+          renderNotes();
 
           setInterval(updateClock, 1000);
-          setInterval(fetchWeather, 18e5); // 30 mins
+          setInterval(fetchWeather, 30 * 60 * 1000);
+          setInterval(() => !document.hidden && loadContext(), 60 * 1000);
+          setInterval(() => !document.hidden && loadBridge(), 30 * 1000);
+          setInterval(() => !document.hidden && loadVfs(), 5 * 60 * 1000);
 
-          // V2 API
-          if (window.MetaOS && MetaOS.system.on) {
-            MetaOS.system.on('vfs_mutation', (m) => {
-              if (m.path.startsWith('data/')) refreshWidgets();
-            });
-          }
-          // 登録した時点でホームに出る（アプリを足しても、ここを書き換えなくてよい）。
-          // 以前は vfs_mutation で登録簿のファイルのパスを見張っていた。いまは持ち主（ホスト）が
-          // 「値が変わった」ときだけ registry_changed を告げる（T-0540）
-          if (window.App?.Registry?.onChange) {
-            App.Registry.onChange('apps', () => renderShortcuts());
-          }
+          const loomD = debounce(loadLoom, 800);
+          const calD = debounce(() => {
+            Cal.render();
+            renderTasks();
+          }, 500);
+          const notesD = debounce(renderNotes, 800);
+          const ctxD = debounce(loadContext, 1500);
+          // 板の変化は Loom デーモンの知らせで拾う。デーモンが居ないときだけ vfs_mutation で拾う
+          MetaOS.system.on('loom.changed', () => loomD());
+          MetaOS.system.on('loom.ready', () => loomD());
+          MetaOS.system.on('vfs_mutation', (m) => {
+            const p = (m && m.path) || '';
+            if (p.startsWith(`${LOOM_DIR}/`)) {
+              if (!loomViaDaemon) loomD();
+            } else if (p.startsWith(`${EVENTS_DIR}/`) || p.startsWith(`${TASKS_DIR}/`)) calD();
+            else if (p.startsWith(`${NOTES_DIR}/`) || p.startsWith(`${JOURNALS}/`)) notesD();
+            else if (p.startsWith(`${USAGE_DIR}/`)) ctxD();
+            else if (p === BRIDGE_CONFIG) loadBridge();
+          });
+          // 設定・登録簿は、持ち主（ホスト）が「値が変わった」ときだけ知らせる（T-0539 / T-0540）
+          App.Config.onChange('preferences', (prefs) => {
+            applyPreferences(prefs);
+            updateClock();
+            loadLoom();
+            renderNotes();
+          });
+          App.Config.onChange('appearance', (appearance) => {
+            applyLocale(appearance);
+            updateClock();
+            Cal.render();
+            loadLoom();
+          });
+          App.Config.onChange('llm', (llm) => {
+            State.model = String((llm && llm.model) || '');
+            showModel();
+            loadContext();
+          });
+          App.Registry.onChange('apps', () => refreshApps());
         };
-
         document.readyState === 'loading' ? document.addEventListener('DOMContentLoaded', boot) : boot();
       })();
     </script>
