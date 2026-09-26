@@ -21,6 +21,40 @@
       },
       "models": [
         {
+          "id": "gemini-3.8-flash",
+          "name": "Gemini 3.8 Flash",
+          "contextTokens": 1048576,
+          "pricing": { "input": 1.50, "cached": 0.15, "output": 7.50 },
+          "capabilities": {
+            "maxMediaSizeMB": 100,
+            "supportedMimes": ["application/pdf", "image/*", "video/*", "audio/*"]
+          },
+          "defaultConfig": {
+            "generationConfig": {
+              "thinkingConfig": {
+                "thinkingLevel": "high"
+              }
+            }
+          }
+        },
+        {
+          "id": "gemini-3.7-flash",
+          "name": "Gemini 3.7 Flash",
+          "contextTokens": 1048576,
+          "pricing": { "input": 1.50, "cached": 0.15, "output": 7.50 },
+          "capabilities": {
+            "maxMediaSizeMB": 100,
+            "supportedMimes": ["application/pdf", "image/*", "video/*", "audio/*"]
+          },
+          "defaultConfig": {
+            "generationConfig": {
+              "thinkingConfig": {
+                "thinkingLevel": "high"
+              }
+            }
+          }
+        },
+        {
           "id": "gemini-3.6-flash",
           "name": "Gemini 3.6 Flash",
           "contextTokens": 1048576,
@@ -86,6 +120,12 @@
           }
         },
         {
+          "id": "gemini-3.5-flash-lite",
+          "name": "Gemini 3.5 Flash Lite",
+          "contextTokens": 1048576,
+          "pricing": { "input": 0.30, "cached": 0.03, "output": 2.50 }
+        },
+        {
           "id": "gemini-3.1-flash-lite",
           "name": "Gemini 3.1 Flash Lite",
           "contextTokens": 1048576,
@@ -129,6 +169,39 @@
         "temperature": null
       },
       "models": [
+        {
+          "id": "gpt-6-astra",
+          "name": "GPT-6 Astra",
+          "contextTokens": 1050000,
+          "pricing": {
+            "tiers": [
+              { "maxTokens": 271999, "input": 10.00, "cached": 1.00, "cacheWrite": 12.50, "output": 50.00 },
+              { "maxTokens": null, "input": 20.00, "cached": 2.00, "cacheWrite": 25.00, "output": 75.00 }
+            ]
+          }
+        },
+        {
+          "id": "gpt-6-sol",
+          "name": "GPT-6 Sol",
+          "contextTokens": 1050000,
+          "pricing": {
+            "tiers": [
+              { "maxTokens": 271999, "input": 2.00, "cached": 0.2, "cacheWrite": 2.50, "output": 10.00 },
+              { "maxTokens": null, "input": 4.00, "cached": 0.4, "cacheWrite": 5.00, "output": 15.00 }
+            ]
+          }
+        },
+        {
+          "id": "gpt-6-luna",
+          "name": "GPT-6 Luna",
+          "contextTokens": 1050000,
+          "pricing": {
+            "tiers": [
+              { "maxTokens": 271999, "input": 0.1, "cached": 0.01, "cacheWrite": 0.125, "output": 0.5 },
+              { "maxTokens": null, "input": 0.2, "cached": 0.02, "cacheWrite": 0.25, "output": 0.75 }
+            ]
+          }
+        },
         {
           "id": "gpt-5.6-sol",
           "name": "GPT-5.6 Sol",
@@ -237,6 +310,19 @@
       },
       "models": [
         {
+          "id": "claude-fable-5-1",
+          "name": "Claude Fable 5.1",
+          "contextTokens": 1000000,
+          "pricing": { "input": 10.00, "cached": 0.25, "output": 50.00 },
+          "defaultConfig": { "thinkingTag": false }
+        },
+        {
+          "id": "claude-opus-5-5",
+          "name": "Claude Opus 5.5",
+          "contextTokens": 1000000,
+          "pricing": { "input": 4.00, "cached": 0.20, "output": 20.00 }
+        },
+        {
           "id": "claude-fable-5",
           "name": "Claude Fable 5",
           "contextTokens": 1000000,
@@ -252,7 +338,7 @@
           "id": "claude-sonnet-5",
           "name": "Claude Sonnet 5",
           "contextTokens": 1000000,
-          "pricing": { "input": 3.00, "cached": 0.30, "output": 15.00 }
+          "pricing": { "input": 2.00, "cached": 0.20, "output": 10.00 }
         },
         {
           "id": "claude-haiku-4-5",
