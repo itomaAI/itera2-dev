@@ -29,6 +29,23 @@ export class TreeView {
   private selectedPaths: Set<string> = new Set();
   private lastClickedPath: string | null = null;
 
+  /**
+   * nodeId → 行の <li>。差分更新が行を引くための索引（T-0544）。
+   *
+   * 以前は `document.querySelector('div[data-path="…"]')` のように属性で引いていた。属性の照合は
+   * DOM 全体の走査で、この木は閉じたフォルダの中身まで DOM に載せているので、写しが大きいほど 1 回が重い。
+   * 実測（2026-09-26・Firefox 156・行 22,552）で 1 回 約 7ms。ホストで 1,000 件消すと
+   * それだけで 6.9 秒、1,000 件作ると 7.1 秒、画面が止まっていた（Local Bridge の同期のたびに起きる）。
+   * 索引で引けば件数に依らない。
+   *
+   * 引く範囲をこの木に限る役目もある。TreeView はエクスプローラとファイル選択の 2 つが同時に在りうるが、
+   * `document` から引くと、相手の木の行を掴むことがあった。
+   *
+   * 正は DOM の側。索引は写しなので、引いたら「まだこの木の中に在るか」を確かめてから使う（_rowOf）。
+   */
+  private rows: Map<string, HTMLElement> = new Map();
+  private rootUl: HTMLElement | null = null;
+
   constructor(containerEl: HTMLElement, contextMenuEl: HTMLElement | null) {
     this.container = containerEl;
     this.contextMenu = contextMenuEl;
@@ -59,8 +76,10 @@ export class TreeView {
       'ring-inset',
     );
     this.container.innerHTML = '';
+    this.rows.clear();
 
     const rootUl = document.createElement('ul');
+    this.rootUl = rootUl;
     rootUl.id = 'vfs-tree-root';
     rootUl.className = 'tree-root text-sm font-mono text-text-main min-h-full pb-4';
 
@@ -108,18 +127,31 @@ export class TreeView {
   applyMutations(mutations: any[], getTreeFn: () => TreeNode[]) {
     if (!this.container) return;
 
-    let needsFullRender = false;
+    // 全体を描き直すかは、差分を当てる前に決める（当ててから描き直すのは二度手間）。T-0544
+    //   - ディレクトリの移動・改名 … 同じ id の DETACH と ATTACH が同じ束に来る（VfsTransaction）。
+    //     配下の行はパスを抱えているので、部分木ごと作り直す必要がある
+    //   - マウントの登録・解除 … ProviderManager が node=null のダミー MUTATE で知らせてくる。
+    //     部分木まるごと印が変わる（_handleNodeMutated は node が無いと何もしない）
+    // それ以外（ファイルの増減・変更、新しいディレクトリ、ディレクトリの削除）は差分で足りる。
+    // 以前はディレクトリの ATTACH と DETACH のたびに VFS 全体の木を組んで描き直しており、
+    // 1 回 0.5〜0.7 秒（行 22,552）かかっていた。
+    const detachedIds = new Set<string>();
+    for (const m of mutations) if (m.type === 'DETACH') detachedIds.add(m.nodeId);
+    const needsFullRender = mutations.some(
+      (m) =>
+        (m.type === 'ATTACH' && m.node?.kind === 'directory' && detachedIds.has(m.nodeId)) ||
+        (m.type === 'MUTATE' && Array.isArray(m.changedProperties) && m.changedProperties.includes('isMountPoint')),
+    );
 
     for (const mutation of mutations) {
       if (mutation.type === 'DETACH') {
-        const targetDiv = document.querySelector(`div[data-path="${mutation.path}"]`) as HTMLElement;
-        if (targetDiv) {
-          // 削除されたのがディレクトリなら、配下の子ノードも消えるため安全のために全再描画フラグを立てる
-          if (targetDiv.dataset.kind === 'directory') {
-            needsFullRender = true;
+        if (!needsFullRender) {
+          // ディレクトリでも行を外すだけでよい。配下の行は同じ <li> の中に在り、一緒に外れる。
+          const li = this._rowOf(mutation.nodeId);
+          if (li) {
+            this._forgetSubtree(li);
+            li.remove();
           }
-          const targetLi = targetDiv.parentElement;
-          if (targetLi) targetLi.remove();
         }
 
         // 内部状態のCascade Purge (巻き込み削除)
@@ -133,26 +165,15 @@ export class TreeView {
             this.expandedPaths.delete(p);
           }
         }
+      } else if (needsFullRender) {
+        continue;
       } else if (mutation.type === 'ATTACH') {
         if (!mutation.node || mutation.node.flags?.isHidden || mutation.node.name === '.keep') continue;
-
-        // ディレクトリがアタッチされた場合（移動・コピー・新規作成）、
-        // ツリー構造の再構築が必要になるため全再描画を行う
-        if (mutation.node.kind === 'directory') {
-          needsFullRender = true;
-        } else {
-          this._handleNodeAttached(mutation);
-        }
+        // 新しいディレクトリは空の行として足す（配下はまだ無い）。
+        // 配下を同じ束で作る場合（コピーなど）も、親が先に put されるので親の行が先にできている。
+        this._handleNodeAttached(mutation);
       } else if (mutation.type === 'MUTATE') {
-        // マウントの登録・解除は ProviderManager が node=null のダミー MUTATE で知らせてくる。
-        // 部分木まるごと見た目が変わるので、ここだけは全再描画にする。
-        // （_handleNodeMutated は node が無いと即 return するため、この合図は
-        //   これまで誰にも拾われておらず、印は再読込するまで変わらなかった）
-        if (mutation.changedProperties && mutation.changedProperties.includes('isMountPoint')) {
-          needsFullRender = true;
-        } else {
-          this._handleNodeMutated(mutation);
-        }
+        this._handleNodeMutated(mutation);
       }
     }
 
@@ -161,8 +182,28 @@ export class TreeView {
     }
   }
 
+  /** 索引から行を引く。この木から外れていたら（写しが古ければ）無いものとして扱い、索引からも落とす */
+  private _rowOf(nodeId: string): HTMLElement | null {
+    const li = this.rows.get(nodeId);
+    if (!li) return null;
+    if (!this.container.contains(li)) {
+      this.rows.delete(nodeId);
+      return null;
+    }
+    return li;
+  }
+
+  /** 外す行とその配下を索引から落とす（配下の走査はその部分木の中だけ） */
+  private _forgetSubtree(li: HTMLElement) {
+    const prefix = 'vfs-node-';
+    this.rows.delete(li.id.slice(prefix.length));
+    for (const el of Array.from(li.querySelectorAll('li.tree-node'))) {
+      this.rows.delete(el.id.slice(prefix.length));
+    }
+  }
+
   private _handleNodeAttached(mutation: any) {
-    if (document.getElementById(`vfs-node-${mutation.nodeId}`)) return;
+    if (this._rowOf(mutation.nodeId)) return;
 
     let parentUl: HTMLElement | null = null;
     let indentLevel = 0;
@@ -177,19 +218,22 @@ export class TreeView {
 
     if (mutation.node.parentId === null) {
       // 最上位のノード。ルート以外のマウントの配下ではありえないので false のままでよい。
-      parentUl = document.getElementById('vfs-tree-root');
+      parentUl = this.rootUl && this.container.contains(this.rootUl) ? this.rootUl : null;
     } else {
-      parentUl = document.getElementById(`vfs-children-${mutation.node.parentId}`);
-      const parentDiv = document.querySelector(`div[data-node-id="${mutation.node.parentId}"]`) as HTMLElement;
-      if (parentDiv) {
-        const paddingRaw = parentDiv.style.paddingLeft || '8px';
-        const parentPadding = parseInt(paddingRaw.replace('px', ''), 10);
-        indentLevel = (parentPadding - 8) / 12 + 1;
-        // マウント地点の行も data-virtual を持つ（getTree はルート以外のマウントに
-        // isVirtual を立てる。ルートはノードとして描かれない）。したがってここは
-        // data-virtual だけを見ればよい。data-mount も見る条件を一度書いたが、
-        // 変異試験で「外しても何も落ちない」＝起きえない場合だと分かったので落とした。
-        isVirtual = parentDiv.dataset.virtual === '1';
+      const parentLi = this._rowOf(mutation.node.parentId);
+      if (parentLi) {
+        parentUl = parentLi.querySelector(':scope > ul');
+        const parentDiv = parentLi.firstElementChild as HTMLElement | null;
+        if (parentDiv) {
+          const paddingRaw = parentDiv.style.paddingLeft || '8px';
+          const parentPadding = parseInt(paddingRaw.replace('px', ''), 10);
+          indentLevel = (parentPadding - 8) / 12 + 1;
+          // マウント地点の行も data-virtual を持つ（getTree はルート以外のマウントに
+          // isVirtual を立てる。ルートはノードとして描かれない）。したがってここは
+          // data-virtual だけを見ればよい。data-mount も見る条件を一度書いたが、
+          // 変異試験で「外しても何も落ちない」＝起きえない場合だと分かったので落とした。
+          isVirtual = parentDiv.dataset.virtual === '1';
+        }
       }
     }
 
@@ -206,13 +250,13 @@ export class TreeView {
       false,
     );
 
-    parentUl.appendChild(newLi);
-    this._sortChildren(parentUl);
+    this._insertSorted(parentUl, newLi);
   }
 
   private _handleNodeMutated(mutation: any) {
     if (!mutation.node) return;
-    const targetDiv = document.querySelector(`div[data-node-id="${mutation.nodeId}"]`) as HTMLElement;
+    const li = this._rowOf(mutation.nodeId);
+    const targetDiv = li ? (li.firstElementChild as HTMLElement | null) : null;
 
     if (targetDiv) {
       const sizeKB = (mutation.node.meta.size / 1024).toFixed(1) + ' KB';
@@ -287,19 +331,28 @@ export class TreeView {
     return true;
   }
 
-  private _sortChildren(ul: HTMLElement) {
-    const items = Array.from(ul.children) as HTMLElement[];
-    items.sort((a, b) =>
-      compareNodes(
-        { name: a.dataset.name || '', kind: a.dataset.kind || 'file' },
-        { name: b.dataset.name || '', kind: b.dataset.kind || 'file' },
+  /**
+   * 並びを保ったまま 1 行を差し込む（兄弟は既に並んでいる）。
+   * 以前は差し込むたびに兄弟を全部並べ替えて付け直していたので、100 件のフォルダへ 100 件足すと
+   * 1 万回の付け直しになった。二分探索で位置を決め、動かすのはこの 1 行だけにする（T-0544）。
+   */
+  private _insertSorted(ul: HTMLElement, li: HTMLElement) {
+    const key = { name: li.dataset.name || '', kind: li.dataset.kind || 'file' };
+    const siblings = ul.children;
+    let lo = 0;
+    let hi = siblings.length;
+    while (lo < hi) {
+      const mid = (lo + hi) >> 1;
+      const sib = siblings[mid] as HTMLElement;
+      const cmp = compareNodes(
+        key,
+        { name: sib.dataset.name || '', kind: sib.dataset.kind || 'file' },
         this.sortWeights,
-      ),
-    );
-
-    for (const item of items) {
-      ul.appendChild(item);
+      );
+      if (cmp < 0) hi = mid;
+      else lo = mid + 1;
     }
+    ul.insertBefore(li, siblings[lo] || null);
   }
 
   // ==========================================
@@ -318,6 +371,7 @@ export class TreeView {
   ): HTMLElement {
     const li = document.createElement('li');
     li.id = `vfs-node-${id}`;
+    this.rows.set(id, li);
     li.className = 'tree-node select-none';
     li.dataset.kind = kind;
     li.dataset.name = name;
