@@ -476,6 +476,26 @@
         }
 
         /**
+         * 墓石（ホストで API を通して消した記録）を、VFS 側の今の項目に当ててよいか。── 分岐1（T-0548）
+         *
+         * 墓石はサーバーのメモリに残り続ける（同じパスがホストに現れるか、サーバーが再起動するまで）。
+         * 以前は VFS 側に何かあれば無条件に消していた。そのため、
+         *   - VFS で消した（DELETE → 墓石）あとに、同じパスへ VFS で作り直したファイルが消えた
+         *     （アンカーからは外れているので、前回の同期とは別物だと分かるのに見ていなかった）
+         *   - ホストでディレクトリを API から消したとき、その下に VFS で足したばかりの
+         *     未送信のファイルまで、部分木ごと消えた（浅い順に回るので親が先に消える）
+         * どちらも両側から消え、戻せなかった（2026-09-26 に隔離環境で再現）。
+         *
+         * 当ててよいのは「VFS 側が前回の同期から動いていないファイル」だけ。墓石はその後に起きた削除であり、
+         * 消しても失うものは無い。それ以外は墓石より後の VFS 側の変更なので、消さずに下の分岐へ流す。
+         */
+        function tombstoneCovers(l, a, same) {
+          if (!l || !a) return false;
+          if (l.kind === 'directory' || a.kind === 'directory') return false;
+          return same(l, a);
+        }
+
+        /**
          * 「利用者が VFS 側で消した」と読んでよいか。── 分岐2
          *
          * ★ ここはホストの実体を消す唯一の推論である。**不在**（VFS に節点が無い）から
@@ -595,7 +615,7 @@
 
             try {
               const full = `${mountPath}/${rel}`;
-              const r = remote[rel];
+              let r = remote[rel];
               const l = local[full];
               const a = anchor[rel];
               const same = (x, y) => (x?.hash || null) === (y?.hash || null);
@@ -607,13 +627,21 @@
 
               // 1. リモートで削除済み（墓石）
               if (r && r.isDeleted) {
-                if (l) {
+                if (!l) {
+                  delete next[rel];
+                  continue;
+                }
+                if (tombstoneCovers(l, a, same)) {
                   try {
                     await MetaOS.fs.delete(full, { permanent: true });
                   } catch (e) {}
+                  delete next[rel];
+                  continue;
                 }
-                delete next[rel];
-                continue;
+                // 墓石より後に VFS 側で作られた・変わったもの。墓石を「ホストに無い」とだけ読み、
+                // 下の分岐に任せる（新しいファイルは 4 で送る、変わったファイルは 2b で復活させる、
+                // ディレクトリは 2b で最後に回し、空のときだけ消す）。
+                r = undefined;
               }
 
               // 2. ローカルで削除された → リモートへ反映
@@ -1721,7 +1749,7 @@ Attributes:
         }
 
         MetaOS.ai.log(
-          'Local Bridge (daemon v3.11) started\n' + (summary.join('\n') || '(no enabled connections)'),
+          'Local Bridge (daemon v3.12) started\n' + (summary.join('\n') || '(no enabled connections)'),
           'system',
         );
       })();
