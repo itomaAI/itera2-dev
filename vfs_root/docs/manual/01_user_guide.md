@@ -16,9 +16,12 @@ The Itera interface consists of three main areas:
 
 When you boot Itera, you see the **Dashboard**. This is your home base.
 
-*   **Header**: Displays a greeting based on the time of day.
-*   **Apps Widget**: Provides quick access to standard applications. Click "Library" to see all installed apps.
-*   **Active Tasks / Recent Notes**: Shows a summary of your current work.
+*   **Header**: A greeting based on the time of day, the date, the weather and the model the AI is using now.
+*   **Left column — Apps and System**:
+    *   **Apps**: Quick access to the registered applications. Click "Library" to see all installed apps.
+    *   **System**: How long the current conversation is (tokens against the model's context window, when the model list states it), storage used on this device (click to open the trash), and the machines connected through Local Bridge.
+*   **Center column — Loom**: The open Loom cards, split into **Your turn** (blocked, review, inbox, paused) and **the AI's turn** (doing, to do). Click a card to open it in Loom.
+*   **Right column — Calendar, Tasks and Notes**: This month's calendar with today's events, your active tasks (nearest due date first; tick to complete, click to edit), your recent notes and the AI's latest journal entries.
 *   **Command Palette**: Press `Cmd/Ctrl + K` anywhere in the OS to open the Command Palette. You can quickly launch apps, search for files, or send a quick prompt to the AI.
 
 **Tip:** You can always return to the dashboard from any app by clicking the **Home Button (House Icon)** in the top center toolbar.
