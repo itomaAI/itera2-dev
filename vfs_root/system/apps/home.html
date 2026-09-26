@@ -151,17 +151,21 @@
             <div id="ctx-sub" class="text-[10px] text-text-muted mt-1 font-mono"></div>
           </div>
 
-          <button
-            id="vfs-btn"
-            class="w-full text-left rounded-lg hover:bg-hover px-2 py-1.5 -mx-2 transition mt-2"
-            title="Storage used on this device. Click to open the trash."
-          >
-            <div class="flex justify-between items-baseline mb-1.5">
-              <span class="text-text-muted">Storage</span>
-              <span id="vfs-num" class="font-mono text-text-main">…</span>
-            </div>
-            <div class="bar bg-card"><div class="fill bg-primary" id="vfs-fill" style="width: 0%"></div></div>
-          </button>
+          <!-- 行の右端を枠の中でそろえる: 負の余白は外側の div に持たせ、ボタンはその幅いっぱいに置く。
+               ボタン自身に w-full と -mx-2 を付けると、左へずれたぶん右端が 1rem 足りなくなる -->
+          <div class="-mx-2 mt-2">
+            <button
+              id="vfs-btn"
+              class="w-full text-left rounded-lg hover:bg-hover px-2 py-1.5 transition"
+              title="Storage used on this device. Click to open the trash."
+            >
+              <div class="flex justify-between items-baseline mb-1.5">
+                <span class="text-text-muted">Storage</span>
+                <span id="vfs-num" class="font-mono text-text-main">…</span>
+              </div>
+              <div class="bar bg-card"><div class="fill bg-primary" id="vfs-fill" style="width: 0%"></div></div>
+            </button>
+          </div>
 
           <div class="mt-3 pt-3 border-t border-border-main">
             <div class="flex justify-between items-baseline mb-1.5">
