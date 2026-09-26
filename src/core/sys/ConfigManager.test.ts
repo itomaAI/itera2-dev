@@ -194,3 +194,90 @@ describe('ConfigManager.homePath: ホームの既定は 1 か所（T-0316 / T-05
     expect(cm.homePath()).toBe(DEFAULT_HOME_PATH);
   });
 });
+
+/**
+ * 既定以外の分類も、訊かれたときに層から読む（T-0553）。
+ *
+ * 背景: 起動時に読むのは既定の分類（preferences / appearance / llm / network）だけで、
+ * それ以外（home.json・credentials.json など）はファイルが書かれるまで控えに無かった。
+ * ゲストの口は「控えにあるか」で断っていたので、同じファイルが「その回のうちに書かれたか」で
+ * 読めたり読めなかったりした。起動直後の oauth は、空の控えに 1 件足して書き、保存済みの鍵を消しえた。
+ */
+describe('ConfigManager.ensure: 起動後に触っていない分類も層から読む', () => {
+  let bus: VfsEventBus;
+
+  beforeEach(() => {
+    bus = new VfsEventBus();
+  });
+
+  it('起動してから一度も書かれていない分類を読める', async () => {
+    const files = { [`${CONFIG}/home.json`]: JSON.stringify({ contextCutAt: 400000 }) };
+    const cm = new ConfigManager(makeVfs(files), bus);
+    await cm.loadAll();
+    expect(cm.get('home')).toBeUndefined(); // 起動時には読まない（既定の分類ではない）
+    expect(await cm.ensure('home')).toEqual({ contextCutAt: 400000 });
+    expect(cm.get('home')).toEqual({ contextCutAt: 400000 });
+  });
+
+  it('層を重ねて読む（後の層が勝つ）', async () => {
+    const files = {
+      'system/config/home.json': JSON.stringify({ a: 1, w: { lat: 1, label: 'Tokyo' } }),
+      'user/config/home.json': JSON.stringify({ w: { label: 'Osaka' } }),
+    };
+    const cm = new ConfigManager(makeVfs(files), bus, ['system/config', 'user/config']);
+    expect(await cm.ensure('home')).toEqual({ a: 1, w: { lat: 1, label: 'Osaka' } });
+  });
+
+  it('どの層にも無い分類は {} を返し、ファイルは作らない', async () => {
+    const files: Record<string, string> = {};
+    const cm = new ConfigManager(makeVfs(files), bus);
+    expect(await cm.ensure('nothing_here')).toEqual({});
+    expect(Object.keys(files)).toEqual([]);
+  });
+
+  it('パスとして読まれうる名前は断る', async () => {
+    const cm = new ConfigManager(makeVfs({}), bus);
+    for (const bad of ['../secret', 'a/b', 'x.json', '', ' home']) {
+      await expect(cm.ensure(bad)).rejects.toThrow('Invalid config category');
+    }
+  });
+
+  it('まだ読んでいない分類に update しても、ファイルにある既存のキーを消さない', async () => {
+    const files = {
+      [`${CONFIG}/credentials.json`]: JSON.stringify({ github: { type: 'header', key: 'Authorization', value: 'x' } }),
+    };
+    const cm = new ConfigManager(makeVfs(files), bus);
+    await cm.loadAll();
+    await cm.update('credentials', { google: { type: 'header', key: 'Authorization', value: 'y' } });
+    const saved = JSON.parse(files[`${CONFIG}/credentials.json`]);
+    expect(Object.keys(saved).sort()).toEqual(['github', 'google']);
+  });
+
+  it('新しい分類を update で作ると、変わったとして知らせる', async () => {
+    const files: Record<string, string> = {};
+    const cm = new ConfigManager(makeVfs(files), bus);
+    const seen: string[][] = [];
+    cm.onUpdate((_c, changed) => seen.push([...changed]));
+    await cm.update('home', { contextCutAt: 300000 });
+    expect(JSON.parse(files[`${CONFIG}/home.json`])).toEqual({ contextCutAt: 300000 });
+    expect(seen).toEqual([['home']]);
+  });
+
+  it('同時に来た ensure は 1 回だけ読む', async () => {
+    const files = { [`${CONFIG}/home.json`]: JSON.stringify({ a: 1 }) };
+    const vfs = makeVfs(files);
+    let reads = 0;
+    const readFile = vfs.readFile;
+    vfs.readFile = async (p: any, path: string) => {
+      reads++;
+      return readFile(p, path);
+    };
+    const cm = new ConfigManager(vfs, bus);
+    const [x, y] = await Promise.all([cm.ensure('home'), cm.ensure('home')]);
+    expect(x).toEqual({ a: 1 });
+    expect(y).toEqual({ a: 1 });
+    expect(reads).toBe(1);
+    await cm.ensure('home'); // 読み終えた分類はもう読まない
+    expect(reads).toBe(1);
+  });
+});
