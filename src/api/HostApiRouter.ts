@@ -5,7 +5,7 @@
 
 import type { HostTransport } from '../ipc/HostTransport';
 import type { VfsService } from '../core/vfs/VfsService';
-import type { ConfigManager, OsConfig } from '../core/sys/ConfigManager';
+import type { ConfigManager } from '../core/sys/ConfigManager';
 import type { Role, Turn, TurnContent, TurnMeta } from '../core/state/HistoryManager';
 import type { DynamicToolRegistration, ProcessInfo } from './HostApiContract';
 import type { SpawnOptions } from '../shell/windowing/ProcessManager';
@@ -436,21 +436,24 @@ export class HostApiRouter {
     //   2. 配信の層に書いてしまい OS 更新のたびに戻る（itera2 で実際に起きた）。
     // 併合と差分書きは ConfigManager が 1 か所で持つ。ゲストはこの口だけを使う。
     // 🔴 credentials は渡さない（鍵の置き場。ゲストが読む筋合いは無い）。
+    // 🔴 分類があるかどうかはここで決めない（T-0553）。以前は「控えにあるか」で断っていたため、
+    //    起動時に読まない分類（既定以外）は、その回のうちにファイルが書かれるまで読めなかった。
+    //    在否は ConfigManager が層を探して答え（無ければ {}）、名前の検めもそこで行う（パスを組むのはそこなので）。
     const GUEST_CONFIG_DENY = new Set(['credentials']);
     const guestConfigCategory = (raw: unknown): string => {
       const category = typeof raw === 'string' ? raw.trim() : '';
-      if (!category || GUEST_CONFIG_DENY.has(category) || !(category in d.configManager.get())) {
-        throw new Error(`Unknown config category: ${JSON.stringify(raw)}`);
+      if (GUEST_CONFIG_DENY.has(category)) {
+        throw new Error(`Config category not available to apps: ${JSON.stringify(raw)}`);
       }
       return category;
     };
     t.registerHandler('sys:get_config', async ({ category }) => {
-      const key = guestConfigCategory(category) as keyof OsConfig;
-      const value = d.configManager.get(key);
+      const key = guestConfigCategory(category);
+      const value = await d.configManager.ensure(key);
       return value === undefined ? {} : JSON.parse(JSON.stringify(value));
     });
     t.registerHandler('sys:update_config', async ({ category, updates }) => {
-      const key = guestConfigCategory(category) as keyof OsConfig;
+      const key = guestConfigCategory(category);
       if (!updates || typeof updates !== 'object' || Array.isArray(updates)) {
         throw new Error('updates must be an object');
       }
@@ -583,7 +586,7 @@ export class HostApiRouter {
     // ==========================================
     // 5. Network (net)
     // ==========================================
-    const prepareFetchOptions = (url: string, options: any) => {
+    const prepareFetchOptions = async (url: string, options: any) => {
       let targetUrl = url;
       const fetchOpts: RequestInit = {
         method: options?.method || 'GET',
@@ -606,7 +609,8 @@ export class HostApiRouter {
         if (options.useProxy && !netConf?.allowCredentialsWithProxy) {
           throw new Error('Security Error: Cannot use public proxy with credentials.');
         }
-        const creds = d.configManager.get('credentials') || {};
+        // credentials は既定の分類ではないので、起動時には読まれていない。ensure で層から読む（T-0553）
+        const creds = (await d.configManager.ensure('credentials')) || {};
         const cred = creds[options.credentialId];
         if (!cred) throw new Error(`Credential ID '${options.credentialId}' not found.`);
         if (cred.type === 'query') {
@@ -624,7 +628,7 @@ export class HostApiRouter {
     };
 
     t.registerHandler('net:fetch', async ({ url, options }) => {
-      const { targetUrl, fetchOpts } = prepareFetchOptions(url, options);
+      const { targetUrl, fetchOpts } = await prepareFetchOptions(url, options);
       const res = await fetch(targetUrl, fetchOpts);
 
       const resHeaders: Record<string, string> = {};
@@ -657,7 +661,7 @@ export class HostApiRouter {
 
     t.registerHandler('net:download', async ({ url, destPath, options }) => {
       // V1のハックを維持：巨大ファイルをIPCで送らず、Host側でフェッチしてBlobを直接VFS（OPFS）に書き込む
-      const { targetUrl, fetchOpts } = prepareFetchOptions(url, options);
+      const { targetUrl, fetchOpts } = await prepareFetchOptions(url, options);
       const res = await fetch(targetUrl, fetchOpts);
       if (!res.ok) throw new Error(`HTTP Error ${res.status}`);
       const blob = await res.blob();
@@ -685,7 +689,8 @@ export class HostApiRouter {
 
         const token = res?.value;
         if (token && token !== 'cancel' && token.trim()) {
-          const creds = d.configManager.get('credentials') || {};
+          // 控えの値を直接いじらない（update が「変わったか」を旧値と比べるので）。起動直後でも層から読む（T-0553）
+          const creds = { ...((await d.configManager.ensure('credentials')) || {}) };
           creds[providerId] = {
             type: 'header',
             key: 'Authorization',

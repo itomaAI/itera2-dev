@@ -97,6 +97,14 @@ const DEFAULT_CONFIG: OsConfig = {
 };
 
 /**
+ * 分類の名前として受け付けるか。名前はそのままファイル名（`<分類>.json`）になるので、
+ * パスとして読まれうる文字（`/`・`.` など）を許さない（T-0553）。
+ */
+export function isValidConfigCategory(name: unknown): name is string {
+  return typeof name === 'string' && /^[A-Za-z0-9_-]+$/.test(name);
+}
+
+/**
  * 設定の変更を受け取る側。
  * `changed` には**値が実際に変わったカテゴリ**だけが入る（書き直されただけのものは入らない）。
  */
@@ -108,6 +116,10 @@ export class ConfigManager {
   /** 読む順。後が勝つ。書き先は最後（`src/config/config_layers.ts`）。 */
   private readonly configDirs: readonly string[];
   private listeners: ConfigUpdateListener[] = [];
+  /** 層から読み終えた分類（控えの値がファイルを反映している分類）。T-0553 */
+  private readonly loaded = new Set<string>();
+  /** 読んでいる途中の分類。同時に来た `ensure` を 1 回の読み込みにまとめる */
+  private readonly loading = new Map<string, Promise<unknown>>();
 
   constructor(vfs: VfsService, eventBus: VfsEventBus, layers: readonly string[] = CONFIG_LAYERS) {
     this.vfs = vfs;
@@ -162,6 +174,7 @@ export class ConfigManager {
     const next = await this._mergeLayers(category, filename, this.configDirs.length);
 
     this.cache[category] = next;
+    this.loaded.add(category);
     return { category, changed: !this._isEqual(previous, next) };
   }
 
@@ -233,6 +246,35 @@ export class ConfigManager {
     return typeof v === 'string' && v.trim() ? v.trim() : DEFAULT_HOME_PATH;
   }
 
+  /**
+   * 分類の値を、層から読んだうえで返す（T-0553）。
+   *
+   * 起動時に読むのは既定の分類（DEFAULT_CONFIG）だけで、それ以外の分類はファイルが書かれるまで控えに無い。
+   * 控えにあるかどうかで「その分類があるか」を決めると、同じファイルが
+   * 「その回のうちに書かれたか」で読めたり読めなかったりする。在否を知っているのはファイルの層なので、
+   * 控えに無ければここで層を探しに行く。どの層にも無ければ `{}`（ファイルは作らない）。
+   *
+   * 既定以外の分類を読む側は、`get()` の前にこれを通すこと。
+   */
+  async ensure(category: string): Promise<any> {
+    if (!isValidConfigCategory(category)) {
+      throw new Error(`Invalid config category: ${JSON.stringify(category)}`);
+    }
+    if (!this.loaded.has(category)) {
+      let pending = this.loading.get(category);
+      if (!pending) {
+        pending = this._loadCategory(`${category}.json`).finally(() => this.loading.delete(category));
+        this.loading.set(category, pending);
+      }
+      await pending;
+    }
+    return this.cache[category];
+  }
+
+  /**
+   * 控えの値をそのまま返す（同期）。既定の分類は起動時に読んである。
+   * **それ以外の分類は `ensure()` を通してから**（通していなければ undefined のことがある）。
+   */
   get(): OsConfig;
   get<K extends keyof OsConfig>(category: K): OsConfig[K];
   get(category?: keyof OsConfig): any {
@@ -243,6 +285,9 @@ export class ConfigManager {
    * 設定を更新し、VFSに書き込む
    */
   async update(category: keyof OsConfig, updates: any): Promise<void> {
+    // まだ読んでいない分類なら、先に層から読む。読まずに重ねると、ファイルにある既存のキーを
+    // 差分から落として消してしまう（T-0553。起動直後の oauth が認証情報をそうしうる）
+    await this.ensure(String(category));
     // ディープマージを使用して安全に更新
     const previous = this.cache[category];
     const newCategoryData = this._deepMerge(previous || {}, updates);
