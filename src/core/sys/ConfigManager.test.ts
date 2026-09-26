@@ -246,7 +246,7 @@ describe('ConfigManager.ensure: 起動後に触っていない分類も層から
     const files = {
       [`${CONFIG}/credentials.json`]: JSON.stringify({ github: { type: 'header', key: 'Authorization', value: 'x' } }),
     };
-    const cm = new ConfigManager(makeVfs(files), bus);
+    const cm = new ConfigManager(makeVfs(files), bus, [CONFIG]); // 書き先を見るので層を 1 つに固定する（itera2 の既定は 2 層）
     await cm.loadAll();
     await cm.update('credentials', { google: { type: 'header', key: 'Authorization', value: 'y' } });
     const saved = JSON.parse(files[`${CONFIG}/credentials.json`]);
@@ -255,12 +255,24 @@ describe('ConfigManager.ensure: 起動後に触っていない分類も層から
 
   it('新しい分類を update で作ると、変わったとして知らせる', async () => {
     const files: Record<string, string> = {};
-    const cm = new ConfigManager(makeVfs(files), bus);
+    const cm = new ConfigManager(makeVfs(files), bus, [CONFIG]); // 書き先を見るので層を 1 つに固定する（itera2 の既定は 2 層）
     const seen: string[][] = [];
     cm.onUpdate((_c, changed) => seen.push([...changed]));
     await cm.update('home', { contextCutAt: 300000 });
     expect(JSON.parse(files[`${CONFIG}/home.json`])).toEqual({ contextCutAt: 300000 });
     expect(seen).toEqual([['home']]);
+  });
+
+  it('2 層のとき、まだ読んでいない分類への update は最上位の層に差分だけ書き、既存のキーを保つ', async () => {
+    const files: Record<string, string> = {
+      'system/config/credentials.json': JSON.stringify({ github: { value: 'x' } }),
+      'user/config/credentials.json': JSON.stringify({ brave: { value: 'b' } }),
+    };
+    const cm = new ConfigManager(makeVfs(files), bus, ['system/config', 'user/config']);
+    await cm.update('credentials', { google: { value: 'y' } });
+    expect(Object.keys(cm.get('credentials')).sort()).toEqual(['brave', 'github', 'google']);
+    expect(JSON.parse(files['system/config/credentials.json'])).toEqual({ github: { value: 'x' } }); // 配信の層は触らない
+    expect(Object.keys(JSON.parse(files['user/config/credentials.json'])).sort()).toEqual(['brave', 'google']);
   });
 
   it('同時に来た ensure は 1 回だけ読む', async () => {
