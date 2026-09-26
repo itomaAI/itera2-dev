@@ -41,3 +41,13 @@ export function writeLayerOf(layers: readonly string[]): string {
  * `user/locales` を作ればそこが効く。書き込みはしない（読むだけ）。
  */
 export const LOCALE_LAYERS: readonly string[] = ['system/locales', 'user/locales'];
+
+/** 設定（appearance.locale）に言語が無いときの UI の言語。Itera は英語（ミャク楽は ja。T-0554 / T-0556）。 */
+export const DEFAULT_LOCALE = 'en';
+
+/**
+ * 既定の言語の辞書。VFS が読めない時点（初めての起動の最初・起動失敗画面）でも既定の言語で出すために、ホストに同梱する。
+ * Itera の既定は英語で、英語はホストの TS（`messages_en`）そのものなので、重ねる辞書は無い。
+ * ミャク楽は配る ja.json を import して渡している（出典は 1 つのまま）。
+ */
+export const DEFAULT_LOCALE_MESSAGES: unknown = undefined;

@@ -3,6 +3,10 @@ import { describe, it, expect } from 'vitest';
 import { LocaleService } from './LocaleService';
 import { I18n } from '../../i18n/i18n';
 import type { ConfigUpdateListener } from '../../core/sys/ConfigManager';
+import { LOCALE_LAYERS, DEFAULT_LOCALE } from '../../config/config_layers';
+
+/** 利用者の層（配布物ごとに違う。itera2-dev は user/locales、ミャク楽は 個人/言語） */
+const USER_LAYER = LOCALE_LAYERS[LOCALE_LAYERS.length - 1];
 
 /**
  * 言語ファイルの重ね（P-0046 / T-0545）。
@@ -50,7 +54,7 @@ describe('LocaleService', () => {
   it('user/locales が system/locales に勝ち、個別の言語が一般の言語に勝つ', async () => {
     const { service, target, appearance } = makeEnv({
       'system/locales/ja.json': { meta: { name: '日本語' }, messages: { 'k.a': 'あ(system)', 'k.b': 'い(system)' } },
-      'user/locales/ja.json': { messages: { 'k.a': 'あ(user)' } },
+      [`${USER_LAYER}/ja.json`]: { messages: { 'k.a': 'あ(user)' } },
       'system/locales/ja-JP.json': { messages: { 'k.b': 'い(ja-JP)' } },
     });
     await service.load();
@@ -71,7 +75,7 @@ describe('LocaleService', () => {
   it('壊れたファイルは飛ばす', async () => {
     const { service, target } = makeEnv({
       'system/locales/ja.json': { messages: { 'k.a': 'あ' } },
-      'user/locales/ja.json': '{broken',
+      [`${USER_LAYER}/ja.json`]: '{broken',
     });
     const warn = console.warn;
     console.warn = () => {};
@@ -100,15 +104,21 @@ describe('LocaleService', () => {
     const { service, target, store, subs } = makeEnv({ 'system/locales/ja.json': { messages: { 'k.a': 'あ' } } });
     service.start();
     await service.load();
-    store.set('user/locales/ja.json', JSON.stringify({ messages: { 'k.a': 'あ!' } }));
-    subs[0]([{ type: 'ATTACH', path: 'user/locales/ja.json' }]);
+    store.set(`${USER_LAYER}/ja.json`, JSON.stringify({ messages: { 'k.a': 'あ!' } }));
+    subs[0]([{ type: 'ATTACH', path: `${USER_LAYER}/ja.json` }]);
     await flush();
     expect(target.t('k.a' as any)).toBe('あ!');
     // 関係のないファイルでは読み直さない
-    store.set('user/locales/ja.json', JSON.stringify({ messages: { 'k.a': 'x' } }));
+    store.set(`${USER_LAYER}/ja.json`, JSON.stringify({ messages: { 'k.a': 'x' } }));
     subs[0]([{ type: 'MUTATE', path: 'data/notes.json' }]);
     await flush();
     expect(target.t('k.a' as any)).toBe('あ!');
+  });
+
+  it('設定に言語が無ければ配布物の既定の言語になる（ミャク楽は ja。T-0554）', () => {
+    const { service, appearance } = makeEnv({});
+    delete appearance.locale;
+    expect(service.currentSetting()).toBe(DEFAULT_LOCALE);
   });
 
   it('立て続けに読んだら最後の 1 回だけが効く', async () => {
