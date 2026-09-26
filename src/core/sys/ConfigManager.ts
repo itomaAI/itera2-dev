@@ -7,6 +7,7 @@ import type { VfsService } from '../vfs/VfsService';
 import type { VfsEventBus } from '../vfs/VfsEventBus';
 import { SYSTEM_PRINCIPAL } from '../vfs/types';
 import { CONFIG_LAYERS } from '../../config/config_layers';
+import { DEFAULT_LOCALE } from '../../config/config_layers';
 
 /**
  * 自律ループで連続実行できるツール回数の既定の上限。
@@ -78,7 +79,7 @@ const DEFAULT_CONFIG: OsConfig = {
   },
   appearance: {
     theme: 'system/themes/light.json',
-    locale: 'en',
+    locale: DEFAULT_LOCALE,
     typography: {
       uiFont: 'system-ui',
       monoFont: 'monospace',

@@ -23,6 +23,7 @@
  */
 
 import { EN, type MessageKey } from './messages_en';
+import { DEFAULT_LOCALE, DEFAULT_LOCALE_MESSAGES } from '../config/config_layers';
 
 export type { MessageKey } from './messages_en';
 
@@ -166,9 +167,20 @@ export class I18n {
   private listeners = new Set<I18nListener>();
   private readonly persist: boolean;
 
-  constructor(base: Messages = EN, opts: { persist?: boolean } = {}) {
+  /**
+   * @param opts.initialLocale / opts.initialMessages 控えが無いときに使う言語と、英語の上に重ねる辞書
+   *   （配布物の既定の言語。Itera は en で辞書なし、ミャク楽は ja と同梱の辞書。T-0554 / T-0556）。VFS を読んだあとは LocaleService が差し替える。
+   */
+  constructor(
+    base: Messages = EN,
+    opts: { persist?: boolean; initialLocale?: string; initialMessages?: unknown } = {},
+  ) {
     this.base = base;
     this.persist = opts.persist ?? false;
+    if (opts.initialLocale) {
+      this._locale = canonicalLocale(opts.initialLocale);
+      this.overlay = sanitizeMessages(opts.initialMessages);
+    }
     if (this.persist) {
       const cached = readCache();
       if (cached) {
@@ -239,7 +251,11 @@ export class I18n {
 }
 
 /** ホスト全体で 1 つ。 */
-export const i18n = new I18n(EN, { persist: true });
+export const i18n = new I18n(EN, {
+  persist: true,
+  initialLocale: DEFAULT_LOCALE,
+  initialMessages: DEFAULT_LOCALE_MESSAGES,
+});
 
 /** 文を引く。`t('explorer.menu.delete')`。 */
 export function t(key: MessageKey, params?: MessageParams): string {

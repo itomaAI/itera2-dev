@@ -15,7 +15,7 @@ import type { ConfigManager } from '../../core/sys/ConfigManager';
 import type { VfsService } from '../../core/vfs/VfsService';
 import type { VfsEventBus } from '../../core/vfs/VfsEventBus';
 import { SYSTEM_PRINCIPAL } from '../../core/vfs/types';
-import { LOCALE_LAYERS } from '../../config/config_layers';
+import { LOCALE_LAYERS, DEFAULT_LOCALE } from '../../config/config_layers';
 import {
   i18n as defaultI18n,
   canonicalLocale,
@@ -55,7 +55,7 @@ export class LocaleService {
   /** 設定に書かれている UI の言語（正規の形）。 */
   currentSetting(): string {
     const appearance = this.configManager.get('appearance') as { locale?: string } | undefined;
-    return canonicalLocale(appearance?.locale || 'en');
+    return canonicalLocale(appearance?.locale || DEFAULT_LOCALE);
   }
 
   start(): void {
