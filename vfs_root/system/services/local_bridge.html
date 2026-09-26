@@ -232,6 +232,23 @@
         // ---------- 補助 ----------
         const api = (conn, path) => `${conn.serverUrl}${path}`;
 
+        // 長い巡回の途中で、ほかの仕事に順番を譲る。setTimeout(0) は使わない（T-0544）。
+        // 背景のタブでは setTimeout が約 1 秒に間引かれる（2026-09-26・Firefox 156 で 1 回 1,015ms を実測）。
+        // 50 件ごとに譲る調停は「写しの件数 ÷ 50」秒かかり、6,400 件の写しで 2 分を超えていた
+        // （利用者が別のタブを見ている間、ホストの変化が VFS に届かない）。
+        // MessageChannel の通知は間引かれないので、譲る効果だけが残る。
+        const yieldChannel = new MessageChannel();
+        const yieldQueue = [];
+        yieldChannel.port1.onmessage = () => {
+          const resume = yieldQueue.shift();
+          if (resume) resume();
+        };
+        const yieldToUi = () =>
+          new Promise((resume) => {
+            yieldQueue.push(resume);
+            yieldChannel.port2.postMessage(0);
+          });
+
         async function getJson(url, opts) {
           const res = await fetch(url, opts);
           if (!res.ok) {
@@ -574,7 +591,7 @@
           for (const rel of sorted) {
             if (!rel) continue;
             if (isIgnoredCompiled(rel, compiledIgnore)) continue;
-            if (++n % 50 === 0) await new Promise((r) => setTimeout(r, 0));
+            if (++n % 50 === 0) await yieldToUi();
 
             try {
               const full = `${mountPath}/${rel}`;
@@ -887,7 +904,7 @@
             }
             if (++n % 50 === 0) {
               onProgress({ done: n, total });
-              await new Promise((r) => setTimeout(r, 0));
+              await yieldToUi();
             }
           }
 
@@ -908,7 +925,7 @@
             }
             if (++n % 50 === 0) {
               onProgress({ done: n, total });
-              await new Promise((r) => setTimeout(r, 0));
+              await yieldToUi();
             }
           }
 
@@ -1704,7 +1721,7 @@ Attributes:
         }
 
         MetaOS.ai.log(
-          'Local Bridge (daemon v3.10) started\n' + (summary.join('\n') || '(no enabled connections)'),
+          'Local Bridge (daemon v3.11) started\n' + (summary.join('\n') || '(no enabled connections)'),
           'system',
         );
       })();
