@@ -89,7 +89,7 @@ const DEFAULT_CONFIG: OsConfig = {
     },
     layout: { animations: true, homePath: DEFAULT_HOME_PATH },
   },
-  llm: { model: 'gemini-3.6-flash' },
+  llm: { model: 'gemini-3.8-flash' },
   network: {
     proxyUrl: 'https://corsproxy.io/?',
     allowCredentialsWithProxy: false,

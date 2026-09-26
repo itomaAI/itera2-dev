@@ -584,7 +584,7 @@
           DOM('config-app-systemfontsize').value = configs.appearance.typography?.systemFontSize || '12';
           DOM('config-app-animations').checked = configs.appearance.layout?.animations !== false;
 
-          await loadLlmProfiles(configs.llm.model || 'gemini-3.6-flash');
+          await loadLlmProfiles(configs.llm.model || 'gemini-3.8-flash');
           await loadThemes();
           await loadServices();
         } catch (e) {
