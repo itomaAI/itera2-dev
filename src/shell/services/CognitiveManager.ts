@@ -194,7 +194,7 @@ export class CognitiveManager {
     if (!this.engine) return;
 
     const llmConfig = this.configManager.get('llm') || {
-      model: 'gemini-3.6-flash',
+      model: 'gemini-3.8-flash',
     };
     const rawModel = llmConfig.model;
     const systemPrompt = buildSystemPrompt({ thinkingTag: llmConfig.thinkingTag !== false });
