@@ -233,15 +233,16 @@ Use this to check file sizes, modification dates, exact hashes, and ACL permissi
 Searches file contents.
 Attributes:
     - query: Text or Regex pattern to search for.
-    - path (optional): Scope.
+    - path (optional): Scope. A directory (everything under it) or a single file.
     - include (optional): File extensions to include (e.g., ".js,.html").
     - regex (optional): "true" or "false" (default: false). Set "true" to use regex matching.
     - case_sensitive (optional): "true" or "false" (default: false).
     - context (optional): Number of lines to show around match (default: 2).
-    - limit (optional): Maximum number of results to return (default: 20).
+    - limit (optional): Maximum number of matches to return (default: 20). Each matching line and each matching file path counts as one. When more matches exist, the output ends with a "Search truncated" note.
     - show_hidden (optional): "true" or "false" (default). Set to "true" to include hidden files and directories (starting with '.').
 Rule:
     - This is a line-based search. You CANNOT match blocks of text across multiple lines using regex.
+    - At most 5 matching lines are shown per file (or \`limit\`, if smaller); "... and more matches in <file>" marks the rest. To see them, use \`read_file\` on that file.
     - By default, \`system/logs/\` and \`system/temp/\` are excluded from the search to avoid noise. To search them, explicitly specify \`path="system/logs"\` or \`path="system/temp"\`.
 </define_tag>
 <define_tag name="delete_file">
