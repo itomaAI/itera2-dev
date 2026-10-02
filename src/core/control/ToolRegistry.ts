@@ -8,6 +8,7 @@ import type { GuestToolInvoker } from './GuestToolInvoker';
 import type { ToolExecutionRecorder } from './ToolExecutionRecorder';
 import { normalizeDynamicToolResult } from './ToolResultNormalizer';
 import type { ToolParams, ToolResult } from '../types/tools';
+import { RESERVED_SYSTEM_TAGS } from '../cognitive/Translator';
 
 export interface ToolDef {
   name: string;
@@ -29,14 +30,34 @@ export interface DynamicToolDefinition {
   definition?: string;
 }
 
-export class UnknownToolError extends Error {
-  readonly code = 'UNKNOWN_TOOL';
-  readonly actionType: string;
-
-  constructor(actionType: string) {
-    super(`Unknown Tool: <${actionType}> is not registered or not available.`);
-    this.actionType = actionType;
+/**
+ * 登録されていないタグを呼んだときの結果（T-0593）。
+ *
+ * 以前は UnknownToolError を投げ、Engine の catch が別に syntax_warning のターンを積んでいた。
+ * いまは他の失敗（ツールが例外を出した）と同じく、失敗した 1 本の結果として返す。
+ * 違いは文面だけ: OS しか出さないタグ（<tool_output> など）なら「偽装は結果にならない」と伝える。
+ * 文言は英語（LLM に読ませる文。itera2 系とミャク楽で共通）。
+ */
+export function unknownToolResult(actionType: string): ToolResult {
+  if (RESERVED_SYSTEM_TAGS.has(actionType)) {
+    return {
+      log: [
+        `[LPML Protocol Violation] <${actionType}> is a tag that only the OS may inject.`,
+        `Forging it does not produce a result: the tag was rejected, and its inner content was kept as plain text (NOT interpreted, NOT executed).`,
+        `NEVER generate this tag yourself. Tool results are delivered to you by the system after your terminal tag.`,
+      ].join('\n'),
+      ui: `❌ Error: <${actionType}> is reserved for the OS`,
+      error: true,
+    };
   }
+  return {
+    log: [
+      `[LPML Syntax Violation] Unknown Tool: <${actionType}> is not registered or not available.`,
+      `You can only use the tags explicitly defined in your instructions or currently registered dynamic tools.`,
+    ].join('\n'),
+    ui: `❌ Error: Unknown tool <${actionType}>`,
+    error: true,
+  };
 }
 
 export class ToolRegistry {
@@ -274,18 +295,25 @@ export class ToolRegistry {
       }
     }
 
+    // 失敗は投げずに結果として返す（下の 2 経路と同じ）。投げると Engine の catch に入り、
+    // 想定外の例外と区別が付かなくなる。
     if (!foundTool || !foundSet) {
-      const error = new UnknownToolError(action.type);
-      this._recordExecution(action, null, startedAt, undefined, error);
-      throw error;
+      const result = unknownToolResult(action.type);
+      this._recordExecution(action, null, startedAt, result);
+      return result;
     }
 
     // 2. システムツールの実行
     if (foundSet.kind === 'system') {
       if (!foundTool.impl) {
-        const error = new Error(`[ToolRegistry] System tool <${action.type}> has no implementation.`);
-        this._recordExecution(action, foundSet, startedAt, undefined, error);
-        throw error;
+        const message = `System tool <${action.type}> has no implementation.`;
+        const result: ToolResult = {
+          log: `Error executing <${action.type}>: ${message}`,
+          ui: `❌ Error: ${message}`,
+          error: true,
+        };
+        this._recordExecution(action, foundSet, startedAt, result);
+        return result;
       }
       try {
         const result = await foundTool.impl(action.params, context);

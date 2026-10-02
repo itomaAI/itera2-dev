@@ -48,11 +48,9 @@ function run(output: string) {
     getRegisteredToolNames: () => ['read_file', 'delete_file'],
     execute: vi.fn(async (action: any) => {
       executed.push(action.type);
+      // 未登録のタグは、本物の ToolRegistry と同じく失敗の結果を返す（投げない）
       if (!['read_file', 'delete_file', 'yield', 'finish'].includes(action.type)) {
-        const err: any = new Error('unknown');
-        err.code = 'UNKNOWN_TOOL';
-        err.actionType = action.type;
-        throw err;
+        return { log: `Unknown Tool: <${action.type}>`, error: true };
       }
       return { log: 'ok', trigger_llm: false };
     }),
