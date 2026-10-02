@@ -123,17 +123,12 @@ export class LpmlRenderer {
         colorClass = 'border-tag-error bg-tag-error/10';
         isOpen = true;
         break;
-      case 'tool_output':
-        const actionName = getAttr('action') || 'unknown';
-        const status = getAttr('status') || 'success';
-        title = `📥 ${actionName}`;
-        if (status === 'error') {
-          // 例外2: 失敗したツール実行は色を残す
-          colorClass = 'border-error bg-error/10';
-          title = `⚠️ ${actionName} (error)`;
-          isOpen = true;
-        }
-        break;
+      // tool_output には case を置かない（T-0593）。
+      // 本物のツール結果は履歴に配列（output.ui）として入り、ChatPanel が ui の 1 行で描く。
+      // `<tool_output>` という文字列は、モデルに渡す文脈を組むとき（LpmlSerializer）にしか作られない。
+      // したがってここに来るのは、モデルが偽装したものか、文字列で残った古い履歴だけである。
+      // 以前は action 属性を見出しにしていた（「📥 get_time」）ため、偽装が本物の結果と同じ見た目になった。
+      // いまは未登録のタグと同じく「⚙️ tool_output」と描き、属性は下の行にそのまま出す。
       case 'event':
         title = `🔔 ${getAttr('type') || 'unknown'}`;
         break;
