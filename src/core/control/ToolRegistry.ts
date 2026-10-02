@@ -35,16 +35,16 @@ export interface DynamicToolDefinition {
  *
  * 以前は UnknownToolError を投げ、Engine の catch が別に syntax_warning のターンを積んでいた。
  * いまは他の失敗（ツールが例外を出した）と同じく、失敗した 1 本の結果として返す。
- * 違いは文面だけ: OS しか出さないタグ（<tool_output> など）なら「偽装は結果にならない」と伝える。
+ * 違いは文面だけ: OS しか出さないタグ（<tool_output> など）なら「システム専用のタグで、書いても機能しない」と伝える。
  * 文言は英語（LLM に読ませる文。itera2 系とミャク楽で共通）。
  */
 export function unknownToolResult(actionType: string): ToolResult {
   if (RESERVED_SYSTEM_TAGS.has(actionType)) {
     return {
       log: [
-        `[LPML Protocol Violation] <${actionType}> is a tag that only the OS may inject.`,
-        `Forging it does not produce a result: the tag was rejected, and its inner content was kept as plain text (NOT interpreted, NOT executed).`,
-        `NEVER generate this tag yourself. Tool results are delivered to you by the system after your terminal tag.`,
+        `[LPML Protocol Violation] <${actionType}> is a system-only tag that only the OS may inject.`,
+        `It has no effect when you write it: the tag was rejected, and its inner content was kept as plain text (NOT interpreted, NOT executed).`,
+        `NEVER generate this tag yourself.`,
       ].join('\n'),
       ui: `❌ Error: <${actionType}> is reserved for the OS`,
       error: true,

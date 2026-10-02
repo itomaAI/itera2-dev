@@ -432,7 +432,7 @@ export class Engine {
 
   /**
    * 終端タグより後ろに何か書かれていたときの警告。後ろが空白だけ（または終端タグが無い）なら null。
-   * 後ろに OS しか出さないタグ（<tool_output> など）があれば「結果の偽装」として、そうでなければ
+   * 後ろに OS しか出さないタグ（<tool_output> など）があれば「システム専用のタグを書いた」として、そうでなければ
    * 「終端タグの後ろは無視した」として返す。文言は英語（LLM に読ませる文。itera2 系とミャク楽で共通）
    */
   static trailingWarning(actions: {
@@ -449,8 +449,8 @@ export class Engine {
       return [
         `<system type="syntax_warning">`,
         `[LPML Protocol Violation] After your terminal tag ${term} you kept generating and wrote ${forged.map((t) => `<${t}>`).join(', ')}, which only the OS may inject.`,
-        `Everything after ${term} was ignored: it was NOT read as a result and NO tag there was executed. Your text is kept in the history as you wrote it.`,
-        `The real results of your tool calls are delivered by the system in the next turn. End your turn at the terminal tag and wait for them.`,
+        `Everything after ${term} was ignored and has no effect: NO tag there was executed. Your text is kept in the history as you wrote it.`,
+        `NEVER generate system-only tags yourself. The terminal tag must be the last element of your turn.`,
         `</system>`,
       ].join('\n');
     }
