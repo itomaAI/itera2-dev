@@ -356,12 +356,19 @@ export class Engine {
       const registeredTools = this.registry.getRegisteredToolNames();
       const actions = this.translator.parse(rawResponse, registeredTools);
 
-      // 終端タグによる切り詰めが発生した場合のリカバリ
-      if (actions.isTruncated && actions.truncatedText) {
-        const truncatedTurn = this.state.history.update(modelTurn.id, actions.truncatedText, { status: 'completed' });
-        if (truncatedTurn) {
-          this._emit('turn_end', { role: 'model', turn: truncatedTurn });
-        }
+      // 終端タグより後ろの出力（T-0593）。
+      // 以前はここで履歴のモデルのターンを終端タグまでに切り詰めていた（古い LLM では、
+      // 偽装した <tool_output> などが履歴に残ること自体が次の誤りを誘ったため）。
+      // しかし履歴を書き換えると、モデルが実際に出した文字列と履歴が食い違い、プロンプトの
+      // キャッシュが当たらなくなる。いまは出力をそのまま残し、後ろは解釈も実行もせず、
+      // LPML 違反と同じく system の警告を積む。後ろが空白だけなら何もしない。
+      const trailingWarning = Engine.trailingWarning(actions);
+      if (trailingWarning) {
+        const warningTurn = this.state.history.append('system', trailingWarning, {
+          type: TurnType.ERROR,
+          trigger_llm: false,
+        });
+        this._emit('turn_end', { role: 'system', turn: warningTurn });
       }
 
       // 生テキストの漏洩（LPML文法違反）のパッシブ警告
@@ -414,6 +421,40 @@ export class Engine {
       // 追い越せる変更（方針次第）が来ていなければ、ここでは予約されず、束の最後の結果が拾う
       if (this.hasPendingEvents) this._scheduleEvaluation();
     }
+  }
+
+  /**
+   * 終端タグより後ろに何か書かれていたときの警告。後ろが空白だけ（または終端タグが無い）なら null。
+   * 後ろに OS しか出さないタグ（<tool_output> など）があれば「結果の偽装」として、そうでなければ
+   * 「終端タグの後ろは無視した」として返す。文言は英語（LLM に読ませる文。itera2 系とミャク楽で共通）
+   */
+  static trailingWarning(actions: {
+    terminalTag?: string | null;
+    trailingText?: string;
+    trailingTags?: string[];
+  }): string | null {
+    const text = actions.trailingText ?? '';
+    if (!actions.terminalTag || !text.trim()) return null;
+    const term = actions.terminalTag === 'ask' ? '</ask>' : `<${actions.terminalTag} />`;
+    const tags = actions.trailingTags ?? [];
+    const forged = tags.filter((t) => RESERVED_SYSTEM_TAGS.has(t));
+    if (forged.length) {
+      return [
+        `<system type="syntax_warning">`,
+        `[LPML Protocol Violation] After your terminal tag ${term} you kept generating and wrote ${forged.map((t) => `<${t}>`).join(', ')}, which only the OS may inject.`,
+        `Everything after ${term} was ignored: it was NOT read as a result and NO tag there was executed. Your text is kept in the history as you wrote it.`,
+        `The real results of your tool calls are delivered by the system in the next turn. End your turn at the terminal tag and wait for them.`,
+        `</system>`,
+      ].join('\n');
+    }
+    const shown = tags.slice(0, 8).map((t) => `<${t}>`);
+    return [
+      `<system type="syntax_warning">`,
+      `[LPML Syntax Violation] You wrote content after your terminal tag ${term}.`,
+      `Everything after ${term} was ignored and NOT executed${shown.length ? ` (including ${shown.join(', ')}${tags.length > shown.length ? ', ...' : ''})` : ''}.`,
+      `The terminal tag must be the last element of your turn. If you need those actions, request them again before the terminal tag.`,
+      `</system>`,
+    ].join('\n');
   }
 
   private _dispatchActions(actions: ParsedAction[]): void {

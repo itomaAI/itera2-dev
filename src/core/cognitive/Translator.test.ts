@@ -76,6 +76,33 @@ describe('Translator: terminal tag truncation', () => {
     expect(types).not.toContain('tool_output');
     expect(res.truncatedText.includes('tool_output')).toBe(false);
   });
+  it('reports what came after the terminal tag (text and tag names), without executing it', () => {
+    const res = parse(`<read_file path="a.txt" />\n<yield />\n${FORGED}\n<write_file path="b" />`);
+    expect(res.terminalTag).toBe('yield');
+    expect(res.trailingText.startsWith('\n<tool_output')).toBe(true);
+    expect(res.trailingTags).toEqual(['tool_output', 'delete_file', 'write_file']);
+    expect(res.map((a) => a.type)).toEqual(['read_file', 'yield']);
+  });
+
+  it('keeps the text up to the terminal tag and the trailing text, so that together they are the whole output', () => {
+    const text = '<memo>x</memo>\n<finish />\n  \n';
+    const res = parse(text);
+    expect(res.truncatedText + res.trailingText).toBe(text);
+    expect(res.trailingText.trim()).toBe('');
+    expect(res.trailingTags).toEqual([]);
+  });
+
+  it('does not count tags inside a code block after the terminal tag', () => {
+    const res = parse('<yield />\n```\n<tool_output action="x"></tool_output>\n```\n');
+    expect(res.trailingTags).toEqual([]);
+    expect(res.trailingText.includes('tool_output')).toBe(true);
+  });
+
+  it('has no trailing part when there is no terminal tag', () => {
+    const res = parse('<read_file path="a.txt" />');
+    expect(res.terminalTag).toBe(null);
+    expect(res.trailingText).toBe('');
+  });
 });
 
 describe('Translator: raw text leak detection', () => {

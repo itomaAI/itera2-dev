@@ -37,8 +37,15 @@ export interface ParsedAction {
 
 export interface ParseResult extends Array<ParsedAction> {
   hasLeak: boolean;
+  /** 最初の（ルート階層の）終端タグまでの文字列。終端タグが無ければ全文 */
   truncatedText: string;
   isTruncated: boolean;
+  /** 見つかった終端タグの名前（yield / breathe / ask / finish）。無ければ null */
+  terminalTag: string | null;
+  /** 終端タグより後ろの文字列（解釈も実行もしない）。履歴からは削らず、Engine が警告に使う */
+  trailingText: string;
+  /** trailingText に現れたタグの名前（開始タグと空タグ。出現順・重複なし。コードブロックの中は数えない） */
+  trailingTags: string[];
 }
 
 export class Translator {
@@ -84,7 +91,10 @@ export class Translator {
     const cleanedText = text.replace(/<!\[CDATA\[([\s\S]*?)\]\]>/gi, '$1');
 
     const exclude = [...this.defaultExcludeTags, ...additionalExcludeTags];
-    const { tree, truncatedText, isTruncated } = this._parseToTree(cleanedText, exclude);
+    const { tree, truncatedText, isTruncated, terminalTag, trailingText, trailingTags } = this._parseToTree(
+      cleanedText,
+      exclude,
+    );
 
     // 1. ツリーのルートレベルに残っている「どのタグにも属さない生テキスト」を結合
     let leakedText = '';
@@ -124,6 +134,9 @@ export class Translator {
     result.hasLeak = hasLeak;
     result.truncatedText = truncatedText;
     result.isTruncated = isTruncated;
+    result.terminalTag = terminalTag;
+    result.trailingText = trailingText;
+    result.trailingTags = trailingTags;
 
     return result;
   }
@@ -191,7 +204,14 @@ export class Translator {
   private _parseToTree(
     text: string,
     exclude: string[] = [],
-  ): { tree: any[]; truncatedText: string; isTruncated: boolean } {
+  ): {
+    tree: any[];
+    truncatedText: string;
+    isTruncated: boolean;
+    terminalTag: string | null;
+    trailingText: string;
+    trailingTags: string[];
+  } {
     const protectedContent: Record<string, string> = {};
     const protectedText = text.replace(Translator.PATTERN_PROTECT, (match) => {
       const placeholder = `__PROTECTED_${Math.random().toString(36).substring(2, 15)}__`;
@@ -216,6 +236,7 @@ export class Translator {
     const regexEmpty = new RegExp('^' + Translator.PATTERN_TAG_EMPTY + '$');
 
     let terminalIndex = -1;
+    let terminalTag: string | null = null;
 
     while ((match = regexTag.exec(protectedText)) !== null) {
       const tagStr = match[0];
@@ -259,6 +280,7 @@ export class Translator {
         // ★ Terminal Tag Detection (Empty Tag)
         if (PARSE_TERMINAL_TAGS.has(name) && tagExclude === null && stack.length === 1) {
           terminalIndex = indTagEnd;
+          terminalTag = name;
           break;
         }
       } else if (matchTagEnd) {
@@ -271,14 +293,17 @@ export class Translator {
         // ★ Terminal Tag Detection (End Tag)
         if (PARSE_TERMINAL_TAGS.has(name) && tagExclude === null && stack.length === 1) {
           terminalIndex = indTagEnd;
+          terminalTag = name;
           break;
         }
       }
     }
 
     let finalProtectedText = protectedText;
+    let trailingProtected = '';
     if (terminalIndex !== -1) {
       finalProtectedText = protectedText.substring(0, terminalIndex);
+      trailingProtected = protectedText.substring(terminalIndex);
     } else {
       const remaining = protectedText.substring(cursor);
       if (remaining.length > 0) stack[stack.length - 1].content.push(remaining);
@@ -287,10 +312,22 @@ export class Translator {
     const restoredTree = this._restoreTree(tree, protectedContent);
     const finalText = this._restoreString(finalProtectedText, protectedContent);
 
+    // 終端タグより後ろに現れたタグの名前（保護した部分＝コードブロック等の中は数えない）
+    const trailingTags: string[] = [];
+    const reTrail = new RegExp(Translator.PATTERN_TAG);
+    let mt;
+    while ((mt = reTrail.exec(trailingProtected)) !== null) {
+      const startOrEmpty = mt[0].match(regexStart) || mt[0].match(regexEmpty);
+      if (startOrEmpty && !trailingTags.includes(startOrEmpty[1])) trailingTags.push(startOrEmpty[1]);
+    }
+
     return {
       tree: restoredTree,
       truncatedText: finalText,
       isTruncated: terminalIndex !== -1,
+      terminalTag,
+      trailingText: this._restoreString(trailingProtected, protectedContent),
+      trailingTags,
     };
   }
 
