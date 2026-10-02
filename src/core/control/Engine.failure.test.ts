@@ -105,8 +105,8 @@ describe('Engine: a failed tool does not take the rest of its batch down (T-0593
     const texts = buildToolPromptNodes(turn)
       .filter((n) => n.shouldEmit)
       .map((n) => n.text);
-    expect(texts.some((t) => t.startsWith('<tool_output action="get_time" status="success"'))).toBe(true);
-    expect(texts.some((t) => t.startsWith('<tool_output action="tool_output" status="error"'))).toBe(true);
+    expect(texts.some((t) => t.startsWith('<tool_output tool="get_time" status="success"'))).toBe(true);
+    expect(texts.some((t) => t.startsWith('<tool_output tool="tool_output" status="error"'))).toBe(true);
   });
 
   it('treats an unregistered tag like any other failure: no extra warning turn, the result explains it', async () => {
