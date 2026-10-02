@@ -124,9 +124,9 @@ Pay attention to the 'pid' and 'name' attributes to understand which app is prov
 <define_tag name="tool_output">
 Injected by the system to return the result of a single tool execution.
 Attributes:
-    - action: The name of the tool executed (e.g., "read_file").
+    - tool: The name of the tool executed (e.g., "read_file").
     - status: "success" or "error".
-    - [params]: The system will echo back the original parameters you provided (e.g., path="...").
+    - param_*: The attributes of your original tag, echoed back with a \`param_\` prefix (e.g., \`<read_file path="a.md" />\` comes back as param_path="a.md"). The prefix keeps them apart from \`tool\` and \`status\`. Tag content is not echoed.
 **CRITICAL**: NEVER generate this tag yourself. The system will provide one \`<tool_output>\` tag for each tool you requested before your last \`<yield />\`. Check the results before your next action.
 </define_tag>
 
