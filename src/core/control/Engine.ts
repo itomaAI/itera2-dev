@@ -28,6 +28,13 @@ export interface EngineState {
   configManager: ConfigManager;
 }
 
+/**
+ * 返っていないツールの枠に入れる文（モデルに見える）。
+ * 枠は投影に入ったあとも書き換えないので、送った時点でもあとから読み返しても正しい文に固定する（T-0597）。
+ * 間に合えば枠は本物の結果で埋まり、この文は送られない。間に合わなければ、結果は新しいターンに届く。
+ */
+export const PENDING_LOG = '[Pending] Still running. The result will come in a later turn.';
+
 export class Engine {
   public state: EngineState;
   public projector: BaseProjector | null;
@@ -479,7 +486,7 @@ export class Engine {
         originalIndex: action.originalIndex,
         params: safeParams,
         output: {
-          log: `[Pending] Executing ${action.type}...`,
+          log: PENDING_LOG,
           ui: `⚙️ Executing ${action.type}...`,
           trigger_llm: false,
         },
@@ -554,12 +561,16 @@ export class Engine {
         return;
       }
 
+      // 画面の印だけを変える。log（モデルに見える文）は [Pending] のまま触らない（T-0597）。
+      // この枠はもう投影に入って送られている。log を書き換えると、次の投影で過去の文字列が変わり、
+      // 前置の一致で引き当てるセッションの再利用やプロンプトキャッシュがそこから外れていた。
+      // PENDING_LOG は「あとで返る」としか言わないので、書き換えなくても嘘にならない。
+      // meta も触らない（起こす理由は下の新しいターンが持つ）
       combinedResults[index].output = {
-        log: `[Returned later. The <tool_output> is in a later turn.]`,
+        ...combinedResults[index].output,
         ui: `⏩ Returned later`,
         trigger_llm: false,
       };
-      // 印だけの書き換え。meta は触らない（起こす理由は下の新しいターンが持つ）
       const markedTurn = this.state.history.update(sharedTurnId, getSortedResults());
       if (markedTurn) this._emit('turn_end', { role: 'system', turn: markedTurn });
 

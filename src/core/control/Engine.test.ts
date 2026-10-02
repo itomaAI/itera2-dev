@@ -12,7 +12,8 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { Engine, TurnType } from './Engine';
+import { Engine, TurnType, PENDING_LOG } from './Engine';
+import { buildToolPromptNodes } from '../cognitive/PromptContentBuilder';
 import { DEFAULT_MAX_CONTINUOUS_TOOLS } from '../sys/ConfigManager';
 
 const ALERT_MARK = 'Max continuous tool executions';
@@ -488,7 +489,10 @@ function createLoopHarness(policy: 'realtime' | 'batch', toolCount: number) {
     const pending = turns
       .filter((t) => t.role === 'system' && Array.isArray(t.content))
       .flatMap((t) => t.content)
-      .filter((r: any) => String(r.output?.log ?? '').startsWith('[Pending]')).length;
+      // 間に合わなかった枠は log が [Pending] のまま残る（T-0597）。まだ走っているものだけを数える
+      .filter(
+        (r: any) => String(r.output?.log ?? '').startsWith('[Pending]') && r.output?.ui !== '⏩ Returned later',
+      ).length;
     pendingAtWake.push(pending);
     return [];
   });
@@ -717,14 +721,31 @@ describe('Engine: 閉じた束の遅い結果は、枠を埋めずに新しい�
     expect(h.turns.indexOf(late)).toBeGreaterThan(modelIdx(h));
     expect(late.content[0].actionType).toBe('tool');
     expect(late.content[0].output.log).toContain('slow result');
-    // 枠の側は印だけ
+    // 枠の側は画面の印だけ。モデルに見える log は [Pending] のまま（T-0597）
     const frame = h.turns.find((t: any) => t.id === frameId);
-    expect(frame.content[1].output.log).toContain('Returned later');
+    expect(frame.content[1].output.ui).toBe('⏩ Returned later');
+    expect(frame.content[1].output.log).toBe(PENDING_LOG);
     expect(frame.content[1].output.log).not.toContain('slow result');
 
     await vi.advanceTimersByTimeAsync(1600);
     expect(h.wakes()).toBe(3);
     expect(h.pendingAtWake[2]).toBe(0);
+  });
+
+  it('遅れた結果が届いても、送った枠の投影の文字列は変わらない（キャッシュの前置を壊さない。T-0597）', async () => {
+    const h = createLoopHarness('realtime', 2);
+    await h.startCycle();
+    await h.resolveTool(0, { log: 'fast result' });
+    await vi.advanceTimersByTimeAsync(1600);
+    expect(h.wakes()).toBe(2);
+    const frame = h.turns.find((t: any) => Array.isArray(t.content));
+    const projected = () => buildToolPromptNodes(frame).map((n) => n.text);
+
+    const before = projected();
+    expect(before[1]).toContain(PENDING_LOG);
+
+    await h.resolveTool(1, { log: 'slow result' });
+    expect(projected()).toEqual(before);
   });
 
   it('遅れた結果が halt（trigger_llm: false）なら起こさない', async () => {
