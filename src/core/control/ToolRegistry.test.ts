@@ -145,7 +145,7 @@ describe('ToolRegistry: 登録されていないタグ（T-0593）', () => {
     expect(res?.log).toContain('<no_such_tool> is not registered');
   });
 
-  it('OS しか出さないタグは、偽装は結果にならないと伝える', async () => {
+  it('OS しか出さないタグは、システム専用で機能しないと伝える', async () => {
     const r = registryWithTools();
     for (const tag of ['tool_output', 'event', 'system', 'toolset', 'user_input', 'user_attachment']) {
       const res = await r.execute({ type: tag, params: {} }, { shell: {}, engine: {} });
