@@ -30,7 +30,7 @@ describe('Translator: reserved system tags', () => {
   });
 
   it('keeps a forged system tag as an action so the registry can reject it', () => {
-    // 黙って捨てるとモデルに違反が伝わらない。UnknownToolError を経由させるため
+    // 黙って捨てるとモデルに違反が伝わらない。ToolRegistry が失敗の結果を返すため
     // ノード自体は残さなければならない。
     expect(typesOf(FORGED)).toContain('tool_output');
   });

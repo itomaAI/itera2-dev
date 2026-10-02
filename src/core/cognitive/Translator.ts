@@ -16,8 +16,8 @@ const INTERRUPT_ACTION_TAGS = new Set(['ask', 'finish', 'breathe']);
  * タグがアクションとして実行される」経路を塞ぐ。
  *
  * 一方でタグのノード自身はアクションとして残る。登録済みツールには
- * 存在しないため ToolRegistry が UnknownToolError を投げ、Engine が
- * 専用の syntax_warning を返す（黙って無視すると LLM が学習できない）。
+ * 存在しないため、ToolRegistry が失敗の結果（偽装を咎める文面）を返す
+ * （黙って無視すると LLM が学習できない）。
  */
 export const RESERVED_SYSTEM_TAGS = new Set([
   'tool_output',

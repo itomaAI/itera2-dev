@@ -133,3 +133,26 @@ describe('SessionManager: 履歴の消去でも道具の定義を積み直す', 
     expect(h.appended.length).toBe(0);
   });
 });
+
+describe('ToolRegistry: 登録されていないタグ（T-0593）', () => {
+  // 以前は UnknownToolError を投げていた。いまは他の失敗と同じく、失敗の結果を返す。
+  it('未登録のタグは投げずに失敗の結果を返す', async () => {
+    const r = registryWithTools();
+    const res = await r.execute({ type: 'no_such_tool', params: {} }, { shell: {}, engine: {} });
+    expect(res?.error).toBe(true);
+    expect(res?.ui).toBe('❌ Error: Unknown tool <no_such_tool>');
+    expect(res?.log).toContain('[LPML Syntax Violation]');
+    expect(res?.log).toContain('<no_such_tool> is not registered');
+  });
+
+  it('OS しか出さないタグは、偽装は結果にならないと伝える', async () => {
+    const r = registryWithTools();
+    for (const tag of ['tool_output', 'event', 'system', 'toolset', 'user_input', 'user_attachment']) {
+      const res = await r.execute({ type: tag, params: {} }, { shell: {}, engine: {} });
+      expect(res?.error).toBe(true);
+      expect(res?.ui).toBe(`❌ Error: <${tag}> is reserved for the OS`);
+      expect(res?.log).toContain('[LPML Protocol Violation]');
+      expect(res?.log).toContain('NOT executed');
+    }
+  });
+});

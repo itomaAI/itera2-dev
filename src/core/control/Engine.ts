@@ -536,14 +536,18 @@ export class Engine {
      * 閉じていれば（次の投影が取られたあと・停止のあと）、枠には「あとで返った」の印だけを置き、
      * 結果そのものは返ったこの時刻に新しい system ターンとして積む。
      * 投影は最後の model ターンより後ろのターンを起床の理由に数えるので、これで遅い結果も起こせる。
+     *
+     * 【重要】失敗した結果でも、ターンの type は TOOL_EXECUTION のまま変えない（T-0593）。
+     * Projector は type が tool_execution の配列ターンしか <tool_output> に組まない。
+     * 以前は失敗が 1 本あるとターンを ERROR にしていたため、同じ束の成功した結果ごと
+     * 文脈から消えていた。失敗は各結果の error（→ status="error"）で伝わる。
      */
-    const deliver = (index: number, output: ToolResult, isError: boolean) => {
+    const deliver = (index: number, output: ToolResult) => {
       // 本数を減らしてから履歴を更新する。最後の 1 本なら、この更新の変更通知が起床を予約する
       settleOne();
       if (batch > this.closedBatchSerial) {
         combinedResults[index].output = output;
         const updatedTurn = this.state.history.update(sharedTurnId, getSortedResults(), {
-          ...(isError ? { type: TurnType.ERROR } : {}),
           trigger_llm: calcTurnTrigger(),
         });
         if (updatedTurn) this._emit('turn_end', { role: 'system', turn: updatedTurn });
@@ -567,7 +571,7 @@ export class Engine {
         },
       };
       const lateTurn = this.state.history.append('system', [lateEntry], {
-        type: isError ? TurnType.ERROR : TurnType.TOOL_EXECUTION,
+        type: TurnType.TOOL_EXECUTION,
         trigger_llm: triggerOf([output]),
       });
       this._emit('turn_end', { role: 'system', turn: lateTurn });
@@ -591,36 +595,16 @@ export class Engine {
         // extraContext 経由で shell 等が注入されているため、anyキャストで型検査を通過させる
         const result = await this.registry.execute(action, context as any);
 
-        deliver(index, result ?? { log: '', trigger_llm: false }, false);
+        deliver(index, result ?? { log: '', trigger_llm: false });
       } catch (err: any) {
-        deliver(index, { log: `Error: ${err.message}`, error: true, trigger_llm: true }, true);
-
-        if (err.code === 'UNKNOWN_TOOL') {
-          const isReservedTag = RESERVED_SYSTEM_TAGS.has(err.actionType);
-          const warningMsg = (
-            isReservedTag
-              ? [
-                  `<system type="syntax_warning">`,
-                  `[LPML Protocol Violation] You generated <${err.actionType}>, which is a tag that only the OS may inject.`,
-                  `Forging it does not produce a result: the tag was rejected, and its inner content was kept as plain text (NOT interpreted, NOT executed).`,
-                  `NEVER generate this tag yourself. Tool results are delivered to you by the system after <yield />.`,
-                  `</system>`,
-                ]
-              : [
-                  `<system type="syntax_warning">`,
-                  `[LPML Syntax Violation] You used an undefined or prohibited tag: <${err.actionType}>.`,
-                  `ABSOLUTE PROHIBITION: You can only use the tags explicitly defined in your instructions or currently registered dynamic tools.`,
-                  `</system>`,
-                ]
-          ).join('\n');
-
-          const warningTurn = this.state.history.append('system', warningMsg, {
-            type: TurnType.ERROR,
-            trigger_llm: false,
-          });
-
-          this._emit('turn_end', { role: 'system', turn: warningTurn });
-        }
+        // ツールの失敗（未登録のタグを含む）は ToolRegistry が結果として返す。
+        // ここに来るのは想定外の例外だけ。それでも同じ形の失敗として届ける。
+        deliver(index, {
+          log: `Error: ${err.message}`,
+          ui: `❌ Error: ${err.message}`,
+          error: true,
+          trigger_llm: true,
+        });
       }
     });
   }
