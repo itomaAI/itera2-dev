@@ -64,6 +64,12 @@ To make your daemon start automatically when Itera OS boots, register it in `sys
 ```
 Users can easily toggle the `autoStart` behavior from the System Settings app.
 
+### System privilege (sync daemons only)
+
+Every guest process touches the VFS as `{ type: 'app', id: <pid> }`, and the area ACLs (`system/config/acl.json`) are evaluated for that principal. The agent's own area (`agent-only`) is readable by apps but writable only by the AI, so a sync daemon running as an app cannot write changes that arrived from another device into it — uploads succeed, downloads are silently skipped.
+
+A daemon that mirrors another device (cloud sync) therefore needs `"systemPrivilege": true` in `services.json`. With it, the OS gives the daemon a `system` principal that bypasses the ACLs. Two conditions must both hold: the daemon's `path` is under `system/` (a distributed daemon, not a user-placed HTML), and the registry entry carries the flag. Do not set it on anything that is not a sync provider.
+
 ## 3. Inter-Process Communication (IPC)
 
 Itera allows completely decoupled communication between your daemons and your UI apps using `broadcast`.
