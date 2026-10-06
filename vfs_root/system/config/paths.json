@@ -1,0 +1,15 @@
+{
+  "agent": {
+    "home": "memory",
+    "init": "memory/init.md",
+    "scratch": null
+  },
+  "user": {
+    "home": "data",
+    "config": null,
+    "registry": null,
+    "locales": "user/locales",
+    "appRegistry": null,
+    "sessions": "data/04_archives/sessions"
+  }
+}

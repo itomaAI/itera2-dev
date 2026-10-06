@@ -64,6 +64,7 @@
     "apiKeys.title": "API 金鑰",
     "apiKeys.save": "儲存金鑰",
     "taskSwitcher.title": "最近使用的應用程式",
+    "notice.pathsMissing": "此發行版未包含 system/config/paths.json。Itera 正在沒有來賓配置的狀態下運作（僅一層設定、無代理區域、無啟動文件）。",
     "notice.storageLost": "Itera 執行期間瀏覽器的儲存空間遭到清除，因此已重新載入。若沒有備份或同步目標，此裝置上的本機檔案與聊天記錄已經遺失。",
     "notice.resetDone": "已將本機資料恢復為原廠狀態。",
     "notice.resetFailed": "無法清除本機資料。請關閉其他分頁後再試一次：{reason}",

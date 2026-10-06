@@ -1,0 +1,13 @@
+{
+  "areas": [
+    { "path": "system", "policy": "readonly" },
+    { "path": "system/config", "policy": "open" },
+    { "path": "system/themes", "policy": "open" },
+    { "path": "system/registry", "policy": "open" },
+    { "path": "system/temp", "policy": "open" },
+    { "path": "system/upstream", "policy": "open" },
+    { "path": "system/credentials", "policy": "open" },
+    { "ref": "agent.home", "policy": "agent-only" },
+    { "ref": "agent.scratch", "policy": "agent-shared" }
+  ]
+}

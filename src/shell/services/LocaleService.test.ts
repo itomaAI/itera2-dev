@@ -6,7 +6,8 @@ import type { ConfigUpdateListener } from '../../core/sys/ConfigManager';
 import { LOCALE_LAYERS, DEFAULT_LOCALE } from '../../config/config_layers';
 
 /** 利用者の層（配布物ごとに違う。itera2-dev は user/locales、ミャク楽は 個人/言語） */
-const USER_LAYER = LOCALE_LAYERS[LOCALE_LAYERS.length - 1];
+// 2 段目の層は配布物の paths.json（user.locales）が決める（T-0614）。ここでは層の重なりを試すので、試験の側で決める
+const USER_LAYER = 'user/locales';
 
 /**
  * 言語ファイルの重ね（P-0046 / T-0545）。
@@ -36,7 +37,10 @@ function makeEnv(files: Record<string, unknown>, locale = 'ja') {
   const subs: ((m: any[]) => void)[] = [];
   const eventBus: any = { subscribe: (cb: any) => (subs.push(cb), () => {}) };
   const target = new I18n({ 'k.a': 'A', 'k.b': 'B', 'k.c': 'C' } as any);
-  const service = new LocaleService(configManager, vfs, eventBus, { target });
+  const service = new LocaleService(configManager, vfs, eventBus, {
+    target,
+    layers: [...LOCALE_LAYERS, 'user/locales'],
+  });
   return { store, appearance, listeners, subs, target, service };
 }
 

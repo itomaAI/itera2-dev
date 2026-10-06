@@ -85,6 +85,8 @@ export const EN = {
   'taskSwitcher.title': 'Recent Apps',
 
   // ---- boot notices
+  'notice.pathsMissing':
+    'This distribution ships no system/config/paths.json. Itera is running with no guest layout (one config layer, no agent area, no boot document).',
   'notice.storageLost':
     'Browser storage was cleared while Itera was running, so it was reloaded. Local files and chat history on this device are gone unless you have a backup or a sync target.',
   'notice.resetDone': 'Local data has been reset to factory state.',

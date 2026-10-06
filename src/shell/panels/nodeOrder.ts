@@ -45,13 +45,28 @@ export const DEFAULT_SORT_WEIGHTS: SortWeights = {
  * 並びの重み（上の DEFAULT_SORT_WEIGHTS）と組み合わせて、
  * **下に沈み、かつ一目で別物と分かる**状態にする。
  *
- * `agent` は AI の領域（この配布物に無ければ、単に使われないだけ）。
+ * AI の領域（`paths.json` の `agent.home`）の記号はここに無い —— 名前は配布物ごとに違う（`memory` / `agent` / `エージェント`）ので、
+ * 名前を知っている側（起動の配線）が `rootIconsFor()` で足す（T-0614）。
  */
 export const DEFAULT_ROOT_ICONS: RootIcons = {
   system: '⚙️',
   trash: '🗑️',
-  agent: '✨',
 };
+
+/** AI の領域の記号。 */
+export const AGENT_ROOT_ICON = '✨';
+
+/**
+ * 配信の既定に、AI の領域（`agentHome` の最上位の名前）と利用者の上書きを重ねた表。
+ * `agentHome` が null（この配布物に AI の領域が無い）なら足さない。上書きが勝つ。
+ */
+export function rootIconsFor(agentHome: string | null | undefined, overrides?: RootIcons | null): RootIcons {
+  const table: RootIcons = { ...DEFAULT_ROOT_ICONS };
+  const root = typeof agentHome === 'string' ? agentHome.split('/')[0] : '';
+  if (root) table[root] = AGENT_ROOT_ICON;
+  if (overrides && typeof overrides === 'object') Object.assign(table, overrides);
+  return table;
+}
 
 /**
  * 最上位の記号を引く。無ければ null（＝呼び出し側が従来どおりの記号を出す）。

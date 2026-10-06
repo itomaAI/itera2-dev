@@ -64,6 +64,7 @@
     "apiKeys.title": "API 키",
     "apiKeys.save": "키 저장",
     "taskSwitcher.title": "최근 앱",
+    "notice.pathsMissing": "이 배포본에는 system/config/paths.json 이 없습니다. Itera 는 게스트 레이아웃 없이 동작 중입니다(설정 계층 1단, 에이전트 영역 없음, 부팅 문서 없음).",
     "notice.storageLost": "Itera 실행 중에 브라우저 저장소가 지워져 다시 불러왔습니다. 백업이나 동기화 대상이 없다면 이 기기의 파일과 채팅 기록은 사라졌습니다.",
     "notice.resetDone": "이 기기의 데이터를 초기 상태로 되돌렸습니다.",
     "notice.resetFailed": "이 기기의 데이터를 지우지 못했습니다. 다른 탭을 닫고 다시 시도하세요: {reason}",

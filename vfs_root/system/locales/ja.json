@@ -64,6 +64,7 @@
     "apiKeys.title": "API キー",
     "apiKeys.save": "キーを保存",
     "taskSwitcher.title": "最近のアプリ",
+    "notice.pathsMissing": "この配布物には system/config/paths.json がありません。ゲスト空間の配置を知らないまま動いています（設定の層は 1 段、AI の領域なし、起動の文書なし）。",
     "notice.storageLost": "Itera の動作中にブラウザのストレージが消去されたため、読み込み直しました。バックアップや同期先が無ければ、この端末のファイルとチャット履歴は失われています。",
     "notice.resetDone": "この端末のデータを初期状態に戻しました。",
     "notice.resetFailed": "この端末のデータを消去できませんでした。ほかのタブを閉じてからやり直してください: {reason}",

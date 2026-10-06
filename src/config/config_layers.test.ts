@@ -9,10 +9,10 @@ import { EN } from '../i18n/messages_en';
  * 共通部品の I18n は、控え（localStorage）が無いときに配布物の既定の言語で始まる（ミャク楽 T-0554 と同じ実装）。
  */
 describe('Itera の言語の定数', () => {
-  it('既定の言語は en で辞書は無い。層は system/locales → user/locales', () => {
+  it('既定の言語は en で辞書は無い。層の定数は system/locales だけ（2 段目は paths.json。T-0614）', () => {
     expect(DEFAULT_LOCALE).toBe('en');
     expect(DEFAULT_LOCALE_MESSAGES).toBeUndefined();
-    expect(LOCALE_LAYERS).toEqual(['system/locales', 'user/locales']);
+    expect(LOCALE_LAYERS).toEqual(['system/locales']);
   });
 
   it('既定のまま作ると、控えが無ければ英語で始まる（これまでと同じ）', () => {

@@ -8,6 +8,7 @@ import type { VfsEventBus } from '../vfs/VfsEventBus';
 import { SYSTEM_PRINCIPAL } from '../vfs/types';
 import { CONFIG_LAYERS } from '../../config/config_layers';
 import { DEFAULT_LOCALE } from '../../config/config_layers';
+import { EMPTY_GUEST_PATHS, normalizeGuestPaths, type GuestPaths } from './GuestPaths';
 
 /**
  * 自律ループで連続実行できるツール回数の既定の上限。
@@ -62,6 +63,12 @@ export interface OsConfig {
   };
   llm: { model: string; [key: string]: any };
   network: { proxyUrl: string; allowCredentialsWithProxy: boolean };
+  /**
+   * ゲスト空間の場所（`system/config/paths.json`。T-0614）。読む側は `paths()` を使う（整えた形で返る）。
+   * 🔴 層の場所（`user.config` / `user.registry` / `user.locales`）は起動時に system 層の値で固定される。
+   * ここに見えるのは層を重ねた値だが、層そのものはこの値では動かない。
+   */
+  paths: GuestPaths;
   [category: string]: any;
 }
 
@@ -95,6 +102,8 @@ const DEFAULT_CONFIG: OsConfig = {
     proxyUrl: 'https://corsproxy.io/?',
     allowCredentialsWithProxy: false,
   },
+  // 既定は「何も知らない形」。配布物の形（memory/ data/ …）をコードに置かない（T-0614）
+  paths: JSON.parse(JSON.stringify(EMPTY_GUEST_PATHS)),
 };
 
 /**
@@ -245,6 +254,14 @@ export class ConfigManager {
   homePath(): string {
     const v = this.cache.appearance?.layout?.homePath;
     return typeof v === 'string' && v.trim() ? v.trim() : DEFAULT_HOME_PATH;
+  }
+
+  /**
+   * ゲスト空間の場所（`paths.json` を層で重ねて整えたもの。T-0614）。**読む側はこれだけを使う。**
+   * 無い鍵・壊れた値は null（推測しない）。層の場所は起動時に固定されていて、ここの値では動かない。
+   */
+  paths(): GuestPaths {
+    return normalizeGuestPaths(this.cache.paths).paths;
   }
 
   /**

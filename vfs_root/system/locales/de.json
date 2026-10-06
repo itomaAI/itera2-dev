@@ -64,6 +64,7 @@
     "apiKeys.title": "API-Schlüssel",
     "apiKeys.save": "Schlüssel speichern",
     "taskSwitcher.title": "Zuletzt verwendete Apps",
+    "notice.pathsMissing": "Diese Distribution enthält keine system/config/paths.json. Itera läuft ohne Gast-Layout (eine Konfigurationsebene, kein Agentenbereich, kein Startdokument).",
     "notice.storageLost": "Der Browserspeicher wurde gelöscht, während Itera lief. Deshalb wurde neu geladen. Lokale Dateien und der Chatverlauf auf diesem Gerät sind verloren, sofern keine Sicherung oder kein Synchronisierungsziel vorhanden ist.",
     "notice.resetDone": "Die lokalen Daten wurden auf Werkseinstellungen zurückgesetzt.",
     "notice.resetFailed": "Die lokalen Daten konnten nicht gelöscht werden. Schließe andere Tabs und versuche es erneut: {reason}",
