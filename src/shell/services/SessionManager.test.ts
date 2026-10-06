@@ -68,12 +68,25 @@ class FakeHistory {
 
 class FakeVfs {
   files = new Map<string, string>();
+  dirs = new Set<string>();
   deleted: string[] = [];
   exists(_p: any, path: string) {
-    return path === 'system/temp/media' || this.files.has(path);
+    return path === 'system/temp/media' || this.files.has(path) || this.dirs.has(path);
+  }
+  async mkdir(_p: any, path: string) {
+    this.dirs.add(path);
+    return path;
   }
   listFiles(_p: any, opts: any) {
-    return [...this.files.keys()].filter((k) => k.startsWith(opts.path + '/')).map((path) => ({ path, kind: 'file' }));
+    return [...this.files.keys()]
+      .filter((k) => k.startsWith(opts.path + '/'))
+      .map((path) => ({
+        path,
+        name: path.split('/').pop(),
+        kind: 'file',
+        size: this.files.get(path)!.length,
+        updatedAt: 7,
+      }));
   }
   async deleteFile(_p: any, path: string) {
     this.files.delete(path);
@@ -95,12 +108,13 @@ const logger = { log: vi.fn() } as any;
 const toolRegistry = { getActiveDynamicToolDefinitions: () => ['<define_tag name="x">x</define_tag>'] } as any;
 const principal = { type: 'user', id: 'u' } as any;
 
-function setup(keep = 10) {
+function setup(keep = 10, sessionsDir: string | null = 'data/sessions') {
   const history = new FakeHistory();
   const vfs = new FakeVfs();
   let now = 5000;
   const sm = new SessionManager(vfs as any, history as any, logger, toolRegistry, {
     keep: () => keep,
+    sessionsDir: () => sessionsDir,
     now: () => now++,
   });
   const changed = vi.fn();
@@ -258,5 +272,40 @@ describe('SessionManager: VFS への保存・VFS からの読み込み', () => {
     expect(json.id).toBe(m.id);
     expect(json.turns[0].content).toBe('archived');
     expect(await sm.exportSession('nope')).toBeNull();
+  });
+});
+
+describe('SessionManager: 既定の保存先（paths.user.sessions）', () => {
+  it('ダイアログ無しで保存先へ書き、名前は会話の始まりの日時＋題。保存し直すと同じファイルを上書き', async () => {
+    const { history, vfs, sm } = setup();
+    history.append('user', 'hello world');
+    const p1 = await sm.exportSessionToDefaultDir('current', principal);
+    expect(p1).toMatch(/^data\/sessions\/\d{8}_\d{4}_hello_world\.json$/);
+    expect(vfs.dirs.has('data/sessions')).toBe(true);
+    history.append('model', '<report>x</report>');
+    const p2 = await sm.exportSessionToDefaultDir('current', principal);
+    expect(p2).toBe(p1);
+    expect(JSON.parse(vfs.files.get(p1!)!).turns).toHaveLength(2);
+    expect([...vfs.files.keys()].filter((k) => k.startsWith('data/sessions/'))).toHaveLength(1);
+  });
+
+  it('保存先の一覧は名前と stat だけで組む（readFile を呼ばない）', async () => {
+    const { history, vfs, sm } = setup();
+    history.append('user', 'listed');
+    await sm.exportSessionToDefaultDir('current', principal);
+    vfs.files.set('data/sessions/other.txt', 'x');
+    const read = vi.spyOn(vfs, 'readFile');
+    const rows = sm.listSavedSessions(principal);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].title).toBe('listed');
+    expect(read).not.toHaveBeenCalled();
+  });
+
+  it('保存先の宣言が無ければ null と空', async () => {
+    const { history, sm } = setup(10, null);
+    history.append('user', 'x');
+    expect(sm.savedSessionsDir()).toBeNull();
+    expect(await sm.exportSessionToDefaultDir('current', principal)).toBeNull();
+    expect(sm.listSavedSessions(principal)).toEqual([]);
   });
 });

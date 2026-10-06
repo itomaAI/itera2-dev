@@ -4,7 +4,9 @@ import {
   buildSessionExport,
   buildSessionMeta,
   collectMediaPaths,
-  defaultExportName,
+  exportFileName,
+  parseExportFileName,
+  listSavedSessions,
   deriveTitle,
   isEmptySession,
   normalizeKeep,
@@ -144,9 +146,34 @@ describe('sessionArchive: VFS との出し入れ', () => {
     expect(parsed).toMatchObject({ ok: true, id: '', createdAt: 7 });
     if (parsed.ok) expect(parsed.turns[0].meta).toEqual({});
   });
-  it('既定のファイル名は日時と題から（名前に使えない字は外す）', () => {
+  it('保存のファイル名は会話の始まりの日時と題から（名前に使えない字は外す）。同じ会話なら同じ名前', () => {
     const d = new Date(2026, 9, 6, 17, 5).getTime();
-    expect(defaultExportName({ title: 'a/b: c?', updatedAt: d })).toBe('20261006_1705_a_b_c.json');
-    expect(defaultExportName({ title: '', updatedAt: d })).toBe('20261006_1705.json');
+    expect(exportFileName({ title: 'a/b: c?', createdAt: d })).toBe('20261006_1705_a_b_c.json');
+    expect(exportFileName({ title: '', createdAt: d })).toBe('20261006_1705.json');
+    expect(exportFileName({ title: 'x', createdAt: d })).toBe(exportFileName({ title: 'x', createdAt: d }));
+  });
+  it('名前から日時と題を戻せる。形が違えば題は名前のまま', () => {
+    const d = new Date(2026, 9, 6, 17, 5).getTime();
+    expect(parseExportFileName('20261006_1705_a_b_c.json')).toEqual({ title: 'a b c', startedAt: d });
+    expect(parseExportFileName('20261006_1705.json')).toEqual({ title: '', startedAt: d });
+    expect(parseExportFileName('notes.json')).toEqual({ title: 'notes', startedAt: null });
+  });
+  it('保存先の一覧は .json のファイルだけを、新しい順に（中身は読まない）', () => {
+    const rows = listSavedSessions([
+      { path: 'd/20261006_1705_old.json', name: '20261006_1705_old.json', kind: 'file', size: 10, updatedAt: 1 },
+      {
+        path: 'd/20261007_0900_new.json',
+        name: '20261007_0900_new.json',
+        kind: 'file',
+        size: 20,
+        updatedAt: 2,
+        syncState: 'stub',
+      },
+      { path: 'd/readme.md', name: 'readme.md', kind: 'file', size: 5, updatedAt: 3 },
+      { path: 'd/sub', name: 'sub', kind: 'directory', size: 0, updatedAt: 4 },
+    ]);
+    expect(rows.map((r) => r.name)).toEqual(['20261007_0900_new.json', '20261006_1705_old.json']);
+    expect(rows[0]).toMatchObject({ title: 'new', stub: true, size: 20 });
+    expect(rows[1].stub).toBe(false);
   });
 });

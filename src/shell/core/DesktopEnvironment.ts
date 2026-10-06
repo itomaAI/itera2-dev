@@ -106,10 +106,6 @@ export class DesktopEnvironment {
     this._syncModal = new SyncModal(adapterHost);
     // 会話のセッション一覧（T-0613）。一覧は IndexedDB の索引だけで描き、VFS は保存／読み込みで選んだ 1 ファイルにしか触らない
     this._sessionHistoryModal = new SessionHistoryModal(sessionManager, this._filePickerModal, {
-      defaultDir: () => configManager.paths().user.sessions,
-      ensureDir: async (path) => {
-        if (!vfs.exists(this.getActivePrincipal(), path)) await vfs.mkdir(this.getActivePrincipal(), path);
-      },
       getActivePrincipal: () => this.getActivePrincipal(),
       keep: () => normalizeKeep(configManager.get('preferences')?.sessionHistoryKeep),
     });

@@ -2,25 +2,21 @@
  * src/shell/modals/SessionHistoryModal.ts
  * Itera OS v2: Session History Modal（T-0613）
  *
- * チャットのヘッダの履歴ボタンから開く。いまの会話と、退避した会話（新しい順）を並べ、
- * 切り替え／VFS に保存／削除／VFS から読み込み ができる。
+ * チャットのヘッダの履歴ボタンから開く。いまの会話と、退避した会話（新しい順）、VFS の保存先にある会話を並べ、
+ * 切り替え／VFS に保存／削除／読み込み ができる。
+ * 🔴 VFS の一覧は名前と stat だけで描き、中身は読まない（同期のスタブを取りに行かない）。読むのは読み込みで選んだ 1 ファイルだけ。
  * ※ index.html を汚さないよう、DOM は TypeScript から動的に生成する（ProcessMonitorModal と同じ型）。
  */
 
 import type { SessionManager, SessionSwitchResult } from '../services/SessionManager';
 import type { FilePickerModal } from './FilePickerModal';
 import type { Principal } from '../../core/vfs/types';
-import type { SessionMeta } from '../../core/state/sessionArchive';
-import { defaultExportName } from '../../core/state/sessionArchive';
+import type { SavedSessionEntry, SessionMeta } from '../../core/state/sessionArchive';
 import { LABEL_KICKER } from '../styles/typography';
 import { t, escapeHtml, i18n } from '../../i18n/i18n';
 import { bindText } from '../../i18n/staticTexts';
 
 export interface SessionHistoryModalDeps {
-  /** 既定の保存先（`ConfigManager.paths().user.sessions`。無ければ null） */
-  defaultDir: () => string | null;
-  /** 保存先を作る（無ければ）。失敗しても開く */
-  ensureDir: (path: string) => Promise<void>;
   getActivePrincipal: () => Principal;
   /** `preferences.sessionHistoryKeep` を整えた値（一覧の下の注記に出す） */
   keep: () => number;
@@ -130,6 +126,50 @@ export class SessionHistoryModal {
     return b;
   }
 
+  private _section(key: Parameters<typeof t>[0], params?: Record<string, string | number>): HTMLElement {
+    const h = document.createElement('div');
+    h.className = `${LABEL_KICKER} text-text-muted px-1 pt-2`;
+    bindText(h, key, params);
+    return h;
+  }
+
+  private _savedRow(entry: SavedSessionEntry): HTMLElement {
+    const row = document.createElement('div');
+    row.className = 'p-3 rounded-xl border flex items-center gap-3 bg-card border-border-main hover:border-primary/40';
+
+    const info = document.createElement('div');
+    info.className = 'flex-1 min-w-0';
+    const title = entry.title || (entry.startedAt ? this._formatWhen(entry.startedAt) : entry.name);
+    const when = entry.startedAt ? this._formatWhen(entry.startedAt) : '';
+    const stub = entry.stub ? ` · ${escapeHtml(t('sessions.stub'))}` : '';
+    info.innerHTML = `
+      <div class="text-sm font-medium text-text-main truncate" title="${escapeHtml(entry.path)}">${escapeHtml(title)}</div>
+      <div class="text-xs text-text-muted mt-0.5 truncate">${escapeHtml(when)}${when ? ' · ' : ''}${escapeHtml(
+        t('sessions.savedAt', { when: this._formatWhen(entry.updatedAt) }),
+      )} · ${escapeHtml(this._formatBytes(entry.size))}${stub}</div>
+    `;
+
+    const actions = document.createElement('div');
+    actions.className = 'flex items-center gap-1.5 shrink-0';
+    actions.appendChild(
+      this._button(
+        'sessions.loadThis',
+        'text-white bg-primary border-primary hover:bg-primary/90',
+        () => void this._loadPath(entry.path),
+      ),
+    );
+    actions.appendChild(
+      this._button(
+        'sessions.delete',
+        'text-error border-error/40 hover:bg-error hover:text-white',
+        () => void this._deleteSaved(entry),
+      ),
+    );
+    row.appendChild(info);
+    row.appendChild(actions);
+    return row;
+  }
+
   private _row(meta: SessionMeta, isCurrent: boolean): HTMLElement {
     const row = document.createElement('div');
     row.className = `p-3 rounded-xl border flex items-center gap-3 ${
@@ -188,14 +228,30 @@ export class SessionHistoryModal {
     try {
       const [current, archived] = await Promise.all([this.sessions.currentSession(), this.sessions.listSessions()]);
       container.innerHTML = '';
+      container.appendChild(this._section('sessions.section.browser', { count: this.deps.keep() }));
       container.appendChild(this._row(current, true));
       if (archived.length === 0) {
         const empty = document.createElement('div');
-        empty.className = 'text-center text-text-muted text-xs p-6';
+        empty.className = 'text-center text-text-muted text-xs p-4';
         bindText(empty, 'sessions.empty');
         container.appendChild(empty);
       } else {
         for (const meta of archived) container.appendChild(this._row(meta, false));
+      }
+
+      // VFS の保存先。名前と stat だけ（中身は読まない）
+      const dir = this.sessions.savedSessionsDir();
+      if (dir) {
+        container.appendChild(this._section('sessions.section.vfs', { dir }));
+        const saved = this.sessions.listSavedSessions(this.deps.getActivePrincipal());
+        if (saved.length === 0) {
+          const empty = document.createElement('div');
+          empty.className = 'text-center text-text-muted text-xs p-4';
+          bindText(empty, 'sessions.savedEmpty');
+          container.appendChild(empty);
+        } else {
+          for (const entry of saved) container.appendChild(this._savedRow(entry));
+        }
       }
       if (this.noteEl) bindText(this.noteEl, 'sessions.keepNote', { count: this.deps.keep() });
     } catch (e: any) {
@@ -261,36 +317,79 @@ export class SessionHistoryModal {
     });
   }
 
+  /**
+   * 既定の保存先（paths.user.sessions）へ直接書く。宣言が無い配布物だけダイアログで場所を訊く。
+   */
   private async _saveToVfs(id: string | 'current', meta: SessionMeta): Promise<void> {
     await this._guard(async () => {
-      const dir = this.deps.defaultDir();
-      if (dir) {
-        try {
-          await this.deps.ensureDir(dir);
-        } catch (e) {
-          console.warn('[SessionHistoryModal] Could not create the default directory', dir, e);
-        }
-      }
-      const path = await this.filePicker.openSave({
-        title: t('sessions.saveTitle'),
-        filters: EXPORT_FILTERS,
-        defaultDir: dir || undefined,
-        defaultName: defaultExportName(meta),
-      });
-      if (!path) return;
+      const principal = this.deps.getActivePrincipal();
       try {
-        const ok = await this.sessions.exportSessionToVfs(id, path, this.deps.getActivePrincipal());
-        if (ok) window.AppUI?.notify(t('sessions.saved', { path }), 'success');
-        else window.AppUI?.notify(t('sessions.loadFailed', { reason: t('sessions.missing') }), 'error');
+        let path: string | null = null;
+        if (this.sessions.savedSessionsDir()) {
+          path = await this.sessions.exportSessionToDefaultDir(id, principal);
+          if (!path) {
+            window.AppUI?.notify(t('sessions.loadFailed', { reason: t('sessions.missing') }), 'error');
+            return;
+          }
+        } else {
+          path = await this.filePicker.openSave({
+            title: t('sessions.saveTitle'),
+            filters: EXPORT_FILTERS,
+            defaultName: `${meta.id.slice(0, 8)}.json`,
+          });
+          if (!path) return;
+          const ok = await this.sessions.exportSessionToVfs(id, path, principal);
+          if (!ok) {
+            window.AppUI?.notify(t('sessions.loadFailed', { reason: t('sessions.missing') }), 'error');
+            return;
+          }
+        }
+        window.AppUI?.notify(t('sessions.saved', { path }), 'success');
+        await this._render();
       } catch (e: any) {
         window.AppUI?.notify(t('notify.saveFailed', { reason: e.message }), 'error');
       }
     });
   }
 
+  /** 保存先の一覧の 1 つを読み込む（読むのはこの 1 ファイルだけ） */
+  private async _loadPath(path: string): Promise<void> {
+    await this._guard(async () => {
+      const res = await this.sessions.importSessionFromVfs(path, this.deps.getActivePrincipal());
+      if (res.ok) {
+        this.close();
+        window.AppUI?.notify(t('sessions.loaded', { path }), 'success');
+      } else {
+        this._explain(res);
+      }
+    });
+  }
+
+  /** 保存先のファイルをゴミ箱へ（永久には消さない） */
+  private async _deleteSaved(entry: SavedSessionEntry): Promise<void> {
+    await this._guard(async () => {
+      const res = await window.AppUI?.showMessageBox({
+        title: t('sessions.deleteConfirm.title'),
+        message: t('sessions.deleteSavedConfirm.message', { name: entry.name }),
+        type: 'warning',
+        buttons: [
+          { label: t('common.cancel'), value: false, style: 'normal', isCancel: true },
+          { label: t('common.delete'), value: true, style: 'danger', isDefault: true },
+        ],
+      });
+      if (!res || !res.action) return;
+      try {
+        await this.sessions.deleteSavedSession(entry.path, this.deps.getActivePrincipal());
+      } catch (e: any) {
+        window.AppUI?.notify(t('sessions.loadFailed', { reason: e.message }), 'error');
+      }
+      await this._render();
+    });
+  }
+
   private async _loadFromVfs(): Promise<void> {
     await this._guard(async () => {
-      const dir = this.deps.defaultDir();
+      const dir = this.sessions.savedSessionsDir();
       const path = await this.filePicker.open({
         title: t('sessions.loadTitle'),
         filters: EXPORT_FILTERS,

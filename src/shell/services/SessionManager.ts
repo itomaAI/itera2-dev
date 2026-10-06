@@ -18,7 +18,9 @@ import { generateId } from '../../utils/id';
 import {
   buildSessionExport,
   buildSessionMeta,
+  exportFileName,
   isEmptySession,
+  listSavedSessions,
   normalizeKeep,
   parseSessionImport,
   pruneSessions,
@@ -26,6 +28,7 @@ import {
   sortSessions,
   unreferencedMedia,
   type CurrentSessionMeta,
+  type SavedSessionEntry,
   type SessionMeta,
 } from '../../core/state/sessionArchive';
 
@@ -45,6 +48,8 @@ export type SessionSwitchResult =
 export interface SessionManagerDeps {
   /** `preferences.sessionHistoryKeep` を返す。無ければ既定（10） */
   keep?: () => unknown;
+  /** VFS の保存先（`ConfigManager.paths().user.sessions`）。宣言が無ければ null */
+  sessionsDir?: () => string | null;
   now?: () => number;
 }
 
@@ -56,6 +61,7 @@ export class SessionManager {
   private onSessionChanged: (() => void) | null = null;
   private isBusy: () => boolean = () => false;
   private readonly keep: () => unknown;
+  private readonly sessionsDir: () => string | null;
   private readonly now: () => number;
   /** いまの会話の札。起動後に 1 度だけ DB から読む（無ければ振る） */
   private currentMeta: CurrentSessionMeta | null = null;
@@ -74,6 +80,7 @@ export class SessionManager {
     this.logger = logger;
     this.toolRegistry = toolRegistry;
     this.keep = deps.keep ?? (() => undefined);
+    this.sessionsDir = deps.sessionsDir ?? (() => null);
     this.now = deps.now ?? (() => Date.now());
   }
 
@@ -373,6 +380,50 @@ export class SessionManager {
     await this.vfs.writeFile(principal, path, json, { overwrite: true });
     if (this.logger) this.logger.log('system', { action: 'session_export', sessionId: id, path });
     return true;
+  }
+
+  /** VFS の保存先（宣言が無ければ null）。読む側はこれだけを使う */
+  public savedSessionsDir(): string | null {
+    const d = this.sessionsDir();
+    return typeof d === 'string' && d.trim() ? d.trim().replace(/\/+$/, '') : null;
+  }
+
+  /**
+   * 会話を**既定の保存先**に書く（ダイアログ無し）。名前は `exportFileName`（会話の始まりの日時＋題）なので、
+   * 同じ会話を保存し直すと同じファイルを上書きする。保存先の宣言が無ければ null。
+   */
+  public async exportSessionToDefaultDir(id: string | 'current', principal: Principal): Promise<string | null> {
+    const dir = this.savedSessionsDir();
+    if (!dir) return null;
+    const meta =
+      id === 'current' ? await this.currentSession() : (await this.history.getSessionsIndex()).find((m) => m.id === id);
+    if (!meta) return null;
+    if (!this.vfs.exists(principal, dir)) await this.vfs.mkdir(principal, dir);
+    const path = `${dir}/${exportFileName(meta)}`;
+    const ok = await this.exportSessionToVfs(id, path, principal);
+    return ok ? path : null;
+  }
+
+  /**
+   * 既定の保存先にある会話の一覧。**名前と stat だけ**で組む（中身は読まない。同期のスタブも取りに行かない —— 山内さん 2026-10-06）。
+   * 保存先の宣言が無い・まだ無ければ空。
+   */
+  public listSavedSessions(principal: Principal): SavedSessionEntry[] {
+    const dir = this.savedSessionsDir();
+    if (!dir || !this.vfs.exists(principal, dir)) return [];
+    try {
+      const stats = this.vfs.listFiles(principal, { path: dir, detail: true }) as VfsStat[];
+      return listSavedSessions(stats);
+    } catch (e) {
+      console.warn('[SessionManager] Failed to list saved sessions:', e);
+      return [];
+    }
+  }
+
+  /** 保存先のファイルをゴミ箱へ移す（永久には消さない） */
+  public async deleteSavedSession(path: string, principal: Principal): Promise<void> {
+    await this.vfs.deleteFile(principal, path);
+    if (this.logger) this.logger.log('system', { action: 'session_export_deleted', path });
   }
 
   /**
