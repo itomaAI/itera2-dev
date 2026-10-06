@@ -263,6 +263,8 @@ export class EventOrchestrator {
         this.desktop.modals.apiSettings.open();
       } else if (target === 'monitor') {
         this.desktop.modals.processMonitor.open();
+      } else if (target === 'sessions') {
+        this.desktop.modals.sessions.open();
       } else {
         if (window.AppUI) window.AppUI.notify(t('notify.unknownSystemModal', { name: target }), 'warning');
       }
@@ -398,13 +400,16 @@ export class EventOrchestrator {
       if (res && res.action) {
         // 履歴を消しても、走っているアプリ・デーモンの道具は生きている。
         // 登録時の tool_available は履歴ごと消えるので、リセット時と同じく定義を積み直す（T-0246）。
+        // 消した会話は退避される（履歴モーダルから戻せる。T-0613）
         this.sessionManager.clearSession({
-          purgeMedia: true,
           triggerLlm: false,
           restoreTools: true,
         });
       }
     });
+
+    // 履歴モーダル（T-0613）
+    chat.on('sessions', () => this.desktop.modals.sessions.open());
 
     chat.on('delete_turn', (id: string) => {
       this.history.delete(id);
@@ -515,8 +520,8 @@ export class EventOrchestrator {
       }
     });
 
-    // セッションクリア後のUI更新
-    this.sessionManager.setOnClearedCallback(() => {
+    // セッションを空にした／差し替えたあとの UI 更新
+    this.sessionManager.setOnSessionChangedCallback(() => {
       this.desktop.panels.chat.renderHistory(this.history.get());
     });
   }

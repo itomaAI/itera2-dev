@@ -32,6 +32,11 @@ export interface OsConfig {
     hiddenEventTypes?: string[];
     /** アプリをまたぐ「戻る／進む」をブラウザの戻る・進むと連動させる（既定 true。T-0453）。妙なら false で切る */
     navBrowserSync?: boolean;
+    /**
+     * 会話のセッション履歴に残す件数（T-0613）。空にした／切り替えた会話を IndexedDB に退避し、
+     * 最後に触った順でこの件数を超えた分を消す。未設定・不正は 10（sessionArchive.DEFAULT_SESSION_HISTORY_KEEP）
+     */
+    sessionHistoryKeep?: number;
   };
   appearance: {
     theme: string;

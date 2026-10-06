@@ -1,0 +1,152 @@
+import { describe, it, expect } from 'vitest';
+import type { Turn } from './HistoryManager';
+import {
+  buildSessionExport,
+  buildSessionMeta,
+  collectMediaPaths,
+  defaultExportName,
+  deriveTitle,
+  isEmptySession,
+  normalizeKeep,
+  parseSessionImport,
+  pruneSessions,
+  referencedMediaPaths,
+  sortSessions,
+  unreferencedMedia,
+  SESSION_EXPORT_FORMAT,
+  type SessionMeta,
+} from './sessionArchive';
+
+const turn = (role: Turn['role'], content: Turn['content'], timestamp = 1000, meta: Turn['meta'] = {}): Turn => ({
+  id: `t${timestamp}`,
+  timestamp,
+  role,
+  content,
+  meta,
+});
+
+const meta = (id: string, updatedAt: number, mediaPaths: string[] = []): SessionMeta => ({
+  id,
+  title: id,
+  createdAt: updatedAt - 10,
+  updatedAt,
+  turnCount: 1,
+  bytes: 10,
+  mediaPaths,
+});
+
+describe('sessionArchive: 空の会話', () => {
+  it('ターンが無ければ空', () => {
+    expect(isEmptySession([])).toBe(true);
+  });
+  it('system のターンしか無ければ空（リセット直後の tool_available だけの会話）', () => {
+    expect(isEmptySession([turn('system', '<event type="tool_available">…</event>')])).toBe(true);
+  });
+  it('利用者か私の発言があれば空でない', () => {
+    expect(isEmptySession([turn('user', 'hi')])).toBe(false);
+    expect(isEmptySession([turn('system', 'x'), turn('model', '<report>…</report>')])).toBe(false);
+  });
+});
+
+describe('sessionArchive: 題', () => {
+  it('最初の利用者の発言の先頭 40 字', () => {
+    const long = 'あ'.repeat(60);
+    expect(deriveTitle([turn('system', 'sys'), turn('user', long)])).toBe('あ'.repeat(40) + '…');
+    expect(deriveTitle([turn('user', 'short')])).toBe('short');
+  });
+  it('配列の本文は text ノードをつなぎ、添付の印は外す', () => {
+    const t = turn('user', [
+      { text: '<user_attachment name="a.png" path="system/temp/media/a.png">…</user_attachment>' },
+      { media: { path: 'system/temp/media/a.png', mimeType: 'image/png' } },
+      { text: 'この画像を見て' },
+    ]);
+    expect(deriveTitle([t])).toBe('この画像を見て');
+  });
+  it('利用者の発言が無ければ空文字', () => {
+    expect(deriveTitle([turn('model', 'x')])).toBe('');
+  });
+});
+
+describe('sessionArchive: 添付の参照', () => {
+  it('利用者の添付とツールの結果の media を集め、重複は 1 つ', () => {
+    const turns: Turn[] = [
+      turn('user', [{ media: { path: 'system/temp/media/a.png', mimeType: 'image/png' } }, { text: 'x' }]),
+      turn('system', [
+        {
+          actionType: 'take_screenshot',
+          output: { log: 'ok', media: { path: 'system/temp/media/s.png', mimeType: 'image/png' } },
+        },
+        { actionType: 'get_time', output: { log: 'now' } },
+      ] as any),
+      turn('user', [{ media: { path: 'system/temp/media/a.png', mimeType: 'image/png' } }]),
+    ];
+    expect(collectMediaPaths(turns).sort()).toEqual(['system/temp/media/a.png', 'system/temp/media/s.png']);
+  });
+  it('残る会話のどれにも参照されていないファイルだけが掃除の対象', () => {
+    const files = ['system/temp/media/a.png', 'system/temp/media/b.png', 'system/temp/media/c.png'];
+    const referenced = referencedMediaPaths(
+      [meta('s1', 1, ['system/temp/media/a.png'])],
+      [turn('user', [{ media: { path: 'system/temp/media/c.png', mimeType: 'image/png' } }])],
+    );
+    expect(unreferencedMedia(files, referenced)).toEqual(['system/temp/media/b.png']);
+  });
+});
+
+describe('sessionArchive: 札と剪定', () => {
+  it('updatedAt は最後のターンの時刻、無ければ createdAt', () => {
+    expect(buildSessionMeta('s', 5, []).updatedAt).toBe(5);
+    expect(buildSessionMeta('s', 5, [turn('user', 'a', 10), turn('model', 'b', 20)]).updatedAt).toBe(20);
+  });
+  it('新しい順に並び、keep を超えた分を古い方から剪定', () => {
+    const index = [meta('a', 1), meta('b', 3), meta('c', 2), meta('d', 4)];
+    expect(sortSessions(index).map((m) => m.id)).toEqual(['d', 'b', 'c', 'a']);
+    const { kept, pruned } = pruneSessions(index, 2);
+    expect(kept.map((m) => m.id)).toEqual(['d', 'b']);
+    expect(pruned.map((m) => m.id)).toEqual(['c', 'a']);
+  });
+  it('keep=0 は全部剪定、既定の整え方', () => {
+    expect(pruneSessions([meta('a', 1)], 0).kept).toEqual([]);
+    expect(normalizeKeep(undefined)).toBe(10);
+    expect(normalizeKeep(-1)).toBe(10);
+    expect(normalizeKeep('3')).toBe(10);
+    expect(normalizeKeep(3.7)).toBe(3);
+  });
+});
+
+describe('sessionArchive: VFS との出し入れ', () => {
+  const turns = [turn('user', 'hello', 10), turn('model', '<report>hi</report>', 20)];
+
+  it('書き出しはターンをそのまま持ち、読み戻せる', () => {
+    const exported = buildSessionExport({ id: 'sid', createdAt: 5 }, turns, 99);
+    expect(exported.format).toBe(SESSION_EXPORT_FORMAT);
+    expect(exported.turns).toBe(turns);
+    const parsed = parseSessionImport(JSON.stringify(exported));
+    expect(parsed.ok).toBe(true);
+    if (parsed.ok) {
+      expect(parsed.id).toBe('sid');
+      expect(parsed.createdAt).toBe(5);
+      expect(parsed.turns).toEqual(turns);
+    }
+  });
+  it('形が違えば理由を返して拒む', () => {
+    expect(parseSessionImport('not json').ok).toBe(false);
+    expect(parseSessionImport('[]').ok).toBe(false);
+    expect(parseSessionImport(JSON.stringify({ format: 'x', turns: [] }))).toMatchObject({ ok: false });
+    expect(parseSessionImport(JSON.stringify({ format: SESSION_EXPORT_FORMAT }))).toMatchObject({ ok: false });
+    const bad = parseSessionImport(JSON.stringify({ format: SESSION_EXPORT_FORMAT, turns: [{ id: 1 }] }));
+    expect(bad.ok).toBe(false);
+    if (!bad.ok) expect(bad.reason).toContain('turn #1');
+  });
+  it('meta の無いターンは {} で埋め、createdAt が無ければ最初のターンの時刻', () => {
+    const parsed = parseSessionImport(
+      JSON.stringify({ format: SESSION_EXPORT_FORMAT, turns: [{ id: 'a', timestamp: 7, role: 'user', content: 'x' }] }),
+    );
+    expect(parsed).toMatchObject({ ok: true, id: '', createdAt: 7 });
+    if (parsed.ok) expect(parsed.turns[0].meta).toEqual({});
+  });
+  it('既定のファイル名は日時と題から（名前に使えない字は外す）', () => {
+    const d = new Date(2026, 9, 6, 17, 5).getTime();
+    expect(defaultExportName({ title: 'a/b: c?', updatedAt: d })).toBe('20261006_1705_a_b_c.json');
+    expect(defaultExportName({ title: '', updatedAt: d })).toBe('20261006_1705.json');
+  });
+});

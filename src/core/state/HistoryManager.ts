@@ -6,6 +6,7 @@
 import type { MediaContentNode, TextContentNode } from '../types/content';
 import type { ToolExecutionEntry } from '../types/tools';
 import { generateId } from '../../utils/id';
+import type { CurrentSessionMeta, SessionMeta } from './sessionArchive';
 
 export type Role = 'user' | 'model' | 'system';
 export type TurnContent = string | Array<TextContentNode | MediaContentNode | ToolExecutionEntry>;
@@ -102,31 +103,99 @@ export class HistoryManager {
     };
   }
 
+  // store `state` のキー（T-0613）。turns 以外は会話の退避に使う。
+  // 版は 1 のまま（store を足して版を上げると、古いビルドで開いたとき VersionError で会話が空に見える）
+  private static readonly KEY_TURNS = 'turns';
+  private static readonly KEY_CURRENT_META = 'current_meta';
+  private static readonly KEY_SESSIONS_INDEX = 'sessions_index';
+  private static sessionKey(id: string): string {
+    return `session:${id}`;
+  }
+
+  private async _dbGet<T>(key: string): Promise<T | undefined> {
+    const db = await this.dbPromise;
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction([this.storeName], 'readonly');
+      const req = tx.objectStore(this.storeName).get(key);
+      req.onsuccess = (e) => resolve((e.target as any).result);
+      req.onerror = (e) => reject((e.target as any).error);
+    });
+  }
+
+  private async _dbPut(key: string, value: unknown): Promise<void> {
+    const db = await this.dbPromise;
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction([this.storeName], 'readwrite');
+      const req = tx.objectStore(this.storeName).put(value, key);
+      req.onsuccess = () => resolve();
+      req.onerror = (e) => reject((e.target as any).error);
+    });
+  }
+
+  private async _dbDelete(key: string): Promise<void> {
+    const db = await this.dbPromise;
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction([this.storeName], 'readwrite');
+      const req = tx.objectStore(this.storeName).delete(key);
+      req.onsuccess = () => resolve();
+      req.onerror = (e) => reject((e.target as any).error);
+    });
+  }
+
   private async _saveToDB(): Promise<void> {
     try {
-      const db = await this.dbPromise;
-      return new Promise((resolve, reject) => {
-        const tx = db.transaction([this.storeName], 'readwrite');
-        const store = tx.objectStore(this.storeName);
-        const req = store.put(this.turns, 'turns');
-        req.onsuccess = () => resolve();
-        req.onerror = (e) => reject((e.target as any).error);
-      });
+      await this._dbPut(HistoryManager.KEY_TURNS, this.turns);
     } catch (e) {
       console.error('[HistoryManager] Failed to persist history:', e);
     }
   }
 
+  /** 予約してある保存を待たずに、いまの会話を DB へ書く（`load()` は自動で保存しないので、差し替えた側が呼ぶ） */
+  async persist(): Promise<void> {
+    if (this.saveTimeoutId) {
+      clearTimeout(this.saveTimeoutId);
+      this.saveTimeoutId = null;
+    }
+    await this._saveToDB();
+  }
+
+  // ==========================================
+  // Session archive I/O（T-0613）。判断はしない（純粋な出し入れ）。規則は sessionArchive.ts、手順は SessionManager
+  // ==========================================
+
+  async getCurrentMeta(): Promise<CurrentSessionMeta | undefined> {
+    return this._dbGet<CurrentSessionMeta>(HistoryManager.KEY_CURRENT_META);
+  }
+
+  async setCurrentMeta(meta: CurrentSessionMeta): Promise<void> {
+    await this._dbPut(HistoryManager.KEY_CURRENT_META, meta);
+  }
+
+  async getSessionsIndex(): Promise<SessionMeta[]> {
+    const v = await this._dbGet<SessionMeta[]>(HistoryManager.KEY_SESSIONS_INDEX);
+    return Array.isArray(v) ? v : [];
+  }
+
+  async setSessionsIndex(index: SessionMeta[]): Promise<void> {
+    await this._dbPut(HistoryManager.KEY_SESSIONS_INDEX, index);
+  }
+
+  async getSession(id: string): Promise<Turn[] | undefined> {
+    const v = await this._dbGet<Turn[]>(HistoryManager.sessionKey(id));
+    return Array.isArray(v) ? v : undefined;
+  }
+
+  async putSession(id: string, turns: Turn[]): Promise<void> {
+    await this._dbPut(HistoryManager.sessionKey(id), turns);
+  }
+
+  async deleteSession(id: string): Promise<void> {
+    await this._dbDelete(HistoryManager.sessionKey(id));
+  }
+
   async loadFromDB(): Promise<void> {
     try {
-      const db = await this.dbPromise;
-      const turns: Turn[] | undefined = await new Promise((resolve, reject) => {
-        const tx = db.transaction([this.storeName], 'readonly');
-        const store = tx.objectStore(this.storeName);
-        const req = store.get('turns');
-        req.onsuccess = (e) => resolve((e.target as any).result);
-        req.onerror = (e) => reject((e.target as any).error);
-      });
+      const turns = await this._dbGet<Turn[]>(HistoryManager.KEY_TURNS);
 
       if (turns && Array.isArray(turns)) {
         this.turns = turns;

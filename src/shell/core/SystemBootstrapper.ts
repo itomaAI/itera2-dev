@@ -206,7 +206,11 @@ export class SystemBootstrapper {
     const engine = new Engine({ history, vfs, configManager }, null, null, translator, toolRegistry, {});
 
     const cognitiveManager = new CognitiveManager(configManager, engine, logger, vfs, registryLayers);
-    const sessionManager = new SessionManager(vfs, history, logger, toolRegistry);
+    const sessionManager = new SessionManager(vfs, history, logger, toolRegistry, {
+      keep: () => configManager.get('preferences')?.sessionHistoryKeep,
+    });
+    // 切り替えを断る判定（走っている束を見捨てない）。知っているのは Engine なので、ここで配線するだけ
+    sessionManager.setBusyProbe(() => engine.isBusy());
     const themeService = new ThemeService(configManager, vfs);
     // UI の言語（appearance.locale）。英語はホストにあり、VFS の言語ファイルを上に重ねる（P-0046 / T-0545）
     const localeService = new LocaleService(configManager, vfs, eventBus, { layers: localeLayers });
@@ -224,6 +228,7 @@ export class SystemBootstrapper {
       cognitiveManager,
       configManager,
       syncAdapterHost,
+      sessionManager,
     );
 
     // ==========================================
