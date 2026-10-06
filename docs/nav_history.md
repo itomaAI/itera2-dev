@@ -10,7 +10,7 @@
 
 - **単位は「場所の変化 1 回」**。前面切替も、同じアプリの中の申告も同じ単位。同じ URI は積まない（pid だけ更新）。`index` より後ろは捨てる。上限 100
 - **死んだアプリの段も消さない**（URI から起動し直せる）。段ごとの状態（スクロール・フォーム）は持たない（アプリの持ち物）
-- **ゲスト API `MetaOS.nav`**: `declare(pathOrQuery)`（申告。`?…` は base に付け足す）／`back()`／`forward()`／`state()`。活性は `system.on('nav_changed')`。**`MetaOS.host.updateAddressBar` は非推奨**（同じ handler。残す）
+- **ゲスト API `MetaOS.nav`**: `declare(pathOrQuery)`（申告。`?…` は base に付け足す。**当たるのは呼び出し元の app だけ** —— 前面なら場所と履歴を更新、背面ならその app の記録だけ。T-0619）／`back()`／`forward()`／`state()`。活性は `system.on('nav_changed')`。**`MetaOS.host.updateAddressBar` は非推奨**（同じ handler。残す）
 - **ホスト UI**: アドレスバー左の ← →（`#btn-nav-back` / `#btn-nav-forward`。`DesktopEnvironment.bindNavHistory`）
 - **ブラウザ連動**: 段ごとに `window.history.pushState({ iteraNav: index })`。`back()` / `forward()` は `history.go(±1)` に委ね、`popstate` で同じ index へ跳ぶ（経路を 1 本にする）。自分の state（`iteraNav`）以外の `popstate` は無視。**`preferences.navBrowserSync: false` で切れる**（既定 true）。ゲストの iframe は blob を 1 回読むだけで履歴に段を足さないので、これで足りる
 - 履歴はセッション内だけ（リロードで空。`replaceState({ iteraNav: -1 })` から始める）
