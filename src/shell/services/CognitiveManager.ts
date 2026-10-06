@@ -18,6 +18,7 @@ import { GeminiAdapter } from '../../core/cognitive/adapters/GeminiAdapter';
 import { OpenAIAdapter } from '../../core/cognitive/adapters/OpenAIAdapter';
 import { AnthropicAdapter } from '../../core/cognitive/adapters/AnthropicAdapter';
 import type { RelayTransport } from '../../core/cognitive/adapters/BaseAdapter';
+import { uploadRelayBody } from '../../core/cognitive/relay/RelayBodyStash';
 import {
   RELAY_PROVIDER_ID,
   RELAY_CATALOG_STORAGE_KEY,
@@ -181,10 +182,20 @@ export class CognitiveManager {
    * 認証アダプタがホスト側にあっても、値は VFS 経由で受け取る（itera2-dev との差分を増やさないため。T-0419）。
    */
   private async readIdToken(): Promise<string | null> {
+    return (await this.readAuthState())?.idToken ?? null;
+  }
+
+  /**
+   * `system/temp/firebase_auth.json` の、中継に要る 3 つ（ID トークン・uid・既定のバケット）。サインインしていなければ null。
+   * 認証アダプタ（配布物側）が `firebaseConfig` をそのまま書くので、バケットの出どころはここ 1 つ（T-0622）。
+   */
+  private async readAuthState(): Promise<{ idToken: string | null; uid: string | null; bucket: string | null } | null> {
     try {
       if (!this.vfs.exists(SYSTEM_PRINCIPAL, AUTH_STATE_PATH)) return null;
       const auth = JSON.parse((await this.vfs.readFile(SYSTEM_PRINCIPAL, AUTH_STATE_PATH)) || '{}');
-      return auth && auth.signedIn && typeof auth.idToken === 'string' && auth.idToken ? auth.idToken : null;
+      if (!auth || !auth.signedIn) return null;
+      const str = (v: unknown) => (typeof v === 'string' && v ? v : null);
+      return { idToken: str(auth.idToken), uid: str(auth.uid), bucket: str(auth.firebaseConfig?.storageBucket) };
     } catch {
       return null;
     }
@@ -303,6 +314,8 @@ export class CognitiveManager {
       return;
     }
 
+    // 大きな本文の置き場（T-0622）。バケットが分かる配布物でだけ口を開ける。無ければ 32 MiB で止まる（BaseAdapter）
+    const bucket = (await this.readAuthState())?.bucket ?? null;
     const relay: RelayTransport = {
       baseUrl,
       getAuthHeaders: async () => {
@@ -312,6 +325,18 @@ export class CognitiveManager {
       },
       // 中継の上流は本家 OpenAI である。設定の素通しはしない
       strictOpenAISchema: true,
+      ...(bucket
+        ? {
+            stashBody: async (body: string, signal?: AbortSignal) => {
+              // 認証は毎回読み直す（1 時間で失効する。getAuthHeaders と同じ理由）
+              const auth = await this.readAuthState();
+              if (!auth?.idToken || !auth.uid || !auth.bucket) {
+                throw new Error('Sign in to Itera Cloud to use the LLM relay.');
+              }
+              return uploadRelayBody({ bucket: auth.bucket, uid: auth.uid, idToken: auth.idToken, body, signal });
+            },
+          }
+        : {}),
     };
 
     const modelCapabilities = entry.capabilities ? { ...capabilities, ...entry.capabilities } : capabilities;
