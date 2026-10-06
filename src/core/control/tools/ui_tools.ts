@@ -196,7 +196,12 @@ export function registerUITools(registry: ToolRegistry): void {
 
           const timestamp = Date.now();
           const safe = String(target).replace(/[^\w.-]+/g, '_');
-          const path = `system/temp/media/screenshot_${safe}_${timestamp}.png`;
+          // いまの会話の添付の置き場（`system/temp/sessions/<id>/`。T-0613）。shell が無ければ旧い置き場
+          const mediaDir: string =
+            typeof context.shell?.currentMediaDir === 'function'
+              ? context.shell.currentMediaDir()
+              : 'system/temp/media';
+          const path = `${mediaDir}/screenshot_${safe}_${timestamp}.png`;
 
           // ツールの責任として Blob に変換してから VFS に渡す
           const byteString = atob(base64);

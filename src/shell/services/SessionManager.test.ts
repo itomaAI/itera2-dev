@@ -67,40 +67,74 @@ class FakeHistory {
 }
 
 class FakeVfs {
+  /** 中身は文字列で持つ（Blob は text に戻して入れる） */
   files = new Map<string, string>();
   dirs = new Set<string>();
   deleted: string[] = [];
+  private isDirPath(path: string) {
+    if (this.dirs.has(path)) return true;
+    for (const k of this.files.keys()) if (k.startsWith(path + '/')) return true;
+    return false;
+  }
   exists(_p: any, path: string) {
-    return path === 'system/temp/media' || this.files.has(path) || this.dirs.has(path);
+    return this.files.has(path) || this.isDirPath(path);
+  }
+  stat(_p: any, path: string) {
+    if (this.files.has(path))
+      return { path, name: path.split('/').pop(), kind: 'file', size: this.files.get(path)!.length, updatedAt: 7 };
+    if (this.isDirPath(path)) return { path, name: path.split('/').pop(), kind: 'directory', size: 0, updatedAt: 7 };
+    throw new Error(`Path not found: ${path}`);
   }
   async mkdir(_p: any, path: string) {
     this.dirs.add(path);
     return path;
   }
   listFiles(_p: any, opts: any) {
-    return [...this.files.keys()]
-      .filter((k) => k.startsWith(opts.path + '/'))
-      .map((path) => ({
-        path,
-        name: path.split('/').pop(),
-        kind: 'file',
-        size: this.files.get(path)!.length,
-        updatedAt: 7,
-      }));
+    const root = opts.path + '/';
+    const out = new Map<string, any>();
+    const add = (path: string, kind: 'file' | 'directory') => {
+      if (!out.has(path))
+        out.set(path, {
+          path,
+          name: path.split('/').pop(),
+          kind,
+          size: kind === 'file' ? this.files.get(path)!.length : 0,
+          updatedAt: 7,
+        });
+    };
+    const consider = (path: string, kind: 'file' | 'directory') => {
+      if (!path.startsWith(root)) return;
+      const rel = path.slice(root.length);
+      const parts = rel.split('/');
+      if (opts.recursive) {
+        for (let i = 1; i < parts.length; i++) add(root + parts.slice(0, i).join('/'), 'directory');
+        add(path, kind);
+      } else {
+        if (parts.length === 1) add(path, kind);
+        else add(root + parts[0], 'directory');
+      }
+    };
+    for (const k of this.files.keys()) consider(k, 'file');
+    for (const d of this.dirs) consider(d, 'directory');
+    return [...out.values()];
   }
   async deleteFile(_p: any, path: string) {
-    this.files.delete(path);
+    for (const k of [...this.files.keys()]) if (k === path || k.startsWith(path + '/')) this.files.delete(k);
+    for (const d of [...this.dirs]) if (d === path || d.startsWith(path + '/')) this.dirs.delete(d);
     this.deleted.push(path);
     return path;
   }
-  async writeFile(_p: any, path: string, content: string) {
-    this.files.set(path, content);
+  async writeFile(_p: any, path: string, content: string | Blob) {
+    this.files.set(path, typeof content === 'string' ? content : await content.text());
     return path;
   }
   async readFile(_p: any, path: string) {
     const v = this.files.get(path);
     if (v === undefined) throw new Error(`Path not found: ${path}`);
     return v;
+  }
+  async readBlob(_p: any, path: string) {
+    return new Blob([await this.readFile(_p, path)]);
   }
 }
 
@@ -303,12 +337,12 @@ describe('SessionManager: 既定の保存先（paths.user.sessions）', () => {
     history.append('user', 'hello world');
     await sm.renameSession('current', 'hello world');
     const p1 = await sm.exportSessionToDefaultDir('current', principal);
-    expect(p1).toMatch(/^data\/sessions\/\d{8}_\d{4}_hello_world\.json$/);
-    expect(vfs.dirs.has('data/sessions')).toBe(true);
+    expect(p1).toMatch(/^data\/sessions\/\d{8}_\d{4}_hello_world$/);
+    expect(vfs.files.has(`${p1}/session.json`)).toBe(true);
     history.append('model', '<report>x</report>');
     const p2 = await sm.exportSessionToDefaultDir('current', principal);
     expect(p2).toBe(p1);
-    expect(JSON.parse(vfs.files.get(p1!)!).turns).toHaveLength(2);
+    expect(JSON.parse(vfs.files.get(`${p1}/session.json`)!).turns).toHaveLength(2);
     expect([...vfs.files.keys()].filter((k) => k.startsWith('data/sessions/'))).toHaveLength(1);
   });
 
@@ -322,7 +356,63 @@ describe('SessionManager: 既定の保存先（paths.user.sessions）', () => {
     const rows = sm.listSavedSessions(principal);
     expect(rows).toHaveLength(1);
     expect(rows[0].title).toBe('listed');
+    expect(rows[0].form).toBe('dir');
     expect(read).not.toHaveBeenCalled();
+  });
+
+  it('添付はいまの会話のディレクトリ（system/temp/sessions/<id>）に置き、保存はそれを media/ に同梱し、読み込みで写して参照を付け替える', async () => {
+    const { history, vfs, sm } = setup();
+    await sm.init();
+    const dir = sm.currentMediaDir();
+    expect(dir).toMatch(/^system\/temp\/sessions\/[^/]+$/);
+    vfs.files.set(`${dir}/1_photo.png`, 'PNG');
+    vfs.files.set(`${dir}/2_memo.txt`, 'memo');
+    vfs.files.set('system/temp/media/legacy.png', 'OLD');
+    history.append('user', [
+      media(`${dir}/1_photo.png`),
+      { text: `<user_attachment name="memo.txt" path="${dir}/2_memo.txt">memo</user_attachment>` },
+      media('system/temp/media/legacy.png'),
+      media('data/docs/big.pdf'),
+    ]);
+    await sm.renameSession('current', 'bundle');
+    const saved = await sm.exportSessionToDefaultDir('current', principal);
+    expect(saved).toMatch(/_bundle$/);
+    expect([...vfs.files.keys()].filter((k) => k.startsWith(`${saved}/media/`)).sort()).toEqual([
+      `${saved}/media/1_photo.png`,
+      `${saved}/media/2_memo.txt`,
+      `${saved}/media/legacy.png`,
+    ]);
+    expect(vfs.files.has(`${saved}/media/big.pdf`)).toBe(false); // VFS の別の場所への参照は同梱しない
+
+    // 読み込み（同じ id が居るので採り直し → 新しいディレクトリへ写り、参照が付け替わる）
+    const res = await sm.importSessionFromVfs(saved!, principal);
+    expect(res.ok).toBe(true);
+    const newDir = sm.currentMediaDir();
+    expect(newDir).not.toBe(dir);
+    expect(vfs.files.get(`${newDir}/1_photo.png`)).toBe('PNG');
+    expect(vfs.files.get(`${newDir}/legacy.png`)).toBe('OLD');
+    const content = history.turns[0].content as any[];
+    expect(content[0].media.path).toBe(`${newDir}/1_photo.png`);
+    expect(content[1].text).toContain(`path="${newDir}/2_memo.txt"`);
+    expect(content[2].media.path).toBe(`${newDir}/legacy.png`);
+    expect(content[3].media.path).toBe('data/docs/big.pdf');
+    // 古い会話は退避され、そのディレクトリは残る（退避中）。削除すると消える
+    const [old] = await history.getSessionsIndex();
+    expect(vfs.exists(null, dir)).toBe(true);
+    await sm.deleteSession(old.id);
+    expect(vfs.exists(null, dir)).toBe(false);
+    expect(vfs.exists(null, newDir)).toBe(true);
+  });
+
+  it('旧形式の単一 .json も読み込める（添付は無い）', async () => {
+    const { history, sm } = setup();
+    history.append('user', 'legacy');
+    await sm.exportSessionToVfs('current', 'data/sessions/20261001_0900_legacy.json', principal);
+    const rows = sm.listSavedSessions(principal);
+    expect(rows.map((r) => r.form)).toEqual(['file']);
+    const res = await sm.importSessionFromVfs('data/sessions/20261001_0900_legacy.json', principal);
+    expect(res.ok).toBe(true);
+    expect(history.turns[0].content).toBe('legacy');
   });
 
   it('保存先の宣言が無ければ null と空', async () => {

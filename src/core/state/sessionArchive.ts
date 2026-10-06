@@ -13,7 +13,7 @@
  */
 
 import type { Turn, TurnMeta } from './HistoryManager';
-import { isMediaContentNode, isToolExecutionEntry } from './TurnContentNormalizer';
+import { isMediaContentNode, isTextContentNode, isToolExecutionEntry } from './TurnContentNormalizer';
 
 /** 退避した会話の札。一覧はこれだけで描ける（ターンを読まない） */
 export interface SessionMeta {
@@ -50,6 +50,24 @@ export interface SessionExport {
   savedAt: number;
   turnCount: number;
   turns: Turn[];
+}
+
+/** 添付の置き場の根。会話ごとに `<根>/<sessionId>/`（端末に属する。同期しない。2026-10-06 山内さん） */
+export const SESSIONS_TEMP_DIR = 'system/temp/sessions';
+/** この版より前の添付の置き場。移行はしない（会話はこのパスで参照したまま。参照されなくなれば消える） */
+export const LEGACY_MEDIA_DIR = 'system/temp/media';
+/** 保存のディレクトリの中の会話の本体と、添付の置き場 */
+export const EXPORT_SESSION_FILE = 'session.json';
+export const EXPORT_MEDIA_DIR = 'media';
+
+/** 会話の添付の置き場 */
+export function sessionMediaDir(sessionId: string): string {
+  return `${SESSIONS_TEMP_DIR}/${sessionId}`;
+}
+
+/** `system/temp/` の下の添付か（保存に同梱する・読み込みで付け替える対象） */
+export function isTempAttachment(path: string): boolean {
+  return path.startsWith('system/temp/');
 }
 
 /** 剪定で残す件数の既定。依頼が数字を言っているのでここだけ既定を持つ（`preferences.sessionHistoryKeep` で変える） */
@@ -93,6 +111,59 @@ export function collectMediaPaths(turns: Turn[]): string[] {
     }
   }
   return [...out];
+}
+
+/** 会話が参照する添付のうち `system/temp/` の下のもの（本文の `<user_attachment path="…">` も数える。テキストの添付はそこにしか無い） */
+export function collectTempAttachmentPaths(turns: Turn[]): string[] {
+  const out = new Set<string>();
+  for (const p of collectMediaPaths(turns)) if (isTempAttachment(p)) out.add(p);
+  for (const turn of turns) {
+    const texts: string[] = [];
+    if (typeof turn.content === 'string') texts.push(turn.content);
+    else if (Array.isArray(turn.content)) {
+      for (const node of turn.content) if (isTextContentNode(node)) texts.push(node.text);
+    }
+    for (const text of texts) {
+      for (const m of text.matchAll(/<user_attachment\b[^>]*\bpath="([^"]+)"/g)) {
+        if (isTempAttachment(m[1])) out.add(m[1]);
+      }
+    }
+  }
+  return [...out];
+}
+
+const basename = (p: string) => p.slice(p.lastIndexOf('/') + 1);
+
+/**
+ * 読み込みで添付の参照を新しい置き場へ向ける。`system/temp/` の下のパスで、名前が `available` に在るものだけを
+ * `<targetDir>/<名前>` に付け替える（`media.path`・ツールの結果の `output.media.path`・本文の `<user_attachment path="…">`）。
+ * それ以外のパス（VFS の別の場所への参照）は触らない。ターンは新しい配列・新しいオブジェクトで返す（元は変えない）。
+ */
+export function relocateTempAttachments(turns: Turn[], targetDir: string, available: Iterable<string>): Turn[] {
+  const names = new Set(available);
+  const map = (p: string): string => {
+    if (!isTempAttachment(p)) return p;
+    const n = basename(p);
+    return names.has(n) ? `${targetDir}/${n}` : p;
+  };
+  const mapText = (text: string): string =>
+    text.replace(/(<user_attachment\b[^>]*\bpath=")([^"]+)(")/g, (_m, a, p, c) => `${a}${map(p)}${c}`);
+  return turns.map((turn) => {
+    if (typeof turn.content === 'string') return { ...turn, content: mapText(turn.content) };
+    if (!Array.isArray(turn.content)) return turn;
+    const content = turn.content.map((node) => {
+      if (isTextContentNode(node)) return { ...node, text: mapText(node.text) };
+      if (isMediaContentNode(node)) return { ...node, media: { ...node.media, path: map(node.media.path) } };
+      if (isToolExecutionEntry(node) && node.output?.media?.path) {
+        return {
+          ...node,
+          output: { ...node.output, media: { ...node.output.media, path: map(node.output.media.path) } },
+        };
+      }
+      return node;
+    });
+    return { ...turn, content };
+  });
 }
 
 /** 札を組む。updatedAt は最後のターンの時刻（無ければ createdAt）。題は渡されたもの（既定は空） */
@@ -221,6 +292,11 @@ export function exportFileName(meta: { title: string; createdAt: number }, now: 
   return slug ? `${stamp}_${slug}.json` : `${stamp}.json`;
 }
 
+/** 保存のディレクトリの名前（`exportFileName` から `.json` を取ったもの）。中に `session.json` と `media/` */
+export function exportDirName(meta: { title: string; createdAt: number }, now: Date = new Date()): string {
+  return exportFileName(meta, now).replace(/\.json$/i, '');
+}
+
 /** VFS に保存してある会話の一覧の 1 行。**ファイルの名前と stat だけ**から作る（中身は読まない） */
 export interface SavedSessionEntry {
   path: string;
@@ -233,6 +309,8 @@ export interface SavedSessionEntry {
   updatedAt: number;
   /** 実体が手元に無い（同期のスタブ）。読み込むときに取り寄せられる */
   stub: boolean;
+  /** 'dir' = `<名前>/session.json`＋`media/` の形、'file' = 旧形式の単一 `.json`（添付は無い） */
+  form: 'dir' | 'file';
 }
 
 const EXPORT_NAME = /^(\d{4})(\d{2})(\d{2})_(\d{2})(\d{2})(?:_(.+))?\.json$/i;
@@ -247,24 +325,59 @@ export function parseExportFileName(name: string): { title: string; startedAt: n
 }
 
 /**
- * 保存先のディレクトリの一覧（stat の配列）から、保存してある会話の行を組む。`.json` のファイルだけ。
- * 新しい順（名前の日時、無ければ updatedAt）
+ * 保存先の一覧（**再帰の** stat の配列）から、保存してある会話の行を組む。
+ * - `<root>/<名前>/session.json` があるディレクトリ … 1 行（大きさはその下の全ファイルの和）
+ * - `<root>/<名前>.json`（旧形式の単一ファイル） … 1 行
+ * 名前と stat だけで組む（中身は読まない）。新しい順（名前の日時、無ければ updatedAt）
  */
 export function listSavedSessions(
+  root: string,
   stats: Array<{ path: string; name: string; kind: string; size: number; updatedAt: number; syncState?: string }>,
 ): SavedSessionEntry[] {
+  const prefix = root.replace(/\/+$/, '') + '/';
   const rows: SavedSessionEntry[] = [];
+  const dirs = new Map<string, { size: number; updatedAt: number; stub: boolean; hasSession: boolean }>();
   for (const s of stats) {
-    if (s.kind !== 'file' || !/\.json$/i.test(s.name)) continue;
-    const parsed = parseExportFileName(s.name);
+    if (!s.path.startsWith(prefix)) continue;
+    const rel = s.path.slice(prefix.length);
+    const slash = rel.indexOf('/');
+    if (slash < 0) {
+      if (s.kind !== 'file' || !/\.json$/i.test(s.name)) continue;
+      const parsed = parseExportFileName(s.name);
+      rows.push({
+        path: s.path,
+        name: s.name,
+        title: parsed.title,
+        startedAt: parsed.startedAt,
+        size: s.size,
+        updatedAt: s.updatedAt,
+        stub: s.syncState === 'stub',
+        form: 'file',
+      });
+      continue;
+    }
+    const top = rel.slice(0, slash);
+    const d = dirs.get(top) ?? { size: 0, updatedAt: 0, stub: false, hasSession: false };
+    if (s.kind === 'file') {
+      d.size += s.size;
+      d.updatedAt = Math.max(d.updatedAt, s.updatedAt);
+      if (s.syncState === 'stub') d.stub = true;
+      if (rel === `${top}/${EXPORT_SESSION_FILE}`) d.hasSession = true;
+    }
+    dirs.set(top, d);
+  }
+  for (const [name, d] of dirs) {
+    if (!d.hasSession) continue;
+    const parsed = parseExportFileName(`${name}.json`);
     rows.push({
-      path: s.path,
-      name: s.name,
+      path: prefix + name,
+      name,
       title: parsed.title,
       startedAt: parsed.startedAt,
-      size: s.size,
-      updatedAt: s.updatedAt,
-      stub: s.syncState === 'stub',
+      size: d.size,
+      updatedAt: d.updatedAt,
+      stub: d.stub,
+      form: 'dir',
     });
   }
   return rows.sort(

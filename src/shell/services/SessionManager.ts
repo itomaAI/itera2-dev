@@ -16,13 +16,20 @@ import type { Principal, VfsStat } from '../../core/vfs/types';
 import { SYSTEM_PRINCIPAL } from '../../core/vfs/types';
 import { generateId } from '../../utils/id';
 import {
+  EXPORT_MEDIA_DIR,
+  EXPORT_SESSION_FILE,
+  LEGACY_MEDIA_DIR,
+  SESSIONS_TEMP_DIR,
   buildSessionExport,
   buildSessionMeta,
-  exportFileName,
+  collectTempAttachmentPaths,
+  exportDirName,
   isEmptySession,
   listSavedSessions,
   normalizeKeep,
   normalizeTitle,
+  relocateTempAttachments,
+  sessionMediaDir,
   parseSessionImport,
   pruneSessions,
   referencedMediaPaths,
@@ -39,8 +46,8 @@ export interface ClearSessionOptions {
   restoreTools?: boolean;
 }
 
-/** 添付の置き場。利用者の添付（EventOrchestrator）と画面写真（ui_tools）が書く場所 */
-export const MEDIA_CACHE_DIR = 'system/temp/media';
+/** この版より前の添付の置き場（移行しない。参照されなくなれば消える）。新しい添付は `currentMediaDir()` */
+export const MEDIA_CACHE_DIR = LEGACY_MEDIA_DIR;
 
 export type SessionSwitchResult =
   { ok: true; id: string } | { ok: false; reason: 'busy' | 'missing' | 'invalid'; detail?: string };
@@ -132,6 +139,19 @@ export class SessionManager {
     }
   }
 
+  /** 起動時に 1 度呼ぶ: いまの会話の id を確定する（`currentMediaDir()` が同期で答えられるように） */
+  public async init(): Promise<void> {
+    await this._ensureCurrentMeta();
+  }
+
+  /**
+   * いまの会話の添付の置き場（`system/temp/sessions/<id>`）。利用者の添付と画面写真はここに書く。
+   * 切り替えは id が変わるだけで、ファイルは動かさない。`init()` の前は旧い置き場を返す。
+   */
+  public currentMediaDir(): string {
+    return this.currentMeta ? sessionMediaDir(this.currentMeta.id) : LEGACY_MEDIA_DIR;
+  }
+
   /** いまの会話の札（一覧の先頭に出す） */
   public async currentSession(): Promise<SessionMeta> {
     const meta = await this._ensureCurrentMeta();
@@ -202,6 +222,35 @@ export class SessionManager {
    * （以前は置き場を丸ごと消していた。退避した会話を戻したとき画像が注記にならないように）
    */
   private async _cleanupMedia(): Promise<void> {
+    await this._cleanupSessionDirs();
+    await this._cleanupLegacyMedia();
+  }
+
+  /** `system/temp/sessions/` の下で、いまの会話にも退避中の会話にも無い id のディレクトリを消す（1 規則） */
+  private async _cleanupSessionDirs(): Promise<void> {
+    try {
+      if (!this.vfs.exists(SYSTEM_PRINCIPAL, SESSIONS_TEMP_DIR)) return;
+      const keep = new Set((await this.history.getSessionsIndex()).map((m) => m.id));
+      if (this.currentMeta) keep.add(this.currentMeta.id);
+      const entries = this.vfs.listFiles(SYSTEM_PRINCIPAL, { path: SESSIONS_TEMP_DIR, detail: true }) as VfsStat[];
+      let n = 0;
+      for (const e of entries) {
+        if (e.kind !== 'directory' || keep.has(e.name)) continue;
+        try {
+          await this.vfs.deleteFile(SYSTEM_PRINCIPAL, e.path, { permanent: true });
+          n++;
+        } catch (err) {
+          console.warn('[SessionManager] Failed to delete session media dir', e.path, err);
+        }
+      }
+      if (n > 0) console.log(`[SessionManager] Session media cleaned (${n} orphan dirs).`);
+    } catch (e) {
+      console.warn('[SessionManager] Failed to clean session media dirs:', e);
+    }
+  }
+
+  /** 旧い置き場（`system/temp/media`）: 残る会話のどれにも参照されていないものを消す */
+  private async _cleanupLegacyMedia(): Promise<void> {
     try {
       if (!this.vfs.exists(SYSTEM_PRINCIPAL, MEDIA_CACHE_DIR)) return;
       const files = (
@@ -416,8 +465,9 @@ export class SessionManager {
   }
 
   /**
-   * 会話を**既定の保存先**に書く（ダイアログ無し）。名前は `exportFileName`（会話の始まりの日時＋題）なので、
-   * 同じ会話を保存し直すと同じファイルを上書きする。保存先の宣言が無ければ null。
+   * 会話を**既定の保存先**に、添付ごと書く（ダイアログ無し）: `<保存先>/<始まりの日時_題>/session.json` と `media/`。
+   * 名前は会話の始まりの日時なので、同じ会話を保存し直すと同じディレクトリを上書きする（`media/` には足りない分を足す）。
+   * 同梱するのは `system/temp/` の下の添付だけ（VFS の別の場所への参照は参照のまま）。保存先の宣言が無ければ null。
    */
   public async exportSessionToDefaultDir(id: string | 'current', principal: Principal): Promise<string | null> {
     const dir = this.savedSessionsDir();
@@ -425,10 +475,44 @@ export class SessionManager {
     const meta =
       id === 'current' ? await this.currentSession() : (await this.history.getSessionsIndex()).find((m) => m.id === id);
     if (!meta) return null;
-    if (!this.vfs.exists(principal, dir)) await this.vfs.mkdir(principal, dir);
-    const path = `${dir}/${exportFileName(meta)}`;
-    const ok = await this.exportSessionToVfs(id, path, principal);
-    return ok ? path : null;
+    const turns = id === 'current' ? this.history.get() : await this.history.getSession(id);
+    if (!turns) return null;
+    const target = `${dir}/${exportDirName(meta)}`;
+    const mediaDir = `${target}/${EXPORT_MEDIA_DIR}`;
+    const ok = await this.exportSessionToVfs(id, `${target}/${EXPORT_SESSION_FILE}`, principal);
+    if (!ok) return null;
+
+    // 添付: 会話のディレクトリの全ファイル ＋ 旧い置き場のうち参照されているもの。名前で `media/` に並べる
+    const sources = new Map<string, string>();
+    const own = sessionMediaDir(meta.id);
+    if (this.vfs.exists(SYSTEM_PRINCIPAL, own)) {
+      for (const st of this.vfs.listFiles(SYSTEM_PRINCIPAL, { path: own, detail: true }) as VfsStat[]) {
+        if (st.kind === 'file') sources.set(st.name, st.path);
+      }
+    }
+    for (const p of collectTempAttachmentPaths(turns)) {
+      const name = p.slice(p.lastIndexOf('/') + 1);
+      if (!sources.has(name) && this.vfs.exists(SYSTEM_PRINCIPAL, p)) sources.set(name, p);
+    }
+    let copied = 0;
+    for (const [name, src] of sources) {
+      const dest = `${mediaDir}/${name}`;
+      try {
+        if (this.vfs.exists(principal, dest)) {
+          const a = this.vfs.stat(SYSTEM_PRINCIPAL, src);
+          const b = this.vfs.stat(principal, dest);
+          if (a.hash && b.hash && a.hash === b.hash) continue;
+        }
+        const blob = await this.vfs.readBlob(SYSTEM_PRINCIPAL, src);
+        await this.vfs.writeFile(principal, dest, blob, { overwrite: true });
+        copied++;
+      } catch (e) {
+        console.warn('[SessionManager] Failed to bundle attachment', src, e);
+      }
+    }
+    if (this.logger)
+      this.logger.log('system', { action: 'session_export_media', sessionId: meta.id, path: target, copied });
+    return target;
   }
 
   /**
@@ -439,8 +523,8 @@ export class SessionManager {
     const dir = this.savedSessionsDir();
     if (!dir || !this.vfs.exists(principal, dir)) return [];
     try {
-      const stats = this.vfs.listFiles(principal, { path: dir, detail: true }) as VfsStat[];
-      return listSavedSessions(stats);
+      const stats = this.vfs.listFiles(principal, { path: dir, recursive: true, detail: true }) as VfsStat[];
+      return listSavedSessions(dir, stats);
     } catch (e) {
       console.warn('[SessionManager] Failed to list saved sessions:', e);
       return [];
@@ -454,15 +538,30 @@ export class SessionManager {
   }
 
   /**
-   * VFS のファイルを読んで、その会話に切り替える（いまの会話は退避）。
-   * 形が違えば断る。id が退避中の会話やいまの会話と衝突すれば採り直す。
+   * VFS から会話を読んで、その会話に切り替える（いまの会話は退避）。`path` は保存のディレクトリ・その中の
+   * `session.json`・旧形式の単一 `.json` のどれでもよい。形が違えば断る。id が衝突すれば採り直す。
+   * 添付（`media/`）は `system/temp/sessions/<id>/` へ写し、会話の参照を新しい場所へ向ける。
+   * 🔴 写しは `readBlob` → `writeFile`（`copyFile` はスタブを取り寄せない）。読むのは選んだ会話の分だけ。
    */
   public importSessionFromVfs(path: string, principal: Principal): Promise<SessionSwitchResult> {
     return this._serialize(async () => {
       if (this.isBusy()) return { ok: false, reason: 'busy' };
+      let sessionFile = path.replace(/\/+$/, '');
+      let bundleDir: string | null = null;
+      try {
+        const st = this.vfs.stat(principal, sessionFile);
+        if (st.kind === 'directory') {
+          bundleDir = sessionFile;
+          sessionFile = `${sessionFile}/${EXPORT_SESSION_FILE}`;
+        } else if (sessionFile.endsWith(`/${EXPORT_SESSION_FILE}`)) {
+          bundleDir = sessionFile.slice(0, -(EXPORT_SESSION_FILE.length + 1));
+        }
+      } catch (e) {
+        return { ok: false, reason: 'invalid', detail: (e as Error).message };
+      }
       let text: string;
       try {
-        text = await this.vfs.readFile(principal, path);
+        text = await this.vfs.readFile(principal, sessionFile);
       } catch (e) {
         return { ok: false, reason: 'invalid', detail: (e as Error).message };
       }
@@ -473,8 +572,28 @@ export class SessionManager {
       const index = await this.history.getSessionsIndex();
       const taken = new Set([current.id, ...index.map((m) => m.id)]);
       const id = parsed.id && !taken.has(parsed.id) ? parsed.id : generateId();
-      const last = parsed.turns.length > 0 ? parsed.turns[parsed.turns.length - 1].timestamp : parsed.createdAt;
-      await this._activate({ id, createdAt: parsed.createdAt, title: parsed.title }, parsed.turns, 'loaded', last);
+
+      // 添付を写し、参照を付け替える（同梱の無い旧形式はそのまま）
+      let turns = parsed.turns;
+      const mediaSrc = bundleDir ? `${bundleDir}/${EXPORT_MEDIA_DIR}` : null;
+      if (mediaSrc && this.vfs.exists(principal, mediaSrc)) {
+        const target = sessionMediaDir(id);
+        const available: string[] = [];
+        for (const st of this.vfs.listFiles(principal, { path: mediaSrc, detail: true }) as VfsStat[]) {
+          if (st.kind !== 'file') continue;
+          try {
+            const blob = await this.vfs.readBlob(principal, st.path);
+            await this.vfs.writeFile(SYSTEM_PRINCIPAL, `${target}/${st.name}`, blob, { overwrite: true, system: true });
+            available.push(st.name);
+          } catch (e) {
+            console.warn('[SessionManager] Failed to restore attachment', st.path, e);
+          }
+        }
+        turns = relocateTempAttachments(turns, target, available);
+      }
+
+      const last = turns.length > 0 ? turns[turns.length - 1].timestamp : parsed.createdAt;
+      await this._activate({ id, createdAt: parsed.createdAt, title: parsed.title }, turns, 'loaded', last);
       return { ok: true, id };
     });
   }

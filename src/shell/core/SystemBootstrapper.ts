@@ -213,6 +213,8 @@ export class SystemBootstrapper {
     });
     // 切り替えを断る判定（走っている束を見捨てない）。知っているのは Engine なので、ここで配線するだけ
     sessionManager.setBusyProbe(() => engine.isBusy());
+    // いまの会話の id を確定する（添付の置き場 `system/temp/sessions/<id>/` を同期で答えるため）
+    await sessionManager.init();
     const themeService = new ThemeService(configManager, vfs);
     // UI の言語（appearance.locale）。英語はホストにあり、VFS の言語ファイルを上に重ねる（P-0046 / T-0545）
     const localeService = new LocaleService(configManager, vfs, eventBus, { layers: localeLayers });
@@ -265,6 +267,8 @@ export class SystemBootstrapper {
       resolver: resolver,
       transport: transport,
       clearSession: (opts: any) => sessionManager.clearSession(opts),
+      // いまの会話の添付の置き場（take_screenshot が書く先。T-0613）
+      currentMediaDir: () => sessionManager.currentMediaDir(),
     };
 
     desktop.bindNavHistory(navHistory);

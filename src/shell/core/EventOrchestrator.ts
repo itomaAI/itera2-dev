@@ -545,7 +545,8 @@ export class EventOrchestrator {
     vfsReferences: string[],
     opts: ChatSendOptions = {},
   ) {
-    const CACHE_DIR = 'system/temp/media';
+    // 添付はいまの会話のディレクトリへ（`system/temp/sessions/<id>/`。T-0613）
+    const CACHE_DIR = this.sessionManager.currentMediaDir();
     const content: any[] = [];
 
     // 1. 既存VFSパスの参照
