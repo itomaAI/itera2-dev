@@ -7,6 +7,7 @@
  *   - 上から順に当てる。広い領域を先に閉じ、中の開ける場所を後から上塗りする（順序が意味を持つ）
  *   - `path` は VFS の相対パス、`ref` は `paths.json` の鍵（`GuestPaths.ts`）。`ref` の先が null の配布物では飛ばす
  *   - `policy` は語彙を固定した 4 つ。生の rules は書かせない（増やしたくなったときに足す）
+ *   - `ensure: true` なら、無ければ先にディレクトリを作る（AI の書き捨てのように、親が閉じていて利用者・アプリが自分では作れない場所）
  *
  * ■ 無い／読めないとき
  *   `acl.json` が配布物にもファイルにも無ければ `BUILTIN_SYSTEM_AREAS`（OS が規定する `system/` の守りだけ）。
@@ -24,6 +25,8 @@ export interface AreaAclEntry {
   path?: string;
   ref?: string;
   policy: AclPolicy;
+  /** 無ければ作ってから当てる（既定 false＝無ければ飛ばす） */
+  ensure?: boolean;
 }
 
 /** 方針の実体。ここが唯一の置き場（以前は VfsInitializer に 3 つの ACL が直書きされていた）。 */
@@ -117,11 +120,11 @@ export function parseAreaAcl(raw: unknown): ParsedAreaAcl {
       problems.push(`areas[${i}]: exactly one of path / ref is required`);
       return;
     }
-    entries.push(
-      hasPath
-        ? { path: (e.path as string).trim(), policy: policy as AclPolicy }
-        : { ref: (e.ref as string).trim(), policy: policy as AclPolicy },
-    );
+    const entry: AreaAclEntry = hasPath
+      ? { path: (e.path as string).trim(), policy: policy as AclPolicy }
+      : { ref: (e.ref as string).trim(), policy: policy as AclPolicy };
+    if (e.ensure === true) entry.ensure = true;
+    entries.push(entry);
   });
   return { entries, problems };
 }
@@ -130,6 +133,7 @@ export interface ResolvedArea {
   path: string;
   policy: AclPolicy;
   acl: AccessControlList;
+  ensure: boolean;
 }
 
 /** 参照を `paths.json` の値に解いて、実際に当てる並びにする。先が null の参照は飛ばし、知らない参照は理由を残す。 */
@@ -152,7 +156,7 @@ export function resolveAreaAcl(
     if (!path) continue;
     const normalized = path.replace(/^\/+|\/+$/g, '');
     if (!normalized) continue;
-    areas.push({ path: normalized, policy: e.policy, acl: aclOfPolicy(e.policy) });
+    areas.push({ path: normalized, policy: e.policy, acl: aclOfPolicy(e.policy), ensure: e.ensure === true });
   }
   return { areas, problems };
 }
@@ -160,14 +164,18 @@ export function resolveAreaAcl(
 /** 当て先に求める最小の口（試験で偽物に差し替える）。 */
 export interface AclTarget {
   exists(principal: typeof SYSTEM_PRINCIPAL, path: string): boolean;
+  mkdir(principal: typeof SYSTEM_PRINCIPAL, path: string): Promise<unknown>;
   setAclRecursive(principal: typeof SYSTEM_PRINCIPAL, path: string, acl: AccessControlList): Promise<unknown>;
 }
 
-/** 並びのとおりに当てる。無い場所は飛ばす。戻り値は実際に当てたパス。 */
+/** 並びのとおりに当てる。無い場所は飛ばす（`ensure` なら作る）。戻り値は実際に当てたパス。 */
 export async function applyAreaAcls(vfs: AclTarget, areas: readonly ResolvedArea[]): Promise<string[]> {
   const applied: string[] = [];
   for (const area of areas) {
-    if (!vfs.exists(SYSTEM_PRINCIPAL, area.path)) continue;
+    if (!vfs.exists(SYSTEM_PRINCIPAL, area.path)) {
+      if (!area.ensure) continue;
+      await vfs.mkdir(SYSTEM_PRINCIPAL, area.path);
+    }
     await vfs.setAclRecursive(SYSTEM_PRINCIPAL, area.path, area.acl);
     applied.push(area.path);
   }
