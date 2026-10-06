@@ -140,7 +140,8 @@ export class SessionHistoryModal {
     const info = document.createElement('div');
     info.className = 'flex-1 min-w-0';
     const title = entry.title || (entry.startedAt ? this._formatWhen(entry.startedAt) : entry.name);
-    const when = entry.startedAt ? this._formatWhen(entry.startedAt) : '';
+    // 題が無ければ始まりの時刻が題になるので、下の行には繰り返さない
+    const when = entry.title && entry.startedAt ? this._formatWhen(entry.startedAt) : '';
     const stub = entry.stub ? ` · ${escapeHtml(t('sessions.stub'))}` : '';
     info.innerHTML = `
       <div class="text-sm font-medium text-text-main truncate" title="${escapeHtml(entry.path)}">${escapeHtml(title)}</div>
@@ -416,7 +417,7 @@ export class SessionHistoryModal {
         title: t('sessions.loadTitle'),
         filters: EXPORT_FILTERS,
         defaultPath: dir || undefined,
-        mode: 'file',
+        mode: 'any', // 保存のディレクトリ（session.json＋media/）か、旧形式の単一 .json
       });
       if (!path) return;
       const res = await this.sessions.importSessionFromVfs(path, this.deps.getActivePrincipal());

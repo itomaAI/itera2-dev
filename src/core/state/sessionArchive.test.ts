@@ -5,8 +5,12 @@ import {
   buildSessionMeta,
   collectMediaPaths,
   exportFileName,
+  exportDirName,
   parseExportFileName,
   listSavedSessions,
+  collectTempAttachmentPaths,
+  relocateTempAttachments,
+  sessionMediaDir,
   normalizeTitle,
   isEmptySession,
   normalizeKeep,
@@ -153,22 +157,64 @@ describe('sessionArchive: VFS との出し入れ', () => {
     expect(parseExportFileName('20261006_1705.json')).toEqual({ title: '', startedAt: d });
     expect(parseExportFileName('notes.json')).toEqual({ title: 'notes', startedAt: null });
   });
-  it('保存先の一覧は .json のファイルだけを、新しい順に（中身は読まない）', () => {
-    const rows = listSavedSessions([
+  it('保存先の一覧: session.json を持つディレクトリと、旧形式の単一 .json を新しい順に（中身は読まない）', () => {
+    const rows = listSavedSessions('d', [
       { path: 'd/20261006_1705_old.json', name: '20261006_1705_old.json', kind: 'file', size: 10, updatedAt: 1 },
+      { path: 'd/20261007_0900_new', name: '20261007_0900_new', kind: 'directory', size: 0, updatedAt: 2 },
+      { path: 'd/20261007_0900_new/session.json', name: 'session.json', kind: 'file', size: 20, updatedAt: 2 },
+      { path: 'd/20261007_0900_new/media', name: 'media', kind: 'directory', size: 0, updatedAt: 2 },
       {
-        path: 'd/20261007_0900_new.json',
-        name: '20261007_0900_new.json',
+        path: 'd/20261007_0900_new/media/a.png',
+        name: 'a.png',
         kind: 'file',
-        size: 20,
-        updatedAt: 2,
+        size: 300,
+        updatedAt: 3,
         syncState: 'stub',
       },
+      { path: 'd/nosession', name: 'nosession', kind: 'directory', size: 0, updatedAt: 4 },
+      { path: 'd/nosession/x.png', name: 'x.png', kind: 'file', size: 1, updatedAt: 4 },
       { path: 'd/readme.md', name: 'readme.md', kind: 'file', size: 5, updatedAt: 3 },
-      { path: 'd/sub', name: 'sub', kind: 'directory', size: 0, updatedAt: 4 },
     ]);
-    expect(rows.map((r) => r.name)).toEqual(['20261007_0900_new.json', '20261006_1705_old.json']);
-    expect(rows[0]).toMatchObject({ title: 'new', stub: true, size: 20 });
-    expect(rows[1].stub).toBe(false);
+    expect(rows.map((r) => r.name)).toEqual(['20261007_0900_new', '20261006_1705_old.json']);
+    expect(rows[0]).toMatchObject({ title: 'new', stub: true, size: 320, form: 'dir', path: 'd/20261007_0900_new' });
+    expect(rows[1]).toMatchObject({ form: 'file', stub: false });
+    expect(exportDirName({ title: 'x', createdAt: new Date(2026, 9, 6, 17, 5).getTime() })).toBe('20261006_1705_x');
+  });
+});
+
+describe('sessionArchive: 添付の置き場と付け替え', () => {
+  const dir = sessionMediaDir('abc');
+  const turns: Turn[] = [
+    turn('user', [
+      { media: { path: `${dir}/1_a.png`, mimeType: 'image/png' } },
+      {
+        text: `<user_attachment name="m.txt" path="${dir}/2_m.txt">x</user_attachment> see <user_attachment path="data/doc.md">[Existing VFS Path]</user_attachment>`,
+      },
+    ]),
+    turn('system', [
+      {
+        actionType: 'take_screenshot',
+        output: { log: 'ok', media: { path: 'system/temp/media/shot.png', mimeType: 'image/png' } },
+      },
+    ] as any),
+    turn('user', '<user_attachment path="system/temp/media/gone.png">[Binary]</user_attachment>'),
+  ];
+  it('置き場は system/temp/sessions/<id>', () => {
+    expect(dir).toBe('system/temp/sessions/abc');
+  });
+  it('system/temp の下の参照だけを集める（本文の user_attachment も）', () => {
+    expect(collectTempAttachmentPaths(turns).sort()).toEqual(
+      [`${dir}/1_a.png`, `${dir}/2_m.txt`, 'system/temp/media/gone.png', 'system/temp/media/shot.png'].sort(),
+    );
+  });
+  it('同梱されている名前だけを新しい置き場へ向け、別の場所への参照と無い名前は触らない。元は変えない', () => {
+    const out = relocateTempAttachments(turns, 'system/temp/sessions/new', ['1_a.png', '2_m.txt', 'shot.png']);
+    const c0 = out[0].content as any[];
+    expect(c0[0].media.path).toBe('system/temp/sessions/new/1_a.png');
+    expect(c0[1].text).toContain('path="system/temp/sessions/new/2_m.txt"');
+    expect(c0[1].text).toContain('path="data/doc.md"');
+    expect((out[1].content as any[])[0].output.media.path).toBe('system/temp/sessions/new/shot.png');
+    expect(out[2].content).toContain('path="system/temp/media/gone.png"');
+    expect((turns[0].content as any[])[0].media.path).toBe(`${dir}/1_a.png`);
   });
 });

@@ -451,9 +451,9 @@ However, the \`<memo>\` and \`<plan>\` tags must be written in English.
 - NO Server. Everything runs client-side.
 
 **2. File Persistence & Uploads**:
-- ALL user uploads (including text and code files) and screenshots are automatically saved to \`system/temp/media/\`.
+- ALL user uploads (including text and code files) and screenshots are automatically saved to the current session's attachment folder, \`system/temp/sessions/<session id>/\`.
 - Text uploads are expanded inline via \`<user_attachment>\`, but they ALSO physically exist in the VFS at the location specified by the \`path\` attribute.
-- Warning: This cache directory is cleared when the chat history is reset. If it contains important files, move them to a persistent directory to keep them.
+- Warning: That folder lives as long as its session (it is deleted when the session is pruned from the session history) and is not synced across devices. If it contains important files, move them to a persistent directory to keep them. Saving a session to the VFS bundles its attachments.
 
 **3. Guest Bridge (window.MetaOS)**:
 The Guest Environment (dashboard/iframe) is isolated. You MUST use the \`window.MetaOS\` client library to interact with the VFS and Host.

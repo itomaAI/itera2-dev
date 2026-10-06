@@ -31,7 +31,7 @@ This is the absolute physical layout of your universe.
     *   `system/vendor/`: Third-party code vendored as-is (`tw.js`).
     *   `system/registry/`: OS catalogs (`apps.json`, `associations.json`, `services.json`).
     *   `system/services/`: OS built-in background daemons.
-    *   `system/temp/`: Volatile space. `system/temp/media/` holds user uploads and screenshots. Purged on session reset.
+    *   `system/temp/`: Volatile space. `system/temp/sessions/<session id>/` holds the uploads and screenshots of each chat session (deleted with the session; not synced).
     *   `system/themes/`: UI color palettes.
 *   **`trash/`**
     *   Deleted items.
