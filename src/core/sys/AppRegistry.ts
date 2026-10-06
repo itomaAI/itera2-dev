@@ -34,6 +34,12 @@ export interface ServiceManifest {
   path: string;
   description?: string;
   autoStart?: boolean;
+  /**
+   * true なら、system/ 配下で動くこのデーモンの VFS 操作は system 特権（ACL を素通し）になる。
+   * 同期デーモンが AI の領域（agent-only）にも他の端末の変更を写せるようにするためのもの（T-0617）。
+   * 判定は src/api/principal.ts。
+   */
+  systemPrivilege?: boolean;
 }
 
 /**

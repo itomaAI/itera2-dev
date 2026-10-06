@@ -8,6 +8,7 @@ import type { VfsService } from '../core/vfs/VfsService';
 import type { ConfigManager } from '../core/sys/ConfigManager';
 import type { Role, Turn, TurnContent, TurnMeta } from '../core/state/HistoryManager';
 import type { DynamicToolRegistration, ProcessInfo } from './HostApiContract';
+import { resolvePrincipal } from './principal';
 import type { SpawnOptions } from '../shell/windowing/ProcessManager';
 import { USER_PRINCIPAL } from '../core/vfs/types';
 import { VfsEventFormatter } from '../core/vfs/VfsEventFormatter';
@@ -54,6 +55,8 @@ export interface IToolRegistry {
 export interface IRegistryReader {
   getAllApps(): any[];
   getAllServices(): any[];
+  /** services.json の 1 件（systemPrivilege の判定に使う。T-0617） */
+  getService(id: string): any | undefined;
   updateEntry(kind: 'apps' | 'services', id: string, updates: Record<string, unknown>): Promise<any>;
 }
 export interface IAssociationReader {
@@ -133,10 +136,9 @@ export class HostApiRouter {
       return content;
     };
 
-    // ヘルパー: 送信元PIDからPrincipalを生成する
-    const getPrincipal = (sourcePid: string): any => {
-      return { type: 'app', id: sourcePid };
-    };
+    // ヘルパー: 送信元PIDからPrincipalを生成する（system 特権の判定は src/api/principal.ts。T-0617）
+    const getPrincipal = (sourcePid: string): any =>
+      resolvePrincipal(sourcePid, { processManager: d.processManager, appRegistry: d.appRegistry });
 
     t.registerHandler('fs:read', async ({ path, opts }, sourcePid) => {
       const principal = getPrincipal(sourcePid);
