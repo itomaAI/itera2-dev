@@ -83,6 +83,7 @@ const DOM_IDS = {
   BTN_SEND: 'btn-send',
   BTN_STOP: 'btn-stop',
   BTN_CLEAR: 'btn-clear-chat',
+  BTN_SESSIONS: 'btn-session-history',
   PREVIEW_AREA: 'file-preview-area',
   FILE_UPLOAD: 'chat-file-upload',
   AI_TYPING: 'ai-typing',
@@ -184,6 +185,12 @@ export class ChatPanel {
     if (this.els.BTN_STOP) {
       this.els.BTN_STOP.onclick = () => {
         if (this.events['stop']) this.events['stop']();
+      };
+    }
+
+    if (this.els.BTN_SESSIONS) {
+      this.els.BTN_SESSIONS.onclick = () => {
+        if (this.events['sessions']) this.events['sessions']();
       };
     }
 

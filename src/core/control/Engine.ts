@@ -45,6 +45,14 @@ export class Engine {
 
   public isRunning: boolean = false;
   private abortController: AbortController | null = null;
+
+  /**
+   * 走っているか: ストリーミング中か、自分が投げたツールの結果をまだ待っているか（T-0613）。
+   * 会話を差し替える側（SessionManager）がこれを見て断る。走っている束を見捨てると、その結果が別の会話に落ちる。
+   */
+  public isBusy(): boolean {
+    return this.isRunning || this.outstandingTools > 0;
+  }
   private listeners: Record<string, Function[]> = {
     turn_start: [],
     stream_chunk: [],

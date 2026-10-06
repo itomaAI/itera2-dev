@@ -131,7 +131,6 @@ export function registerSysTools(registry: ToolRegistry): void {
     name: 'reset_session',
     description: 'Reset history session.',
     impl: async (params: any, context: any) => {
-      const purgeMedia = params.purge_media === 'true';
       const summary = params.content || '';
 
       let nextSessionMsg =
@@ -141,7 +140,6 @@ export function registerSysTools(registry: ToolRegistry): void {
       if (context.shell && context.shell.clearSession) {
         // ※ ShellController 側に clearSession の実装が必要
         await context.shell.clearSession({
-          purgeMedia,
           summary: nextSessionMsg,
           triggerLlm: true,
           restoreTools: true,

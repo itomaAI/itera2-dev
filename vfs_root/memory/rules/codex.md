@@ -180,7 +180,7 @@ const foo = "baz"; // Fixed
 *   **`<ps>`**: List running processes.
 *   **`<take_screenshot>`**: Capture the user's current screen to verify UI layouts and color schemes.
 *   **`<set_timer delay="...">`**: Sets a background timer that triggers you asynchronously.
-*   **`<reset_session purge_media="true">`**: Clears the conversation history to free up context limits. Use when history is cluttered.
+*   **`<reset_session>`**: Clears the conversation history to free up context limits. Use when history is cluttered. The cleared conversation stays in the session history (chat header 🕘), and the user can switch back to it.
 
 ### 3.4 The Art of Manipulation
 **Principle 1: Read before Write**

@@ -63,6 +63,7 @@ The Chat Panel (Right) is where you give instructions to Itera.
 *   **Context Management**: You can upload files or drag existing VFS files into the chat to add them to the AI's context as attachments.
 *   **Asynchronous Collaboration**: You can type and send new messages even while the AI is thinking or executing tools. The AI will adapt its workflow dynamically.
 *   **Stop Button**: If the AI gets stuck in a loop, press the red "Stop" button in the input area to halt its operations.
+*   **Session History** (🕘 in the chat header): Clearing the chat (🗑) or a `reset_session` by the AI does not throw the conversation away. The latest 10 sessions (`preferences.sessionHistoryKeep`) stay in this browser's IndexedDB, ordered by last activity; older ones are deleted automatically. From the dialog you can switch back to an earlier session and keep talking (stop the AI first if it is working), delete one, **save** any session to the VFS as a JSON file (default folder: `paths.user.sessions`), or **load** such a file back. The list is built from the stored index only; it never scans or fetches VFS files.
 
 ---
 **Next Step:** Proceed to [02_architecture.md](02_architecture.md) to understand the internal directory structure.

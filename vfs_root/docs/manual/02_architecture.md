@@ -32,7 +32,7 @@ The Virtual File System is organized into specific domains. Some areas are stric
 │   ├── core/               # Shared core libraries (std.js, ui.js)
 │   ├── registry/           # App and Service registries
 │   ├── services/           # OS built-in background daemons
-│   ├── temp/               # [Volatile Layer] User uploads and screenshots. Purged on session reset.
+│   ├── temp/               # [Volatile Layer] User uploads and screenshots. Deleted once no kept session refers to them.
 │   └── themes/             # UI Themes (.json)
 │
 └── trash/                  # [Recycle Bin] (Read/Write). Not synced — per device.

@@ -103,9 +103,17 @@ describe('SessionManager: 履歴の消去でも道具の定義を積み直す', 
   function harness() {
     const appended: Array<{ role: string; content: string; meta: any }> = [];
     let cleared = 0;
+    // 退避の口（T-0613）は空の会話として応える。退避そのものの試験は SessionManager.test.ts
     const history: any = {
       clear: () => cleared++,
       append: (role: string, content: string, meta: any) => appended.push({ role, content, meta }),
+      get: () => [],
+      getCurrentMeta: async () => undefined,
+      setCurrentMeta: async () => {},
+      getSessionsIndex: async () => [],
+      setSessionsIndex: async () => {},
+      putSession: async () => {},
+      deleteSession: async () => {},
     };
     const vfs: any = { exists: () => false, deleteFile: async () => {} };
     const logger: any = { log: () => {} };
@@ -115,7 +123,7 @@ describe('SessionManager: 履歴の消去でも道具の定義を積み直す', 
   it('restoreTools: true で「Restored Dynamic Tools」が積まれ、AI は起こさない', async () => {
     const h = harness();
     const sm = new SessionManager(h.vfs, h.history, h.logger, registryWithTools());
-    await sm.clearSession({ purgeMedia: true, triggerLlm: false, restoreTools: true });
+    await sm.clearSession({ triggerLlm: false, restoreTools: true });
     expect(h.clearedCount()).toBe(1);
     const restored = h.appended.find((a) => a.content.includes('[System: Restored Dynamic Tools]'))!;
     expect(restored).toBeTruthy();

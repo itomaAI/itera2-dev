@@ -407,8 +407,7 @@ Rule:
 
 <define_tag name="reset_session">
 Clears the conversation history to free up context window, while optionally carrying over important information to the next session.
-Attributes:
-    - purge_media (optional): "true" or "false" (default). Set to "true" to also clear the media/image cache.
+The cleared conversation is kept in the session history (the user can switch back to it from the chat header's history button); attachments it refers to are kept with it.
 Content (optional):
     - Write a summary of the current state, ongoing tasks, or user preferences to carry over to the new session.
 Rule:

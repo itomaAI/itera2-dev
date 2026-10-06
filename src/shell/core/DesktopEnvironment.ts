@@ -33,6 +33,9 @@ import { PropertiesModal } from '../modals/PropertiesModal';
 import { CommandPaletteModal } from '../modals/CommandPaletteModal';
 import { FilePickerModal } from '../modals/FilePickerModal';
 import { SyncModal } from '../modals/SyncModal';
+import { SessionHistoryModal } from '../modals/SessionHistoryModal';
+import type { SessionManager } from '../services/SessionManager';
+import { normalizeKeep } from '../../core/state/sessionArchive';
 import type { SyncAdapterHost, SyncAdapterStatus } from '../services/SyncAdapterHost';
 // Services
 import { LpmlRenderer } from '../services/LpmlRenderer';
@@ -58,6 +61,7 @@ export class DesktopEnvironment {
   private _propertiesModal: PropertiesModal;
   private _filePickerModal: FilePickerModal;
   private _syncModal: SyncModal;
+  private _sessionHistoryModal: SessionHistoryModal;
 
   private saveFeedbackTimer: ReturnType<typeof setTimeout> | null = null;
   private activePrincipal: Principal = USER_PRINCIPAL;
@@ -75,6 +79,7 @@ export class DesktopEnvironment {
     cognitiveManager: CognitiveManager,
     configManager: ConfigManager,
     adapterHost: SyncAdapterHost,
+    sessionManager: SessionManager,
   ) {
     const lpmlRenderer = new LpmlRenderer();
 
@@ -99,6 +104,15 @@ export class DesktopEnvironment {
     this._filePickerModal = new FilePickerModal(vfs, () => this.getActivePrincipal());
     this.commandPalette = new CommandPaletteModal(vfs, appRegistry, uriRouter, () => this.getActivePrincipal());
     this._syncModal = new SyncModal(adapterHost);
+    // 会話のセッション一覧（T-0613）。一覧は IndexedDB の索引だけで描き、VFS は保存／読み込みで選んだ 1 ファイルにしか触らない
+    this._sessionHistoryModal = new SessionHistoryModal(sessionManager, this._filePickerModal, {
+      defaultDir: () => configManager.paths().user.sessions,
+      ensureDir: async (path) => {
+        if (!vfs.exists(this.getActivePrincipal(), path)) await vfs.mkdir(this.getActivePrincipal(), path);
+      },
+      getActivePrincipal: () => this.getActivePrincipal(),
+      keep: () => normalizeKeep(configManager.get('preferences')?.sessionHistoryKeep),
+    });
 
     this.panelLayout = new PanelLayout();
     this.panelLayout.init();
@@ -166,6 +180,7 @@ export class DesktopEnvironment {
       properties: this._propertiesModal,
       filePicker: this._filePickerModal,
       sync: this._syncModal,
+      sessions: this._sessionHistoryModal,
     };
   }
 
