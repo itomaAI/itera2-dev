@@ -42,7 +42,7 @@ The OS menus, dialogs and notifications follow `appearance.locale`. Pick it in *
 *   English is built into the host, so the OS works even with no language files at all.
 *   Other languages are JSON files named after the language: `system/locales/ja.json`, `zh-Hans.json`, ...
     Shipped: `ja`, `zh-Hans`, `zh-Hant`, `ko`, `es`, `fr`, `de`.
-*   Files are layered: `system/locales/<lang>.json`, then `user/locales/<lang>.json` on top (create `user/locales/` if it does not exist).
+*   Files are layered: `system/locales/<lang>.json`, then the user locale directory on top. Which directory that is comes from `paths.json` (`user.locales`; `user/locales/` in this distribution — create it if it does not exist).
     A key missing from both falls back to English. A more specific tag wins over a general one (`ja-JP.json` over `ja.json`).
 *   Edits apply immediately, without a reload.
 *   To change a few words, do not edit `system/locales` (OS updates overwrite it). Put only the keys you want to change in `user/locales/<lang>.json`:
@@ -59,6 +59,71 @@ The OS menus, dialogs and notifications follow `appearance.locale`. Pick it in *
 Translations are plain text (HTML is not interpreted). `{name}` marks a value filled in by the OS; keep it as is.
 Plural forms use the keys of `Intl.PluralRules` (`{ "one": "...", "other": "..." }`).
 The AI-facing text (tool results, error details, event logs) stays in English on purpose.
+
+### Where the guest space lives (`paths.json`)
+
+The host only regulates two places: `system/` (the OS itself) and `trash/`. Everything else — where the agent keeps its
+memory, where your files are, where a second configuration layer sits, where chat sessions are saved — is **declared, not assumed**,
+in `system/config/paths.json`. The host never hard-codes names such as `memory/` or `data/`; a test
+(`src/config/guestPathLiterals.test.ts`) fails the build if a hard-coded name sneaks back in.
+
+```json
+{
+  "agent": {
+    "home": "memory",
+    "init": "memory/init.md",
+    "scratch": null
+  },
+  "user": {
+    "home": "data",
+    "config": null,
+    "registry": null,
+    "locales": "user/locales",
+    "appRegistry": null,
+    "sessions": "data/04_archives/sessions"
+  }
+}
+```
+
+| Key | Meaning |
+| :-- | :-- |
+| `agent.home` | The agent's own area. Gets the `agent-only` ACL (see `acl.json`): the agent writes, everyone else reads. |
+| `agent.init` | The document the agent reads on its first turn. `null` means there is no boot sequence (it greets and waits). |
+| `agent.scratch` | A scratch area where apps and you may also write (`agent-shared` ACL). `null` in this distribution. |
+| `user.home` | Your area. Informational for now (shown to the agent). |
+| `user.config` / `user.registry` / `user.locales` | A **second layer** on top of `system/config`, `system/registry`, `system/locales`. Only the copy in `system/config/paths.json` decides these (the layer must be known before layers can be read). |
+| `user.appRegistry` | A user-level app registry file, for distributions that keep one outside the registry layers. |
+| `user.sessions` | Default folder when a chat session is saved to the VFS. |
+
+`null` means "this distribution has no such place" — the OS does not guess. A value inside `system/` or `trash/` is rejected
+(logged under `system/logs/system/` and treated as `null`). If the file is missing from both the VFS and the distribution,
+the OS still boots: one configuration layer, no agent area, no boot document, and a one-time warning.
+
+### Area permissions (`acl.json`)
+
+On every boot the OS re-applies permissions to whole areas. The list lives in `system/config/acl.json` and is applied
+**top to bottom**: close the wide area first, then open the places inside it.
+
+```json
+{
+  "areas": [
+    { "path": "system", "policy": "readonly" },
+    { "path": "system/config", "policy": "open" },
+    { "path": "system/temp", "policy": "open" },
+    { "ref": "agent.home", "policy": "agent-only" },
+    { "ref": "agent.scratch", "policy": "agent-shared" }
+  ]
+}
+```
+
+*   `path` is a VFS path; `ref` names a key of `paths.json`, so renaming the agent area in `paths.json` needs no change here.
+    A `ref` whose value is `null` is skipped.
+*   `policy` is one of four fixed words: `readonly` (everyone reads), `open` (you manage; the agent and apps read/write),
+    `agent-only` (the agent owns it; others read), `agent-shared` (the agent owns it; you and apps may also write).
+*   To stop protecting an area, delete its line. If the file is missing or unreadable, the built-in `system/` rules are applied
+    (never "no rules").
+*   This is the same as what `sudo` could do by hand; it is a convenience for distributions, not a security boundary against
+    someone who can already edit `system/config/`.
 
 ## 2. System Registries (`system/registry/`)
 

@@ -10,6 +10,8 @@ import { PathResolver } from '../../core/vfs/PathResolver';
 import { VfsEventBus } from '../../core/vfs/VfsEventBus';
 import { VfsService } from '../../core/vfs/VfsService';
 import { VfsInitializer } from '../../core/vfs/VfsInitializer';
+import { configLayersOf, localeLayersOf, registryLayersOf } from '../../core/sys/GuestPaths';
+import { rootIconsFor } from '../panels/nodeOrder';
 
 // System Core & State
 import { ConfigManager } from '../../core/sys/ConfigManager';
@@ -120,16 +122,23 @@ export class SystemBootstrapper {
     const initializer = new VfsInitializer(vfs, nodeStore, pathResolver);
     await initializer.initialize();
 
+    // ゲスト空間の場所（system/config/paths.json。T-0614）。層の並びはここで固定する。
+    // ホストはこれ以外に memory/ data/ user/ … のような名前を知らない。
+    const guestPaths = initializer.guestPaths;
+    const configLayers = configLayersOf(guestPaths);
+    const registryLayers = registryLayersOf(guestPaths);
+    const localeLayers = localeLayersOf(guestPaths);
+
     // ==========================================
     // 2. System State & Registry Initialization
     // ==========================================
-    const configManager = new ConfigManager(vfs, eventBus);
+    const configManager = new ConfigManager(vfs, eventBus, configLayers);
     await configManager.loadAll();
 
-    const appRegistry = new AppRegistry(vfs, eventBus);
+    const appRegistry = new AppRegistry(vfs, eventBus, registryLayers);
     await appRegistry.loadAll();
 
-    const resolver = new FileAssociationResolver(vfs, appRegistry, eventBus);
+    const resolver = new FileAssociationResolver(vfs, appRegistry, eventBus, registryLayers);
     await resolver.loadAssociations();
 
     const history = new HistoryManager();
@@ -196,11 +205,11 @@ export class SystemBootstrapper {
     // Engineの初期化 (AdapterとProjectorはCognitiveManagerが後で注入)
     const engine = new Engine({ history, vfs, configManager }, null, null, translator, toolRegistry, {});
 
-    const cognitiveManager = new CognitiveManager(configManager, engine, logger, vfs);
+    const cognitiveManager = new CognitiveManager(configManager, engine, logger, vfs, registryLayers);
     const sessionManager = new SessionManager(vfs, history, logger, toolRegistry);
     const themeService = new ThemeService(configManager, vfs);
     // UI の言語（appearance.locale）。英語はホストにあり、VFS の言語ファイルを上に重ねる（P-0046 / T-0545）
-    const localeService = new LocaleService(configManager, vfs, eventBus);
+    const localeService = new LocaleService(configManager, vfs, eventBus, { layers: localeLayers });
     const maintenanceDaemon = new MaintenanceDaemon(processManager, logger, vfs, nodeStore, appRegistry);
 
     const desktop = new DesktopEnvironment(
@@ -357,13 +366,18 @@ export class SystemBootstrapper {
     desktop.panels.chat.setHiddenEventTypes(configManager.get('preferences')?.hiddenEventTypes);
     // 一覧の並びの上書き（appearance.sortWeight）。同じ形で、判定は持ち主（Explorer）に置く。
     desktop.panels.explorer.setSortWeights(configManager.get('appearance')?.sortWeight);
-    desktop.panels.explorer.setRootIcons(configManager.get('appearance')?.rootIcons);
+    // AI の領域の記号（✨）は名前が配布物ごとに違うので、paths.json から引いて足す（T-0614）
+    desktop.panels.explorer.setRootIcons(
+      rootIconsFor(configManager.paths().agent.home, configManager.get('appearance')?.rootIcons),
+    );
     configManager.onUpdate((config) => {
       if (desktop.panels.chat.setHiddenEventTypes(config.preferences?.hiddenEventTypes)) {
         desktop.panels.chat.renderHistory(history.get());
       }
       desktop.panels.explorer.setSortWeights(config.appearance?.sortWeight);
-      desktop.panels.explorer.setRootIcons(config.appearance?.rootIcons);
+      desktop.panels.explorer.setRootIcons(
+        rootIconsFor(configManager.paths().agent.home, config.appearance?.rootIcons),
+      );
     });
     desktop.panels.chat.renderHistory(history.get());
     // 言語を切り替えたら会話欄の枠の文（ボタン・読み込み中の表示など）を描き直す。本文は訳さない（T-0545）
@@ -382,6 +396,18 @@ export class SystemBootstrapper {
     // ダッシュボードの起動
     const homePath = configManager.homePath();
     await processManager.spawn({ path: homePath, show: true });
+
+    // 配布物の形を決めるファイルが無い／壊れている（T-0614）。起動は止めないが、黙って他所の形を仮定もしない
+    if (initializer.distributionProblems.length > 0) {
+      logger.log('system', { action: 'distribution_problems', problems: initializer.distributionProblems });
+    }
+    if (initializer.guestPathsSource === 'none') {
+      logger.log('system', {
+        action: 'guest_paths_missing',
+        message: 'system/config/paths.json is neither in the VFS nor in the distribution.',
+      });
+      dialogService.notify(t('notice.pathsMissing'), 'warning');
+    }
 
     // 前回、動作中にブラウザのデータが消されて読み込み直したなら、1 度だけ伝える（黙って戻すと障害に見える）
     const storageLoss = StorageLossGuard.consumeNotice();

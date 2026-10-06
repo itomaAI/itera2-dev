@@ -64,6 +64,7 @@
     "apiKeys.title": "API 密钥",
     "apiKeys.save": "保存密钥",
     "taskSwitcher.title": "最近使用的应用",
+    "notice.pathsMissing": "此发行版未包含 system/config/paths.json。Itera 正在没有来宾布局的状态下运行（仅一层配置，无代理区域，无启动文档）。",
     "notice.storageLost": "Itera 运行期间浏览器存储被清除，因此已重新加载。如果没有备份或同步目标，此设备上的本地文件和聊天记录已丢失。",
     "notice.resetDone": "已将本地数据恢复为出厂状态。",
     "notice.resetFailed": "无法清除本地数据。请关闭其他标签页后重试：{reason}",

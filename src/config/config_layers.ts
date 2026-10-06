@@ -1,6 +1,6 @@
 /**
  * src/config/config_layers.ts
- * 設定をどの順で重ねるか。**配布物ごとに違う唯一の場所。**
+ * 設定・登録簿・言語ファイルをどの順で重ねるか。
  *
  * ここに並べたディレクトリを順に読み、**後の層が勝つ**。
  * `ConfigManager.update()` の書き先は**最後の層**である。
@@ -11,12 +11,17 @@
  *   - 配信で上書きしない → 新しい既定が既存の環境へ永久に届かない
  * のどちらかしか選べない。層に分ければどちらも起きない。
  *
- * ■ この配布物（itera2-dev）では 1 層
- * 利用者の領域を持たないので `system/config` だけ。**挙動はこれまでと変わらない。**
- * クラウド版（itera2）は `['system/config', 'user/config']` を渡す。
- * 形は `src/config/wake_policy.ts` と同じ —— コードは共通、並びだけが配布物ごとの定数。
+ * ■ 2 段目の層は配布物の設定で決まる（T-0614）
+ * 以前はここが「配布物ごとに違う唯一の場所」で、itera2 は `['system/config', 'user/config']` をコードに持っていた。
+ * いまは **`system/config/paths.json`**（`user.config` / `user.registry` / `user.locales`）が 2 段目を指し、
+ * `GuestPaths.ts` の `configLayersOf` などが並びを組む。ここに残るのは OS が規定する 1 段目だけ。
+ * ホストのコードに `user/` `個人/` のような名前を書かない（守りは `guestPathLiterals.test.ts`）。
+ *
+ * これらの定数は「`paths.json` を知らないときの並び」＝ 1 層。コンストラクタの既定として使う。
  */
-export const CONFIG_LAYERS: readonly string[] = ['system/config'];
+import { SYSTEM_CONFIG_DIR, SYSTEM_LOCALES_DIR, SYSTEM_REGISTRY_DIR } from '../core/sys/GuestPaths';
+
+export const CONFIG_LAYERS: readonly string[] = [SYSTEM_CONFIG_DIR];
 
 /**
  * 登録簿（apps.json / services.json）を読む順。**後の層が勝つ。**
@@ -28,7 +33,7 @@ export const CONFIG_LAYERS: readonly string[] = ['system/config'];
  * かつ利用者の層は同期される。層を認めると、アカウントが奪われたときに
  * **すべての端末でホストのコードが走る**。アダプタは配信物だけから読む。
  */
-export const REGISTRY_LAYERS: readonly string[] = ['system/registry'];
+export const REGISTRY_LAYERS: readonly string[] = [SYSTEM_REGISTRY_DIR];
 
 /** 書き先＝最後の層。ここは配信で上書きしない（VfsInitializer が使う）。 */
 export function writeLayerOf(layers: readonly string[]): string {
@@ -37,10 +42,9 @@ export function writeLayerOf(layers: readonly string[]): string {
 
 /**
  * 言語ファイル（`<dir>/<言語>.json`）を読む順。**後の層が勝つ**。その下に英語（ホストの TS）がある。
- * 設定の層とは独立に固定する（P-0046 2026-09-25 山内さん）。itera2-dev は既定で `user/` を持たないが、
- * `user/locales` を作ればそこが効く。書き込みはしない（読むだけ）。
+ * 2 段目（itera2-dev は `paths.json` の `user.locales` = `user/locales`）は設定で決まる。書き込みはしない（読むだけ）。
  */
-export const LOCALE_LAYERS: readonly string[] = ['system/locales', 'user/locales'];
+export const LOCALE_LAYERS: readonly string[] = [SYSTEM_LOCALES_DIR];
 
 /** 設定（appearance.locale）に言語が無いときの UI の言語。Itera は英語（ミャク楽は ja。T-0554 / T-0556）。 */
 export const DEFAULT_LOCALE = 'en';

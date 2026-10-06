@@ -4,14 +4,31 @@
  */
 
 import { DEFAULT_FILES } from '../../config/default_files';
-import { CONFIG_LAYERS, REGISTRY_LAYERS, writeLayerOf } from '../../config/config_layers';
-
-/** 利用者が書く層。ここは配信で上書きしない。 */
-const WRITE_LAYERS = [writeLayerOf(CONFIG_LAYERS), writeLayerOf(REGISTRY_LAYERS)];
+import { writeLayerOf } from '../../config/config_layers';
 import type { VfsService } from './VfsService';
 import type { NodeStore } from './NodeStore';
 import type { PathResolver } from './PathResolver';
-import { AGENT_PRINCIPAL, SYSTEM_PRINCIPAL, type AccessControlList } from './types';
+import { SYSTEM_PRINCIPAL } from './types';
+import {
+  EMPTY_GUEST_PATHS,
+  GUEST_PATHS_FILE,
+  configLayersOf,
+  normalizeGuestPaths,
+  registryLayersOf,
+  type GuestPaths,
+} from '../sys/GuestPaths';
+import { BUILTIN_SYSTEM_AREAS, applyAreaAcls, parseAreaAcl, resolveAreaAcl, type AreaAclEntry } from './areaAcl';
+
+/** `acl.json` の置き場。OS が規定する側なので直書きしてよい。 */
+export const AREA_ACL_FILE = 'system/config/acl.json';
+
+/**
+ * 配布物の形を決めるファイル（`paths.json` / `acl.json`）をどこから読めたか。
+ *   vfs      … VFS のファイル（利用者が書き換えていればそれ）
+ *   defaults … 配信物（DEFAULT_FILES）。まだ VFS に無い＝初回起動や更新直後
+ *   none     … どちらにも無い。コードの既定（何も知らない形）で動く
+ */
+export type DistributionFileSource = 'vfs' | 'defaults' | 'none';
 
 export class VfsInitializer {
   private vfs: VfsService;
@@ -30,10 +47,75 @@ export class VfsInitializer {
    */
   public failures: Array<{ path: string; error: unknown }> = [];
 
+  /**
+   * ゲスト空間の場所（`system/config/paths.json`。T-0614）。initialize() が読み、起動の残りはこれを引く。
+   * 無ければ `EMPTY_GUEST_PATHS`（何も知らない形）。層の場所はここで固定される。
+   */
+  public guestPaths: GuestPaths = EMPTY_GUEST_PATHS;
+  public guestPathsSource: DistributionFileSource = 'none';
+  public areaAclSource: DistributionFileSource = 'none';
+  /** `paths.json` / `acl.json` で捨てた値と、その理由。空なら健全 */
+  public distributionProblems: string[] = [];
+
+  /**
+   * 配布物の形を決める JSON を読む。VFS のファイル → 配信物 → 無し、の順。
+   * 「読めない」と「無い」を分ける: 壊れた VFS のファイルは配信物に落とし、理由を problems に残す。
+   */
+  private async _readDistributionJson(
+    path: string,
+    problems: string[],
+  ): Promise<{ value: unknown; source: DistributionFileSource }> {
+    if (this.vfs.exists(SYSTEM_PRINCIPAL, path)) {
+      try {
+        return { value: JSON.parse(await this.vfs.readFile(SYSTEM_PRINCIPAL, path)), source: 'vfs' };
+      } catch (e) {
+        problems.push(
+          `${path}: unreadable in VFS (${(e as { message?: string } | null)?.message || String(e)}); falling back to the distribution copy`,
+        );
+      }
+    }
+    const shipped = (DEFAULT_FILES as Record<string, string>)[path];
+    if (typeof shipped === 'string') {
+      try {
+        return { value: JSON.parse(shipped), source: 'defaults' };
+      } catch (e) {
+        problems.push(
+          `${path}: the distribution copy is not valid JSON (${(e as { message?: string } | null)?.message || String(e)})`,
+        );
+      }
+    }
+    return { value: undefined, source: 'none' };
+  }
+
+  /** `paths.json` を読んで整える。 */
+  private async _readGuestPaths(problems: string[]): Promise<{ paths: GuestPaths; source: DistributionFileSource }> {
+    const { value, source } = await this._readDistributionJson(GUEST_PATHS_FILE, problems);
+    if (source === 'none') return { paths: EMPTY_GUEST_PATHS, source };
+    const normalized = normalizeGuestPaths(value);
+    problems.push(...normalized.problems.map((p) => `${GUEST_PATHS_FILE}: ${p}`));
+    return { paths: normalized.paths, source };
+  }
+
+  /** `acl.json` を読んで並びにする。無い／壊れているときは組み込み（`system/` の守りだけ）。 */
+  private async _readAreaAcl(
+    problems: string[],
+  ): Promise<{ entries: readonly AreaAclEntry[]; source: DistributionFileSource }> {
+    const { value, source } = await this._readDistributionJson(AREA_ACL_FILE, problems);
+    if (source === 'none') return { entries: BUILTIN_SYSTEM_AREAS, source };
+    const parsed = parseAreaAcl(value);
+    problems.push(...parsed.problems.map((p) => `${AREA_ACL_FILE}: ${p}`));
+    if (parsed.entries.length === 0) {
+      problems.push(`${AREA_ACL_FILE}: no usable areas; applying the built-in system areas instead`);
+      return { entries: BUILTIN_SYSTEM_AREAS, source };
+    }
+    return { entries: parsed.entries, source };
+  }
+
   async initialize(): Promise<void> {
     let deployedCount = 0;
     let updatedCount = 0;
     const failures: Array<{ path: string; error: unknown }> = [];
+    const problems: string[] = [];
     // ファイルの実体（OPFS）が 1 つでも書けたか。ディレクトリは IndexedDB だけなので数えない。
     let writtenFiles = 0;
 
@@ -69,11 +151,18 @@ export class VfsInitializer {
       }
     }
 
-    // ユーザーの自動アップデート設定を読み取る。
-    // ConfigManager より前に走るので自前で読むが、層の並びは同じ（後の層が勝つ）。
+    // 2. ゲスト空間の場所（paths.json）を読む。ConfigManager より前に走るので自前で読む。
+    // 配信の前に読むのは「どの層が利用者の書き先か」（配信で上書きしない場所）を知るため。
+    // 配信のあとで読み直す（配信で新しくなった値を ACL と起動の残りに使う）。
+    const before = await this._readGuestPaths(problems);
+    const configLayers = configLayersOf(before.paths);
+    /** 利用者が書く層。ここは配信で上書きしない。 */
+    const writeLayers = [writeLayerOf(configLayers), writeLayerOf(registryLayersOf(before.paths))];
+
+    // ユーザーの自動アップデート設定を読み取る。層の並びは ConfigManager と同じ（後の層が勝つ）。
     // 配信の層だけ見ると、利用者が自分の層で切った `autoUpdateSystemFiles: false` が効かない。
     let autoUpdate = true;
-    for (const dir of CONFIG_LAYERS) {
+    for (const dir of configLayers) {
       const path = `${dir}/preferences.json`;
       try {
         if (!this.vfs.exists(SYSTEM_PRINCIPAL, path)) continue;
@@ -128,7 +217,7 @@ export class VfsInitializer {
         // （そうしないと、新しく足した項目が既存の環境へ永久に届かない）。
         // 層が 1 つの配布物では書き先＝system/config・system/registry なので、
         // これまでと同じ「config と registry は上書きしない」になる。
-        const isWriteLayer = WRITE_LAYERS.some((dir) => cleanPath.startsWith(`${dir}/`));
+        const isWriteLayer = writeLayers.some((dir) => cleanPath.startsWith(`${dir}/`));
 
         // 初回起動ではなく、かつシステム領域外のファイル・ディレクトリは展開をスキップ（ユーザーの自由な削除を尊重）
         if (!isFirstBoot && !isSystemArea) {
@@ -186,68 +275,27 @@ export class VfsInitializer {
       }
     }
 
-    // --- 厳密な ACL（権限）の再帰的適用 ---
-    // 1. system/ 領域は原則 Read-Only (AIやGuestアプリからの破壊を防止)
-    if (this.vfs.exists(SYSTEM_PRINCIPAL, 'system')) {
-      await this.vfs.setAclRecursive(SYSTEM_PRINCIPAL, 'system', {
-        owner: SYSTEM_PRINCIPAL,
-        rules: [
-          { principal: { type: 'user', id: 'local_user' }, permissions: ['read'] },
-          { principal: { ...AGENT_PRINCIPAL }, permissions: ['read'] },
-          { principal: { type: 'any', id: '*' }, permissions: ['read'] },
-        ],
-      });
+    // 3. 配信のあとで paths.json を読み直す（いま置いた／更新した値で、ACL と起動の残りを決める）
+    const after = await this._readGuestPaths(problems);
+    this.guestPaths = after.paths;
+    this.guestPathsSource = after.source;
+
+    // 4. 領域の ACL（権限）の再帰的適用 —— 並びは acl.json（無ければ組み込みの system/ の守りだけ。T-0614）。
+    // 広い領域を先に閉じ、中の開ける場所を後から上塗りする。順序は宣言のとおり。
+    const acl = await this._readAreaAcl(problems);
+    this.areaAclSource = acl.source;
+    const resolved = resolveAreaAcl(acl.entries, this.guestPaths);
+    problems.push(...resolved.problems.map((p) => `${AREA_ACL_FILE}: ${p}`));
+    await applyAreaAcls(this.vfs, resolved.areas);
+
+    this.distributionProblems = problems;
+    if (problems.length > 0) {
+      console.warn('[VfsInitializer] Distribution files (paths.json / acl.json) had problems:', problems);
     }
-
-    // 2. ただし以下の領域は Read/Write を許可して上塗りする
-    const readWriteAcl: AccessControlList = {
-      owner: SYSTEM_PRINCIPAL,
-      rules: [
-        { principal: { type: 'user', id: 'local_user' }, permissions: ['read', 'write', 'manage'] },
-        { principal: { ...AGENT_PRINCIPAL }, permissions: ['read', 'write'] },
-        { principal: { type: 'any', id: '*' }, permissions: ['read', 'write'] },
-      ],
-    };
-
-    const rwPaths = [
-      'system/config',
-      'system/themes',
-      'system/registry',
-      'system/temp',
-      'system/upstream', // ★ 追加: 再起動で元に戻るため、一時的な書き換えや実験を許可する
-      // ★ 認証情報の一元管理領域。
-      //   デーモン（git / github / telegram 等）が読み、認証アダプタが書くため R/W が要る。
-      //
-      //   この領域を独立させている理由は、クラウド同期の除外を「1 ディレクトリ」で
-      //   表現できるようにするため。認証情報が config や memory に散在していると、
-      //   同期対象を広げるたびに漏れが生まれ、PAT やトークンがクラウドへ流出する。
-      //
-      //   ★ ここを同期対象に含めてはならない。
-      'system/credentials',
-    ];
-
-    for (const rwPath of rwPaths) {
-      if (this.vfs.exists(SYSTEM_PRINCIPAL, rwPath)) {
-        await this.vfs.setAclRecursive(SYSTEM_PRINCIPAL, rwPath, readWriteAcl);
-      }
-    }
-
-    // 3. memory 領域の権限設定 (AIのみ読み書き可能、User/GuestはRead-Only)
-    if (this.vfs.exists(SYSTEM_PRINCIPAL, 'memory')) {
-      const memoryAcl: AccessControlList = {
-        owner: { ...AGENT_PRINCIPAL },
-        rules: [
-          {
-            principal: { ...AGENT_PRINCIPAL },
-            permissions: ['read', 'write', 'manage'],
-          },
-          {
-            principal: { type: 'any', id: '*' },
-            permissions: ['read'],
-          },
-        ],
-      };
-      await this.vfs.setAclRecursive(SYSTEM_PRINCIPAL, 'memory', memoryAcl);
+    if (after.source === 'none') {
+      console.warn(
+        `[VfsInitializer] ${GUEST_PATHS_FILE} is neither in the VFS nor in the distribution. Running with no guest layout (1 config layer, no agent area).`,
+      );
     }
 
     if (deployedCount > 0 || updatedCount > 0) {

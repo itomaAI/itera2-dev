@@ -64,6 +64,7 @@
     "apiKeys.title": "Clés d’API",
     "apiKeys.save": "Enregistrer les clés",
     "taskSwitcher.title": "Applications récentes",
+    "notice.pathsMissing": "Cette distribution ne fournit pas system/config/paths.json. Itera fonctionne sans disposition de l’espace invité (une seule couche de configuration, pas de zone agent, pas de document de démarrage).",
     "notice.storageLost": "Le stockage du navigateur a été effacé pendant l’exécution d’Itera ; la page a donc été rechargée. Les fichiers locaux et l’historique de discussion de cet appareil sont perdus, sauf si vous disposez d’une sauvegarde ou d’une cible de synchronisation.",
     "notice.resetDone": "Les données locales ont été réinitialisées.",
     "notice.resetFailed": "Impossible d’effacer les données locales. Fermez les autres onglets et réessayez : {reason}",

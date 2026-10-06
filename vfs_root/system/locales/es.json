@@ -64,6 +64,7 @@
     "apiKeys.title": "Claves de API",
     "apiKeys.save": "Guardar claves",
     "taskSwitcher.title": "Aplicaciones recientes",
+    "notice.pathsMissing": "Esta distribución no incluye system/config/paths.json. Itera se ejecuta sin diseño de invitado (una capa de configuración, sin área del agente, sin documento de arranque).",
     "notice.storageLost": "El almacenamiento del navegador se borró mientras Itera estaba en ejecución, así que se volvió a cargar. Los archivos locales y el historial de chat de este dispositivo se han perdido, salvo que tengas una copia de seguridad o un destino de sincronización.",
     "notice.resetDone": "Los datos locales se han restablecido a los valores de fábrica.",
     "notice.resetFailed": "No se pudieron borrar los datos locales. Cierra las demás pestañas y vuelve a intentarlo: {reason}",

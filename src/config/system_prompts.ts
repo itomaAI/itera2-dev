@@ -3,6 +3,8 @@
  * Itera OS v2: System Prompt Definition
  */
 
+import { EMPTY_GUEST_PATHS, type GuestPaths } from '../core/sys/GuestPaths';
+
 export interface SystemPromptOptions {
   /**
    * Include the <thinking> tag definition in the prompt.
@@ -11,6 +13,54 @@ export interface SystemPromptOptions {
    * turning this off leaves <memo> as the only carry-over channel.
    */
   thinkingTag?: boolean;
+  /**
+   * Where the guest space keeps things (system/config/paths.json, T-0614).
+   * The prompt must not hard-code memory/ data/ user/ …; it only names what this says.
+   * Omitted / null entries mean "this distribution has no such place".
+   */
+  paths?: GuestPaths;
+}
+
+/** The <rule name="guest_layout"> block: only the places this distribution declares. Empty when nothing is declared. */
+export function buildGuestLayoutSection(paths: GuestPaths): string {
+  const lines: string[] = [];
+  if (paths.agent.home) lines.push(`- Your own area (only you write here; others read): \`${paths.agent.home}/\``);
+  if (paths.agent.init) lines.push(`- Your boot document: \`${paths.agent.init}\``);
+  if (paths.agent.scratch)
+    lines.push(`- Your scratch area (apps and the user may write here too): \`${paths.agent.scratch}/\``);
+  if (paths.user.home) lines.push(`- The user's area: \`${paths.user.home}/\``);
+  if (paths.user.config)
+    lines.push(`- The user's config layer (overrides \`system/config/\`): \`${paths.user.config}/\``);
+  if (paths.user.registry)
+    lines.push(`- The user's registry layer (overrides \`system/registry/\`): \`${paths.user.registry}/\``);
+  if (paths.user.locales) lines.push(`- The user's locale files: \`${paths.user.locales}/\``);
+  if (paths.user.appRegistry) lines.push(`- The user's app registry: \`${paths.user.appRegistry}\``);
+  if (paths.user.sessions) lines.push(`- Saved chat sessions: \`${paths.user.sessions}/\``);
+  if (lines.length === 0) return '';
+  return `
+<rule name="guest_layout">
+These locations come from \`system/config/paths.json\` (the OS only regulates \`system/\` and \`trash/\`; everything else is declared there):
+${lines.join('\n')}
+</rule>
+`;
+}
+
+/** The <rule name="boot_protocol"> block. Without a boot document there is no init sequence: greet and wait. */
+export function buildBootProtocolSection(paths: GuestPaths): string {
+  if (paths.agent.init) {
+    return `<rule name="boot_protocol">
+**ON THE FIRST TURN**:
+1. You MUST read \`${paths.agent.init}\`.
+2. Follow the instructions in \`${paths.agent.init}\` to initialize the session.
+3. Once initialization is complete, you should use the \`<report>\` tag to greet the user and provide a brief system status report.
+4. Do NOT use \`<finish/>\` until initialization is complete.
+</rule>`;
+  }
+  return `<rule name="boot_protocol">
+**ON THE FIRST TURN**:
+This distribution declares no boot document (\`agent.init\` in \`system/config/paths.json\` is empty). Do not look for one.
+Use \`<report>\` to greet the user with a brief status (what the VFS contains, which processes run), then \`<finish />\` and wait for instructions.
+</rule>`;
 }
 
 const THINKING_TAG_SECTION = `
@@ -20,7 +70,7 @@ Use this space to process complex reasoning step-by-step (think out loud) before
 `;
 
 export function buildSystemPrompt(options: SystemPromptOptions = {}): string {
-  const { thinkingTag = true } = options;
+  const { thinkingTag = true, paths = EMPTY_GUEST_PATHS } = options;
   return `
 <!-- ================================================================= -->
 <!-- 1. LPML DEFINITION & TURN LIFECYCLE                               -->
@@ -423,14 +473,14 @@ All methods (except \`on/off\`) are **Asynchronous** and return a \`Promise\`.
     - If \`content\` is a \`Uint8Array\`, \`ArrayBuffer\`, or \`Blob\`, it is always saved as binary.
     - If \`content\` is a String, it is saved as pure text by default. The OS will NOT auto-detect Data URIs.
     - To write a Base64 or Data URI string as binary, you MUST explicitly specify \`{ encoding: 'base64' }\` or \`{ encoding: 'dataurl' }\` in \`opts\`.
-- \`resolveUrl(path)\` (Returns a String): In Guest Apps, relative paths (e.g., \`./image.png\`) in JS do NOT work because apps run on virtual Blob URLs. To dynamically load assets from VFS into \`img.src\` or CSS, you MUST resolve the real URL first: \`const url = await MetaOS.fs.resolveUrl('data/image.png'); img.src = url;\`. (Note: Static HTML/CSS like \`<img src="...">\` or \`url(...)\` are auto-compiled and safe to use relative paths).
+- \`resolveUrl(path)\` (Returns a String): In Guest Apps, relative paths (e.g., \`./image.png\`) in JS do NOT work because apps run on virtual Blob URLs. To dynamically load assets from VFS into \`img.src\` or CSS, you MUST resolve the real URL first: \`const url = await MetaOS.fs.resolveUrl('some/dir/image.png'); img.src = url;\`. (Note: Static HTML/CSS like \`<img src="...">\` or \`url(...)\` are auto-compiled and safe to use relative paths).
 - \`delete(path, opts)\`, \`rename(oldPath, newPath, opts)\`, \`copy(srcPath, destPath, opts)\`, \`mkdir(path, opts)\`
   *(\`delete\` moves to \`trash/<deletedAt>_<name>\` and records the original path; pass \`{ permanent: true }\` to destroy.)*
 - \`restore(path, opts)\`: Moves a trashed entry back to its original location (\`stat(path).trashedFrom\`) or to \`opts.to\`. Creates missing parent folders, never overwrites (a duplicate becomes \`name (2).ext\`). Returns the restored path. Fails if the original location is unknown and \`opts.to\` is not given.
 - \`stat(path)\`: Returns a plain object \`{ kind: 'file' | 'directory', size, ... }\` (Do NOT use Node.js \`isDirectory()\`). Trashed entries also carry \`deletedAt\` and \`trashedFrom\`.
 - \`list(path, opts)\`: Returns \`string[]\`. If \`opts.detail=true\`, returns an array of stat objects.
 - \`exists(path)\`: Returns boolean.
-- \`getUsage()\`: Returns \`{ used, max, reserved }\` in bytes for this device's VFS (\`used\` includes system files; user/guest writes are allowed up to \`max - reserved\`). Ratios are yours to compute.
+- \`getUsage()\`: Returns \`{ used, max, reserved }\` in bytes for this device's VFS (\`used\` includes system files; writes by the user and guest apps are allowed up to \`max - reserved\`). Ratios are yours to compute.
 - \`registerSyncProvider(path, handlers)\`: Registers the app as a Sync Provider. \`handlers.onFetchContent(path)\` is called to fetch missing stub contents. \`handlers.onMutate(mutations)\` receives an array of state changes (\`ATTACH\`, \`DETACH\`, \`MUTATE\`) avoiding echo-loops automatically.
 - \`unregisterSyncProvider(path)\`: Removes the sync provider registration.
 - \`listMounts()\`: Returns the current Sync Provider mount table as \`[{ mountPath, pid, registered, alive }]\`. \`alive\` tells whether that provider process can answer right now — a mount is NOT removed when its process dies, so a registered mount does not mean the content can be fetched. Use \`mountPath\` (never \`alive\`) to decide which subtrees to exclude: dropping the exclusion while the other provider is temporarily down can delete its directories and propagate that deletion to the user's machine. A daemon mounted at the root uses this to derive which subtrees belong to *other* providers and exclude them, instead of hardcoding an exclusion list. Note that mount resolution is longest-prefix-match, so the root mount ('') always loses to a deeper mount.
@@ -487,9 +537,9 @@ Guest apps can expose custom tools to you.
 
 **4. Configuration Files & Registry (V2 Structure)**:
 Settings are split into multiple JSON files under \`system/config/\` and \`system/registry/\`. Do NOT use a monolithic \`config.json\`.
-Both directories are *layers*: \`system/\` holds the distribution defaults (re-deployed on every OS update) and, in builds that have a user layer, \`user/config/\` and \`user/registry/\` hold the user's overrides (a config file is deep-merged; a registry entry is matched by \`id\` and only the keys present in the upper layer win). Read/write them through the host (\`getConfig\` / \`getRegistry\`), not by editing the \`system/\` files.
+Both directories are *layers*: \`system/\` holds the distribution defaults (re-deployed on every OS update) and, in builds that declare a user layer in \`system/config/paths.json\` (\`user.config\` / \`user.registry\`), that layer holds the user's overrides (a config file is deep-merged; a registry entry is matched by \`id\` and only the keys present in the upper layer win). Read/write them through the host (\`getConfig\` / \`getRegistry\`), not by editing the \`system/\` files.
 - \`system/config/preferences.json\`: username, agentName, language, autoUpdateSystemFiles, maxContinuousTools, hiddenEventTypes (event types such as "tool_available" or "info" that are hidden from the user's chat view; you still receive them)
-- \`system/config/appearance.json\`: theme (path to theme file), locale (interface language of the OS menus and dialogs, e.g. "ja"; files in \`system/locales/\` and \`user/locales/\`. Separate from preferences.language)
+- \`system/config/appearance.json\`: theme (path to theme file), locale (interface language of the OS menus and dialogs, e.g. "ja"; files in \`system/locales/\` and in the user locale directory declared in \`system/config/paths.json\` (\`user.locales\`). Separate from preferences.language)
 - \`system/config/llm.json\`: model, temperature
 - \`system/config/network.json\`: proxyUrl, allowCredentialsWithProxy
 - \`system/registry/associations.json\`: File extension to App ID mappings (e.g., {"extensions": {"md": "notes"}})
@@ -513,13 +563,8 @@ If you are unsure of what changes occurred in the system in the background, you 
 - App lifecycle (spawn/kill): \`system/logs/process_events/YYYY-MM-DD.jsonl\`
 </rule>
 
-<rule name="boot_protocol">
-**ON THE FIRST TURN**:
-1. You MUST read \`memory/init.md\`.
-2. Follow the instructions in \`memory/init.md\` to initialize the session.
-3. Once initialization is complete, you should use the \`<report>\` tag to greet the user and provide a brief system status report.
-4. Do NOT use \`<finish/>\` until initialization is complete.
-</rule>
+${buildGuestLayoutSection(paths)}
+${buildBootProtocolSection(paths)}
 `.trim();
 }
 

@@ -197,7 +197,10 @@ export class CognitiveManager {
       model: 'gemini-3.8-flash',
     };
     const rawModel = llmConfig.model;
-    const systemPrompt = buildSystemPrompt({ thinkingTag: llmConfig.thinkingTag !== false });
+    const systemPrompt = buildSystemPrompt({
+      thinkingTag: llmConfig.thinkingTag !== false,
+      paths: this.configManager.paths(),
+    });
 
     let provider = 'google';
     let modelName = rawModel;

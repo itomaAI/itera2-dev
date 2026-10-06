@@ -13,6 +13,7 @@ import {
   compareNodes,
   weightOf,
   rootIconOf,
+  rootIconsFor,
   DEFAULT_ROOT_ICONS,
   DEFAULT_SORT_WEIGHTS,
   type RootIcons,
@@ -95,7 +96,12 @@ describe('rootIconOf', () => {
   it('最上位の名前には表の記号を返す', () => {
     expect(rootIconOf('system', DEFAULT_ROOT_ICONS)).toBe('⚙️');
     expect(rootIconOf('trash', DEFAULT_ROOT_ICONS)).toBe('🗑️');
-    expect(rootIconOf('agent', DEFAULT_ROOT_ICONS)).toBe('✨');
+    // AI の領域の記号は配信の既定には無い。名前は配布物ごとに違うので、知っている側が rootIconsFor で足す（T-0614）
+    expect(rootIconOf('agent', DEFAULT_ROOT_ICONS)).toBeNull();
+    expect(rootIconOf('agent', rootIconsFor('agent'))).toBe('✨');
+    expect(rootIconOf('memory', rootIconsFor('memory/init.md'.split('/')[0]))).toBe('✨');
+    expect(rootIconOf('memory', rootIconsFor(null))).toBeNull();
+    expect(rootIconOf('agent', rootIconsFor('agent', { agent: '🤖' }))).toBe('🤖');
   });
 
   it('表に無い最上位は null（呼び出し側が従来どおりの記号を出す）', () => {
