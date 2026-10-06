@@ -81,12 +81,7 @@ export class AnthropicAdapter extends BaseLLMAdapter {
       delete payload.top_k;
     }
 
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: headers,
-      body: JSON.stringify(payload),
-      signal,
-    });
+    const response = await this.postForStream(url, headers, payload, signal);
 
     await this.checkError(response, 'Anthropic');
 

@@ -55,6 +55,12 @@ export interface RelayTransport {
    * 既定の絞り込みを働かせる。
    */
   strictOpenAISchema?: boolean;
+  /**
+   * 大きな本文を Firebase Storage に置き、在り処（`llmRelayBodies/{uid}/{名前}.json`）を返す（T-0622。ミャク楽 T-0600）。
+   * 中継は HTTP/1 で受けるので 32 MiB を超える本文は届かない。超えそうな本文はここへ置き、中継には在り処だけを送る。
+   * 無ければ（置き場の分からない配布物）従来どおり 32 MiB で止める。
+   */
+  stashBody?: (body: string, signal?: AbortSignal) => Promise<string>;
 }
 
 /**
@@ -85,6 +91,64 @@ export function filterNestedObject(input: any, template: Record<string, any>): R
   }
 
   return result;
+}
+
+/**
+ * 中継（Cloud Functions 第 2 世代＝Cloud Run）が受け付ける要求本文の上限（ミャク楽 T-0594）。
+ *
+ * 超えると Google のフロントが 413 を返すが、その応答には CORS ヘッダが無い。
+ * ブラウザは状態コードを読めず、fetch は "Failed to fetch"（TypeError）で落ちる。
+ * ミャク楽 prod で確かめた値（2026-10-02）: 31 MiB の POST は関数に届き、33 MiB は 413（CORS なし）。
+ * 中継の経路では添付を毎回 base64 で本文に埋めるので、会話が進むほど本文は大きくなる。
+ */
+export const RELAY_MAX_REQUEST_BYTES = 32 * 1024 * 1024;
+
+/**
+ * これを超える本文は、上限の手前でも中継が処理しきれないことがある（ミャク楽 T-0594）。
+ * 2026-10-02 のミャク楽 prod のログでは、18.3 MB の要求の 1 秒後に中継が 512 MiB を超えて落ちた。
+ * 落ちた中継の応答にも CORS ヘッダは無く、ブラウザからは同じ "Failed to fetch" に見える。
+ */
+export const RELAY_LARGE_REQUEST_BYTES = 16 * 1024 * 1024;
+
+/**
+ * これを超える本文は、Storage に置いてから在り処だけを中継へ送る（T-0622。ミャク楽 T-0600）。
+ * 32 MiB の門の手前に余裕を取る（認証ヘッダなど本文の外の分と、数え方の差）。
+ */
+export const RELAY_STASH_THRESHOLD_BYTES = 24 * 1024 * 1024;
+
+/** Storage に置ける本文の上限。中継側の `storage.rules` と `llmRelayBodies.MAX_STORED_BYTES` と同じ値にする */
+export const RELAY_STORED_MAX_BYTES = 64 * 1024 * 1024;
+
+/** 本文を中継へ渡すときの在り処の印。中継側の `llmRelayBodies.STORED_BODY_FIELD` と同じ名前 */
+export const RELAY_STORED_BODY_FIELD = 'relayStoredBody';
+
+function formatMB(bytes: number): string {
+  return (bytes / (1024 * 1024)).toFixed(1);
+}
+
+/** 中継の上限を超えたため送らなかったときの文言。利用者と AI の両方が読む */
+export function requestTooLargeMessage(bytes: number, limit: number = RELAY_MAX_REQUEST_BYTES): string {
+  return (
+    `The request was not sent because it is too large for the LLM relay (about ${formatMB(bytes)} MB; the limit is ${formatMB(limit)} MB). ` +
+    `Attachments in the conversation (PDFs, images, files you read) are re-sent in full on every turn, so the request grows as the conversation goes on. ` +
+    `Start a new conversation, or remove the messages with attachments from the history, and try again.`
+  );
+}
+
+/** 中継への fetch が応答を返さずに落ちたときの文言。ブラウザは理由を教えないので、分かっていることと候補を伝える */
+export function relayFetchFailedMessage(cause: string, bytes: number): string {
+  const head = `Could not reach the LLM relay (${cause}; the request was about ${formatMB(bytes)} MB). `;
+  if (bytes > RELAY_LARGE_REQUEST_BYTES) {
+    return (
+      head +
+      `Large requests (over ${formatMB(RELAY_LARGE_REQUEST_BYTES)} MB) can fail because the relay cannot handle them. ` +
+      `Attachments in the conversation (PDFs, images, files you read) are re-sent in full on every turn. ` +
+      `Start a new conversation, or remove the messages with attachments from the history, and try again.`
+    );
+  }
+  return (
+    head + `The connection may have dropped or the relay may be temporarily unavailable. Wait a moment and try again.`
+  );
 }
 
 export abstract class BaseLLMAdapter {
@@ -123,6 +187,49 @@ export abstract class BaseLLMAdapter {
    * @param signal - 中断用のAbortSignal
    */
   abstract generateStream(messages: any, onChunk: (text: string) => void, signal?: AbortSignal): Promise<void>;
+
+  /**
+   * 生成の要求を送る（3 つのアダプタ共通。T-0622。ミャク楽 T-0594 / T-0600）。
+   *
+   * **中継を使わないときは素の fetch そのもの**（利用者の鍵で直接叩く経路の振る舞いは変えない。山内さん 2026-10-07）。
+   *
+   * 中継を使うとき:
+   *   - 閾値（24 MiB）を超える本文は、`relay.stashBody` が在れば Storage に置いて在り処だけを送る。
+   *     置ける上限（64 MiB）を超える本文は置かずに止める
+   *   - 置く口が無ければ、上限（32 MiB）を超える本文は送らずに止める（送っても必ず落ちる）
+   *   - fetch が応答を返さずに落ちたら（TypeError: Failed to fetch。ブラウザは理由を教えない）、送った大きさと
+   *     理由の候補と次の一手を添えて投げ直す。素の文言のままだと、利用者も AI も同じ送信を繰り返すだけになる
+   *     （ミャク楽 2026-10-02: 「続けてください」の繰り返し）
+   *   - 中断（AbortError）はそのまま投げ直す（Engine が停止として扱う）
+   */
+  protected async postForStream(url: string, headers: any, payload: any, signal?: AbortSignal): Promise<Response> {
+    let body = JSON.stringify(payload);
+    if (!this.relay) return fetch(url, { method: 'POST', headers, body, signal });
+
+    const bytes = new TextEncoder().encode(body).length;
+    if (bytes > RELAY_STASH_THRESHOLD_BYTES && this.relay.stashBody) {
+      if (bytes > RELAY_STORED_MAX_BYTES) throw new Error(requestTooLargeMessage(bytes, RELAY_STORED_MAX_BYTES));
+      let path: string;
+      try {
+        path = await this.relay.stashBody(body, signal);
+      } catch (err: any) {
+        if (signal?.aborted || err?.name === 'AbortError') throw new DOMException('Aborted', 'AbortError');
+        throw new Error(
+          `Could not hand the request (about ${formatMB(bytes)} MB) to the LLM relay (${String(err?.message || err)}). ` +
+            `Check your connection and try again.`,
+        );
+      }
+      body = JSON.stringify({ [RELAY_STORED_BODY_FIELD]: { path } });
+    } else if (bytes > RELAY_MAX_REQUEST_BYTES) {
+      throw new Error(requestTooLargeMessage(bytes));
+    }
+    try {
+      return await fetch(url, { method: 'POST', headers, body, signal });
+    } catch (err: any) {
+      if (err?.name === 'AbortError') throw err;
+      throw new Error(relayFetchFailedMessage(String(err?.message || err), bytes));
+    }
+  }
 
   protected async checkError(response: Response, providerName: string): Promise<void> {
     if (!response.ok) {
