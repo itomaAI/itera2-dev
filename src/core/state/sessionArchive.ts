@@ -220,9 +220,13 @@ export function parseSessionImport(text: string): ParsedSessionImport {
   return { ok: true, id, createdAt, turns };
 }
 
-/** 既定のファイル名: `YYYYMMDD_HHMM_<題の先頭>.json`（題は名前に使える字だけ残す） */
-export function defaultExportName(meta: { title: string; updatedAt: number }, now: Date = new Date()): string {
-  const d = new Date(meta.updatedAt || now.getTime());
+/**
+ * 保存のファイル名: `YYYYMMDD_HHMM_<題の先頭>.json`（題は名前に使える字だけ残す）。
+ * 日時は**会話の始まり（createdAt）**で付ける —— 同じ会話を保存し直せば同じ名前になり、上書きされる
+ * （最後に触った時刻で付けると、続きを話すたびに別のファイルが増える）。
+ */
+export function exportFileName(meta: { title: string; createdAt: number }, now: Date = new Date()): string {
+  const d = new Date(meta.createdAt || now.getTime());
   const pad = (n: number) => String(n).padStart(2, '0');
   const stamp = `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}_${pad(d.getHours())}${pad(d.getMinutes())}`;
   const slug = Array.from(
@@ -236,4 +240,55 @@ export function defaultExportName(meta: { title: string; updatedAt: number }, no
     .trim()
     .replace(/\s/g, '_');
   return slug ? `${stamp}_${slug}.json` : `${stamp}.json`;
+}
+
+/** VFS に保存してある会話の一覧の 1 行。**ファイルの名前と stat だけ**から作る（中身は読まない） */
+export interface SavedSessionEntry {
+  path: string;
+  name: string;
+  /** 名前から戻した題（無ければ空文字。表示側が日時で代える） */
+  title: string;
+  /** 名前の日時（会話の始まり）。読めなければ null */
+  startedAt: number | null;
+  size: number;
+  updatedAt: number;
+  /** 実体が手元に無い（同期のスタブ）。読み込むときに取り寄せられる */
+  stub: boolean;
+}
+
+const EXPORT_NAME = /^(\d{4})(\d{2})(\d{2})_(\d{2})(\d{2})(?:_(.+))?\.json$/i;
+
+/** `exportFileName` の逆: 名前から 日時と題 を戻す。形が違えば題は名前そのもの（拡張子抜き）、日時は null */
+export function parseExportFileName(name: string): { title: string; startedAt: number | null } {
+  const m = EXPORT_NAME.exec(name);
+  if (!m) return { title: name.replace(/\.json$/i, ''), startedAt: null };
+  const [, y, mo, d, h, mi, slug] = m;
+  const t = new Date(Number(y), Number(mo) - 1, Number(d), Number(h), Number(mi)).getTime();
+  return { title: (slug || '').replace(/_/g, ' '), startedAt: Number.isFinite(t) ? t : null };
+}
+
+/**
+ * 保存先のディレクトリの一覧（stat の配列）から、保存してある会話の行を組む。`.json` のファイルだけ。
+ * 新しい順（名前の日時、無ければ updatedAt）
+ */
+export function listSavedSessions(
+  stats: Array<{ path: string; name: string; kind: string; size: number; updatedAt: number; syncState?: string }>,
+): SavedSessionEntry[] {
+  const rows: SavedSessionEntry[] = [];
+  for (const s of stats) {
+    if (s.kind !== 'file' || !/\.json$/i.test(s.name)) continue;
+    const parsed = parseExportFileName(s.name);
+    rows.push({
+      path: s.path,
+      name: s.name,
+      title: parsed.title,
+      startedAt: parsed.startedAt,
+      size: s.size,
+      updatedAt: s.updatedAt,
+      stub: s.syncState === 'stub',
+    });
+  }
+  return rows.sort(
+    (a, b) => (b.startedAt ?? b.updatedAt) - (a.startedAt ?? a.updatedAt) || a.name.localeCompare(b.name),
+  );
 }

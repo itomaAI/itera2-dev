@@ -208,6 +208,8 @@ export class SystemBootstrapper {
     const cognitiveManager = new CognitiveManager(configManager, engine, logger, vfs, registryLayers);
     const sessionManager = new SessionManager(vfs, history, logger, toolRegistry, {
       keep: () => configManager.get('preferences')?.sessionHistoryKeep,
+      // VFS の保存先は paths.json の user.sessions（T-0614）。ここから自動で決まり、利用者に場所を訊かない
+      sessionsDir: () => configManager.paths().user.sessions,
     });
     // 切り替えを断る判定（走っている束を見捨てない）。知っているのは Engine なので、ここで配線するだけ
     sessionManager.setBusyProbe(() => engine.isBusy());
