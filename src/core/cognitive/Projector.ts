@@ -12,6 +12,7 @@ import { buildTextPromptNodes, buildToolPromptNodes, buildUserPromptNodes } from
 import { wrapUserInput } from './LpmlSerializer';
 import { SYSTEM_PRINCIPAL } from '../vfs/types';
 import { blobToBase64 } from '../../utils/binary';
+import type { RelayTransport } from './adapters/BaseAdapter';
 
 export interface LlmCapabilities {
   maxMediaSizeMB: number;
@@ -171,18 +172,41 @@ export abstract class BaseProjector {
 
 export class GeminiProjector extends BaseProjector {
   private apiKey: string;
+  /**
+   * 中継（鍵が無いとき）。あれば添付を中継の Files 経路で運営の鍵へ上げる（T-0623。ミャク楽 T-0119）。
+   * 鍵があるとき（利用者の鍵で直接叩く経路）はこれを見ない —— その経路の振る舞いは変えない。
+   */
+  private relay: RelayTransport | null;
 
   public static readonly DEFAULT_CAPABILITIES: LlmCapabilities = {
     maxMediaSizeMB: 100,
     supportedMimes: ['application/pdf', 'image/*', 'video/*', 'audio/*'],
   };
 
-  constructor(systemPrompt: string, capabilities: Partial<LlmCapabilities> | undefined, apiKey: string) {
+  /** Gemini の埋め込み（inlineData）は「要求全体で 20MB」（公式）。実体はその 3/4 までに収まっている必要がある。 */
+  public static readonly INLINE_REQUEST_LIMIT_MB = 20;
+
+  constructor(
+    systemPrompt: string,
+    capabilities: Partial<LlmCapabilities> | undefined,
+    apiKey: string,
+    relay: RelayTransport | null = null,
+  ) {
     super(systemPrompt, {
       ...GeminiProjector.DEFAULT_CAPABILITIES,
       ...capabilities,
     } as LlmCapabilities);
     this.apiKey = apiKey;
+    this.relay = relay;
+  }
+
+  /**
+   * 中継の経路では、上げられなかったときに本文への埋め込み（inlineData）へ落とすので、
+   * 大きさの判定は埋め込みの上限で行う（落としても上流に断られないように）。鍵があるときは従来どおり。
+   */
+  protected getMaxMediaSizeMB(_mimeType: string): number {
+    if (this.apiKey || !this.relay) return this.capabilities.maxMediaSizeMB;
+    return rawLimitMBFromEncodedLimitMB(GeminiProjector.INLINE_REQUEST_LIMIT_MB);
   }
 
   async createContext(
@@ -231,9 +255,9 @@ export class GeminiProjector extends BaseProjector {
           if (node.media) {
             const support = await this.checkMediaSupport(vfs, node.media, SYSTEM_PRINCIPAL);
             if (support.supported) {
-              const fileData = await this._resolveMediaFile(node.media, vfs, apiKey, signal);
-              if (fileData.ok) parts.push({ fileData: fileData.value });
-              else parts.push({ text: buildMediaFailureNotice(node.media.path, fileData.reason) });
+              const mediaPart = await this._resolveMediaPart(node.media, vfs, apiKey, signal);
+              if (mediaPart.ok) parts.push(mediaPart.value);
+              else parts.push({ text: buildMediaFailureNotice(node.media.path, mediaPart.reason) });
             } else {
               parts.push({
                 text: this.getUnsupportedMessage(node.media.path, node.media.mimeType, support.reason!),
@@ -255,9 +279,9 @@ export class GeminiProjector extends BaseProjector {
 
           const support = await this.checkMediaSupport(vfs, node.media, SYSTEM_PRINCIPAL);
           if (support.supported) {
-            const fileData = await this._resolveMediaFile(node.media, vfs, apiKey, signal);
-            if (fileData.ok) parts.push({ fileData: fileData.value });
-            else parts.push({ text: buildMediaFailureNotice(node.media.path, fileData.reason) });
+            const mediaPart = await this._resolveMediaPart(node.media, vfs, apiKey, signal);
+            if (mediaPart.ok) parts.push(mediaPart.value);
+            else parts.push({ text: buildMediaFailureNotice(node.media.path, mediaPart.reason) });
           } else {
             parts.push({
               text: this.getUnsupportedMessage(node.media.path, node.media.mimeType, support.reason!),
@@ -270,6 +294,93 @@ export class GeminiProjector extends BaseProjector {
       return buildTextPromptNodes(turn).map((node) => ({ text: node.text }));
     }
     return [];
+  }
+
+  /**
+   * 添付を Gemini の part にする（`fileData` か `inlineData`。器の形が違うので呼び出し側に組ませない）。
+   *
+   * 鍵が無く中継があるとき（T-0623）: 控えの fileUri（metadata.gemini）は利用者自身の鍵で上げたもので、
+   * 運営の鍵からは参照できない。中継の Files 経路で運営の鍵へ上げ直し、控えは別の場所（metadata.relay.gemini）に持つ。
+   * 上げられなければ本文への埋め込みへ落とす。
+   * それ以外（利用者の鍵で直接叩く・鍵も中継も無い）は従来どおり `_resolveMediaFile`。
+   */
+  private async _resolveMediaPart(
+    mediaObj: any,
+    vfs: VfsService,
+    apiKey: string,
+    signal?: AbortSignal,
+  ): Promise<MediaAttachResult<any>> {
+    if (!apiKey && this.relay) return this._resolveViaRelay(mediaObj, vfs, this.relay, signal);
+    const resolved = await this._resolveMediaFile(mediaObj, vfs, apiKey, signal);
+    return resolved.ok ? { ok: true, value: { fileData: resolved.value } } : resolved;
+  }
+
+  /** 鍵が無いときの逃げ道。Files API を使わず、本文へ base64 で埋める（part そのものを返す）。 */
+  private async _resolveInlineData(mediaObj: any, vfs: VfsService): Promise<MediaAttachResult<any>> {
+    if (!vfs.exists(SYSTEM_PRINCIPAL, mediaObj.path)) return { ok: false, reason: 'missing' };
+    try {
+      const blob = await vfs.readBlob(SYSTEM_PRINCIPAL, mediaObj.path);
+      const data = await this._blobToBase64(blob);
+      const mimeType = mediaObj.mimeType || blob.type || 'application/octet-stream';
+      return { ok: true, value: { inlineData: { mimeType, data } } };
+    } catch (e) {
+      console.error('[Projector] Inline embedding failed:', e);
+      return { ok: false, reason: 'missing' };
+    }
+  }
+
+  /**
+   * 中継の Files 経路で、運営の鍵の側へ上げる（T-0623。ミャク楽 T-0119）。
+   *
+   * 中継が代行するのは鍵の要る 1 回目（start）だけで、バイト本体は返ってきた
+   * `x-goog-upload-url`（それ自体が資格である URL）へ直接送る。中継の 32 MiB に当たらない。
+   *
+   * 上げられなかったときは本文への埋め込みへ落とす（中継の Files 経路がまだ配信されていない間も添付は送れる）。
+   * 大きさの判定は埋め込みの上限なので（getMaxMediaSizeMB）、落としても上流に断られない。
+   */
+  private async _resolveViaRelay(
+    mediaObj: any,
+    vfs: VfsService,
+    relay: RelayTransport,
+    signal?: AbortSignal,
+  ): Promise<MediaAttachResult<any>> {
+    const cached = mediaObj.metadata?.relay?.gemini;
+    if (cached && cached.fileUri && cached.expirationTime) {
+      if (new Date(cached.expirationTime) > new Date(Date.now() + 60 * 60 * 1000)) {
+        return { ok: true, value: { fileData: { fileUri: cached.fileUri, mimeType: mediaObj.mimeType } } };
+      }
+    }
+
+    if (!vfs.exists(SYSTEM_PRINCIPAL, mediaObj.path)) return { ok: false, reason: 'missing' };
+
+    try {
+      const blob = await vfs.readBlob(SYSTEM_PRINCIPAL, mediaObj.path);
+      const mimeType = mediaObj.mimeType || blob.type || 'application/octet-stream';
+      const uploadResult = await this._uploadToGemini(
+        blob,
+        mimeType,
+        {
+          url: `${relay.baseUrl.replace(/\/+$/, '')}/google/upload/v1beta/files`,
+          headers: await relay.getAuthHeaders(),
+        },
+        signal,
+      );
+
+      if (!mediaObj.metadata) mediaObj.metadata = {};
+      mediaObj.metadata.relay = {
+        ...(mediaObj.metadata.relay || {}),
+        gemini: {
+          fileUri: uploadResult.fileUri,
+          expirationTime: uploadResult.expirationTime,
+          name: uploadResult.name,
+        },
+      };
+      return { ok: true, value: { fileData: { fileUri: uploadResult.fileUri, mimeType } } };
+    } catch (e) {
+      if (signal?.aborted) throw e;
+      console.warn('[Projector] Relay file upload failed; embedding inline instead:', e);
+      return this._resolveInlineData(mediaObj, vfs);
+    }
   }
 
   private async _resolveMediaFile(
@@ -292,7 +403,12 @@ export class GeminiProjector extends BaseProjector {
 
     try {
       const blob = await vfs.readBlob(SYSTEM_PRINCIPAL, mediaObj.path);
-      const uploadResult = await this._uploadToGemini(blob, mediaObj.mimeType, apiKey, signal);
+      const uploadResult = await this._uploadToGemini(
+        blob,
+        mediaObj.mimeType,
+        { url: `https://generativelanguage.googleapis.com/upload/v1beta/files?key=${apiKey}`, headers: {} },
+        signal,
+      );
 
       if (!mediaObj.metadata) mediaObj.metadata = {};
       mediaObj.metadata.gemini = {
@@ -308,12 +424,21 @@ export class GeminiProjector extends BaseProjector {
     }
   }
 
-  private async _uploadToGemini(blob: Blob, mimeType: string, apiKey: string, signal?: AbortSignal): Promise<any> {
+  /**
+   * 再開可能アップロード。1 回目（start）の宛先だけが経路で違う
+   * （利用者の鍵なら Google へ直接・中継なら中継の Files 経路）。本体は返ってきた upload URL へ直接送る。
+   */
+  private async _uploadToGemini(
+    blob: Blob,
+    mimeType: string,
+    init: { url: string; headers: Record<string, string> },
+    signal?: AbortSignal,
+  ): Promise<any> {
     const size = blob.size;
-    const initUrl = `https://generativelanguage.googleapis.com/upload/v1beta/files?key=${apiKey}`;
-    const initRes = await fetch(initUrl, {
+    const initRes = await fetch(init.url, {
       method: 'POST',
       headers: {
+        ...init.headers,
         'X-Goog-Upload-Protocol': 'resumable',
         'X-Goog-Upload-Command': 'start',
         'X-Goog-Upload-Header-Content-Length': size.toString(),
@@ -542,11 +667,22 @@ export class AnthropicProjector extends BaseProjector {
     return rawLimitMBFromEncodedLimitMB(encodedLimitMB);
   }
 
-  constructor(systemPrompt: string, capabilities: Partial<LlmCapabilities> | undefined) {
+  /**
+   * 中継（鍵が無いとき）。あれば添付を中継の Files 経路で運営の鍵へ上げる（T-0623。ミャク楽 T-0119）。
+   * 利用者の鍵で直接叩く経路は本文への埋め込みのまま（下の注記のとおり Files API はブラウザから叩けない）。
+   */
+  private relay: RelayTransport | null;
+
+  constructor(
+    systemPrompt: string,
+    capabilities: Partial<LlmCapabilities> | undefined,
+    relay: RelayTransport | null = null,
+  ) {
     super(systemPrompt, {
       ...AnthropicProjector.DEFAULT_CAPABILITIES,
       ...capabilities,
     } as LlmCapabilities);
+    this.relay = relay;
   }
 
   async createContext(
@@ -691,6 +827,17 @@ export class AnthropicProjector extends BaseProjector {
     vfs: VfsService,
     signal?: AbortSignal,
   ): Promise<MediaAttachResult<any>> {
+    // 中継があるときだけ、運営の鍵の側の Files API を中継経由で使う（T-0623）。無ければ従来どおり埋め込み
+    if (this.relay) return this._resolveAnthropicViaRelay(mediaObj, vfs, this.relay, signal);
+    return this._resolveInlineBlock(mediaObj, vfs, signal);
+  }
+
+  /** 本文へ埋め込む（従来の経路そのもの）。 */
+  private async _resolveInlineBlock(
+    mediaObj: any,
+    vfs: VfsService,
+    signal?: AbortSignal,
+  ): Promise<MediaAttachResult<any>> {
     if (!vfs.exists(SYSTEM_PRINCIPAL, mediaObj.path)) return { ok: false, reason: 'missing' };
     if (signal && signal.aborted) throw new DOMException('Aborted', 'AbortError');
 
@@ -714,6 +861,72 @@ export class AnthropicProjector extends BaseProjector {
       console.error('[Projector] Anthropic media encode failed:', e);
       return { ok: false, reason: 'missing' };
     }
+  }
+
+  /**
+   * 中継の Files 経路で、運営の鍵の側へ上げる（T-0623。ミャク楽 T-0119）。
+   *
+   * バイトは中継を通る（Anthropic には Gemini のような直接の上げ先が無い）。中継の上限は 24 MiB だが、
+   * 大きさの判定は埋め込みの上限（画像 3.75MB・文書 24MB。getMaxMediaSizeMB）のままにしてある。
+   * そのため上げられなかったときに本文への埋め込みへ落としても、上流に断られない。
+   * text/* は Files に上げる利点が無い（小さく、本文として渡せる）ので、埋め込みのまま。
+   * 控えは `metadata.relay.anthropic`（利用者自身の鍵の控えと混ぜない）。あれば上げ直さない ——
+   * 参照が会話の中で変わらないので、プロンプトキャッシュが外れない。
+   */
+  private async _resolveAnthropicViaRelay(
+    mediaObj: any,
+    vfs: VfsService,
+    relay: RelayTransport,
+    signal?: AbortSignal,
+  ): Promise<MediaAttachResult<any>> {
+    if ((mediaObj.mimeType || '').startsWith('text/')) return this._resolveInlineBlock(mediaObj, vfs, signal);
+
+    const cached = mediaObj.metadata?.relay?.anthropic;
+    if (cached && cached.fileId) {
+      return { ok: true, value: this._buildAnthropicFileBlock(cached.fileId, mediaObj.mimeType) };
+    }
+
+    if (!vfs.exists(SYSTEM_PRINCIPAL, mediaObj.path)) return { ok: false, reason: 'missing' };
+    if (signal && signal.aborted) throw new DOMException('Aborted', 'AbortError');
+
+    try {
+      const blob = await vfs.readBlob(SYSTEM_PRINCIPAL, mediaObj.path);
+      const mimeType = mediaObj.mimeType || blob.type || 'application/octet-stream';
+      if (mimeType.startsWith('text/')) return this._resolveInlineBlock(mediaObj, vfs, signal);
+      const filename = mediaObj.path.split('/').pop() || 'file';
+
+      const formData = new FormData();
+      formData.append('file', blob as Blob, filename);
+      const response = await fetch(`${relay.baseUrl.replace(/\/+$/, '')}/anthropic/v1/files`, {
+        method: 'POST',
+        headers: {
+          ...(await relay.getAuthHeaders()),
+          'anthropic-version': '2023-06-01',
+          'anthropic-beta': 'files-api-2025-04-14',
+        },
+        body: formData,
+        signal,
+      });
+      if (!response.ok) {
+        throw new Error(`Relay Anthropic upload failed (${response.status}): ${await response.text()}`);
+      }
+      const uploaded = await response.json();
+      if (!uploaded?.id) throw new Error('Relay Anthropic upload returned no file id');
+
+      if (!mediaObj.metadata) mediaObj.metadata = {};
+      mediaObj.metadata.relay = { ...(mediaObj.metadata.relay || {}), anthropic: { fileId: uploaded.id } };
+      return { ok: true, value: this._buildAnthropicFileBlock(uploaded.id, mimeType) };
+    } catch (e) {
+      if (signal?.aborted) throw e;
+      console.warn('[Projector] Relay file upload failed; embedding inline instead:', e);
+      return this._resolveInlineBlock(mediaObj, vfs, signal);
+    }
+  }
+
+  /** Files API に上げた添付を指すブロック（`source.type: 'file'`）。 */
+  private _buildAnthropicFileBlock(fileId: string, mimeType: string): any {
+    if ((mimeType || '').startsWith('image/')) return { type: 'image', source: { type: 'file', file_id: fileId } };
+    return { type: 'document', source: { type: 'file', file_id: fileId } };
   }
 
   private _buildAnthropicContentBlock(base64: string, mimeType: string): any {
