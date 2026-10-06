@@ -661,13 +661,16 @@ export class HostApiRouter {
       return responseObj;
     });
 
-    t.registerHandler('net:download', async ({ url, destPath, options }) => {
+    t.registerHandler('net:download', async ({ url, destPath, options }, sourcePid) => {
       // V1のハックを維持：巨大ファイルをIPCで送らず、Host側でフェッチしてBlobを直接VFS（OPFS）に書き込む
       const { targetUrl, fetchOpts } = await prepareFetchOptions(url, options);
       const res = await fetch(targetUrl, fetchOpts);
       if (!res.ok) throw new Error(`HTTP Error ${res.status}`);
       const blob = await res.blob();
-      await d.vfs.writeFile(USER_PRINCIPAL, destPath, blob, {
+      // 書くのは呼び手の principal（T-0617）。以前は USER で書いていたため、同期デーモンが
+      // スタブの中身をここで取り寄せると、AI の領域（agent-only）では USER に書く権限が無く
+      // 「Failed to fetch missing content」で落ちた。system 特権のデーモンは system で書く。
+      await d.vfs.writeFile(getPrincipal(sourcePid), destPath, blob, {
         overwrite: true,
         // 実体化のときに元の日付を保つための口（T-0351）
         meta: options?.meta,
