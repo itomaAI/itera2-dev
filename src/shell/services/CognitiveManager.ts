@@ -346,7 +346,8 @@ export class CognitiveManager {
 
     switch (entry.upstream) {
       case 'anthropic':
-        this.engine.projector = new AnthropicProjector(systemPrompt, modelCapabilities);
+        // 添付は中継の Files 経路で運営の鍵へ上げる（毎ターン本文へ埋めない。T-0623）
+        this.engine.projector = new AnthropicProjector(systemPrompt, modelCapabilities, relay);
         this.engine.llm = new AnthropicAdapter('', alias, llmConfig, this.logger, relay);
         break;
       case 'openai':
@@ -355,9 +356,9 @@ export class CognitiveManager {
         break;
       case 'google':
       default:
-        // 🔴 Gemini の Files API は鍵が要るので中継では使えない。GeminiProjector は鍵が無いと添付を
-        //    送らず、その旨を本文に書く（ミャク楽は inline data に落とす。こちらは未移植）
-        this.engine.projector = new GeminiProjector(systemPrompt, modelCapabilities, '');
+        // Gemini の Files API は鍵が要る。中継では GeminiProjector が中継の Files 経路（start だけ代行）で
+        // 運営の鍵へ上げ、上げられなければ inlineData へ落とす（T-0623。以前は添付を送れなかった）
+        this.engine.projector = new GeminiProjector(systemPrompt, modelCapabilities, '', relay);
         this.engine.llm = new GeminiAdapter('', alias, llmConfig, this.logger, relay);
         break;
     }
