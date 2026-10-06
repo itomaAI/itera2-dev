@@ -96,11 +96,30 @@ describe('resolveAreaAcl', () => {
   });
 });
 
+describe('parseAreaAcl ensure', () => {
+  it('ensure: true だけを拾う', () => {
+    const r = parseAreaAcl({
+      areas: [
+        { path: 'a', policy: 'open', ensure: true },
+        { path: 'b', policy: 'open', ensure: 'yes' },
+      ],
+    });
+    expect(r.entries).toEqual([
+      { path: 'a', policy: 'open', ensure: true },
+      { path: 'b', policy: 'open' },
+    ]);
+  });
+});
+
 describe('applyAreaAcls', () => {
-  it('在る場所にだけ、並びの順で当てる', async () => {
+  it('在る場所にだけ、並びの順で当てる。ensure の場所は無ければ作る', async () => {
     const calls: string[] = [];
+    const made: string[] = [];
     const vfs = {
-      exists: (_p: unknown, path: string) => path !== 'missing',
+      exists: (_p: unknown, path: string) => path !== 'missing' && path !== 'memory/scratch',
+      mkdir: async (_p: unknown, path: string) => {
+        made.push(path);
+      },
       setAclRecursive: async (_p: unknown, path: string) => {
         calls.push(path);
       },
@@ -111,11 +130,13 @@ describe('applyAreaAcls', () => {
         { path: 'system', policy: 'readonly' },
         { path: 'missing', policy: 'open' },
         { ref: 'agent.home', policy: 'agent-only' },
+        { path: 'memory/scratch', policy: 'agent-shared', ensure: true },
       ],
       paths,
     );
     const applied = await applyAreaAcls(vfs as never, areas);
-    expect(applied).toEqual(['system', 'memory']);
-    expect(calls).toEqual(['system', 'memory']);
+    expect(applied).toEqual(['system', 'memory', 'memory/scratch']);
+    expect(calls).toEqual(['system', 'memory', 'memory/scratch']);
+    expect(made).toEqual(['memory/scratch']);
   });
 });

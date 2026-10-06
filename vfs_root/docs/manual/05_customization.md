@@ -120,6 +120,8 @@ On every boot the OS re-applies permissions to whole areas. The list lives in `s
     A `ref` whose value is `null` is skipped.
 *   `policy` is one of four fixed words: `readonly` (everyone reads), `open` (you manage; the agent and apps read/write),
     `agent-only` (the agent owns it; others read), `agent-shared` (the agent owns it; you and apps may also write).
+*   `"ensure": true` creates the directory first when it is missing (for places whose parent is closed, such as an agent scratch area
+    that apps must be able to write to but cannot create themselves).
 *   To stop protecting an area, delete its line. If the file is missing or unreadable, the built-in `system/` rules are applied
     (never "no rules").
 *   This is the same as what `sudo` could do by hand; it is a convenience for distributions, not a security boundary against
