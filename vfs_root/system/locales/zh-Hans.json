@@ -111,7 +111,8 @@
     "sessions.title": "会话历史",
     "sessions.subtitle": "保存在此浏览器中的最近会话",
     "sessions.current": "当前",
-    "sessions.untitled": "（无标题）",
+    "sessions.rename": "重命名",
+    "sessions.renameMessage": "此会话的标题（留空则显示开始时间）：",
     "sessions.empty": "没有更早的会话。",
     "sessions.turns": {
       "other": "{count} 轮"

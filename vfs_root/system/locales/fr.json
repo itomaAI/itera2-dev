@@ -112,7 +112,8 @@
     "sessions.title": "Historique des sessions",
     "sessions.subtitle": "Conversations récentes conservées dans ce navigateur",
     "sessions.current": "Actuelle",
-    "sessions.untitled": "(sans titre)",
+    "sessions.rename": "Renommer",
+    "sessions.renameMessage": "Titre de cette session (laisser vide pour afficher l’heure de début) :",
     "sessions.empty": "Aucune session antérieure.",
     "sessions.turns": {
       "one": "{count} tour",

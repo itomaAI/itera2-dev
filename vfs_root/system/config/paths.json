@@ -10,6 +10,6 @@
     "registry": null,
     "locales": "user/locales",
     "appRegistry": null,
-    "sessions": "data/04_archives/sessions"
+    "sessions": "data/sessions"
   }
 }

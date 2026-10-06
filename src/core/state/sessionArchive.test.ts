@@ -7,7 +7,7 @@ import {
   exportFileName,
   parseExportFileName,
   listSavedSessions,
-  deriveTitle,
+  normalizeTitle,
   isEmptySession,
   normalizeKeep,
   parseSessionImport,
@@ -51,21 +51,14 @@ describe('sessionArchive: 空の会話', () => {
 });
 
 describe('sessionArchive: 題', () => {
-  it('最初の利用者の発言の先頭 40 字', () => {
-    const long = 'あ'.repeat(60);
-    expect(deriveTitle([turn('system', 'sys'), turn('user', long)])).toBe('あ'.repeat(40) + '…');
-    expect(deriveTitle([turn('user', 'short')])).toBe('short');
+  it('題は利用者が付けたものだけ。最初の発言から導かない（既定は空＝表示側が始まりの時刻で代える）', () => {
+    expect(buildSessionMeta('s', 5, [turn('user', 'こんにちは')]).title).toBe('');
+    expect(buildSessionMeta('s', 5, [turn('user', 'x')], ' 見積の相談 ').title).toBe('見積の相談');
   });
-  it('配列の本文は text ノードをつなぎ、添付の印は外す', () => {
-    const t = turn('user', [
-      { text: '<user_attachment name="a.png" path="system/temp/media/a.png">…</user_attachment>' },
-      { media: { path: 'system/temp/media/a.png', mimeType: 'image/png' } },
-      { text: 'この画像を見て' },
-    ]);
-    expect(deriveTitle([t])).toBe('この画像を見て');
-  });
-  it('利用者の発言が無ければ空文字', () => {
-    expect(deriveTitle([turn('model', 'x')])).toBe('');
+  it('整え方: 前後の空白と改行を落とし、80 字で切る。文字列以外は空', () => {
+    expect(normalizeTitle('  a \n b  ')).toBe('a b');
+    expect(normalizeTitle('あ'.repeat(100))).toBe('あ'.repeat(80));
+    expect(normalizeTitle(undefined)).toBe('');
   });
 });
 
@@ -119,13 +112,15 @@ describe('sessionArchive: VFS との出し入れ', () => {
   const turns = [turn('user', 'hello', 10), turn('model', '<report>hi</report>', 20)];
 
   it('書き出しはターンをそのまま持ち、読み戻せる', () => {
-    const exported = buildSessionExport({ id: 'sid', createdAt: 5 }, turns, 99);
+    const exported = buildSessionExport({ id: 'sid', createdAt: 5, title: '題' }, turns, 99);
     expect(exported.format).toBe(SESSION_EXPORT_FORMAT);
+    expect(exported.title).toBe('題');
     expect(exported.turns).toBe(turns);
     const parsed = parseSessionImport(JSON.stringify(exported));
     expect(parsed.ok).toBe(true);
     if (parsed.ok) {
       expect(parsed.id).toBe('sid');
+      expect(parsed.title).toBe('題');
       expect(parsed.createdAt).toBe(5);
       expect(parsed.turns).toEqual(turns);
     }
@@ -143,7 +138,7 @@ describe('sessionArchive: VFS との出し入れ', () => {
     const parsed = parseSessionImport(
       JSON.stringify({ format: SESSION_EXPORT_FORMAT, turns: [{ id: 'a', timestamp: 7, role: 'user', content: 'x' }] }),
     );
-    expect(parsed).toMatchObject({ ok: true, id: '', createdAt: 7 });
+    expect(parsed).toMatchObject({ ok: true, id: '', title: '', createdAt: 7 });
     if (parsed.ok) expect(parsed.turns[0].meta).toEqual({});
   });
   it('保存のファイル名は会話の始まりの日時と題から（名前に使えない字は外す）。同じ会話なら同じ名前', () => {

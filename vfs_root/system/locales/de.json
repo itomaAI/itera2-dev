@@ -112,7 +112,8 @@
     "sessions.title": "Sitzungsverlauf",
     "sessions.subtitle": "Letzte Unterhaltungen in diesem Browser",
     "sessions.current": "Aktuell",
-    "sessions.untitled": "(ohne Titel)",
+    "sessions.rename": "Umbenennen",
+    "sessions.renameMessage": "Titel dieser Sitzung (leer lassen, um die Startzeit anzuzeigen):",
     "sessions.empty": "Keine früheren Sitzungen.",
     "sessions.turns": {
       "one": "{count} Beitrag",

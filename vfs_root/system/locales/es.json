@@ -112,7 +112,8 @@
     "sessions.title": "Historial de sesiones",
     "sessions.subtitle": "Conversaciones recientes guardadas en este navegador",
     "sessions.current": "Actual",
-    "sessions.untitled": "(sin título)",
+    "sessions.rename": "Renombrar",
+    "sessions.renameMessage": "Título de esta sesión (déjelo vacío para mostrar la hora de inicio):",
     "sessions.empty": "No hay sesiones anteriores.",
     "sessions.turns": {
       "one": "{count} turno",

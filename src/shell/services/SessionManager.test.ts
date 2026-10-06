@@ -133,7 +133,7 @@ describe('SessionManager: 空にすると退避される', () => {
 
     const index = await history.getSessionsIndex();
     expect(index).toHaveLength(1);
-    expect(index[0].title).toBe('first question');
+    expect(index[0].title).toBe(''); // 最初の発言は題にしない
     expect(index[0].turnCount).toBe(2);
     expect(await history.getSession(index[0].id)).toHaveLength(2);
     expect(history.turns.map((t) => t.meta.type)).toEqual(['tool_available', 'event_log']);
@@ -155,6 +155,7 @@ describe('SessionManager: 空にすると退避される', () => {
     const { history, sm } = setup(2);
     for (let i = 0; i < 4; i++) {
       history.append('user', `q${i}`);
+      await sm.renameSession('current', `q${i}`);
       await sm.clearSession({});
     }
     const index = await history.getSessionsIndex();
@@ -196,6 +197,7 @@ describe('SessionManager: 切り替え', () => {
     await sm.clearSession({});
     const [old] = await history.getSessionsIndex();
     history.append('user', 'new');
+    await sm.renameSession('current', 'new');
 
     const res = await sm.switchSession(old.id);
     expect(res).toEqual({ ok: true, id: old.id });
@@ -212,6 +214,23 @@ describe('SessionManager: 切り替え', () => {
     expect(index.map((m) => m.title)).toEqual(['new']);
     expect(await history.getSession(old.id)).toBeUndefined();
     expect((await history.getCurrentMeta())?.id).toBe(old.id);
+  });
+
+  it('題は付け替えられ、退避・切り替えについて回る。空にすると題なし', async () => {
+    const { history, sm } = setup();
+    history.append('user', 'a');
+    expect(await sm.renameSession('current', '  見積の相談  ')).toBe(true);
+    expect((await sm.currentSession()).title).toBe('見積の相談');
+    await sm.clearSession({});
+    const [old] = await history.getSessionsIndex();
+    expect(old.title).toBe('見積の相談');
+    expect(await sm.renameSession(old.id, '改題')).toBe(true);
+    expect((await history.getSessionsIndex())[0].title).toBe('改題');
+    expect(await sm.renameSession('nope', 'x')).toBe(false);
+    await sm.switchSession(old.id);
+    expect((await sm.currentSession()).title).toBe('改題');
+    expect(await sm.renameSession('current', '')).toBe(true);
+    expect((await sm.currentSession()).title).toBe('');
   });
 
   it('エンジンが走っている間は断る（何も変えない）', async () => {
@@ -237,9 +256,11 @@ describe('SessionManager: VFS への保存・VFS からの読み込み', () => {
     const { history, vfs, sm } = setup();
     history.append('user', 'saved one');
     history.append('model', '<report>x</report>');
+    await sm.renameSession('current', 'saved one');
     expect(await sm.exportSessionToVfs('current', 'data/sessions/a.json', principal)).toBe(true);
     const json = JSON.parse(vfs.files.get('data/sessions/a.json')!);
     expect(json.format).toBe('itera-session/1');
+    expect(json.title).toBe('saved one');
     expect(json.turns).toHaveLength(2);
     const currentId = (await history.getCurrentMeta())!.id;
     expect(json.id).toBe(currentId);
@@ -249,6 +270,7 @@ describe('SessionManager: VFS への保存・VFS からの読み込み', () => {
     if (res.ok) expect(res.id).not.toBe(currentId); // いまの会話と同じ id なので採り直し
     expect(history.turns.slice(0, 2).map((t) => t.content)).toEqual(['saved one', '<report>x</report>']);
     expect(history.turns[2].meta.eventType).toBe('session_loaded');
+    expect((await sm.currentSession()).title).toBe('saved one'); // 題もファイルから戻る
     // 書き出す前の会話は退避されている
     expect((await history.getSessionsIndex()).map((m) => m.title)).toEqual(['saved one']);
   });
@@ -279,6 +301,7 @@ describe('SessionManager: 既定の保存先（paths.user.sessions）', () => {
   it('ダイアログ無しで保存先へ書き、名前は会話の始まりの日時＋題。保存し直すと同じファイルを上書き', async () => {
     const { history, vfs, sm } = setup();
     history.append('user', 'hello world');
+    await sm.renameSession('current', 'hello world');
     const p1 = await sm.exportSessionToDefaultDir('current', principal);
     expect(p1).toMatch(/^data\/sessions\/\d{8}_\d{4}_hello_world\.json$/);
     expect(vfs.dirs.has('data/sessions')).toBe(true);
@@ -292,6 +315,7 @@ describe('SessionManager: 既定の保存先（paths.user.sessions）', () => {
   it('保存先の一覧は名前と stat だけで組む（readFile を呼ばない）', async () => {
     const { history, vfs, sm } = setup();
     history.append('user', 'listed');
+    await sm.renameSession('current', 'listed');
     await sm.exportSessionToDefaultDir('current', principal);
     vfs.files.set('data/sessions/other.txt', 'x');
     const read = vi.spyOn(vfs, 'readFile');

@@ -18,7 +18,7 @@ import { isMediaContentNode, isToolExecutionEntry } from './TurnContentNormalize
 /** 退避した会話の札。一覧はこれだけで描ける（ターンを読まない） */
 export interface SessionMeta {
   id: string;
-  /** 最初の利用者の発言の先頭（無ければ空文字。表示側が日時で代える） */
+  /** 利用者が付けた題（無ければ空文字。表示側が会話の始まりの時刻で代える。2026-10-06 山内さん: 最初の発言は題にしない） */
   title: string;
   createdAt: number;
   /** 最後のターンの時刻。「最後に触った順」の根拠 */
@@ -34,6 +34,8 @@ export interface SessionMeta {
 export interface CurrentSessionMeta {
   id: string;
   createdAt: number;
+  /** 利用者が付けた題（無ければ空文字） */
+  title?: string;
 }
 
 /** VFS へ書き出す形。ターンは加工しない（戻したとき投影の前置が変わらない） */
@@ -53,8 +55,16 @@ export interface SessionExport {
 /** 剪定で残す件数の既定。依頼が数字を言っているのでここだけ既定を持つ（`preferences.sessionHistoryKeep` で変える） */
 export const DEFAULT_SESSION_HISTORY_KEEP = 10;
 
-/** 題にする文字数 */
-export const TITLE_MAX_CHARS = 40;
+/** 題の長さの上限（付け替えのとき切る） */
+export const TITLE_MAX_CHARS = 80;
+
+/** 利用者が入れた題を整える: 前後の空白を落とし、改行は空白に、上限で切る */
+export function normalizeTitle(value: unknown): string {
+  if (typeof value !== 'string') return '';
+  const t = value.replace(/\s+/g, ' ').trim();
+  const chars = Array.from(t);
+  return chars.length > TITLE_MAX_CHARS ? chars.slice(0, TITLE_MAX_CHARS).join('') : t;
+}
 
 const ROLES = new Set(['user', 'model', 'system']);
 
@@ -72,37 +82,6 @@ export function isEmptySession(turns: Turn[]): boolean {
   return !turns.some((t) => t.role === 'user' || t.role === 'model');
 }
 
-/** ターンの本文を文字列に寄せる（題の導出に使う。添付の XML は外す） */
-function textOf(turn: Turn): string {
-  if (typeof turn.content === 'string') return turn.content;
-  if (!Array.isArray(turn.content)) return '';
-  return turn.content
-    .map((node) =>
-      node && typeof (node as { text?: unknown }).text === 'string' ? (node as { text: string }).text : '',
-    )
-    .join('\n');
-}
-
-/**
- * 題を導く: 最初の利用者の発言の、添付の印（<user_attachment …>…）を除いた本文の先頭 40 字。
- * 利用者の発言が無ければ空文字（表示側が日時で代える）。
- */
-export function deriveTitle(turns: Turn[]): string {
-  for (const turn of turns) {
-    if (turn.role !== 'user') continue;
-    const text = textOf(turn)
-      .replace(/<user_attachment\b[^>]*>[\s\S]*?<\/user_attachment>/g, ' ')
-      .replace(/<user_attachment\b[^>]*\/>/g, ' ')
-      .replace(/<\/?user_input[^>]*>/g, ' ')
-      .replace(/\s+/g, ' ')
-      .trim();
-    if (!text) continue;
-    const chars = Array.from(text);
-    return chars.length > TITLE_MAX_CHARS ? chars.slice(0, TITLE_MAX_CHARS).join('') + '…' : text;
-  }
-  return '';
-}
-
 /** 会話が参照する添付のパス（利用者の添付と、ツールの結果の media の両方）。重複は 1 つに */
 export function collectMediaPaths(turns: Turn[]): string[] {
   const out = new Set<string>();
@@ -116,12 +95,12 @@ export function collectMediaPaths(turns: Turn[]): string[] {
   return [...out];
 }
 
-/** 札を組む。updatedAt は最後のターンの時刻（無ければ createdAt） */
-export function buildSessionMeta(id: string, createdAt: number, turns: Turn[]): SessionMeta {
+/** 札を組む。updatedAt は最後のターンの時刻（無ければ createdAt）。題は渡されたもの（既定は空） */
+export function buildSessionMeta(id: string, createdAt: number, turns: Turn[], title = ''): SessionMeta {
   const last = turns.length > 0 ? turns[turns.length - 1] : null;
   return {
     id,
-    title: deriveTitle(turns),
+    title: normalizeTitle(title),
     createdAt,
     updatedAt: last ? last.timestamp : createdAt,
     turnCount: turns.length,
@@ -161,7 +140,7 @@ export function referencedMediaPaths(index: SessionMeta[], currentTurns: Turn[])
 
 /** VFS へ書き出す形を組む */
 export function buildSessionExport(meta: CurrentSessionMeta, turns: Turn[], savedAt: number): SessionExport {
-  const m = buildSessionMeta(meta.id, meta.createdAt, turns);
+  const m = buildSessionMeta(meta.id, meta.createdAt, turns, meta.title);
   return {
     format: SESSION_EXPORT_FORMAT,
     id: m.id,
@@ -185,7 +164,7 @@ function isTurn(value: unknown): value is Turn {
 }
 
 export type ParsedSessionImport =
-  { ok: true; id: string; createdAt: number; turns: Turn[] } | { ok: false; reason: string };
+  { ok: true; id: string; title: string; createdAt: number; turns: Turn[] } | { ok: false; reason: string };
 
 /**
  * 読み込んだ JSON を検査する。形が違えば理由を返して拒む（黙って空の会話にしない）。
@@ -217,7 +196,7 @@ export function parseSessionImport(text: string): ParsedSessionImport {
       : turns.length > 0
         ? turns[0].timestamp
         : Date.now();
-  return { ok: true, id, createdAt, turns };
+  return { ok: true, id, title: normalizeTitle(r.title), createdAt, turns };
 }
 
 /**

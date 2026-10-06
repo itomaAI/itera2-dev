@@ -80,7 +80,7 @@ in `system/config/paths.json`. The host never hard-codes names such as `memory/`
     "registry": null,
     "locales": "user/locales",
     "appRegistry": null,
-    "sessions": "data/04_archives/sessions"
+    "sessions": "data/sessions"
   }
 }
 ```

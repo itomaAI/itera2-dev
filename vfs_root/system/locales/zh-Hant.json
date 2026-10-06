@@ -111,7 +111,8 @@
     "sessions.title": "工作階段記錄",
     "sessions.subtitle": "保存在此瀏覽器中的最近對話",
     "sessions.current": "目前",
-    "sessions.untitled": "（無標題）",
+    "sessions.rename": "重新命名",
+    "sessions.renameMessage": "此工作階段的標題（留空則顯示開始時間）：",
     "sessions.empty": "沒有更早的工作階段。",
     "sessions.turns": {
       "other": "{count} 輪"
