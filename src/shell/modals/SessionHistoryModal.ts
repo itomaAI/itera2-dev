@@ -178,16 +178,27 @@ export class SessionHistoryModal {
 
     const info = document.createElement('div');
     info.className = 'flex-1 min-w-0';
-    const title = meta.title || t('sessions.untitled');
+    // 題は利用者が付けたもの。無ければ会話の始まりの時刻（最初の発言は題にしない。2026-10-06 山内さん）
+    const title = meta.title || this._formatWhen(meta.createdAt);
     const badge = isCurrent
       ? `<span class="ml-2 px-1.5 py-0.5 rounded text-[0.625rem] font-bold bg-primary/15 text-primary border border-primary/30">${escapeHtml(t('sessions.current'))}</span>`
       : '';
     info.innerHTML = `
-      <div class="text-sm font-medium text-text-main truncate">${escapeHtml(title)}${badge}</div>
+      <div class="text-sm font-medium text-text-main truncate flex items-center min-w-0">
+        <span class="truncate">${escapeHtml(title)}</span>${badge}
+        <button type="button" class="ml-1.5 shrink-0 text-text-muted hover:text-primary text-xs" data-role="rename" title="${escapeHtml(t('sessions.rename'))}">✎</button>
+      </div>
       <div class="text-xs text-text-muted mt-0.5 truncate">${escapeHtml(this._formatWhen(meta.updatedAt))} · ${escapeHtml(
         t('sessions.turns', { count: meta.turnCount }),
       )} · ${escapeHtml(this._formatBytes(meta.bytes))}</div>
     `;
+    const renameBtn = info.querySelector<HTMLButtonElement>('button[data-role="rename"]');
+    if (renameBtn) {
+      renameBtn.onclick = (e) => {
+        e.stopPropagation();
+        void this._rename(isCurrent ? 'current' : meta.id, meta);
+      };
+    }
 
     const actions = document.createElement('div');
     actions.className = 'flex items-center gap-1.5 shrink-0';
@@ -300,11 +311,22 @@ export class SessionHistoryModal {
     });
   }
 
+  /** 題を付け替える（空にすると題なし＝始まりの時刻で表示） */
+  private async _rename(id: string | 'current', meta: SessionMeta): Promise<void> {
+    await this._guard(async () => {
+      const value = await window.AppUI?.prompt(t('sessions.renameMessage'), meta.title, t('sessions.rename'));
+      if (value === null || value === undefined) return;
+      const ok = await this.sessions.renameSession(id, value);
+      if (!ok) window.AppUI?.notify(t('sessions.loadFailed', { reason: t('sessions.missing') }), 'error');
+      await this._render();
+    });
+  }
+
   private async _delete(meta: SessionMeta): Promise<void> {
     await this._guard(async () => {
       const res = await window.AppUI?.showMessageBox({
         title: t('sessions.deleteConfirm.title'),
-        message: t('sessions.deleteConfirm.message', { title: meta.title || this._formatWhen(meta.updatedAt) }),
+        message: t('sessions.deleteConfirm.message', { title: meta.title || this._formatWhen(meta.createdAt) }),
         type: 'warning',
         buttons: [
           { label: t('common.cancel'), value: false, style: 'normal', isCancel: true },

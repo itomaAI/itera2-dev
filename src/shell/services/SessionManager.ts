@@ -22,6 +22,7 @@ import {
   isEmptySession,
   listSavedSessions,
   normalizeKeep,
+  normalizeTitle,
   parseSessionImport,
   pruneSessions,
   referencedMediaPaths,
@@ -115,7 +116,7 @@ export class SessionManager {
     if (!meta || typeof meta.id !== 'string' || !meta.id) {
       // 初めて（この版より前から続いている会話）。最初のターンの時刻を始まりにする
       const first = this.history.get()[0];
-      meta = { id: generateId(), createdAt: first ? first.timestamp : this.now() };
+      meta = { id: generateId(), createdAt: first ? first.timestamp : this.now(), title: '' };
       await this._setCurrentMeta(meta);
     }
     this.currentMeta = meta;
@@ -134,7 +135,28 @@ export class SessionManager {
   /** いまの会話の札（一覧の先頭に出す） */
   public async currentSession(): Promise<SessionMeta> {
     const meta = await this._ensureCurrentMeta();
-    return buildSessionMeta(meta.id, meta.createdAt, this.history.get());
+    return buildSessionMeta(meta.id, meta.createdAt, this.history.get(), meta.title);
+  }
+
+  /**
+   * 題を付け替える（`current` ならいまの会話）。空にすると題なし（表示は会話の始まりの時刻）。
+   * 無い id なら false。
+   */
+  public renameSession(id: string | 'current', title: string): Promise<boolean> {
+    return this._serialize(async () => {
+      const t = normalizeTitle(title);
+      if (id === 'current') {
+        const meta = await this._ensureCurrentMeta();
+        await this._setCurrentMeta({ ...meta, title: t });
+        return true;
+      }
+      const index = await this.history.getSessionsIndex();
+      const i = index.findIndex((m) => m.id === id);
+      if (i < 0) return false;
+      index[i] = { ...index[i], title: t };
+      await this.history.setSessionsIndex(index);
+      return true;
+    });
   }
 
   // ==========================================
@@ -154,7 +176,7 @@ export class SessionManager {
     const meta = await this._ensureCurrentMeta();
     if (isEmptySession(turns)) return false;
 
-    const entry = buildSessionMeta(meta.id, meta.createdAt, turns);
+    const entry = buildSessionMeta(meta.id, meta.createdAt, turns, meta.title);
     await this.history.putSession(entry.id, turns);
     const index = (await this.history.getSessionsIndex()).filter((m) => m.id !== entry.id);
     index.push(entry);
@@ -245,7 +267,7 @@ export class SessionManager {
     }
 
     this.history.clear();
-    await this._setCurrentMeta({ id: generateId(), createdAt: this.now() });
+    await this._setCurrentMeta({ id: generateId(), createdAt: this.now(), title: '' });
 
     await this._cleanupMedia();
 
@@ -285,7 +307,12 @@ export class SessionManager {
       const meta = index.find((m) => m.id === id);
       const turns = meta ? await this.history.getSession(id) : undefined;
       if (!meta || !turns) return { ok: false, reason: 'missing' };
-      await this._activate({ id: meta.id, createdAt: meta.createdAt }, turns, 'switched', meta.updatedAt);
+      await this._activate(
+        { id: meta.id, createdAt: meta.createdAt, title: meta.title },
+        turns,
+        'switched',
+        meta.updatedAt,
+      );
       return { ok: true, id: meta.id };
     });
   }
@@ -367,7 +394,7 @@ export class SessionManager {
       const found = (await this.history.getSessionsIndex()).find((m) => m.id === id);
       const stored = found ? await this.history.getSession(id) : undefined;
       if (!found || !stored) return null;
-      meta = { id: found.id, createdAt: found.createdAt };
+      meta = { id: found.id, createdAt: found.createdAt, title: found.title };
       turns = stored;
     }
     return JSON.stringify(buildSessionExport(meta, turns, this.now()), null, 2);
@@ -447,7 +474,7 @@ export class SessionManager {
       const taken = new Set([current.id, ...index.map((m) => m.id)]);
       const id = parsed.id && !taken.has(parsed.id) ? parsed.id : generateId();
       const last = parsed.turns.length > 0 ? parsed.turns[parsed.turns.length - 1].timestamp : parsed.createdAt;
-      await this._activate({ id, createdAt: parsed.createdAt }, parsed.turns, 'loaded', last);
+      await this._activate({ id, createdAt: parsed.createdAt, title: parsed.title }, parsed.turns, 'loaded', last);
       return { ok: true, id };
     });
   }

@@ -111,7 +111,8 @@
     "sessions.title": "セッション履歴",
     "sessions.subtitle": "このブラウザに残っている最近の会話",
     "sessions.current": "現在",
-    "sessions.untitled": "（題なし）",
+    "sessions.rename": "題を変更",
+    "sessions.renameMessage": "このセッションの題（空にすると始まりの時刻を表示）:",
     "sessions.empty": "以前のセッションはありません。",
     "sessions.turns": {
       "other": "{count} ターン"
