@@ -158,6 +158,7 @@
 
       const $ = (id) => document.getElementById(id);
       let cwd = ''; // いま見ているフォルダ（起動時に loadRoots → navigate で決まる）
+      let declaredCwd = null; // 最後に nav.declare で名乗った cwd（T-0619）
       let entries = []; // cwd の中身（stat の配列）
       let selected = new Set(); // 選んでいるパス
       let lastClicked = null;
@@ -327,9 +328,14 @@
         renderCrumbs();
         renderList();
         await renderTree();
-        try {
-          await MetaOS.nav.declare('?path=' + encodeURIComponent(cwd)); // 場所の申告（T-0453。戻るで前の場所へ）
-        } catch (_) {}
+        if (cwd !== declaredCwd) {
+          // 場所の申告（T-0453。戻るで前の場所へ）。同じ場所を名乗り直さない —— vfs_mutation の描き直しは
+          // 数十秒に何度も起きるので、そのたびに申告すると履歴に同じ段が積まれる（T-0619）
+          declaredCwd = cwd;
+          try {
+            await MetaOS.nav.declare('?path=' + encodeURIComponent(cwd));
+          } catch (_) {}
+        }
       }
 
       function renderCrumbs() {

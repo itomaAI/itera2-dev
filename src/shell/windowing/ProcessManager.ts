@@ -10,6 +10,7 @@ import { USER_PRINCIPAL } from '../../core/vfs/types';
 import { GuestCompiler } from './GuestCompiler';
 import { resolveRelativePath } from '../../utils/path';
 import { t, escapeHtml } from '../../i18n/i18n';
+import { declaredRoute } from './declaredRoute';
 
 export interface Process {
   pid: string;
@@ -510,30 +511,29 @@ export class ProcessManager {
   }
 
   /**
-   * ゲストの申告（自分の画面の URL を伝える）。前面のアプリの path と currentUri を書き換え、場所を更新する。
+   * ゲストの申告（自分の画面の URL を伝える）。
+   * 🔴 当てるのは**呼び出し元**の app（`pid`）であって、前面のアプリではない（T-0619）。
+   * 以前は前面を探して書き換えていたので、背面の Explorer が `vfs_mutation` のたびに名乗り直すと、
+   * 前面にある別のアプリの path に `?path=…` が付き、Explorer 自身のクエリは消えた。
+   * 呼び出し元が前面なら「現在の場所」を更新する（履歴に積まれる）。背面なら、その pid の path / currentUri の
+   * 記録だけを更新し、場所も履歴も触らない（前面に戻ったとき・再起動のときにその場所が使われる）。
+   * `pid` を省けば従来どおり前面の app（シェルの内部からの呼び出し用）。
    * path が '?' / '#' で始まれば base に付け足す。`metaos://<intent>/<path>` の完全な URI なら intent とパスに分けて受ける
    * （そのまま前置すると `metaos://run/metaos://run/…` と二重になり、path も `metaos://…` になって resume 判定と相対パスが狂う。T-0468）。
-   * 戻り値は新しい URI（前面が無ければ null）。
+   * 戻り値は新しい URI（当てる app が無ければ null。daemon からの申告も null）。
    */
-  public declareRoute(path: string): string | null {
-    const fg = Array.from(this.processes.values()).find((p) => p.type === 'app' && p.state === 'foreground');
-    if (!fg) return null;
-    const oldBasePath = fg.path.split(/[?#]/)[0];
-    // 既存の URI から intent（run / open）を保つ。完全な URI で申告されたらそちらの intent を採る
-    const intentMatch = fg.currentUri.match(/^metaos:\/\/([^/]+)/);
-    let intent = intentMatch ? intentMatch[1] : 'open';
-    let declared = String(path || '');
-    const full = declared.match(/^metaos:\/\/([^/]+)\/(.*)$/);
-    if (full) {
-      intent = full[1];
-      declared = full[2];
+  public declareRoute(path: string, pid?: string): string | null {
+    const target = pid
+      ? this.processes.get(pid)
+      : Array.from(this.processes.values()).find((p) => p.type === 'app' && p.state === 'foreground');
+    if (!target || target.type !== 'app') return null;
+    const next = declaredRoute(target, path);
+    target.path = next.path;
+    target.currentUri = next.uri;
+    if (target.state === 'foreground') {
+      this.setCurrentRoute({ pid: target.pid, uri: target.currentUri });
     }
-    const newPath =
-      declared.startsWith('?') || declared.startsWith('#') ? oldBasePath + declared : declared || oldBasePath;
-    fg.path = newPath;
-    fg.currentUri = `metaos://${intent}/${newPath}`;
-    this.setCurrentRoute({ pid: fg.pid, uri: fg.currentUri });
-    return fg.currentUri;
+    return target.currentUri;
   }
 
   /** アドレスバーの表示だけ（②）。場所は変えない。場所を変えるのは setCurrentRoute */

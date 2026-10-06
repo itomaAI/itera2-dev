@@ -32,7 +32,7 @@ export interface IProcessManager {
   reportError(pid: string, errorData: any): void;
   processes: Map<string, any>;
   _updateAddressBar(path: string): void;
-  declareRoute(path: string): string | null;
+  declareRoute(path: string, pid?: string): string | null;
 }
 export interface IEngine {
   injectUserTurn(content: TurnContent, meta?: TurnMeta): Promise<void>;
@@ -551,9 +551,10 @@ export class HostApiRouter {
     });
 
     // ゲストの申告（自分の画面の URL）。nav.declare が正式名。host.updateAddressBar は互換（非推奨）で同じ handler（T-0453）
-    const declare = async ({ path }: { path: string }) => {
+    // 当てるのは呼び出し元（sourcePid）であって前面ではない（T-0619）
+    const declare = async ({ path }: { path: string }, sourcePid: string) => {
       if (!d.processManager) return false;
-      return d.processManager.declareRoute(String(path || '')) !== null;
+      return d.processManager.declareRoute(String(path || ''), sourcePid) !== null;
     };
     t.registerHandler('host:address_bar', declare);
     t.registerHandler('nav:declare', declare);
