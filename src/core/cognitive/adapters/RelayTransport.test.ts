@@ -101,6 +101,34 @@ describe('Anthropic 形式', () => {
   });
 });
 
+describe('Gemini の generationConfig（2026-10-07 の Google の告知）', () => {
+  it('temperature / topP / topK / thinkingBudget は設定にあっても送らない。thinkingLevel と maxOutputTokens は送る', async () => {
+    const adapter = new GeminiAdapter(
+      'AIzaUSERKEY',
+      'gemini-3.8-flash',
+      {
+        temperature: 0.2,
+        generationConfig: { topP: 0.9, topK: 40, thinkingConfig: { thinkingLevel: 'high', thinkingBudget: 1024 } },
+      },
+      null,
+    );
+    await adapter.generateStream([], noop);
+
+    const gc = calls[0].body.generationConfig;
+    expect(gc.temperature).toBeUndefined();
+    expect(gc.topP).toBeUndefined();
+    expect(gc.topK).toBeUndefined();
+    expect(gc.thinkingConfig).toEqual({ thinkingLevel: 'high' });
+    expect(gc.maxOutputTokens).toBe(65536);
+  });
+
+  it('何も指定しなければ maxOutputTokens だけ（temperature の既定 1.0 を付けない）', async () => {
+    const adapter = new GeminiAdapter('AIzaUSERKEY', 'gemini-3.8-flash', {}, null);
+    await adapter.generateStream([], noop);
+    expect(calls[0].body.generationConfig).toEqual({ maxOutputTokens: 65536 });
+  });
+});
+
 describe('Gemini 形式', () => {
   it('中継の /v1beta/models/<別名>:streamGenerateContent へ送る', async () => {
     const adapter = new GeminiAdapter('', 'standard', {}, null, relay());

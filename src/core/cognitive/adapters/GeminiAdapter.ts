@@ -36,18 +36,19 @@ export class GeminiAdapter extends BaseLLMAdapter {
       url = `${this.baseUrl}/${this.modelName}:streamGenerateContent?alt=sse&key=${this.apiKey}`;
     }
 
+    // Gemini に送ってよい generationConfig の鍵。
+    // 2026-10-07 の Google の告知（[Action Required] Update thinking_budget and sampling parameters）:
+    //   - temperature / topP / topK は 3.6 Flash 以降、既定に固定されて効いていない。次のモデルからは付いているとエラー
+    //   - thinkingBudget は次のモデルから 400 INVALID_ARGUMENT（thinkingLevel に置き換え）
+    // 設定（llm.json・各アプリの generationConfig）にあっても送らない。思考の深さは thinkingLevel だけ。
     const GEMINI_ALLOWED_STRUCTURE = {
-      temperature: null,
       maxOutputTokens: null,
-      topP: null,
-      topK: null,
       stopSequences: null,
       responseMimeType: null,
       responseSchema: null,
       candidateCount: null,
       thinkingConfig: {
         thinkingLevel: null,
-        thinkingBudget: null,
         includeThoughts: null,
       },
     };
@@ -64,12 +65,7 @@ export class GeminiAdapter extends BaseLLMAdapter {
 
     const generationConfig = filterNestedObject(combinedInput, GEMINI_ALLOWED_STRUCTURE);
 
-    if (generationConfig.temperature === undefined) generationConfig.temperature = 1.0;
     if (generationConfig.maxOutputTokens === undefined) generationConfig.maxOutputTokens = 65536;
-
-    if (generationConfig.thinkingConfig && generationConfig.thinkingConfig.thinkingLevel) {
-      delete generationConfig.thinkingConfig.thinkingBudget;
-    }
 
     const payload = {
       contents: messages,
