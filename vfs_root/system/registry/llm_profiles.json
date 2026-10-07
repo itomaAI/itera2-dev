@@ -12,11 +12,9 @@
       "defaultConfig": {
         "generationConfig": {
           "thinkingConfig": {
-            "thinkingLevel": null,
-            "thinkingBudget": null
+            "thinkingLevel": null
           },
-          "maxOutputTokens": null,
-          "temperature": null
+          "maxOutputTokens": null
         }
       },
       "models": [
