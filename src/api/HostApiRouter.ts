@@ -10,7 +10,8 @@ import type { Role, Turn, TurnContent, TurnMeta } from '../core/state/HistoryMan
 import type { DynamicToolRegistration, ProcessInfo } from './HostApiContract';
 import { resolvePrincipal } from './principal';
 import type { SpawnOptions } from '../shell/windowing/ProcessManager';
-import { USER_PRINCIPAL } from '../core/vfs/types';
+import { SYSTEM_PRINCIPAL, USER_PRINCIPAL } from '../core/vfs/types';
+import { buildAppendPlan, buildChatStatus, buildResetPlan, latestContextUsage } from './chatApi';
 import { VfsEventFormatter } from '../core/vfs/VfsEventFormatter';
 import { buildGuestThemeCss } from '../shell/windowing/guestThemeCss';
 import { base64ToBlob, blobToDataUrl, dataUrlToBlob } from '../utils/binary';
@@ -20,6 +21,7 @@ import { t as tr } from '../i18n/i18n';
 // 依存モジュールのダックタイピング・インターフェース (未実装モジュール用)
 export interface IHistoryManager {
   append(role: Role, content: TurnContent, meta?: TurnMeta): Turn;
+  get(): Turn[];
 }
 export interface IProcessManager {
   spawn(options: SpawnOptions): Promise<void>;
@@ -35,8 +37,22 @@ export interface IProcessManager {
   declareRoute(path: string, pid?: string): string | null;
 }
 export interface IEngine {
-  injectUserTurn(content: TurnContent, meta?: TurnMeta): Promise<void>;
+  injectUserTurn(content: TurnContent, meta?: TurnMeta): Promise<Turn>;
+  requestEvaluation(): void;
   stop(): void;
+  status(): { running: boolean; busy: boolean; outstandingTools: number };
+}
+/** 会話の空にする・切り替える・保存する（SessionManager が満たす。MetaOS.chat の実体。T-0634） */
+export interface ISessionManager {
+  clearSession(opts: { summary?: string; triggerLlm?: boolean; restoreTools?: boolean }): Promise<{
+    archived: boolean;
+    sessionId: string;
+  }>;
+  currentSession(): Promise<{ id: string; title: string; createdAt: number }>;
+  listSessions(): Promise<unknown[]>;
+  switchSession(id: string): Promise<unknown>;
+  exportSessionToDefaultDir(id: string | 'current', principal: unknown): Promise<string | null>;
+  importSessionFromVfs(path: string, principal: unknown): Promise<unknown>;
 }
 export interface IShell {
   _closeMobileDrawers(): void;
@@ -80,6 +96,7 @@ export interface RouterDeps {
   engine?: IEngine;
   shell?: IShell;
   toolRegistry?: IToolRegistry;
+  sessionManager?: ISessionManager;
 }
 
 export class HostApiRouter {
@@ -314,78 +331,113 @@ export class HostApiRouter {
     });
 
     // ==========================================
-    // 2. AI & History (ai)
+    // 2. Chat (chat) — 会話の基本操作（T-0634）
+    //   append / wake / stop / reset / status と、会話の一覧・切り替え・保存・読み込み。
+    //   ai.ask / ai.task / ai.log / ai.stop は guest_bridge.js の側で append / stop の薄皮として組む
+    //   （ホストに `ai:*` を残して二重に実装しない）。規則は chatApi.ts（純関数）。
+    //   権限は従来の ai:* と同じ（ゲストに閉じない）。遠隔の相手の認証は中継するデーモンの責任。
     // ==========================================
-    t.registerHandler('ai:ask', async ({ text, opts }) => {
-      if (!d.engine || !d.shell) return false;
-      const attachments =
-        opts && opts.attachments
-          ? opts.attachments.map((p: string) => {
-              const mime = p.match(/\.(png|jpg|jpeg|gif|webp)$/i) ? 'image/png' : 'application/octet-stream';
-              return { media: { path: p, mimeType: mime, metadata: {} } };
-            })
-          : [];
-      let content: any[] = [];
-      if (attachments.length > 0) {
-        content.push(...attachments);
-        attachments.forEach((a: any) =>
-          content.push({
-            text: `<user_attachment path="${a.media.path}">[Attachment]</user_attachment>`,
-          }),
-        );
-      }
-      if (text) content.push({ text });
+    const chatPanel = () => d.shell?.panels?.chat;
 
-      // opts.silent: 履歴に user ターンを置くだけで LLM を起こさない
-      // （後続の ai.task などに心構えを前置きするための経路）
-      if (opts && opts.silent === true) {
-        await d.engine.injectUserTurn(content, { trigger_llm: false });
-        return true;
+    t.registerHandler('chat:append', async ({ role, content, opts }, sourcePid) => {
+      if (!d.engine || !d.history) throw new Error('Chat is not available.');
+      const plan = buildAppendPlan({ role, content, opts }, sourcePid);
+      if (!plan.ok) throw new Error(`chat.append: ${plan.reason}`);
+      const chat = chatPanel();
+      if (plan.role === 'user') {
+        // injectUserTurn が turn_end を出すので画面には Engine 経由で載る
+        const turn = await d.engine.injectUserTurn(plan.content, plan.meta);
+        if (plan.wake) chat?.setProcessing(true);
+        return { id: turn.id };
       }
-      d.shell.panels.chat.setProcessing(true);
-      await d.engine.injectUserTurn(content);
+      const turn = d.history.append('system', plan.content, plan.meta);
+      if (plan.visible) chat?.appendTurn(turn);
+      if (plan.wake) chat?.setProcessing(true);
+      return { id: turn.id };
+    });
+
+    t.registerHandler('chat:wake', async () => {
+      if (!d.engine) throw new Error('Chat is not available.');
+      d.engine.requestEvaluation();
+      // 未読が無ければ評価が loop_stop(idle) を出して消す
+      chatPanel()?.setProcessing(true);
       return true;
     });
 
-    t.registerHandler('ai:task', async ({ instruction, context, opts }) => {
-      if (!d.history || !d.shell) return false;
-      let text = `[System Task Request]\n${instruction}`;
-      if (context) text += `\n\n[Context]\n${JSON.stringify(context, null, 2)}`;
-      const lpml = `<event type="system_task">\n${text}\n</event>`;
-
-      const turn = d.history.append('system', lpml, {
-        type: 'event_log',
-        visible: !opts?.silent,
-        trigger_llm: true,
-      });
-      if (!opts?.silent) {
-        d.shell.panels.chat.appendTurn(turn);
-        d.shell.panels.chat.setProcessing(true);
-      }
-      return true;
-    });
-
-    t.registerHandler('ai:log', async ({ message, type, opts }) => {
-      if (!d.history || !d.shell) return false;
-      const triggerLlm = opts?.trigger_llm === true;
-      const lpml = `<event type="${type || 'app_event'}">\n${message}\n</event>`;
-      // イベントの種類を meta.eventType に残す（画面で隠す判定 preferences.hiddenEventTypes に使う。T-0246）。
-      // meta.type は従来どおり event_log（Engine の連続回数の判定がこれを見る）。
-      const turn = d.history.append('system', lpml, {
-        type: 'event_log',
-        eventType: type || 'app_event',
-        trigger_llm: triggerLlm,
-      });
-      d.shell.panels.chat.appendTurn(turn);
-      if (triggerLlm) {
-        d.shell.panels.chat.setProcessing(true);
-      }
-      return true;
-    });
-
-    t.registerHandler('ai:stop', async () => {
+    t.registerHandler('chat:stop', async () => {
       if (d.engine) d.engine.stop();
       return true;
+    });
+
+    t.registerHandler('chat:reset', async ({ opts }, sourcePid) => {
+      if (!d.engine || !d.sessionManager) throw new Error('Chat is not available.');
+      const plan = buildResetPlan(opts, sourcePid);
+      // LLM が応答できない状態（文脈の溢れ）でも効くように、busy は見ない。走っている束は見捨てる（会話は退避される）
+      d.engine.stop();
+      return await d.sessionManager.clearSession({
+        summary: plan.summary,
+        triggerLlm: plan.wake,
+        restoreTools: plan.restoreTools,
+      });
+    });
+
+    // usage ログは UTC の日付で切られ、応答のあとに書かれる（観測は 1 ターン遅れる）。今日に無ければ昨日を読む
+    const readLatestUsage = async () => {
+      for (const back of [0, 1]) {
+        const day = new Date(Date.now() - back * 86400000).toISOString().slice(0, 10);
+        const path = `system/logs/usage/${day}.jsonl`;
+        try {
+          if (!d.vfs.exists(SYSTEM_PRINCIPAL, path)) continue;
+          const found = latestContextUsage(await d.vfs.readFile(SYSTEM_PRINCIPAL, path));
+          if (found) return found;
+        } catch {
+          /* 読めなければ無いのと同じ */
+        }
+      }
+      return null;
+    };
+
+    t.registerHandler('chat:status', async () => {
+      if (!d.engine || !d.history) throw new Error('Chat is not available.');
+      let session: { id: string; title: string; createdAt: number } | null = null;
+      if (d.sessionManager) {
+        try {
+          const m = await d.sessionManager.currentSession();
+          session = { id: m.id, title: m.title, createdAt: m.createdAt };
+        } catch {
+          session = null;
+        }
+      }
+      return buildChatStatus({
+        engine: d.engine.status(),
+        turns: d.history.get(),
+        session,
+        context: await readLatestUsage(),
+      });
+    });
+
+    t.registerHandler('chat:sessions', async () => {
+      if (!d.sessionManager) throw new Error('Chat is not available.');
+      const [current, saved] = await Promise.all([d.sessionManager.currentSession(), d.sessionManager.listSessions()]);
+      return { current, saved };
+    });
+
+    t.registerHandler('chat:switch_session', async ({ id }) => {
+      if (!d.sessionManager) throw new Error('Chat is not available.');
+      if (typeof id !== 'string' || !id) throw new Error('chat.switchSession: id is required');
+      return await d.sessionManager.switchSession(id);
+    });
+
+    t.registerHandler('chat:save_session', async ({ id }, sourcePid) => {
+      if (!d.sessionManager) throw new Error('Chat is not available.');
+      const target = typeof id === 'string' && id ? id : 'current';
+      return await d.sessionManager.exportSessionToDefaultDir(target, getPrincipal(sourcePid));
+    });
+
+    t.registerHandler('chat:load_session', async ({ path }, sourcePid) => {
+      if (!d.sessionManager) throw new Error('Chat is not available.');
+      if (typeof path !== 'string' || !path) throw new Error('chat.loadSession: path is required');
+      return await d.sessionManager.importSessionFromVfs(path, getPrincipal(sourcePid));
     });
 
     // ==========================================

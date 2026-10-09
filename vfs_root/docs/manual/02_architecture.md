@@ -67,7 +67,15 @@ The **Guest** environment (where apps run) is isolated from the **Host** (where 
     *   `.openEditor(path)`: Opens the Host's code editor fallback.
     *   `.notify(message, title)`: Sends a system toast notification.
 
-*   **AI Interaction (`MetaOS.ai`)**:
+*   **Chat (`MetaOS.chat`)** — the primitive operations on the conversation. None of them needs the LLM to be responsive, so a daemon can use them to recover a stuck session (e.g. a `/reset` received over Telegram):
+    *   `.append(role, content, opts)`: Puts one turn in the history. `role` is `'user'` or `'system'`; `content` is a string or an array of `{text}` / `{media:{path}}` parts; `opts: { wake=false, visible=true, eventType, attachments }`. Returns `{ id }`.
+    *   `.wake()`: Asks the engine to evaluate the history (idle if nothing is unread). `.stop()`: aborts generation.
+    *   `.reset({ summary, wake=true, restoreTools=true })`: Clears the conversation (the current one is archived to the session history). Returns `{ archived, sessionId }`.
+    *   `.status()`: Engine state, turn count, current session and the last context size from the usage log.
+    *   `.sessions()` / `.switchSession(id)` / `.saveSession(id)` / `.loadSession(path)`: the session history.
+
+*   **AI Interaction (`MetaOS.ai`)** — thin wrappers over `MetaOS.chat`:
+    *   `.ask(text, opts)`: Sends a chat message as the user and wakes the AI (`opts.silent=true` only places it).
     *   `.task(instruction, context, opts)`: Triggers the AI to perform a background task.
     *   `.log(message, type, opts)`: Appends an event to the AI's history (e.g., to inform the AI that a user clicked a button). Pass `opts.trigger_llm=true` to wake the AI (debounced 1.5s).
 

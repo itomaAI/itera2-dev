@@ -46,6 +46,12 @@ export interface ClearSessionOptions {
   restoreTools?: boolean;
 }
 
+/** 空にした結果: いまの会話を退避したか・新しい会話の id（MetaOS.chat.reset が返す。T-0634） */
+export interface ClearSessionResult {
+  archived: boolean;
+  sessionId: string;
+}
+
 /** この版より前の添付の置き場（移行しない。参照されなくなれば消える）。新しい添付は `currentMediaDir()` */
 export const MEDIA_CACHE_DIR = LEGACY_MEDIA_DIR;
 
@@ -295,11 +301,11 @@ export class SessionManager {
   // 空にする（ゴミ箱・<reset_session>）
   // ==========================================
 
-  public clearSession(options: ClearSessionOptions = {}): Promise<void> {
+  public clearSession(options: ClearSessionOptions = {}): Promise<ClearSessionResult> {
     return this._serialize(() => this._clearSession(options));
   }
 
-  private async _clearSession(options: ClearSessionOptions): Promise<void> {
+  private async _clearSession(options: ClearSessionOptions): Promise<ClearSessionResult> {
     const summary = options.summary || null;
     const triggerLlm = options.triggerLlm || false;
     const restoreTools = options.restoreTools || false;
@@ -316,7 +322,8 @@ export class SessionManager {
     }
 
     this.history.clear();
-    await this._setCurrentMeta({ id: generateId(), createdAt: this.now(), title: '' });
+    const next: CurrentSessionMeta = { id: generateId(), createdAt: this.now(), title: '' };
+    await this._setCurrentMeta(next);
 
     await this._cleanupMedia();
 
@@ -334,6 +341,7 @@ export class SessionManager {
     }
 
     this.onSessionChanged?.();
+    return { archived, sessionId: next.id };
   }
 
   // ==========================================

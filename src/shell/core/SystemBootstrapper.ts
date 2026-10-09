@@ -286,6 +286,7 @@ export class SystemBootstrapper {
       history,
       engine,
       toolRegistry,
+      sessionManager,
       shell: shellFacade as any,
     });
 
