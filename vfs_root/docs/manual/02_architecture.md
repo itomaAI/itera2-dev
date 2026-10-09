@@ -70,7 +70,7 @@ The **Guest** environment (where apps run) is isolated from the **Host** (where 
 *   **Chat (`MetaOS.chat`)** — the primitive operations on the conversation. None of them needs the LLM to be responsive, so a daemon can use them to recover a stuck session (e.g. a `/reset` received over Telegram):
     *   `.append(role, content, opts)`: Puts one turn in the history. `role` is `'user'` or `'system'`; `content` is a string or an array of `{text}` / `{media:{path}}` parts; `opts: { wake=false, visible=true, eventType, attachments }`. Returns `{ id }`.
     *   `.wake()`: Asks the engine to evaluate the history (idle if nothing is unread). `.stop()`: aborts generation.
-    *   `.reset({ summary, wake=true, restoreTools=true })`: Clears the conversation (the current one is archived to the session history). Returns `{ archived, sessionId }`.
+    *   `.reset({ summary, restoreTools=true })`: Clears the conversation (the current one is archived to the session history). It does not wake the AI; the next message does, and the AI reads `summary` then. Returns `{ archived, sessionId }`.
     *   `.status()`: Engine state, turn count, current session and the last context size from the usage log.
     *   `.sessions()` / `.switchSession(id)` / `.saveSession(id)` / `.loadSession(path)`: the session history.
 

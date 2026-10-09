@@ -36,17 +36,48 @@ export interface CommandSpec {
   summary: string;
 }
 
+/** 画面に出る文言（配布物ごとに差し替える。共通部品に文言を埋めない。Itera は英語、ミャク楽は日本語） */
+export interface CommandTexts {
+  helpHeader: string;
+  unknownCommand: string; // {name}
+  summary: { help: string; status: string; stop: string; reset: string; ps: string; open: string };
+  stopped: string;
+  sessionReset: string;
+  noProcesses: string;
+  openUsage: string;
+  opening: string; // {target}
+}
+
+export const COMMAND_TEXTS_EN: CommandTexts = {
+  helpHeader: 'Commands (typed at the start of a chat message; `//` sends a literal slash):',
+  unknownCommand: 'Unknown command: /{name}',
+  summary: {
+    help: 'List commands, or show one',
+    status: 'Engine state, session and the last context size',
+    stop: 'Abort generation and abandon the tool batch in flight',
+    reset:
+      'Archive this conversation and start a fresh one (the note is carried over; the AI reads it with your next message)',
+    ps: 'List running processes',
+    open: 'Open a VFS path with its app (or a metaos:// URI)',
+  },
+  stopped: 'Stopped.',
+  sessionReset: 'Session reset.',
+  noProcesses: '(no processes)',
+  openUsage: 'usage: /open <path>',
+  opening: 'Opening {target}',
+};
+
 /** `/help` の文面（名前順） */
-export function helpText(specs: CommandSpec[], name?: string): string {
+export function helpText(specs: CommandSpec[], name?: string, T: CommandTexts = COMMAND_TEXTS_EN): string {
   if (name) {
     const s = specs.find((c) => c.name === name.toLowerCase());
-    if (!s) return `Unknown command: /${name}`;
+    if (!s) return T.unknownCommand.replace('{name}', name);
     return `${s.usage}\n  ${s.summary}`;
   }
   const sorted = [...specs].sort((a, b) => a.name.localeCompare(b.name));
   const width = Math.max(...sorted.map((c) => c.usage.length));
   const lines = sorted.map((c) => `${c.usage.padEnd(width)}  ${c.summary}`);
-  return ['Commands (typed at the start of a chat message; `//` sends a literal slash):', ...lines].join('\n');
+  return [T.helpHeader, ...lines].join('\n');
 }
 
 /** 実行の記録を 1 つの文にする（履歴に `<event type="command">` として置く本文） */
