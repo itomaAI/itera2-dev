@@ -755,7 +755,7 @@
           });
 
         /**
-         * 親へ運んで done にする（＝山内さんの「確認したので完了にする」）。**ちょうど一度だけ。**
+         * 親へ運んで done にする（＝利用者の「確認したので完了にする」）。**ちょうど一度だけ。**
          * レポート本体は所属プロジェクトの履歴へ、上位タスクへは 1 行。
          * 列の中で読み直してから「既に運ばれたか」を見るので、二度押しでも二重に載らない。
          */
@@ -989,6 +989,17 @@
           return xs;
         };
 
+        // 利用者の呼び名（preferences.username の先頭の語。ホームと同じ読み方）。道具の定義と手番の文に使う。
+        // 配信物に特定の名前を焼き付けない（2026-10-10 / T-0635）
+        const userName = async () => {
+          try {
+            const p = (await MetaOS.system.getConfig('preferences')) || {};
+            return String(p.username || '').split(/[\s(（]/)[0] || 'user';
+          } catch (e) {
+            return 'user';
+          }
+        };
+        const USER = await userName();
         const TOOLS = [];
         const tool = (name, description, definition, handler) => TOOLS.push({ name, description, definition, handler });
 
@@ -998,7 +1009,7 @@
           `<define_tag name="loom_list">
 Loom の札を front matter で絞って一覧する（Loom デーモン。ファイルを読まずに写しから答える）。
 Attributes:
-  - status (optional): カンマ区切り。todo,doing / review / blocked ほか。特別な値: "mine"（私の番＝todo・doing）"yours"（山内さんの番）"open"（閉じていない）
+  - status (optional): カンマ区切り。todo,doing / review / blocked ほか。特別な値: "mine"（私の番＝todo・doing）"yours"（${USER}さんの番）"open"（閉じていない）
   - kind (optional): "task" | "project"
   - parent (optional): この札の直下の子だけ（継承の前任の子も含む）
   - under (optional): この札とその子孫だけ
@@ -1134,13 +1145,13 @@ Attributes:
   - refs (optional): JSON の配列（例: ["data/x.md"]）
   - force (optional): status="review" のとき、レポートが無くても回す
 Note: status="review" は「確認へ回す」と同じ（レポートが無ければ回さずに理由を返す。親へは運ばない）。
-      🔴 status="done" は受け付けない —— done は山内さんの一手で、親へ運ぶ引き金でもある。
+      🔴 status="done" は受け付けない —— done は${USER}さんの一手で、親へ運ぶ引き金でもある。
 </define_tag>`,
           async (ctx) => {
             const { a } = attrsOf(ctx);
             if (!a.id) return '[Error] id が要ります';
             if (a.status === 'done')
-              return '[Error] done は受け付けません（山内さんが画面の「確認したので完了にする」で行う。そのとき親へ運ばれる）';
+              return `[Error] done は受け付けません（${USER}さんが画面の「確認したので完了にする」で行う。そのとき親へ運ばれる）`;
             const patch = {};
             for (const k of ['priority', 'scheduled', 'title', 'parent']) if (a[k] != null) patch[k] = a[k];
             if (a.refs != null) {
@@ -1222,16 +1233,16 @@ Attributes:
   - parent (required for task): 親の id
   - title (required): 題（仮の題を焼き付けないため必須）
   - kind (optional): "task"（既定）| "project"
-  - status (optional): タスクの既定は "todo"（私が起こす札は私のボール）。山内さんに渡すなら "inbox"
+  - status (optional): タスクの既定は "todo"（私が起こす札は私のボール）。${USER}さんに渡すなら "inbox"
   - priority / scheduled (optional)
-Content: タスクなら ## 依頼 の本文。プロジェクトでは受け付けない（## 意図 は山内さんが置く）。
+Content: タスクなら ## 依頼 の本文。プロジェクトでは受け付けない（## 意図 は${USER}さんが置く）。
 </define_tag>`,
           async (ctx) => {
             const { a, content } = attrsOf(ctx);
             if (!a.title) return '[Error] title が要ります';
             const kind = a.kind === 'project' ? 'project' : 'task';
             if (kind === 'project' && content.trim())
-              return '[Error] プロジェクトの本文（意図）は受け付けません。意図は山内さんが置く';
+              return `[Error] プロジェクトの本文（意図）は受け付けません。意図は ${USER}さんが置く`;
             const r = await Ops.create({
               kind,
               parent: a.parent,

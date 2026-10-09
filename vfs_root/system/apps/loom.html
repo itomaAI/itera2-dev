@@ -129,6 +129,9 @@
         追随: 'text-warning',
       };
 
+      // 利用者の呼び名（preferences.username の先頭の語。ホームと同じ読み方）。追記の who と AI への通知文に使う。
+      // 配信物に特定の名前を焼き付けない（2026-10-10 / T-0635）
+      let USER = 'user';
       let nodes = [];
       let selectedId = null;
       let editing = false;
@@ -1505,7 +1508,7 @@
         editing = true;
         await refresh();
         await notifyAI(
-          `Loom: ${p.meta.id}「${p.meta.title}」から ${r.id} へ継承しました。後継の ## 意図 は山内さんが書きます。` +
+          `Loom: ${p.meta.id}「${p.meta.title}」から ${r.id} へ継承しました。後継の ## 意図 は${USER}さんが書きます。` +
             `そのうえで、前任の履歴を全部読み、意図に照らして畳んだものを後継の ## 文脈 に書いてください（文脈生成）。`,
         );
       };
@@ -1752,14 +1755,14 @@
           section,
           text: text.replace(/\n/g, ' '),
           form: section === '意図' ? 'raw' : 'entry',
-          who: '山内',
+          who: USER,
           unblock: !!notify,
         });
         if (!r || !r.ok) return;
         clearQuick();
         if (notify)
           await notifyAI(
-            `Loom ${n.meta.id}「${n.meta.title}」に山内さんから追記がありました（## ${section}）。${await hintOf(n.meta.id, r.lines[0])}`,
+            `Loom ${n.meta.id}「${n.meta.title}」に${USER}さんから追記がありました（## ${section}）。${await hintOf(n.meta.id, r.lines[0])}`,
           );
         await refresh();
       };
@@ -1801,7 +1804,7 @@
         const r = await call('append', {
           id: n.meta.id,
           form: 'addendum',
-          who: '山内',
+          who: USER,
           text: text.replace(/\n/g, ' '),
         });
         if (!r || !r.ok) return;
@@ -1834,14 +1837,14 @@
               id: t.meta.id,
               section: '追加要望',
               text: note.replace(/\n/g, ' '),
-              who: '山内',
+              who: USER,
               status: 'todo',
             })
           : await call('saveMeta', { id: t.meta.id, patch: { status: 'todo' } });
         if (!r || !r.ok) return;
         clearQuick();
         await notifyAI(
-          `Loom ${t.meta.id}「${t.meta.title}」の手番が山内さんから Itera に渡されました。` +
+          `Loom ${t.meta.id}「${t.meta.title}」の手番が${USER}さんから Itera に渡されました。` +
             (note ? `一言が添えられています。${await hintOf(t.meta.id, r.lines[0])}` : await hintOf(t.meta.id)),
         );
         await refresh();
@@ -1853,7 +1856,7 @@
         if (!(await commitIfEditing())) return;
         const note = quickNote();
         const text = `手番を引き取り、作業の中止を指示。${note ? note.replace(/\n/g, ' ') : ''}`.trim();
-        const r = await call('append', { id: t.meta.id, section: '進捗', text, who: '山内', status: 'paused' });
+        const r = await call('append', { id: t.meta.id, section: '進捗', text, who: USER, status: 'paused' });
         if (!r || !r.ok) return;
         clearQuick();
         try {
@@ -1869,11 +1872,11 @@
         if (!(await commitIfEditing())) return;
         const note = quickNote();
         const text = `中断を指示。${note ? note.replace(/\n/g, ' ') : ''}`.trim();
-        const r = await call('append', { id: t.meta.id, section: '追加要望', text, who: '山内', status: 'paused' });
+        const r = await call('append', { id: t.meta.id, section: '追加要望', text, who: USER, status: 'paused' });
         if (!r || !r.ok) return;
         clearQuick();
         await notifyAI(
-          `Loom ${t.meta.id}「${t.meta.title}」について、山内さんから中断の指示です。新しい作業を始めず、ここまでと次の一手を ## 進捗 に書いてから止めてください。${await hintOf(t.meta.id, r.lines[0])}`,
+          `Loom ${t.meta.id}「${t.meta.title}」について、${USER}さんから中断の指示です。新しい作業を始めず、ここまでと次の一手を ## 進捗 に書いてから止めてください。${await hintOf(t.meta.id, r.lines[0])}`,
         );
         await refresh();
       };
@@ -2640,6 +2643,10 @@
       };
 
       (async () => {
+        try {
+          const p = (await MetaOS.system.getConfig('preferences')) || {};
+          USER = String(p.username || '').split(/[\s(（]/)[0] || 'user';
+        } catch (e) {}
         // 札の一覧はデーモン（system/services/loom.html）の写しから受け取る。デーモンが居なければ掲示を出す
         await refresh();
         // ★ 札を読み終えてから。初回の既定（子を持つ札を畳む）が nodes に依る（T-0202）。
