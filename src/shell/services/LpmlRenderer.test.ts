@@ -46,3 +46,23 @@ describe('LpmlRenderer: tag box titles', () => {
     expect(summaryOf(r.formatStream('<event type="daemon_event">e</event>'))).toBe('🔔 daemon_event');
   });
 });
+
+describe('LpmlRenderer: command events', () => {
+  const r = new LpmlRenderer();
+  const isOpen = (html: string) => {
+    const div = document.createElement('div');
+    div.innerHTML = html;
+    const d = div.querySelector('details');
+    return !!d && d.hasAttribute('open');
+  };
+
+  it('opens the box of <event type="command"> (the result is for the user to read)', () => {
+    const html = r.formatStream('<event type="command">\n$ /status\nengine: idle\n</event>');
+    expect(summaryOf(html)).toBe('🔔 command');
+    expect(isOpen(html)).toBe(true);
+  });
+
+  it('keeps other events folded', () => {
+    expect(isOpen(r.formatStream('<event type="info">\nx\n</event>'))).toBe(false);
+  });
+});

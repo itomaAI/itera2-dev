@@ -129,9 +129,13 @@ export class LpmlRenderer {
       // したがってここに来るのは、モデルが偽装したものか、文字列で残った古い履歴だけである。
       // 以前は action 属性を見出しにしていた（「📥 get_time」）ため、偽装が本物の結果と同じ見た目になった。
       // いまは未登録のタグと同じく「⚙️ tool_output」と描き、属性は下の行にそのまま出す。
-      case 'event':
-        title = `🔔 ${getAttr('type') || 'unknown'}`;
+      case 'event': {
+        const evType = getAttr('type') || 'unknown';
+        title = `🔔 ${evType}`;
+        // 例外2: スラッシュコマンドの結果は利用者が見るために置いたもの（T-0634）。畳まずに出す
+        if (evType === 'command') isOpen = true;
         break;
+      }
       case 'system':
         const sysType = getAttr('type') || 'info';
         title = `💻 ${sysType}`;
