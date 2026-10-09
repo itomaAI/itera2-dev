@@ -13,6 +13,7 @@ import {
   buildResetPlan,
   formatChatStatus,
   readLatestContextUsage,
+  runChatReset,
   STATUS_LABELS_EN,
   type StatusLabels,
   type UsageLogReader,
@@ -39,6 +40,7 @@ export interface Command extends CommandSpec {
 export interface CommandDeps {
   engine: {
     stop(): void;
+    requestEvaluation(): void;
     status(): { running: boolean; busy: boolean; outstandingTools: number };
   };
   history: {
@@ -46,7 +48,10 @@ export interface CommandDeps {
     append(role: 'system', content: TurnContent, meta: TurnMeta): Turn;
   };
   sessionManager: {
-    clearSession(opts: { summary?: string; triggerLlm?: boolean; restoreTools?: boolean }): Promise<unknown>;
+    clearSession(opts: { summary?: string; triggerLlm?: boolean; restoreTools?: boolean }): Promise<{
+      archived: boolean;
+      sessionId: string;
+    }>;
     currentSession(): Promise<{ id: string; title: string; createdAt: number }>;
   };
   processManager: { list(): Array<{ pid: string; path: string; type: string; state: string }> };
@@ -158,12 +163,7 @@ export class CommandDispatcher {
         summary: T.summary.reset,
         run: async (c) => {
           const plan = buildResetPlan({ summary: c.rest }, 'user command');
-          d.engine.stop();
-          await d.sessionManager.clearSession({
-            summary: plan.summary,
-            triggerLlm: plan.wake,
-            restoreTools: plan.restoreTools,
-          });
+          await runChatReset({ engine: d.engine, sessionManager: d.sessionManager }, plan);
           return { ok: true, text: T.sessionReset };
         },
       },

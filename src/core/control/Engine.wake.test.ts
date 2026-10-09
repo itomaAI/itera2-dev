@@ -110,3 +110,20 @@ describe('Engine.status / injectUserTurn', () => {
     }
   });
 });
+
+describe('停止のあとの履歴の変更（/reset の申し送りが起こさなかった理由）', () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  it('stop() のあとに trigger_llm: true の system ターンを積んでも起きない。requestEvaluation で起きる', async () => {
+    const h = createHarness();
+    h.engine.stop();
+    h.history.append('system', '<event type="session_reset">carried</event>', { type: 'event_log', trigger_llm: true });
+    await h.flush();
+    expect(h.woke()).toBe(false);
+
+    h.engine.requestEvaluation();
+    await h.flush();
+    expect(h.woke()).toBe(true);
+  });
+});

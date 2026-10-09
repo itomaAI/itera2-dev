@@ -273,3 +273,36 @@ export function formatChatStatus(s: ChatStatus, now: number = Date.now(), L: Sta
     `${L.context}: ${ctx}`,
   ].join('\n');
 }
+
+/** chat.reset / `/reset` が使う実体の口 */
+export interface ResetDeps {
+  engine: { stop(): void; requestEvaluation(): void };
+  sessionManager: {
+    clearSession(opts: { summary?: string; triggerLlm?: boolean; restoreTools?: boolean }): Promise<{
+      archived: boolean;
+      sessionId: string;
+    }>;
+  };
+}
+
+/**
+ * 会話を空にして（必要なら）起こす。chat:reset と /reset の両方がここを通る（手順を 2 か所に置かない）。
+ *
+ * 🔴 `engine.stop()` は停止要求（`stopRequested`）を立て、それが立っている間は履歴の変更が評価を予約しない。
+ * `clearSession` が積む申し送り（`trigger_llm: true`）はその経路で黙って捨てられるので、
+ * **止めたあとに空にしたら `requestEvaluation()` で明示的に起こす**（2026-10-10 山内さん「/reset は起こさない」で発覚）。
+ * `<reset_session>` 道具は stop を呼ばないので、この一手が無くても起きていた。
+ */
+export async function runChatReset(
+  deps: ResetDeps,
+  plan: ChatResetPlan,
+): Promise<{ archived: boolean; sessionId: string }> {
+  deps.engine.stop();
+  const r = await deps.sessionManager.clearSession({
+    summary: plan.summary,
+    triggerLlm: plan.wake,
+    restoreTools: plan.restoreTools,
+  });
+  if (plan.wake) deps.engine.requestEvaluation();
+  return r;
+}

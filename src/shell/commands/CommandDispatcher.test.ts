@@ -4,7 +4,11 @@ import { CommandDispatcher } from './CommandDispatcher';
 function harness(opts: { usage?: string } = {}) {
   const turns: any[] = [];
   const shown: any[] = [];
-  const engine = { stop: vi.fn(), status: () => ({ running: false, busy: true, outstandingTools: 2 }) };
+  const engine = {
+    stop: vi.fn(),
+    requestEvaluation: vi.fn(),
+    status: () => ({ running: false, busy: true, outstandingTools: 2 }),
+  };
   const history = {
     get: () => turns,
     append: (role: string, content: any, meta: any) => {
@@ -96,6 +100,8 @@ describe('CommandDispatcher', () => {
       restoreTools: true,
     });
     expect(h.turns).toEqual([]);
+    // stop() が立てる停止要求は申し送りの trigger_llm を黙って捨てるので、明示的に起こす
+    expect(h.engine.requestEvaluation).toHaveBeenCalledTimes(1);
   });
 
   it('/ps は一覧、/open は開く。引数なしの /open は失敗として記録', async () => {

@@ -2,7 +2,14 @@
  * MetaOS.chat の規則（T-0634）。ホストの実体に触らない純関数の試験。
  */
 import { describe, it, expect } from 'vitest';
-import { buildAppendPlan, buildResetPlan, latestContextUsage, buildChatStatus, mimeOfAttachment } from './chatApi';
+import {
+  buildAppendPlan,
+  buildResetPlan,
+  latestContextUsage,
+  buildChatStatus,
+  mimeOfAttachment,
+  runChatReset,
+} from './chatApi';
 
 describe('chat.append の計画', () => {
   it('文字列は user の text 1 つになり、既定では起こさない・画面に出す', () => {
@@ -141,5 +148,34 @@ describe('chat.status', () => {
         context: null,
       }).lastTurnAt,
     ).toBeNull();
+  });
+});
+
+describe('runChatReset', () => {
+  it('stop → clearSession → requestEvaluation の順（止めたあとは履歴の変更だけでは起きない）', async () => {
+    const calls: string[] = [];
+    const deps = {
+      engine: { stop: () => calls.push('stop'), requestEvaluation: () => calls.push('wake') },
+      sessionManager: {
+        clearSession: async (o: any) => {
+          calls.push(`clear:${o.triggerLlm}`);
+          return { archived: true, sessionId: 'n' };
+        },
+      },
+    };
+    const r = await runChatReset(deps, { summary: 's', wake: true, restoreTools: true });
+    expect(calls).toEqual(['stop', 'clear:true', 'wake']);
+    expect(r).toEqual({ archived: true, sessionId: 'n' });
+  });
+  it('wake=false なら起こさない', async () => {
+    const calls: string[] = [];
+    await runChatReset(
+      {
+        engine: { stop: () => calls.push('stop'), requestEvaluation: () => calls.push('wake') },
+        sessionManager: { clearSession: async () => ({ archived: false, sessionId: 'n' }) },
+      },
+      { summary: 's', wake: false, restoreTools: false },
+    );
+    expect(calls).toEqual(['stop']);
   });
 });

@@ -11,7 +11,7 @@ import type { DynamicToolRegistration, ProcessInfo } from './HostApiContract';
 import { resolvePrincipal } from './principal';
 import type { SpawnOptions } from '../shell/windowing/ProcessManager';
 import { USER_PRINCIPAL } from '../core/vfs/types';
-import { buildAppendPlan, buildChatStatus, buildResetPlan, readLatestContextUsage } from './chatApi';
+import { buildAppendPlan, buildChatStatus, buildResetPlan, readLatestContextUsage, runChatReset } from './chatApi';
 import { VfsEventFormatter } from '../core/vfs/VfsEventFormatter';
 import { buildGuestThemeCss } from '../shell/windowing/guestThemeCss';
 import { base64ToBlob, blobToDataUrl, dataUrlToBlob } from '../utils/binary';
@@ -373,12 +373,7 @@ export class HostApiRouter {
       if (!d.engine || !d.sessionManager) throw new Error('Chat is not available.');
       const plan = buildResetPlan(opts, sourcePid);
       // LLM が応答できない状態（文脈の溢れ）でも効くように、busy は見ない。走っている束は見捨てる（会話は退避される）
-      d.engine.stop();
-      return await d.sessionManager.clearSession({
-        summary: plan.summary,
-        triggerLlm: plan.wake,
-        restoreTools: plan.restoreTools,
-      });
+      return await runChatReset({ engine: d.engine, sessionManager: d.sessionManager }, plan);
     });
 
     t.registerHandler('chat:status', async () => {
