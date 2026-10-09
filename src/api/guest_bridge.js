@@ -1,347 +1,428 @@
-(function(global) {
-    const PROTOCOL_VERSION = 'itera:ipc:v2';
+(function (global) {
+  const PROTOCOL_VERSION = 'itera:ipc:v2';
 
-    const generateId = () => {
-        if (typeof crypto !== 'undefined' && crypto.randomUUID) {
-            return crypto.randomUUID();
-        }
-        return Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
-    };
-
-    class IpcMessage {
-        static createRequest(source, target, action, payload = {}) {
-            return { protocol: PROTOCOL_VERSION, type: 'req', id: generateId(), source, target, action, payload, error: null };
-        }
-        static createResponse(reqMessage, result, error = null) {
-            return { protocol: PROTOCOL_VERSION, type: 'res', id: reqMessage.id, source: reqMessage.target, target: reqMessage.source, action: reqMessage.action, payload: result, error: error ? String(error) : null };
-        }
-        static createEvent(source, target, action, payload = {}) {
-            return { protocol: PROTOCOL_VERSION, type: 'event', id: generateId(), source, target, action, payload, error: null };
-        }
-        static isValid(msg) {
-            return msg && msg.protocol === PROTOCOL_VERSION && msg.type && msg.source && msg.target;
-        }
+  const generateId = () => {
+    if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+      return crypto.randomUUID();
     }
+    return Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+  };
 
-    class RpcManager {
-        constructor(timeoutMs = 150000) {
-            this.pendingRequests = new Map();
-            this.timeoutMs = timeoutMs;
-        }
-        waitFor(id) {
-            return new Promise((resolve, reject) => {
-                const timeoutId = setTimeout(() => {
-                    if (this.pendingRequests.has(id)) {
-                        this.pendingRequests.delete(id);
-                        reject(new Error("RPC Timeout: Request " + id + " exceeded " + this.timeoutMs + "ms"));
-                    }
-                }, this.timeoutMs);
-                this.pendingRequests.set(id, { resolve, reject, timeoutId });
-            });
-        }
-        resolve(id, result, error = null) {
-            if (this.pendingRequests.has(id)) {
-                const pending = this.pendingRequests.get(id);
-                clearTimeout(pending.timeoutId);
-                this.pendingRequests.delete(id);
-                if (error) pending.reject(new Error(error));
-                else pending.resolve(result);
-            }
-        }
+  class IpcMessage {
+    static createRequest(source, target, action, payload = {}) {
+      return {
+        protocol: PROTOCOL_VERSION,
+        type: 'req',
+        id: generateId(),
+        source,
+        target,
+        action,
+        payload,
+        error: null,
+      };
     }
-
-    class GuestTransport {
-        constructor(pid) {
-            this.pid = pid;
-            this.rpc = new RpcManager();
-            this.handlers = new Map();
-            this.eventListeners = new Map();
-            this._initListener();
-        }
-        registerHandler(action, handler) {
-            this.handlers.set(action, handler);
-        }
-        on(action, callback) {
-            if (!this.eventListeners.has(action)) this.eventListeners.set(action, []);
-            this.eventListeners.get(action).push(callback);
-        }
-        off(action, callback) {
-            if (this.eventListeners.has(action)) {
-                const filtered = this.eventListeners.get(action).filter(cb => cb !== callback);
-                if (filtered.length === 0) this.eventListeners.delete(action);
-                else this.eventListeners.set(action, filtered);
-            }
-        }
-        async requestHost(action, payload) {
-            const req = IpcMessage.createRequest(this.pid, 'host', action, payload);
-            const promise = this.rpc.waitFor(req.id);
-            window.parent.postMessage(req, '*');
-            return promise;
-        }
-        _initListener() {
-            window.addEventListener('message', async (e) => {
-                const msg = e.data;
-                if (!IpcMessage.isValid(msg)) return;
-                if (msg.target !== this.pid && msg.target !== 'broadcast') return;
-
-                if (msg.type === 'req') {
-                    const handler = this.handlers.get(msg.action);
-                    let result = null, error = null;
-                    if (handler) {
-                        try { result = await handler(msg.payload); }
-                        catch (err) { error = err.message || String(err); }
-                    } else {
-                        error = "No handler registered for action: " + msg.action;
-                    }
-                    if (e.source) e.source.postMessage(IpcMessage.createResponse(msg, result, error), '*');
-                } else if (msg.type === 'res') {
-                    this.rpc.resolve(msg.id, msg.payload, msg.error);
-                } else if (msg.type === 'event') {
-                    const listeners = this.eventListeners.get(msg.action);
-                    if (listeners) listeners.forEach(cb => cb(msg.payload));
-                }
-            });
-        }
+    static createResponse(reqMessage, result, error = null) {
+      return {
+        protocol: PROTOCOL_VERSION,
+        type: 'res',
+        id: reqMessage.id,
+        source: reqMessage.target,
+        target: reqMessage.source,
+        action: reqMessage.action,
+        payload: result,
+        error: error ? String(error) : null,
+      };
     }
+    static createEvent(source, target, action, payload = {}) {
+      return {
+        protocol: PROTOCOL_VERSION,
+        type: 'event',
+        id: generateId(),
+        source,
+        target,
+        action,
+        payload,
+        error: null,
+      };
+    }
+    static isValid(msg) {
+      return msg && msg.protocol === PROTOCOL_VERSION && msg.type && msg.source && msg.target;
+    }
+  }
 
-    const MY_PID = window.__ITERA_PID__ || window.name || 'unknown';
-    const transport = new GuestTransport(MY_PID);
-    const localToolHandlers = new Map();
-    const mountHandlers = new Map();
+  class RpcManager {
+    constructor(timeoutMs = 150000) {
+      this.pendingRequests = new Map();
+      this.timeoutMs = timeoutMs;
+    }
+    waitFor(id) {
+      return new Promise((resolve, reject) => {
+        const timeoutId = setTimeout(() => {
+          if (this.pendingRequests.has(id)) {
+            this.pendingRequests.delete(id);
+            reject(new Error('RPC Timeout: Request ' + id + ' exceeded ' + this.timeoutMs + 'ms'));
+          }
+        }, this.timeoutMs);
+        this.pendingRequests.set(id, { resolve, reject, timeoutId });
+      });
+    }
+    resolve(id, result, error = null) {
+      if (this.pendingRequests.has(id)) {
+        const pending = this.pendingRequests.get(id);
+        clearTimeout(pending.timeoutId);
+        this.pendingRequests.delete(id);
+        if (error) pending.reject(new Error(error));
+        else pending.resolve(result);
+      }
+    }
+  }
 
-    const reportedErrors = new Set();
-    let errorCount = 0;
-    const MAX_ERRORS = 10;
+  class GuestTransport {
+    constructor(pid) {
+      this.pid = pid;
+      this.rpc = new RpcManager();
+      this.handlers = new Map();
+      this.eventListeners = new Map();
+      this._initListener();
+    }
+    registerHandler(action, handler) {
+      this.handlers.set(action, handler);
+    }
+    on(action, callback) {
+      if (!this.eventListeners.has(action)) this.eventListeners.set(action, []);
+      this.eventListeners.get(action).push(callback);
+    }
+    off(action, callback) {
+      if (this.eventListeners.has(action)) {
+        const filtered = this.eventListeners.get(action).filter((cb) => cb !== callback);
+        if (filtered.length === 0) this.eventListeners.delete(action);
+        else this.eventListeners.set(action, filtered);
+      }
+    }
+    async requestHost(action, payload) {
+      const req = IpcMessage.createRequest(this.pid, 'host', action, payload);
+      const promise = this.rpc.waitFor(req.id);
+      window.parent.postMessage(req, '*');
+      return promise;
+    }
+    _initListener() {
+      window.addEventListener('message', async (e) => {
+        const msg = e.data;
+        if (!IpcMessage.isValid(msg)) return;
+        if (msg.target !== this.pid && msg.target !== 'broadcast') return;
 
-    window.addEventListener('error', (e) => {
-        if (errorCount >= MAX_ERRORS) return;
-        const errKey = e.message + ':' + e.lineno;
-        if (reportedErrors.has(errKey)) return;
-        reportedErrors.add(errKey);
-        errorCount++;
-        transport.requestHost('sys:report_error', {
-            message: e.message,
-            filename: e.filename,
-            line: e.lineno,
-            col: e.colno,
-            stack: e.error ? e.error.stack : null
-        }).catch(() => {});
-    });
-
-    window.addEventListener('unhandledrejection', (e) => {
-        if (errorCount >= MAX_ERRORS) return;
-        let msg = 'Unhandled Rejection';
-        let stack = null;
-        if (e.reason instanceof Error) {
-            msg = e.reason.message;
-            stack = e.reason.stack;
-        } else {
-            msg = String(e.reason);
-        }
-        const errKey = 'promise:' + msg;
-        if (reportedErrors.has(errKey)) return;
-        reportedErrors.add(errKey);
-        errorCount++;
-        transport.requestHost('sys:report_error', {
-            message: msg,
-            stack: stack
-        }).catch(() => {});
-    });
-
-    transport.registerHandler('fs:resolve_missing', async (payload) => {
-        let longestMatch = '';
-        let matchedHandler = null;
-        for (const [mountedPath, handler] of mountHandlers.entries()) {
-            // ルートマウント('')の場合は常にマッチさせる
-            if (mountedPath === '' || payload.path === mountedPath || payload.path.startsWith(mountedPath + '/')) {
-                // 空文字の場合は length が 0 なので、他のより深いマウントポイントがあればそちらが優先される
-                if (mountedPath === '' && longestMatch !== '') continue;
-                
-                if (mountedPath.length >= longestMatch.length) {
-                    longestMatch = mountedPath;
-                    matchedHandler = handler;
-                }
-            }
-        }
-        if (matchedHandler) {
-            return await matchedHandler(payload.path);
-        }
-        return false;
-    });
-
-    transport.registerHandler('execute_tool', async (payload) => {
-        const handler = localToolHandlers.get(payload.name);
-        if (!handler) throw new Error("Tool handler not found: " + payload.name);
-        return await handler(payload.params);
-    });
-
-    transport.registerHandler('eval_js', async (payload) => {
-        const AsyncFunction = Object.getPrototypeOf(async function(){}).constructor;
-        const func = new AsyncFunction(payload.code);
-        return await func();
-    });
-
-    global.MetaOS = {
-        fs: {
-            read: async (path, opts = {}) => transport.requestHost('fs:read', { path, opts }),
-            write: async (path, content, opts = {}) => transport.requestHost('fs:write', { path, content, opts }),
-            append: async (path, content, opts = {}) => transport.requestHost('fs:append', { path, content, opts }),
-            delete: async (path, opts = {}) => transport.requestHost('fs:delete', { path, opts }),
-            rename: async (oldPath, newPath, opts = {}) => transport.requestHost('fs:rename', { oldPath, newPath, opts }),
-            restore: async (path, opts = {}) => transport.requestHost('fs:restore', { path, opts }),
-            copy: async (srcPath, destPath, opts = {}) => transport.requestHost('fs:copy', { srcPath, destPath, opts }),
-            mkdir: async (path, opts = {}) => transport.requestHost('fs:mkdir', { path, opts }),
-            stat: async (path) => transport.requestHost('fs:stat', { path }),
-            list: async (path, opts = {}) => transport.requestHost('fs:list', { path, opts }),
-            exists: async (path) => transport.requestHost('fs:exists', { path }),
-            getSyncState: async (path) => transport.requestHost('fs:get_sync_state', { path }),
-            getUsage: async () => transport.requestHost('fs:get_usage', {}),
-            listMounts: async () => transport.requestHost('fs:list_mounts', {}),
-            resolveUrl: async (path) => transport.requestHost('fs:resolve_url', { path }),
-            getAcl: async (path) => transport.requestHost('fs:get_acl', { path }),
-            setAcl: async (path, acl, opts = {}) => transport.requestHost('fs:set_acl', { path, acl, opts }),
-            registerSyncProvider: async (path, handlers) => {
-                let normPath = path.replace(/\\/g, '/').replace(/^\/+/, '').replace(/\/+$/, '');
-                if (handlers.onFetchContent) mountHandlers.set(normPath, handlers.onFetchContent);
-
-                if (handlers.onMutate) {
-                    transport.on('sync:onMutate', (payload) => {
-                        handlers.onMutate(payload.mutations);
-                    });
-                }
-
-                return transport.requestHost('fs:register_provider', { path: normPath });
-            },
-            unregisterSyncProvider: async (path) => {
-                let normPath = path.replace(/\\/g, '/').replace(/^\/+/, '').replace(/\/+$/, '');
-                mountHandlers.delete(normPath);
-                return transport.requestHost('fs:unregister_provider', { path: normPath });
-            },
-            createStub: async (path, meta, opts = {}) => transport.requestHost('fs:create_stub', { path, meta, opts })
-        },
-        ai: {
-            ask: async (text, opts = {}) => transport.requestHost('ai:ask', { text, opts }),
-            task: async (instruction, context, opts = {}) => transport.requestHost('ai:task', { instruction, context, opts }),
-            log: async (message, type, opts = {}) => transport.requestHost('ai:log', { message, type, opts }),
-            stop: async () => transport.requestHost('ai:stop', {})
-        },
-        system: {
-            spawn: async (path, opts = {}) => transport.requestHost('sys:spawn', { path, opts }),
-            kill: async (pid) => transport.requestHost('sys:kill', { pid }),
-            ps: async () => transport.requestHost('sys:ps', {}),
-            info: async () => transport.requestHost('sys:info', {}),
-            broadcast: async (eventName, payload) => transport.requestHost('sys:broadcast', { eventName, payload }),
-            on: (eventName, handler) => transport.on(eventName, handler),
-            off: (eventName, handler) => transport.off(eventName, handler),
-            capture: async (pid) => transport.requestHost('sys:capture', { pid }),
-            getArgs: async () => transport.requestHost('sys:get_args', {}),
-            getProviders: async () => transport.requestHost('sys:get_providers', {}),
-            // 設定は層（配信の既定 → 利用者の上書き）になっている。併合と書き先はホストが決める（T-0431）
-            getConfig: async (category) => transport.requestHost('sys:get_config', { category }),
-            updateConfig: async (category, updates) => transport.requestHost('sys:update_config', { category, updates }),
-            // 登録簿（apps / services / associations）も層になっている。重ねた値と書き先はホストが決める（T-0447）
-            getRegistry: async (name) => transport.requestHost('sys:get_registry', { name }),
-            updateRegistry: async (name, id, updates) => transport.requestHost('sys:update_registry', { name, id, updates })
-        },
-        host: {
-            goHome: async () => transport.requestHost('host:go_home', {}),
-            showOpenDialog: async (options = {}) => transport.requestHost('host:show_open_dialog', { options }),
-            showSaveDialog: async (options = {}) => transport.requestHost('host:show_save_dialog', { options }),
-            openEditor: async (path) => transport.requestHost('host:open_editor', { path }),
-            notify: async (message, type, duration) => transport.requestHost('host:notify', { message, type, duration }),
-            copyText: async (text) => transport.requestHost('host:copy', { text }),
-            openExternal: async (url) => transport.requestHost('host:open_url', { url }),
-            // 非推奨（T-0453）: MetaOS.nav.declare(path) を使う。中身は同じ handler（前面アプリの場所を申告する）
-            updateAddressBar: async (path) => transport.requestHost('nav:declare', { path }),
-            revealInExplorer: async (path) => transport.requestHost('host:reveal_in_explorer', { path }),
-            open: async (path) => transport.requestHost('host:open_path', { path }),
-            showMessageBox: async (options) => transport.requestHost('host:show_message_box', { options }),
-            showLoading: async (message) => transport.requestHost('host:show_loading', { message }),
-            hideLoading: async () => transport.requestHost('host:hide_loading', {})
-        },
-        // アプリをまたぐ「戻る／進む」（T-0453）。履歴はホスト（シェル）が持つ。活性の変化は system.on('nav_changed', …)
-        nav: {
-            declare: async (path) => transport.requestHost('nav:declare', { path }),
-            back: async () => transport.requestHost('nav:back', {}),
-            forward: async () => transport.requestHost('nav:forward', {}),
-            state: async () => transport.requestHost('nav:state', {})
-        },
-        net: {
-            fetch: async (url, options = {}) => transport.requestHost('net:fetch', { url, options }),
-            download: async (url, destPath, options = {}) => transport.requestHost('net:download', { url, destPath, options }),
-            oauth: async (providerId, authUrl, instructions) => transport.requestHost('net:oauth', { providerId, authUrl, instructions })
-        },
-        device: {
-            getLocation: async (options = {}) => transport.requestHost('dev:location', { options }),
-            takePhoto: async (options = {}) => transport.requestHost('dev:photo', { options }),
-            recordAudio: async (options = {}) => transport.requestHost('dev:audio', { options }),
-            vibrate: async (pattern) => transport.requestHost('dev:vibrate', { pattern })
-        },
-        tools: {
-            register: async (toolDef) => {
-                if (!toolDef || !toolDef.name || typeof toolDef.handler !== 'function') {
-                    throw new Error("Invalid tool definition.");
-                }
-                localToolHandlers.set(toolDef.name, toolDef.handler);
-                await transport.requestHost('tools:register', {
-                    name: toolDef.name,
-                    description: toolDef.description,
-                    definition: toolDef.definition
-                });
-            },
-            unregister: async (name) => {
-                localToolHandlers.delete(name);
-                await transport.requestHost('tools:unregister', { name });
-            }
-        }
-    };
-
-    // テーマの追随（T-0539）。OS がアプリへ入れた <style id="itera-guest-theme"> は OS の持ち物なので、
-    // 差し替えも OS の部品（このブリッジ）が受け持つ。アプリの中身には触らない（ui.js を使わないアプリにも効く）。
-    // theme_changed はテーマの持ち主（ホストの ThemeService）が当て終えてから来るので、そのとき取り直す。
-    // 立て続けに来たら最後の 1 回だけを当てる（応答の順が入れ替わっても古い CSS で上書きしない）。
-    let themeSeq = 0;
-    transport.on('theme_changed', async () => {
-        const el = document.getElementById('itera-guest-theme');
-        if (!el) return;
-        const seq = ++themeSeq;
-        try {
-            const css = await transport.requestHost('sys:get_theme_css', {});
-            if (seq !== themeSeq || typeof css !== 'string') return;
-            el.textContent = css;
-        } catch (e) {
-            console.warn('[Itera] Could not refresh the theme', e);
-        }
-    });
-
-    // <html lang> の追随（P-0046 / T-0545）。アプリが自分で lang を書いていれば触らない（アプリの持ち物）。
-    // 書いていないアプリにだけ、OS の UI の言語（appearance.locale）を入れ、切り替わったら追随する。
-    // 入れたことは data-itera-lang で覚える（アプリが後から自分で書いた lang と区別するため）。
-    const rootEl = document.documentElement;
-    const osOwnsLang = !!rootEl && (!rootEl.hasAttribute('lang') || rootEl.hasAttribute('data-itera-lang'));
-    const syncLang = async () => {
-        if (!osOwnsLang) return;
-        try {
-            const appearance = await transport.requestHost('sys:get_config', { category: 'appearance' });
-            let locale = String((appearance && appearance.locale) || 'en');
+        if (msg.type === 'req') {
+          const handler = this.handlers.get(msg.action);
+          let result = null,
+            error = null;
+          if (handler) {
             try {
-                locale = Intl.getCanonicalLocales(locale)[0] || locale;
-            } catch (e) {
-                /* 読めない名前はそのまま */
+              result = await handler(msg.payload);
+            } catch (err) {
+              error = err.message || String(err);
             }
-            rootEl.setAttribute('lang', locale);
-            rootEl.setAttribute('data-itera-lang', '');
-        } catch (e) {
-            console.warn('[Itera] Could not read the UI language', e);
+          } else {
+            error = 'No handler registered for action: ' + msg.action;
+          }
+          if (e.source) e.source.postMessage(IpcMessage.createResponse(msg, result, error), '*');
+        } else if (msg.type === 'res') {
+          this.rpc.resolve(msg.id, msg.payload, msg.error);
+        } else if (msg.type === 'event') {
+          const listeners = this.eventListeners.get(msg.action);
+          if (listeners) listeners.forEach((cb) => cb(msg.payload));
         }
-    };
-    if (osOwnsLang) {
-        void syncLang();
-        transport.on('config_changed', (payload) => {
-            const categories = payload && Array.isArray(payload.categories) ? payload.categories : [];
-            if (categories.includes('appearance')) void syncLang();
-        });
+      });
     }
+  }
 
-    console.log("[Itera] MetaOS Bridge v2 Initialized (PID: " + MY_PID + ")");
+  const MY_PID = window.__ITERA_PID__ || window.name || 'unknown';
+  const transport = new GuestTransport(MY_PID);
+  const localToolHandlers = new Map();
+  const mountHandlers = new Map();
+
+  const reportedErrors = new Set();
+  let errorCount = 0;
+  const MAX_ERRORS = 10;
+
+  window.addEventListener('error', (e) => {
+    if (errorCount >= MAX_ERRORS) return;
+    const errKey = e.message + ':' + e.lineno;
+    if (reportedErrors.has(errKey)) return;
+    reportedErrors.add(errKey);
+    errorCount++;
+    transport
+      .requestHost('sys:report_error', {
+        message: e.message,
+        filename: e.filename,
+        line: e.lineno,
+        col: e.colno,
+        stack: e.error ? e.error.stack : null,
+      })
+      .catch(() => {});
+  });
+
+  window.addEventListener('unhandledrejection', (e) => {
+    if (errorCount >= MAX_ERRORS) return;
+    let msg = 'Unhandled Rejection';
+    let stack = null;
+    if (e.reason instanceof Error) {
+      msg = e.reason.message;
+      stack = e.reason.stack;
+    } else {
+      msg = String(e.reason);
+    }
+    const errKey = 'promise:' + msg;
+    if (reportedErrors.has(errKey)) return;
+    reportedErrors.add(errKey);
+    errorCount++;
+    transport
+      .requestHost('sys:report_error', {
+        message: msg,
+        stack: stack,
+      })
+      .catch(() => {});
+  });
+
+  transport.registerHandler('fs:resolve_missing', async (payload) => {
+    let longestMatch = '';
+    let matchedHandler = null;
+    for (const [mountedPath, handler] of mountHandlers.entries()) {
+      // ルートマウント('')の場合は常にマッチさせる
+      if (mountedPath === '' || payload.path === mountedPath || payload.path.startsWith(mountedPath + '/')) {
+        // 空文字の場合は length が 0 なので、他のより深いマウントポイントがあればそちらが優先される
+        if (mountedPath === '' && longestMatch !== '') continue;
+
+        if (mountedPath.length >= longestMatch.length) {
+          longestMatch = mountedPath;
+          matchedHandler = handler;
+        }
+      }
+    }
+    if (matchedHandler) {
+      return await matchedHandler(payload.path);
+    }
+    return false;
+  });
+
+  transport.registerHandler('execute_tool', async (payload) => {
+    const handler = localToolHandlers.get(payload.name);
+    if (!handler) throw new Error('Tool handler not found: ' + payload.name);
+    return await handler(payload.params);
+  });
+
+  transport.registerHandler('eval_js', async (payload) => {
+    const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
+    const func = new AsyncFunction(payload.code);
+    return await func();
+  });
+
+  global.MetaOS = {
+    fs: {
+      read: async (path, opts = {}) => transport.requestHost('fs:read', { path, opts }),
+      write: async (path, content, opts = {}) => transport.requestHost('fs:write', { path, content, opts }),
+      append: async (path, content, opts = {}) => transport.requestHost('fs:append', { path, content, opts }),
+      delete: async (path, opts = {}) => transport.requestHost('fs:delete', { path, opts }),
+      rename: async (oldPath, newPath, opts = {}) => transport.requestHost('fs:rename', { oldPath, newPath, opts }),
+      restore: async (path, opts = {}) => transport.requestHost('fs:restore', { path, opts }),
+      copy: async (srcPath, destPath, opts = {}) => transport.requestHost('fs:copy', { srcPath, destPath, opts }),
+      mkdir: async (path, opts = {}) => transport.requestHost('fs:mkdir', { path, opts }),
+      stat: async (path) => transport.requestHost('fs:stat', { path }),
+      list: async (path, opts = {}) => transport.requestHost('fs:list', { path, opts }),
+      exists: async (path) => transport.requestHost('fs:exists', { path }),
+      getSyncState: async (path) => transport.requestHost('fs:get_sync_state', { path }),
+      getUsage: async () => transport.requestHost('fs:get_usage', {}),
+      listMounts: async () => transport.requestHost('fs:list_mounts', {}),
+      resolveUrl: async (path) => transport.requestHost('fs:resolve_url', { path }),
+      getAcl: async (path) => transport.requestHost('fs:get_acl', { path }),
+      setAcl: async (path, acl, opts = {}) => transport.requestHost('fs:set_acl', { path, acl, opts }),
+      registerSyncProvider: async (path, handlers) => {
+        let normPath = path.replace(/\\/g, '/').replace(/^\/+/, '').replace(/\/+$/, '');
+        if (handlers.onFetchContent) mountHandlers.set(normPath, handlers.onFetchContent);
+
+        if (handlers.onMutate) {
+          transport.on('sync:onMutate', (payload) => {
+            handlers.onMutate(payload.mutations);
+          });
+        }
+
+        return transport.requestHost('fs:register_provider', { path: normPath });
+      },
+      unregisterSyncProvider: async (path) => {
+        let normPath = path.replace(/\\/g, '/').replace(/^\/+/, '').replace(/\/+$/, '');
+        mountHandlers.delete(normPath);
+        return transport.requestHost('fs:unregister_provider', { path: normPath });
+      },
+      createStub: async (path, meta, opts = {}) => transport.requestHost('fs:create_stub', { path, meta, opts }),
+    },
+    // 会話の基本操作（T-0634）。LLM を通さずにホストの会話を操作する口。
+    //   append(role, content, { wake, visible, eventType, attachments }) … 履歴にターンを置く（wake で起こす）
+    //   wake()   … 評価を頼む（未読が無ければ何も起きない）
+    //   stop()   … 生成・結果待ちをやめる
+    //   reset({ summary, wake = true, restoreTools = true }) … 会話を空にする（いまの会話は退避される）。LLM が死んでいても効く
+    //   status() … { running, busy, outstandingTools, turns, lastTurnAt, session, context }
+    //   sessions() / switchSession(id) / saveSession(id = 'current') / loadSession(path)
+    chat: {
+      append: async (role, content, opts = {}) => transport.requestHost('chat:append', { role, content, opts }),
+      wake: async () => transport.requestHost('chat:wake', {}),
+      stop: async () => transport.requestHost('chat:stop', {}),
+      reset: async (opts = {}) => transport.requestHost('chat:reset', { opts }),
+      status: async () => transport.requestHost('chat:status', {}),
+      sessions: async () => transport.requestHost('chat:sessions', {}),
+      switchSession: async (id) => transport.requestHost('chat:switch_session', { id }),
+      saveSession: async (id = 'current') => transport.requestHost('chat:save_session', { id }),
+      loadSession: async (path) => transport.requestHost('chat:load_session', { path }),
+    },
+    // 従来の ai.* は chat.append / chat.stop の薄皮（ホストには chat:* しか無い）。
+    // ask: 利用者の発言として置いて起こす（silent なら置くだけ）。task: system_task として起こす。log: 記録（trigger_llm で起こす）
+    ai: {
+      ask: async (text, opts = {}) => {
+        await transport.requestHost('chat:append', {
+          role: 'user',
+          content: text || '',
+          opts: { attachments: opts.attachments || [], wake: opts.silent !== true },
+        });
+        return true;
+      },
+      task: async (instruction, context, opts = {}) => {
+        let text = `[System Task Request]\n${instruction}`;
+        if (context) text += `\n\n[Context]\n${JSON.stringify(context, null, 2)}`;
+        await transport.requestHost('chat:append', {
+          role: 'system',
+          content: `<event type="system_task">\n${text}\n</event>`,
+          opts: { eventType: 'system_task', wake: true, visible: !(opts && opts.silent) },
+        });
+        return true;
+      },
+      log: async (message, type, opts = {}) => {
+        const eventType = type || 'app_event';
+        await transport.requestHost('chat:append', {
+          role: 'system',
+          content: `<event type="${eventType}">\n${message}\n</event>`,
+          opts: { eventType, wake: !!(opts && opts.trigger_llm === true) },
+        });
+        return true;
+      },
+      stop: async () => transport.requestHost('chat:stop', {}),
+    },
+    system: {
+      spawn: async (path, opts = {}) => transport.requestHost('sys:spawn', { path, opts }),
+      kill: async (pid) => transport.requestHost('sys:kill', { pid }),
+      ps: async () => transport.requestHost('sys:ps', {}),
+      info: async () => transport.requestHost('sys:info', {}),
+      broadcast: async (eventName, payload) => transport.requestHost('sys:broadcast', { eventName, payload }),
+      on: (eventName, handler) => transport.on(eventName, handler),
+      off: (eventName, handler) => transport.off(eventName, handler),
+      capture: async (pid) => transport.requestHost('sys:capture', { pid }),
+      getArgs: async () => transport.requestHost('sys:get_args', {}),
+      getProviders: async () => transport.requestHost('sys:get_providers', {}),
+      // 設定は層（配信の既定 → 利用者の上書き）になっている。併合と書き先はホストが決める（T-0431）
+      getConfig: async (category) => transport.requestHost('sys:get_config', { category }),
+      updateConfig: async (category, updates) => transport.requestHost('sys:update_config', { category, updates }),
+      // 登録簿（apps / services / associations）も層になっている。重ねた値と書き先はホストが決める（T-0447）
+      getRegistry: async (name) => transport.requestHost('sys:get_registry', { name }),
+      updateRegistry: async (name, id, updates) => transport.requestHost('sys:update_registry', { name, id, updates }),
+    },
+    host: {
+      goHome: async () => transport.requestHost('host:go_home', {}),
+      showOpenDialog: async (options = {}) => transport.requestHost('host:show_open_dialog', { options }),
+      showSaveDialog: async (options = {}) => transport.requestHost('host:show_save_dialog', { options }),
+      openEditor: async (path) => transport.requestHost('host:open_editor', { path }),
+      notify: async (message, type, duration) => transport.requestHost('host:notify', { message, type, duration }),
+      copyText: async (text) => transport.requestHost('host:copy', { text }),
+      openExternal: async (url) => transport.requestHost('host:open_url', { url }),
+      // 非推奨（T-0453）: MetaOS.nav.declare(path) を使う。中身は同じ handler（前面アプリの場所を申告する）
+      updateAddressBar: async (path) => transport.requestHost('nav:declare', { path }),
+      revealInExplorer: async (path) => transport.requestHost('host:reveal_in_explorer', { path }),
+      open: async (path) => transport.requestHost('host:open_path', { path }),
+      showMessageBox: async (options) => transport.requestHost('host:show_message_box', { options }),
+      showLoading: async (message) => transport.requestHost('host:show_loading', { message }),
+      hideLoading: async () => transport.requestHost('host:hide_loading', {}),
+    },
+    // アプリをまたぐ「戻る／進む」（T-0453）。履歴はホスト（シェル）が持つ。活性の変化は system.on('nav_changed', …)
+    nav: {
+      declare: async (path) => transport.requestHost('nav:declare', { path }),
+      back: async () => transport.requestHost('nav:back', {}),
+      forward: async () => transport.requestHost('nav:forward', {}),
+      state: async () => transport.requestHost('nav:state', {}),
+    },
+    net: {
+      fetch: async (url, options = {}) => transport.requestHost('net:fetch', { url, options }),
+      download: async (url, destPath, options = {}) =>
+        transport.requestHost('net:download', { url, destPath, options }),
+      oauth: async (providerId, authUrl, instructions) =>
+        transport.requestHost('net:oauth', { providerId, authUrl, instructions }),
+    },
+    device: {
+      getLocation: async (options = {}) => transport.requestHost('dev:location', { options }),
+      takePhoto: async (options = {}) => transport.requestHost('dev:photo', { options }),
+      recordAudio: async (options = {}) => transport.requestHost('dev:audio', { options }),
+      vibrate: async (pattern) => transport.requestHost('dev:vibrate', { pattern }),
+    },
+    tools: {
+      register: async (toolDef) => {
+        if (!toolDef || !toolDef.name || typeof toolDef.handler !== 'function') {
+          throw new Error('Invalid tool definition.');
+        }
+        localToolHandlers.set(toolDef.name, toolDef.handler);
+        await transport.requestHost('tools:register', {
+          name: toolDef.name,
+          description: toolDef.description,
+          definition: toolDef.definition,
+        });
+      },
+      unregister: async (name) => {
+        localToolHandlers.delete(name);
+        await transport.requestHost('tools:unregister', { name });
+      },
+    },
+  };
+
+  // テーマの追随（T-0539）。OS がアプリへ入れた <style id="itera-guest-theme"> は OS の持ち物なので、
+  // 差し替えも OS の部品（このブリッジ）が受け持つ。アプリの中身には触らない（ui.js を使わないアプリにも効く）。
+  // theme_changed はテーマの持ち主（ホストの ThemeService）が当て終えてから来るので、そのとき取り直す。
+  // 立て続けに来たら最後の 1 回だけを当てる（応答の順が入れ替わっても古い CSS で上書きしない）。
+  let themeSeq = 0;
+  transport.on('theme_changed', async () => {
+    const el = document.getElementById('itera-guest-theme');
+    if (!el) return;
+    const seq = ++themeSeq;
+    try {
+      const css = await transport.requestHost('sys:get_theme_css', {});
+      if (seq !== themeSeq || typeof css !== 'string') return;
+      el.textContent = css;
+    } catch (e) {
+      console.warn('[Itera] Could not refresh the theme', e);
+    }
+  });
+
+  // <html lang> の追随（P-0046 / T-0545）。アプリが自分で lang を書いていれば触らない（アプリの持ち物）。
+  // 書いていないアプリにだけ、OS の UI の言語（appearance.locale）を入れ、切り替わったら追随する。
+  // 入れたことは data-itera-lang で覚える（アプリが後から自分で書いた lang と区別するため）。
+  const rootEl = document.documentElement;
+  const osOwnsLang = !!rootEl && (!rootEl.hasAttribute('lang') || rootEl.hasAttribute('data-itera-lang'));
+  const syncLang = async () => {
+    if (!osOwnsLang) return;
+    try {
+      const appearance = await transport.requestHost('sys:get_config', { category: 'appearance' });
+      let locale = String((appearance && appearance.locale) || 'en');
+      try {
+        locale = Intl.getCanonicalLocales(locale)[0] || locale;
+      } catch (e) {
+        /* 読めない名前はそのまま */
+      }
+      rootEl.setAttribute('lang', locale);
+      rootEl.setAttribute('data-itera-lang', '');
+    } catch (e) {
+      console.warn('[Itera] Could not read the UI language', e);
+    }
+  };
+  if (osOwnsLang) {
+    void syncLang();
+    transport.on('config_changed', (payload) => {
+      const categories = payload && Array.isArray(payload.categories) ? payload.categories : [];
+      if (categories.includes('appearance')) void syncLang();
+    });
+  }
+
+  console.log('[Itera] MetaOS Bridge v2 Initialized (PID: ' + MY_PID + ')');
 })(window);

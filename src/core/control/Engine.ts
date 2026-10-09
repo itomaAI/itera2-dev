@@ -236,7 +236,7 @@ export class Engine {
     return recentTurns.some((t) => t.meta && t.meta.trigger_llm === true);
   }
 
-  async injectUserTurn(inputContent: TurnContent, meta: TurnMeta = {}): Promise<void> {
+  async injectUserTurn(inputContent: TurnContent, meta: TurnMeta = {}): Promise<Turn> {
     // 明示的な新規要求なので、以前の停止要求は解除する。
     // append() は同期的に _schedulePing() を呼ぶため、必ず append の前に解除すること。
     this.stopRequested = false;
@@ -249,6 +249,25 @@ export class Engine {
     const turn = this.state.history.append('user', inputContent, turnMeta);
 
     this._emit('turn_end', { role: 'user', turn });
+    return turn;
+  }
+
+  /**
+   * 外から評価を頼む（MetaOS.chat.wake。T-0634）。
+   * 停止要求を解除し、保留として予約する。起床するかどうかは評価（_evaluateWakeUp）が履歴だけで決めるので、
+   * 最後の model ターンより後ろに未読が無ければ loop_stop(idle) で終わる（空の応答は作らない）。
+   * 連続実行の上限による停止（haltedByToolCap）はここでは解除しない —— それを解くのは利用者の発言だけ。
+   * 自分のツールを待っている間は追い越さない（束の終わりに評価される）。
+   */
+  requestEvaluation(): void {
+    this.stopRequested = false;
+    this.hasPendingEvents = true;
+    this._scheduleEvaluation();
+  }
+
+  /** いまの状態（MetaOS.chat.status。T-0634）。busy はストリーミング中か結果待ちの束がある */
+  status(): { running: boolean; busy: boolean; outstandingTools: number } {
+    return { running: this.isRunning, busy: this.isBusy(), outstandingTools: this.outstandingTools };
   }
 
   /**

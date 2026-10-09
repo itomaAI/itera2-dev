@@ -485,11 +485,19 @@ All methods (except \`on/off\`) are **Asynchronous** and return a \`Promise\`.
 - \`listMounts()\`: Returns the current Sync Provider mount table as \`[{ mountPath, pid, registered, alive }]\`. \`alive\` tells whether that provider process can answer right now — a mount is NOT removed when its process dies, so a registered mount does not mean the content can be fetched. Use \`mountPath\` (never \`alive\`) to decide which subtrees to exclude: dropping the exclusion while the other provider is temporarily down can delete its directories and propagate that deletion to the user's machine. A daemon mounted at the root uses this to derive which subtrees belong to *other* providers and exclude them, instead of hardcoding an exclusion list. Note that mount resolution is longest-prefix-match, so the root mount ('') always loses to a deeper mount.
 - \`createStub(path, meta, opts)\`: Creates a metadata-only entry (placeholder) in the VFS without uploading actual content. Useful for Cloud Sync providers.
 
-**AI & History (MetaOS.ai)**:
-- \`ask(text, opts)\`: Sends a chat message as the user and triggers AI. \`opts.attachments\` accepts an array of VFS paths. \`opts.silent=true\` only places the user turn in the history WITHOUT waking the AI (use it to give context before a following \`task\`).
-- \`task(instruction, context, opts)\`: Triggers a background AI task. Appends a <system_task> event and wakes up the AI. \`opts.silent=true\` hides it from UI.
-- \`log(message, type, opts)\`: Silently appends an event log. AI does not wake up unless \`opts.trigger_llm=true\` is passed. Wake-up is debounced (1.5s).
-- \`stop()\`: Aborts current AI generation.
+**Chat (MetaOS.chat)** — the primitive operations on the conversation. None of them needs the LLM to be responsive:
+- \`append(role, content, opts)\`: Puts one turn in the history. \`role\` is \`'user'\` or \`'system'\`; \`content\` is a string or an array of \`{text}\` / \`{media:{path}}\` parts. \`opts: { wake=false, visible=true, eventType, attachments: [vfsPaths] }\`. \`wake=true\` wakes you (debounced 1.5s). The caller's pid is recorded as \`meta.source\`. Returns \`{ id }\`.
+- \`wake()\`: Asks the engine to evaluate the history. If nothing is unread after your last turn, it ends idle (no empty turn is produced). Does not lift the continuous-tool cap.
+- \`stop()\`: Aborts generation and abandons the tool batch in flight.
+- \`reset(opts)\`: Clears the conversation (the current one is archived to the session history). \`opts: { summary, wake=true, restoreTools=true }\`. Works even when the context is too long for you to answer. Returns \`{ archived, sessionId }\`.
+- \`status()\`: \`{ running, busy, outstandingTools, turns, lastTurnAt, session: {id, title, createdAt}, context: {tokens, output, model, at} | null }\` (\`context\` is the last usage log line; it lags one turn).
+- \`sessions()\`, \`switchSession(id)\`, \`saveSession(id='current')\`, \`loadSession(path)\`: the session history (refused with \`{ ok:false, reason:'busy' }\` while the engine is busy).
+
+**AI & History (MetaOS.ai)** — thin wrappers over \`chat.append\` / \`chat.stop\` (kept for compatibility):
+- \`ask(text, opts)\`: \`chat.append('user', text, { attachments: opts.attachments, wake: !opts.silent })\`. \`opts.silent=true\` only places the user turn WITHOUT waking the AI.
+- \`task(instruction, context, opts)\`: appends a <system_task> event and wakes the AI. \`opts.silent=true\` hides it from UI.
+- \`log(message, type, opts)\`: appends an \`<event type="…">\` log. The AI does not wake up unless \`opts.trigger_llm=true\`.
+- \`stop()\`: same as \`chat.stop()\`.
 
 **System & IPC (MetaOS.system)**:
 - \`spawn(path, opts)\`: Starts a process. \`opts: { pid, type, show, forceReload, args }\`. (show=true brings to foreground view, set forceReload=true to ignore cache)
