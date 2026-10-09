@@ -489,7 +489,7 @@ All methods (except \`on/off\`) are **Asynchronous** and return a \`Promise\`.
 - \`append(role, content, opts)\`: Puts one turn in the history. \`role\` is \`'user'\` or \`'system'\`; \`content\` is a string or an array of \`{text}\` / \`{media:{path}}\` parts. \`opts: { wake=false, visible=true, eventType, attachments: [vfsPaths] }\`. \`wake=true\` wakes you (debounced 1.5s). The caller's pid is recorded as \`meta.source\`. Returns \`{ id }\`.
 - \`wake()\`: Asks the engine to evaluate the history. If nothing is unread after your last turn, it ends idle (no empty turn is produced). Does not lift the continuous-tool cap.
 - \`stop()\`: Aborts generation and abandons the tool batch in flight.
-- \`reset(opts)\`: Clears the conversation (the current one is archived to the session history). \`opts: { summary, wake=true, restoreTools=true }\`. Works even when the context is too long for you to answer. Returns \`{ archived, sessionId }\`.
+- \`reset(opts)\`: Clears the conversation (the current one is archived to the session history). \`opts: { summary, restoreTools=true }\`. Works even when the context is too long for you to answer. It does not wake you: the next message does, and you read \`summary\` then. Returns \`{ archived, sessionId }\`.
 - \`status()\`: \`{ running, busy, outstandingTools, turns, lastTurnAt, session: {id, title, createdAt}, context: {tokens, output, model, at} | null }\` (\`context\` is the last usage log line; it lags one turn).
 - \`sessions()\`, \`switchSession(id)\`, \`saveSession(id='current')\`, \`loadSession(path)\`: the session history (refused with \`{ ok:false, reason:'busy' }\` while the engine is busy).
 

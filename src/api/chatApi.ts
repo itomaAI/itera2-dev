@@ -34,15 +34,18 @@ export type ChatAppendPlan =
 
 export interface ChatResetOpts {
   summary?: string;
-  /** 空にしたあと起こすか。既定 true（起動手順を踏んで戻ってくるため） */
-  wake?: boolean;
   /** 走っているアプリ・デーモンの道具の定義を積み直すか。既定 true */
   restoreTools?: boolean;
 }
 
+/**
+ * reset は AI を起こさない。Engine は「止めたら利用者が次に発言するまで起きない」設計で、
+ * reset は走っている生成を止めてから会話を空にするので、申し送りを trigger_llm で積んでも起きない（捨てられる）。
+ * 意図と実装を揃え、申し送りは置くだけにする —— 次の発言（チャット欄でも Telegram でも）で AI が起き、申し送りを読む
+ * （2026-10-10 山内さん）。
+ */
 export interface ChatResetPlan {
   summary: string;
-  wake: boolean;
   restoreTools: boolean;
 }
 
@@ -144,7 +147,6 @@ export function buildResetPlan(opts: ChatResetOpts | null | undefined, source: s
   if (carried) summary += `\n\n[Carried Over Information]\n${carried}`;
   return {
     summary,
-    wake: o.wake !== false,
     restoreTools: o.restoreTools !== false,
   };
 }

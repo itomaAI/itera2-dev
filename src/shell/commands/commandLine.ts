@@ -55,7 +55,8 @@ export const COMMAND_TEXTS_EN: CommandTexts = {
     help: 'List commands, or show one',
     status: 'Engine state, session and the last context size',
     stop: 'Abort generation and abandon the tool batch in flight',
-    reset: 'Archive this conversation and start a fresh one (the note is carried over); the AI wakes up',
+    reset:
+      'Archive this conversation and start a fresh one (the note is carried over; the AI reads it with your next message)',
     ps: 'List running processes',
     open: 'Open a VFS path with its app (or a metaos:// URI)',
   },

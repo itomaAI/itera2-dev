@@ -258,7 +258,7 @@
     //   append(role, content, { wake, visible, eventType, attachments }) … 履歴にターンを置く（wake で起こす）
     //   wake()   … 評価を頼む（未読が無ければ何も起きない）
     //   stop()   … 生成・結果待ちをやめる
-    //   reset({ summary, wake = true, restoreTools = true }) … 会話を空にする（いまの会話は退避される）。LLM が死んでいても効く
+    //   reset({ summary, restoreTools = true }) … 会話を空にする（いまの会話は退避される）。LLM が死んでいても効く。起こさない（次の発言で起きて summary を読む）
     //   status() … { running, busy, outstandingTools, turns, lastTurnAt, session, context }
     //   sessions() / switchSession(id) / saveSession(id = 'current') / loadSession(path)
     chat: {

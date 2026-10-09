@@ -85,14 +85,14 @@ describe('CommandDispatcher', () => {
     expect(h.lastText()).toContain('Stopped.');
   });
 
-  it('/reset は stop → clearSession（申し送りを運び、起こす）。結果のターンは置かない（新しい会話を汚さない）', async () => {
+  it('/reset は stop → clearSession（申し送りを運ぶ。起こさない —— 次の発言で読まれる）。結果のターンは置かない', async () => {
     const h = harness();
     await h.d.tryDispatch('/reset T-0633 を見張る');
     expect(h.engine.stop).toHaveBeenCalledTimes(1);
     expect(h.sessionManager.clearSession).toHaveBeenCalledWith({
       summary:
         '[System: Session reset by user command]\nPlease run the Initialization Protocol first.\n\n[Carried Over Information]\nT-0633 を見張る',
-      triggerLlm: true,
+      triggerLlm: false,
       restoreTools: true,
     });
     expect(h.turns).toEqual([]);

@@ -372,11 +372,12 @@ export class HostApiRouter {
     t.registerHandler('chat:reset', async ({ opts }, sourcePid) => {
       if (!d.engine || !d.sessionManager) throw new Error('Chat is not available.');
       const plan = buildResetPlan(opts, sourcePid);
-      // LLM が応答できない状態（文脈の溢れ）でも効くように、busy は見ない。走っている束は見捨てる（会話は退避される）
+      // LLM が応答できない状態（文脈の溢れ）でも効くように、busy は見ない。走っている束は見捨てる（会話は退避される）。
+      // 起こさない: stop() のあとは利用者が次に発言するまで起きない（Engine の設計）。申し送りは置くだけで、次の発言で読まれる
       d.engine.stop();
       return await d.sessionManager.clearSession({
         summary: plan.summary,
-        triggerLlm: plan.wake,
+        triggerLlm: false,
         restoreTools: plan.restoreTools,
       });
     });

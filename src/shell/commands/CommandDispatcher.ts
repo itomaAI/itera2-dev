@@ -158,10 +158,11 @@ export class CommandDispatcher {
         summary: T.summary.reset,
         run: async (c) => {
           const plan = buildResetPlan({ summary: c.rest }, 'user command');
+          // 起こさない（chat:reset と同じ。次の発言で AI が起きて申し送りを読む）
           d.engine.stop();
           await d.sessionManager.clearSession({
             summary: plan.summary,
-            triggerLlm: plan.wake,
+            triggerLlm: false,
             restoreTools: plan.restoreTools,
           });
           return { ok: true, text: T.sessionReset };
