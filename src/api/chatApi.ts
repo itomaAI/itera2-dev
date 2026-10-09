@@ -226,16 +226,50 @@ export async function readLatestContextUsage(
   return null;
 }
 
-/** `/status` と Telegram の `/status` が同じ文面になるように、人向けの文もここで組む */
-export function formatChatStatus(s: ChatStatus, now: number = Date.now()): string {
+/** `/status` の文面の語（配布物ごとに差し替える。共通部品に文言を埋めない） */
+export interface StatusLabels {
+  engine: string;
+  running: string;
+  idle: string;
+  busy: string;
+  toolsInFlight: string;
+  session: string;
+  untitled: string;
+  turns: string;
+  lastTurnMinAgo: string;
+  context: string;
+  tokensIn: string;
+  lagsOneTurn: string;
+  unknown: string;
+}
+
+export const STATUS_LABELS_EN: StatusLabels = {
+  engine: 'engine',
+  running: 'running',
+  idle: 'idle',
+  busy: 'busy',
+  toolsInFlight: 'tools in flight',
+  session: 'session',
+  untitled: 'untitled',
+  turns: 'turns',
+  lastTurnMinAgo: 'last turn {n} min ago',
+  context: 'context',
+  tokensIn: 'tokens in',
+  lagsOneTurn: 'lags one turn',
+  unknown: 'unknown (no usage log yet)',
+};
+
+/** chat.status を人向けの 3 行にする（`/status` の本文。語は labels から） */
+export function formatChatStatus(s: ChatStatus, now: number = Date.now(), L: StatusLabels = STATUS_LABELS_EN): string {
   const age = s.lastTurnAt ? Math.round((now - s.lastTurnAt) / 60000) : null;
   const ctx = s.context
-    ? `${s.context.tokens.toLocaleString('en-US')} tokens in (${s.context.model || '?'}, ${s.context.at}; lags one turn)`
-    : 'unknown (no usage log yet)';
-  const title = s.session ? (s.session.title ? `"${s.session.title}"` : 'untitled') : '-';
+    ? `${s.context.tokens.toLocaleString('en-US')} ${L.tokensIn} (${s.context.model || '?'}, ${s.context.at}; ${L.lagsOneTurn})`
+    : L.unknown;
+  const title = s.session ? (s.session.title ? `"${s.session.title}"` : L.untitled) : '-';
+  const last = age === null ? '' : `, ${L.lastTurnMinAgo.replace('{n}', String(age))}`;
   return [
-    `engine: ${s.running ? 'running' : 'idle'}${s.busy ? ' / busy' : ''} (tools in flight: ${s.outstandingTools})`,
-    `session: ${title}, ${s.turns} turns${age === null ? '' : `, last turn ${age} min ago`}`,
-    `context: ${ctx}`,
+    `${L.engine}: ${s.running ? L.running : L.idle}${s.busy ? ` / ${L.busy}` : ''} (${L.toolsInFlight}: ${s.outstandingTools})`,
+    `${L.session}: ${title}, ${s.turns} ${L.turns}${last}`,
+    `${L.context}: ${ctx}`,
   ].join('\n');
 }
