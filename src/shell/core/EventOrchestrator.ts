@@ -3,6 +3,7 @@
  * Itera OS v2: Event Routing and Inter-Component Coordination
  */
 
+import { CommandDispatcher } from '../commands/CommandDispatcher';
 import type { DesktopEnvironment } from './DesktopEnvironment';
 import type { VfsService } from '../../core/vfs/VfsService';
 import type { HistoryManager } from '../../core/state/HistoryManager';
@@ -65,6 +66,7 @@ export class EventOrchestrator {
   private resolver: FileAssociationResolver;
   private eventBus: VfsEventBus;
   private configManager: ConfigManager;
+  private commands: CommandDispatcher;
 
   constructor(
     desktop: DesktopEnvironment,
@@ -90,6 +92,23 @@ export class EventOrchestrator {
     this.resolver = resolver;
     this.eventBus = eventBus;
     this.configManager = configManager;
+    this.commands = new CommandDispatcher({
+      engine,
+      history,
+      sessionManager,
+      processManager,
+      vfs,
+      open: (target) => {
+        if (/^metaos:\/\//i.test(target)) {
+          try {
+            uriRouter.dispatch(target);
+          } catch (e: any) {
+            if (window.AppUI) window.AppUI.notify(`Cannot open: ${e.message}`, 'error');
+          }
+        } else this.openPath(target);
+      },
+      show: (turn) => desktop.panels.chat.appendTurn(turn),
+    });
   }
 
   /**
@@ -545,6 +564,14 @@ export class EventOrchestrator {
     vfsReferences: string[],
     opts: ChatSendOptions = {},
   ) {
+    // コマンド（`/status` など。T-0634）は LLM に渡さずここで済ませる。判定はここ 1 か所。
+    // 添付の無い文だけが対象（添付があれば `/…` で始まっていても発言）。`//` は 1 文字落として発言に
+    if (attachments.length === 0 && vfsReferences.length === 0) {
+      const r = await this.commands.tryDispatch(text);
+      if (r.handled) return;
+      text = r.text;
+    }
+
     // 添付はいまの会話のディレクトリへ（`system/temp/sessions/<id>/`。T-0613）
     const CACHE_DIR = this.sessionManager.currentMediaDir();
     const content: any[] = [];

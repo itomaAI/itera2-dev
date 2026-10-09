@@ -10,8 +10,8 @@ import type { Role, Turn, TurnContent, TurnMeta } from '../core/state/HistoryMan
 import type { DynamicToolRegistration, ProcessInfo } from './HostApiContract';
 import { resolvePrincipal } from './principal';
 import type { SpawnOptions } from '../shell/windowing/ProcessManager';
-import { SYSTEM_PRINCIPAL, USER_PRINCIPAL } from '../core/vfs/types';
-import { buildAppendPlan, buildChatStatus, buildResetPlan, latestContextUsage } from './chatApi';
+import { USER_PRINCIPAL } from '../core/vfs/types';
+import { buildAppendPlan, buildChatStatus, buildResetPlan, readLatestContextUsage } from './chatApi';
 import { VfsEventFormatter } from '../core/vfs/VfsEventFormatter';
 import { buildGuestThemeCss } from '../shell/windowing/guestThemeCss';
 import { base64ToBlob, blobToDataUrl, dataUrlToBlob } from '../utils/binary';
@@ -381,22 +381,6 @@ export class HostApiRouter {
       });
     });
 
-    // usage ログは UTC の日付で切られ、応答のあとに書かれる（観測は 1 ターン遅れる）。今日に無ければ昨日を読む
-    const readLatestUsage = async () => {
-      for (const back of [0, 1]) {
-        const day = new Date(Date.now() - back * 86400000).toISOString().slice(0, 10);
-        const path = `system/logs/usage/${day}.jsonl`;
-        try {
-          if (!d.vfs.exists(SYSTEM_PRINCIPAL, path)) continue;
-          const found = latestContextUsage(await d.vfs.readFile(SYSTEM_PRINCIPAL, path));
-          if (found) return found;
-        } catch {
-          /* 読めなければ無いのと同じ */
-        }
-      }
-      return null;
-    };
-
     t.registerHandler('chat:status', async () => {
       if (!d.engine || !d.history) throw new Error('Chat is not available.');
       let session: { id: string; title: string; createdAt: number } | null = null;
@@ -412,7 +396,7 @@ export class HostApiRouter {
         engine: d.engine.status(),
         turns: d.history.get(),
         session,
-        context: await readLatestUsage(),
+        context: await readLatestContextUsage(d.vfs),
       });
     });
 
