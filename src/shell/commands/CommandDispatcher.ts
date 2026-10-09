@@ -13,9 +13,19 @@ import {
   buildResetPlan,
   formatChatStatus,
   readLatestContextUsage,
+  STATUS_LABELS_EN,
+  type StatusLabels,
   type UsageLogReader,
 } from '../../api/chatApi';
-import { commandEventText, helpText, parseCommandLine, type CommandSpec, type ParsedCommand } from './commandLine';
+import {
+  COMMAND_TEXTS_EN,
+  commandEventText,
+  helpText,
+  parseCommandLine,
+  type CommandSpec,
+  type CommandTexts,
+  type ParsedCommand,
+} from './commandLine';
 
 export interface CommandResult {
   ok: boolean;
@@ -46,6 +56,9 @@ export interface CommandDeps {
   /** 結果のターンを画面に出す */
   show(turn: Turn): void;
   now?: () => number;
+  /** 画面に出る文言（既定は英語） */
+  texts?: CommandTexts;
+  statusLabels?: StatusLabels;
 }
 
 export class CommandDispatcher {
@@ -101,17 +114,19 @@ export class CommandDispatcher {
   private _builtins(): Command[] {
     const d = this.deps;
     const now = () => (d.now ? d.now() : Date.now());
+    const T = d.texts || COMMAND_TEXTS_EN;
+    const L = d.statusLabels || STATUS_LABELS_EN;
     return [
       {
         name: 'help',
         usage: '/help [name]',
-        summary: 'List commands, or show one',
-        run: async (c) => ({ ok: true, text: helpText(this.specs(), c.args[0]) }),
+        summary: T.summary.help,
+        run: async (c) => ({ ok: true, text: helpText(this.specs(), c.args[0], T) }),
       },
       {
         name: 'status',
         usage: '/status',
-        summary: 'Engine state, session and the last context size',
+        summary: T.summary.status,
         run: async () => {
           let session: { id: string; title: string; createdAt: number } | null = null;
           try {
@@ -125,22 +140,22 @@ export class CommandDispatcher {
             session,
             context: await readLatestContextUsage(d.vfs, now()),
           });
-          return { ok: true, text: formatChatStatus(s, now()) };
+          return { ok: true, text: formatChatStatus(s, now(), L) };
         },
       },
       {
         name: 'stop',
         usage: '/stop',
-        summary: 'Abort generation and abandon the tool batch in flight',
+        summary: T.summary.stop,
         run: async () => {
           d.engine.stop();
-          return { ok: true, text: 'Stopped.' };
+          return { ok: true, text: T.stopped };
         },
       },
       {
         name: 'reset',
         usage: '/reset [note]',
-        summary: 'Archive this conversation and start a fresh one (the note is carried over); the AI wakes up',
+        summary: T.summary.reset,
         run: async (c) => {
           const plan = buildResetPlan({ summary: c.rest }, 'user command');
           d.engine.stop();
@@ -149,16 +164,16 @@ export class CommandDispatcher {
             triggerLlm: plan.wake,
             restoreTools: plan.restoreTools,
           });
-          return { ok: true, text: 'Session reset.' };
+          return { ok: true, text: T.sessionReset };
         },
       },
       {
         name: 'ps',
         usage: '/ps',
-        summary: 'List running processes',
+        summary: T.summary.ps,
         run: async () => {
           const rows = d.processManager.list();
-          if (rows.length === 0) return { ok: true, text: '(no processes)' };
+          if (rows.length === 0) return { ok: true, text: T.noProcesses };
           const w = Math.max(...rows.map((r) => r.pid.length));
           return {
             ok: true,
@@ -171,11 +186,11 @@ export class CommandDispatcher {
       {
         name: 'open',
         usage: '/open <path | metaos://…>',
-        summary: 'Open a VFS path with its app (or a metaos:// URI)',
+        summary: T.summary.open,
         run: async (c) => {
-          if (!c.rest) return { ok: false, text: 'usage: /open <path>' };
+          if (!c.rest) return { ok: false, text: T.openUsage };
           d.open(c.rest);
-          return { ok: true, text: `Opening ${c.rest}` };
+          return { ok: true, text: T.opening.replace('{target}', c.rest) };
         },
       },
     ];
