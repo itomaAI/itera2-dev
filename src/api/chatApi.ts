@@ -7,6 +7,7 @@
  */
 
 import type { Turn, TurnContent, TurnMeta } from '../core/state/HistoryManager';
+import { SYSTEM_PRINCIPAL, type Principal } from '../core/vfs/types';
 
 export type ChatRole = 'user' | 'system';
 
@@ -195,4 +196,46 @@ export function buildChatStatus(input: ChatStatusInput): ChatStatus {
     session: input.session,
     context: input.context,
   };
+}
+
+/** usage ログを読むのに要る VFS の口（VfsService が満たす） */
+export interface UsageLogReader {
+  exists(principal: Principal, path: string): boolean;
+  readFile(principal: Principal, path: string): Promise<string>;
+}
+
+/**
+ * 直近の文脈の長さを usage ログから読む。ログは UTC の日付で切られ、応答のあとに書かれる（観測は 1 ターン遅れる）。
+ * 今日に無ければ昨日を読む。読めなければ null（推測値は返さない）。
+ */
+export async function readLatestContextUsage(
+  vfs: UsageLogReader,
+  now: number = Date.now(),
+): Promise<ContextUsage | null> {
+  for (const back of [0, 1]) {
+    const day = new Date(now - back * 86400000).toISOString().slice(0, 10);
+    const path = `system/logs/usage/${day}.jsonl`;
+    try {
+      if (!vfs.exists(SYSTEM_PRINCIPAL, path)) continue;
+      const found = latestContextUsage(await vfs.readFile(SYSTEM_PRINCIPAL, path));
+      if (found) return found;
+    } catch {
+      /* 読めなければ無いのと同じ */
+    }
+  }
+  return null;
+}
+
+/** `/status` と Telegram の `/status` が同じ文面になるように、人向けの文もここで組む */
+export function formatChatStatus(s: ChatStatus, now: number = Date.now()): string {
+  const age = s.lastTurnAt ? Math.round((now - s.lastTurnAt) / 60000) : null;
+  const ctx = s.context
+    ? `${s.context.tokens.toLocaleString('en-US')} tokens in (${s.context.model || '?'}, ${s.context.at}; lags one turn)`
+    : 'unknown (no usage log yet)';
+  const title = s.session ? (s.session.title ? `"${s.session.title}"` : 'untitled') : '-';
+  return [
+    `engine: ${s.running ? 'running' : 'idle'}${s.busy ? ' / busy' : ''} (tools in flight: ${s.outstandingTools})`,
+    `session: ${title}, ${s.turns} turns${age === null ? '' : `, last turn ${age} min ago`}`,
+    `context: ${ctx}`,
+  ].join('\n');
 }
