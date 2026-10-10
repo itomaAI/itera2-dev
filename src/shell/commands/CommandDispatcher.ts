@@ -2,7 +2,8 @@
  * src/shell/commands/CommandDispatcher.ts
  * チャット欄のコマンド（T-0634）— 判定は 1 か所（`tryDispatch`）。呼ぶのは `EventOrchestrator._handleChatSend` の先頭だけ。
  *
- * 組み込みの実体は MetaOS.chat と同じホストの関数（Engine / SessionManager / ProcessManager）。
+ * 組み込みの実体は MetaOS.chat と同じホストの関数（Engine / SessionManager / ProcessManager / ConfigManager）。
+ * 設定は ConfigManager が持つホストの状態として扱う（どのファイルに在るかはコマンドは知らない。T-0636）。
  * 結果は `<event type="command">` の system ターンとして履歴に置く（LLM は起こさない。次に起きたときに読む）。
  * ゲストにコマンド文字列を解釈する口は出さない（ゲストは MetaOS.chat を直接呼ぶ）。
  */
@@ -50,6 +51,11 @@ export interface CommandDeps {
     currentSession(): Promise<{ id: string; title: string; createdAt: number }>;
   };
   processManager: { list(): Array<{ pid: string; path: string; type: string; state: string }> };
+  /** 設定（層の合成・書き先・読み直しは ConfigManager の責任） */
+  config: {
+    get(category: 'llm'): { model?: string } | undefined;
+    update(category: 'llm', updates: { model: string }): Promise<void>;
+  };
   vfs: UsageLogReader;
   /** パス（関連付けのアプリ）または `metaos://…` を開く */
   open(target: string): void;
@@ -192,6 +198,23 @@ export class CommandDispatcher {
           if (!c.rest) return { ok: false, text: T.openUsage };
           d.open(c.rest);
           return { ok: true, text: T.opening.replace('{target}', c.rest) };
+        },
+      },
+      {
+        name: 'model',
+        usage: '/model [provider/model]',
+        summary: T.summary.model,
+        // 検証はしない（一覧に無い名前も置ける。動かなければ置き直す。山内さん 2026-10-10）。
+        // 反映は CognitiveManager が ConfigManager の更新を購読して行う（T-0313）ので、ここでは置くだけ
+        run: async (c) => {
+          const current = (d.config.get('llm') || {}).model || '';
+          const shown = current || T.modelUnset;
+          if (c.args.length === 0) return { ok: true, text: T.modelCurrent.replace('{model}', shown) };
+          if (c.args.length > 1) return { ok: false, text: T.modelUsage };
+          const next = c.args[0];
+          if (next === current) return { ok: true, text: T.modelCurrent.replace('{model}', shown) };
+          await d.config.update('llm', { model: next });
+          return { ok: true, text: T.modelChanged.replace('{from}', shown).replace('{to}', next) };
         },
       },
     ];

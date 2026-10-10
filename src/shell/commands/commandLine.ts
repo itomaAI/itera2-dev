@@ -40,12 +40,16 @@ export interface CommandSpec {
 export interface CommandTexts {
   helpHeader: string;
   unknownCommand: string; // {name}
-  summary: { help: string; status: string; stop: string; reset: string; ps: string; open: string };
+  summary: { help: string; status: string; stop: string; reset: string; ps: string; open: string; model: string };
   stopped: string;
   sessionReset: string;
   noProcesses: string;
   openUsage: string;
   opening: string; // {target}
+  modelUsage: string;
+  modelCurrent: string; // {model}
+  modelChanged: string; // {from} {to}
+  modelUnset: string;
 }
 
 export const COMMAND_TEXTS_EN: CommandTexts = {
@@ -59,12 +63,17 @@ export const COMMAND_TEXTS_EN: CommandTexts = {
       'Archive this conversation and start a fresh one (the note is carried over; the AI reads it with your next message)',
     ps: 'List running processes',
     open: 'Open a VFS path with its app (or a metaos:// URI)',
+    model: 'Show or change the LLM (llm.model; takes effect from the next step)',
   },
   stopped: 'Stopped.',
   sessionReset: 'Session reset.',
   noProcesses: '(no processes)',
   openUsage: 'usage: /open <path>',
   opening: 'Opening {target}',
+  modelUsage: 'usage: /model [provider/model]',
+  modelCurrent: 'Model: {model}',
+  modelChanged: 'Model: {from} → {to}',
+  modelUnset: '(unset)',
 };
 
 /** `/help` の文面（名前順） */

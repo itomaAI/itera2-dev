@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { CommandDispatcher } from './CommandDispatcher';
 
-function harness(opts: { usage?: string } = {}) {
+function harness(opts: { usage?: string; model?: string } = {}) {
   const turns: any[] = [];
   const shown: any[] = [];
   const engine = { stop: vi.fn(), status: () => ({ running: false, busy: true, outstandingTools: 2 }) };
@@ -18,6 +18,13 @@ function harness(opts: { usage?: string } = {}) {
     currentSession: async () => ({ id: 's', title: 'T', createdAt: 0 }),
   };
   const processManager = { list: () => [{ pid: 'home', path: 'apps/home.html', type: 'app', state: 'foreground' }] };
+  const llm: { model?: string } = { model: opts.model ?? 'google/gemini-3.8-flash' };
+  const config = {
+    get: (_c: 'llm') => llm,
+    update: vi.fn(async (_c: 'llm', u: { model: string }) => {
+      llm.model = u.model;
+    }),
+  };
   const files: Record<string, string> = {};
   if (opts.usage !== undefined) files['system/logs/usage/1970-01-01.jsonl'] = opts.usage;
   const vfs = {
@@ -30,13 +37,14 @@ function harness(opts: { usage?: string } = {}) {
     history: history as any,
     sessionManager,
     processManager,
+    config,
     vfs,
     open: (t) => opened.push(t),
     show: (t) => shown.push(t),
     now: () => 60000,
   });
   const lastText = () => turns[turns.length - 1]?.content as string;
-  return { d, turns, shown, engine, sessionManager, opened, lastText };
+  return { d, turns, shown, engine, sessionManager, opened, lastText, config, llm };
 }
 
 describe('CommandDispatcher', () => {
@@ -106,6 +114,28 @@ describe('CommandDispatcher', () => {
     expect(h.opened).toEqual(['metaos://system/settings']);
     await h.d.tryDispatch('/open');
     expect(h.lastText()).toContain('[Error] usage: /open <path>');
+  });
+
+  it('/model は引数なしでいまの値、引数で ConfigManager に置く（検証はしない）。同じ値なら置かない', async () => {
+    const h = harness();
+    await h.d.tryDispatch('/model');
+    expect(h.lastText()).toContain('Model: google/gemini-3.8-flash');
+    expect(h.config.update).not.toHaveBeenCalled();
+    await h.d.tryDispatch('/model custom/claude-fable-5-1');
+    expect(h.config.update).toHaveBeenCalledWith('llm', { model: 'custom/claude-fable-5-1' });
+    expect(h.lastText()).toContain('Model: google/gemini-3.8-flash → custom/claude-fable-5-1');
+    await h.d.tryDispatch('/model custom/claude-fable-5-1');
+    expect(h.config.update).toHaveBeenCalledTimes(1);
+    expect(h.lastText()).toContain('Model: custom/claude-fable-5-1');
+    await h.d.tryDispatch('/model a b');
+    expect(h.lastText()).toContain('[Error] usage: /model [provider/model]');
+    expect(h.config.update).toHaveBeenCalledTimes(1);
+  });
+
+  it('/model は値が無ければ (unset) と出す', async () => {
+    const h = harness({ model: '' });
+    await h.d.tryDispatch('/model');
+    expect(h.lastText()).toContain('Model: (unset)');
   });
 
   it('実行の例外は [Error] として記録され、呼び手には handled で返る', async () => {
