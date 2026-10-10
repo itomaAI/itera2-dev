@@ -140,19 +140,32 @@ export class Engine {
     return DEFAULT_MAX_CONTINUOUS_TOOLS;
   }
 
+  /**
+   * システム／アプリからの明示のタスク要求（ai.task → `<event type="system_task">`）か。
+   * 正は meta.eventType（chat.append が付ける）。eventType の無い古い形は本文で拾う。
+   * 🔴 本文は chat.append（T-0634）が常に [{ text }] に正規化するので、文字列だけを見ると一度も当たらない
+   *   （#158 以降 ai.task が連続実行の上限を解けなくなっていた。T-0638）。配列なら text を連ねて見る。
+   */
+  static isSystemTask(turn: Turn): boolean {
+    const meta: any = turn.meta || {};
+    if (meta.type !== 'event_log') return false;
+    if (meta.eventType === 'system_task') return true;
+    return Engine.textOf(turn.content).includes('<event type="system_task">');
+  }
+
+  private static textOf(content: TurnContent): string {
+    if (typeof content === 'string') return content;
+    if (!Array.isArray(content)) return '';
+    return content.map((p: any) => (p && typeof p.text === 'string' ? p.text : '')).join('\n');
+  }
+
   private _onHistoryChange(payload: any): void {
     if ((payload.type === 'append' || payload.type === 'update') && payload.turn) {
       const turn: Turn = payload.turn;
 
       // ユーザーの直接入力、またはシステム/アプリからの明示的なタスク要求の場合はカウントをリセットする
       if (payload.type === 'append') {
-        if (
-          turn.role === 'user' ||
-          (turn.meta &&
-            turn.meta.type === 'event_log' &&
-            typeof turn.content === 'string' &&
-            turn.content.includes('<event type="system_task">'))
-        ) {
+        if (turn.role === 'user' || Engine.isSystemTask(turn)) {
           this.continuousToolCount = 0;
           // 上限による停止も、ここで一緒に解除する。
           // 【重要】この解除は下の _schedulePing() より前に置くこと。

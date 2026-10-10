@@ -352,7 +352,13 @@ export class HostApiRouter {
       }
       const turn = d.history.append('system', plan.content, plan.meta);
       if (plan.visible) chat?.appendTurn(turn);
-      if (plan.wake) chat?.setProcessing(true);
+      if (plan.wake) {
+        // 積んだだけでは、停止（UI の停止・chat.reset が呼ぶ engine.stop）のあと予約が捨てられる（stopRequested）。
+        // 画面には Thinking... だけが残り、利用者がチャット欄から発言するまで動かない（ai.task で踏んだ。T-0638）。
+        // wake の契約は「起こす」なので停止要求を解いて評価を頼む。起きるかどうかは Engine が履歴で決める。
+        d.engine.requestEvaluation();
+        chat?.setProcessing(true);
+      }
       return { id: turn.id };
     });
 

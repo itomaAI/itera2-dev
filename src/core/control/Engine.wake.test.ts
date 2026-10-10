@@ -110,3 +110,70 @@ describe('Engine.status / injectUserTurn', () => {
     }
   });
 });
+
+/** ai.task の実体（chat.append が system ロールで積む形）。本文は常に [{ text }] に正規化されている */
+function systemTask(h: ReturnType<typeof createHarness>, text = 'do it') {
+  return h.history.append('system', [{ text: `<event type="system_task">\n${text}\n</event>` }], {
+    type: 'event_log',
+    eventType: 'system_task',
+    trigger_llm: true,
+    source: 'daemon',
+  });
+}
+
+describe('system_task（ai.task）の扱い — T-0638', () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  it('本文が [{ text }] に正規化されていても、連続実行の上限と回数を解く', async () => {
+    const h = createHarness();
+    (h.engine as any).haltedByToolCap = true;
+    (h.engine as any).continuousToolCount = 7;
+
+    systemTask(h);
+    expect((h.engine as any).haltedByToolCap).toBe(false);
+    expect((h.engine as any).continuousToolCount).toBe(0);
+    await h.flush();
+    expect(h.woke()).toBe(true);
+  });
+
+  it('eventType の無い古い形（本文が文字列）も解く', () => {
+    const h = createHarness();
+    (h.engine as any).haltedByToolCap = true;
+    h.history.append('system', '<event type="system_task">\nx\n</event>', { type: 'event_log', trigger_llm: true });
+    expect((h.engine as any).haltedByToolCap).toBe(false);
+  });
+
+  it('普通の event_log（ai.log）は解かない', () => {
+    const h = createHarness();
+    (h.engine as any).haltedByToolCap = true;
+    h.history.append('system', [{ text: '<event type="app_event">\nx\n</event>' }], {
+      type: 'event_log',
+      eventType: 'app_event',
+      trigger_llm: true,
+    });
+    expect((h.engine as any).haltedByToolCap).toBe(true);
+  });
+
+  it('isSystemTask は meta.type が event_log でなければ偽（本文に文字列があっても）', () => {
+    expect(
+      Engine.isSystemTask({
+        role: 'user',
+        content: '<event type="system_task">x</event>',
+        meta: { type: 'message' },
+      } as any),
+    ).toBe(false);
+  });
+
+  it('停止（chat.reset）のあとに積んだだけでは起きない —— chat:append は wake なら requestEvaluation を呼ぶ', async () => {
+    const h = createHarness();
+    h.engine.stop(); // chat.reset はアイドル中でも stop() を呼ぶので stopRequested が残る
+    systemTask(h);
+    await h.flush();
+    expect(h.woke()).toBe(false); // 積むだけの経路（旧 chat:append）は予約が捨てられる
+
+    h.engine.requestEvaluation(); // 直した chat:append が wake のときに呼ぶ
+    await h.flush();
+    expect(h.woke()).toBe(true);
+  });
+});
