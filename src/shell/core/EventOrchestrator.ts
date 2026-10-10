@@ -97,6 +97,7 @@ export class EventOrchestrator {
       history,
       sessionManager,
       processManager,
+      config: configManager,
       vfs,
       open: (target) => {
         if (/^metaos:\/\//i.test(target)) {
