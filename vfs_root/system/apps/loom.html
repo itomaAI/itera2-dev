@@ -1251,8 +1251,12 @@
           </div>
 
           ${
-            editing
-              ? `<textarea id="f-body" class="w-full h-[420px] bg-card border border-border-main rounded-lg p-4 font-mono text-xs leading-relaxed focus:border-primary focus:outline-none resize-y">${esc(n.body)}</textarea>`
+            // ★ 本文を読む前の札で編集欄を出さない。空の欄が出ると、打ちかけの入力を守る仕組み（restoreDraft）が
+            //   その空を「入力」として次の描画へ持ち越し、保存で本文が消える（分岐で起きた。P-0053）。
+            // ★ 開始タグ直後の改行は HTML の解析で 1 つ捨てられるので、先頭に 1 つ足しておく
+            //   （足さないと本文が改行で始まる札で欄と本文が常に食い違い、未保存の入力があると誤判定する）。
+            editing && n.body != null
+              ? `<textarea id="f-body" class="w-full h-[420px] bg-card border border-border-main rounded-lg p-4 font-mono text-xs leading-relaxed focus:border-primary focus:outline-none resize-y">\n${esc(n.body)}</textarea>`
               : n.body == null
                 ? `<div class="bg-panel border border-border-main rounded-lg p-5 text-sm text-text-muted italic">本文を読み込めていません（${n.pendingFetch ? '中身がまだ降りてきていない stub です' : '読み込み中か、読めませんでした'}）。右上の再読込を試してください。</div>`
                 : `<div class="bg-panel border border-border-main rounded-lg p-5 text-sm">${mdRender(n.body, sectionRange(n.body, '計画'))}</div>`
@@ -1354,7 +1358,8 @@
       }
       async function commitAll(t) {
         if (!t) return null;
-        if (editing) return await saveBodyChecked(t);
+        // 本文を読めていない札は本文を送らない（undefined で上書きしない）。front matter だけ保存する
+        if (editing && t.body != null) return await saveBodyChecked(t);
         const patch = metaPatch(t);
         if (!Object.keys(patch).length) return { ok: true, id: t.meta.id };
         const r = await call('saveMeta', { id: t.meta.id, patch });
@@ -2025,6 +2030,19 @@
         };
       }
 
+      /**
+       * 選んでいる札の本文を読む。読んでいる間に選択が変わったら、変わった先も読む。
+       * ★ 読み始めた札と描く札がずれると、本文の無い札を描く。分岐では親の更新の知らせ（applyChanged）が
+       *   親の本文を読んでいる間に createAndOpen が新しい札へ選択を移し、本文の無い新しい札が描かれていた（P-0053）。
+       */
+      async function loadSelectedBody() {
+        for (let i = 0; i < 5 && selectedId; i++) {
+          const id = selectedId;
+          await loadBody(id);
+          if (selectedId === id) return;
+        }
+      }
+
       /** 選んだ札の本文を読む（デーモン経由でファイルから）。読めなければ null */
       async function loadBody(id) {
         const r = await call('get', { id }, { quiet: true });
@@ -2050,7 +2068,7 @@
         nodes = r.rows.map(rowToNode).sort(byIdAsc);
         loadSkips = r.skips || [];
         if (selectedId && !byId(selectedId)) selectedId = null;
-        if (selectedId) await loadBody(selectedId);
+        await loadSelectedBody();
         // 編集の基準は「編集を始めた時点の本文」に固定する。
         // ★ ここで毎回張り替えると、外部の追記を「差が無い」と誤判定して踏み潰す（実機で再現済み）。
         if (editing) {
@@ -2106,7 +2124,7 @@
         }
         nodes = list;
         if (selectedId && !byId(selectedId)) selectedId = null;
-        if (selectedId) await loadBody(selectedId);
+        await loadSelectedBody();
         renderAll();
         if (!own) AppUI.notify('外部の更新を取り込みました', 'info', 2000);
       }
@@ -2666,7 +2684,7 @@
         }
         // 畳んだ状態で始まるので、選んでいる札までの道を開いてから描く。
         openPathTo(selectedId);
-        if (selectedId) await loadBody(selectedId);
+        await loadSelectedBody();
         renderAll();
         // 外の変更はデーモンが 'loom.changed' で知らせる（4 秒ごとの監視は廃止。T-0531）
       })();
