@@ -7,7 +7,7 @@
     <script src="/system/vendor/tw.js"></script>
     <!-- 描画は同梱のものだけを使う。回線が無くても同じように出る（2026-08-24 / T-0191） -->
     <script src="/system/lib/md.js"></script>
-    <!-- MathJax は数式が出てきたときだけ、あとから読み込む（ensureMathJax）。設定は script より先に要る -->
+    <!-- MathJax は数式が出てきたときだけ、あとから CDN から読み込む（ensureMathJax）。設定は script より先に要る -->
     <script>
       window.MathJax = {
         tex: {
@@ -507,18 +507,11 @@
       }
 
       /**
-       * ホストが同梱している静的資産（public/vendor）の URL。
-       * ★ ゲストの文書は blob: なので、'/vendor/…' のような絶対パスは解決できず、script の読み込みが黙って失敗する。
-       *   ホストが配信物の根より深い場所（GitHub Pages の /itera2-dev/ など）に居ることもあるので、
-       *   同じ出自にある親文書（ホスト）の baseURI から解く。届かないときは出自の根。
+       * MathJax は CDN から読む（版を固定）。VFS には置かない —— 2 MB 超を全利用者に配るほど使われる機能ではない
+       * （2026-10-17 山内さん）。取ってこれなくても数式が TeX の記法のまま出るだけで、本文の描画は止めない。
+       * ★ '/vendor/…' のような絶対パスは、ゲストの文書が blob: なので解決できない。絶対 URL で指すこと。
        */
-      function hostUrl(path) {
-        let base = `${location.origin}/`;
-        try {
-          if (parent && parent !== window && parent.document && parent.document.baseURI) base = parent.document.baseURI;
-        } catch (e) {}
-        return new URL(path, base).href;
-      }
+      const MATHJAX_URL = 'https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-mml-chtml.js';
 
       /** MathJax は使うときだけ読み込む。読めなくても本文の描画は止めない。 */
       let mathLoading = null;
@@ -528,7 +521,7 @@
         mathLoading = new Promise((resolve) => {
           const s = document.createElement('script');
           s.id = 'MathJax-script'; // MathJax はこの script の場所からフォント等のパスを決める
-          s.src = hostUrl('vendor/mathjax/tex-mml-chtml.js');
+          s.src = MATHJAX_URL;
           s.async = true;
           s.onload = () => {
             const mj = window.MathJax;
