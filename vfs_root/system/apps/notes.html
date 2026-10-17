@@ -7,7 +7,7 @@
     <script src="/system/vendor/tw.js"></script>
     <!-- 描画は同梱のものだけを使う。回線が無くても同じように出る（2026-08-24 / T-0191） -->
     <script src="/system/lib/md.js"></script>
-    <!-- MathJax は数式が出てきたときだけ、あとから読み込む -->
+    <!-- MathJax は数式が出てきたときだけ、あとから CDN から読み込む（ensureMathJax）。設定は script より先に要る -->
     <script>
       window.MathJax = {
         tex: {
@@ -15,8 +15,13 @@
             ['$', '$'],
             ['\\(', '\\)'],
           ],
+          displayMath: [
+            ['$$', '$$'],
+            ['\\[', '\\]'],
+          ],
         },
         svg: { fontCache: 'global' },
+        startup: { typeset: false }, // 描画は renderMarkdown が本文に対して呼ぶ
       };
     </script>
     <script src="/system/core/ui.js"></script>
@@ -501,6 +506,13 @@
         return { text: s, slots };
       }
 
+      /**
+       * MathJax は CDN から読む（版を固定）。VFS には置かない —— 2 MB 超を全利用者に配るほど使われる機能ではない
+       * （2026-10-17 山内さん）。取ってこれなくても数式が TeX の記法のまま出るだけで、本文の描画は止めない。
+       * ★ '/vendor/…' のような絶対パスは、ゲストの文書が blob: なので解決できない。絶対 URL で指すこと。
+       */
+      const MATHJAX_URL = 'https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-mml-chtml.js';
+
       /** MathJax は使うときだけ読み込む。読めなくても本文の描画は止めない。 */
       let mathLoading = null;
       function ensureMathJax() {
@@ -508,9 +520,17 @@
         if (mathLoading) return mathLoading;
         mathLoading = new Promise((resolve) => {
           const s = document.createElement('script');
-          s.src = '/vendor/mathjax/tex-mml-chtml.js';
+          s.id = 'MathJax-script'; // MathJax はこの script の場所からフォント等のパスを決める
+          s.src = MATHJAX_URL;
           s.async = true;
-          s.onload = () => resolve(true);
+          s.onload = () => {
+            const mj = window.MathJax;
+            const ready = mj && mj.startup && mj.startup.promise ? mj.startup.promise : Promise.resolve();
+            ready.then(
+              () => resolve(!!(window.MathJax && window.MathJax.typesetPromise)),
+              () => resolve(false),
+            );
+          };
           s.onerror = () => resolve(false);
           document.head.appendChild(s);
         });

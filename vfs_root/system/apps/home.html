@@ -357,16 +357,16 @@
     <script>
       (() => {
         // =====================================================================
-        // 配信物ごとに違うのはここだけ（itera2-dev: data/apps・memory/journals ／ itera2: user/appdata・agent/journals）。
-        // dev/main を取り込むとき、差分がこの 2 行に収まるようにしてある。
+        // 配信物ごとに違うのはここだけ（itera2-dev: data・data/apps・memory/journals ／ itera2: user・user/appdata・agent/journals）。
+        // dev/main を取り込むとき、差分がこの 3 行に収まるようにしてある。
         // =====================================================================
+        const USER_HOME = 'data'; // 利用者の領域（paths.json の user.home）。最近のメモはこの下の .md 全部から
         const APPDATA = 'data/apps';
         const JOURNALS = 'memory/journals';
 
         const LOOM_DIR = `${APPDATA}/loom`;
         const EVENTS_DIR = `${APPDATA}/events`;
         const TASKS_DIR = `${APPDATA}/tasks`;
-        const NOTES_DIR = `${APPDATA}/notes`;
         const BRIDGE_CONFIG = 'system/config/local_bridge.json'; // 端末の状態（Local Bridge の設定アプリ・デーモンと同じ場所）
         const USAGE_DIR = 'system/logs/usage'; // ホストが 1 ターン 1 行で書く（SystemLogger）
 
@@ -1075,32 +1075,42 @@
         // ---------- 最近のメモ・日誌 ----------
         const FILE_ICON =
           '<svg class="w-4 h-4 text-text-muted group-hover:text-primary transition shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>';
-        const fileRows = (paths, kind, empty) =>
+        // 行の見出しはファイル名。baseDir を渡すと、そこからの相対のディレクトリを薄く添える（同じ名前の区別のため）
+        const fileRows = (paths, kind, empty, baseDir) =>
           paths.length
             ? paths
-                .map(
-                  (
-                    p,
-                  ) => `<div data-${kind}="${esc(p)}" class="flex items-center gap-2 px-1.5 py-1 rounded-lg hover:bg-hover transition cursor-pointer group">
-                    ${FILE_ICON}<span class="text-sm truncate">${esc(p.split('/').pop().replace(/\.md$/, ''))}</span>
-                  </div>`,
-                )
+                .map((p) => {
+                  const rel = baseDir && p.startsWith(`${baseDir}/`) ? p.slice(baseDir.length + 1) : p;
+                  const dir = rel.includes('/') ? rel.slice(0, rel.lastIndexOf('/')) : '';
+                  const name = rel.split('/').pop().replace(/\.md$/, '');
+                  return `<div data-${kind}="${esc(p)}" title="${esc(p)}" class="flex items-center gap-2 px-1.5 py-1 rounded-lg hover:bg-hover transition cursor-pointer group">
+                    ${FILE_ICON}<span class="text-sm truncate">${esc(name)}</span>${
+                      dir
+                        ? `<span class="text-xs text-text-muted truncate shrink-0 max-w-[45%]">${esc(dir)}</span>`
+                        : ''
+                    }
+                  </div>`;
+                })
                 .join('')
             : `<div class="text-text-muted text-xs italic px-1">${esc(empty)}</div>`;
+        // 最近のメモ: 利用者の領域（USER_HOME）の下の .md を更新順に（ノートアプリが一覧にする範囲と同じ）。
+        // 板の札（LOOM_DIR）も .md だが、板はこの画面の別の枠に出ているので、ここには混ぜない
+        const isNotePath = (p) => p.endsWith('.md') && !p.startsWith(`${LOOM_DIR}/`) && !p.split('/').includes('.git');
         const renderNotes = async () => {
           let notes = [];
           try {
-            if (await MetaOS.fs.exists(NOTES_DIR)) {
-              const files = await MetaOS.fs.list(NOTES_DIR, { detail: true });
+            if (await MetaOS.fs.exists(USER_HOME)) {
+              const files = await MetaOS.fs.list(USER_HOME, { recursive: true, detail: true });
               notes = files
-                .map((it) => ({ path: resolvePath(it, NOTES_DIR), at: (it && it.updatedAt) || 0 }))
-                .filter((x) => x.path.endsWith('.md'))
+                .filter((it) => it && it.kind !== 'directory')
+                .map((it) => ({ path: resolvePath(it, USER_HOME), at: (it && it.updatedAt) || 0 }))
+                .filter((x) => isNotePath(x.path))
                 .sort((a, b) => b.at - a.at)
                 .slice(0, 6)
                 .map((x) => x.path);
             }
           } catch (e) {}
-          DOM('widget-notes').innerHTML = fileRows(notes, 'note', 'No notes yet');
+          DOM('widget-notes').innerHTML = fileRows(notes, 'note', 'No notes yet', USER_HOME);
           let journals = [];
           try {
             if (await MetaOS.fs.exists(JOURNALS)) {
@@ -1183,7 +1193,7 @@
             if (p.startsWith(`${LOOM_DIR}/`)) {
               if (!loomViaDaemon) loomD();
             } else if (p.startsWith(`${EVENTS_DIR}/`) || p.startsWith(`${TASKS_DIR}/`)) calD();
-            else if (p.startsWith(`${NOTES_DIR}/`) || p.startsWith(`${JOURNALS}/`)) notesD();
+            else if ((p.startsWith(`${USER_HOME}/`) && isNotePath(p)) || p.startsWith(`${JOURNALS}/`)) notesD();
             else if (p.startsWith(`${USAGE_DIR}/`)) ctxD();
             else if (p === BRIDGE_CONFIG) loadBridge();
           });
