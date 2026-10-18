@@ -112,6 +112,11 @@ export class DesktopEnvironment {
 
     this.panelLayout = new PanelLayout();
     this.panelLayout.init();
+    // 登録簿で immersive のアプリが前面に出たら集中モードへ、別のアプリに替わったら（自動で入っていたなら）戻す（T-0641）
+    processManager.on('foreground_changed', (proc: { path: string }) => {
+      const app = appRegistry.getAllApps().find((a) => a.path === proc.path);
+      this.panelLayout.onForegroundApp(app?.immersive === true);
+    });
     this._bindMobileNavigation();
     this._bindCommandPaletteShortcut();
     this._bindSudoToggle();

@@ -6,6 +6,9 @@
  * - 幅は各パネルの CSS 変数（`--explorer-w` / `--chat-w`）に置き、md 以上でだけ効く
  * - 開閉と幅は localStorage に残す（端末ごとの見え方なので VFS の設定には入れない）
  * - チャットの全画面（`.chat-full`）は中央の上に重ねるだけ。中央は再レイアウトされない。保存しない
+ * - 集中モード（`body.focus-mode`・T-0641）は、上の帯・エクスプローラ・中央の道具帯を隠して主画面をアプリだけにする。
+ *   チャットは右から重なる引き出し（`.focus-chat-open`）。登録簿で `immersive: true` のアプリが前面に出たら
+ *   自動で入り、別のアプリに替わったら（自動で入っていたときだけ）戻す。手で入ったときは Esc か釦で出る。保存しない
  */
 import { bindText } from '../../i18n/staticTexts';
 
@@ -20,6 +23,10 @@ const IDS = {
   BTN_EXPLORER: 'btn-toggle-explorer',
   BTN_CHAT: 'btn-toggle-chat',
   BTN_FULL: 'btn-chat-fullscreen',
+  BTN_FOCUS: 'btn-focus',
+  FOCUS_CONTROLS: 'focus-controls',
+  BTN_FOCUS_CHAT: 'btn-focus-chat',
+  BTN_FOCUS_EXIT: 'btn-focus-exit',
 };
 
 export interface LayoutState {
@@ -51,6 +58,10 @@ export function readLayoutState(storage: Pick<Storage, 'getItem'>): LayoutState 
 export class PanelLayout {
   private state: LayoutState;
   private fullscreen = false;
+  /** 集中モード。`focusAuto` は「登録簿の immersive で自動的に入った」印（自動で出てよいのはこのときだけ） */
+  private focus = false;
+  private focusAuto = false;
+  private focusChat = false;
   private els: Record<string, HTMLElement | null> = {};
 
   private storage: Storage;
@@ -63,6 +74,7 @@ export class PanelLayout {
   public init(): void {
     for (const [k, id] of Object.entries(IDS)) this.els[k] = document.getElementById(id);
     const { SIDEBAR, CHAT, EXPLORER_RESIZER, CHAT_RESIZER, BTN_EXPLORER, BTN_CHAT, BTN_FULL } = this.els;
+    const { BTN_FOCUS, BTN_FOCUS_CHAT, BTN_FOCUS_EXIT } = this.els;
     if (!SIDEBAR || !CHAT) return;
 
     if (this.state.explorerWidth) SIDEBAR.style.setProperty('--explorer-w', `${this.state.explorerWidth}px`);
@@ -72,11 +84,18 @@ export class PanelLayout {
     BTN_EXPLORER?.addEventListener('click', () => this.toggleExplorer());
     BTN_CHAT?.addEventListener('click', () => this.toggleChat());
     BTN_FULL?.addEventListener('click', () => this.setChatFullscreen(!this.fullscreen));
+    BTN_FOCUS?.addEventListener('click', () => this.setFocus(!this.focus));
+    BTN_FOCUS_CHAT?.addEventListener('click', () => this.toggleFocusChat());
+    BTN_FOCUS_EXIT?.addEventListener('click', () => this.setFocus(false));
     EXPLORER_RESIZER?.addEventListener('dblclick', () => this.setExplorer(false));
     CHAT_RESIZER?.addEventListener('dblclick', () => this.setChat(false));
 
     document.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape' && this.fullscreen) this.setChatFullscreen(false);
+      if (e.key !== 'Escape') return;
+      if (this.fullscreen) this.setChatFullscreen(false);
+      // 集中モードでは Esc 1 回目で引き出しを閉じ、2 回目で出る（ゲストの iframe の中の Esc はここに届かないので釦も要る）
+      else if (this.focus && this.focusChat) this.setFocusChat(false);
+      else if (this.focus) this.setFocus(false);
     });
 
     // 幅はリサイザが CSS 変数に書く。ここでは観測して保存するだけ
@@ -94,6 +113,12 @@ export class PanelLayout {
   }
   public get isChatFullscreen(): boolean {
     return this.fullscreen;
+  }
+  public get isFocus(): boolean {
+    return this.focus;
+  }
+  public get isFocusChatOpen(): boolean {
+    return this.focus && this.focusChat;
   }
 
   public toggleExplorer(): void {
@@ -114,14 +139,53 @@ export class PanelLayout {
     this._save();
   }
   public setChatFullscreen(on: boolean): void {
+    // 集中モードの引き出しと全画面は両立しない（left と width が噛み合わない）。全画面にしたいなら集中モードを出る
+    if (on && this.focus) this.setFocus(false);
     this.fullscreen = on;
     if (on) this.state.chat = true;
     this._apply();
     this._save();
   }
 
+  /**
+   * 集中モードに入る／出る。`auto` は登録簿の immersive による入り（出るのも自動でよい）。
+   * 入るとチャットの全画面は解く（引き出しと両立しない）。引き出しは閉じた状態から始める。開閉の状態（`state`）は変えない
+   */
+  public setFocus(on: boolean, opts: { auto?: boolean } = {}): void {
+    if (on === this.focus) {
+      if (on && !opts.auto) this.focusAuto = false; // 手で入り直したら、自動では出なくする
+      return;
+    }
+    this.focus = on;
+    this.focusAuto = on ? opts.auto === true : false;
+    this.focusChat = false;
+    if (on) this.fullscreen = false;
+    this._apply();
+  }
+  public toggleFocusChat(): void {
+    this.setFocusChat(!this.focusChat);
+  }
+  public setFocusChat(open: boolean): void {
+    if (!this.focus) return;
+    this.focusChat = open;
+    this._apply();
+  }
+  /** 前面のアプリが替わったとき（ProcessManager の `foreground_changed`）。immersive なら入り、違えば自動で入っていたときだけ出る */
+  public onForegroundApp(immersive: boolean): void {
+    if (immersive) this.setFocus(true, { auto: true });
+    else if (this.focus && this.focusAuto) this.setFocus(false);
+  }
+
   private _apply(): void {
     const { SIDEBAR, CHAT, EXPLORER_RESIZER, CHAT_RESIZER, BTN_EXPLORER, BTN_CHAT, BTN_FULL } = this.els;
+    const { BTN_FOCUS, BTN_FOCUS_CHAT, FOCUS_CONTROLS } = this.els;
+    document.body.classList.toggle('focus-mode', this.focus);
+    CHAT?.classList.toggle('focus-chat-open', this.focus && this.focusChat);
+    // 引き出しが開いている間、浮き釦は引き出しの左隣へ（下に隠れて押せなくならないように）
+    if (FOCUS_CONTROLS)
+      FOCUS_CONTROLS.style.right = this.focus && this.focusChat && CHAT ? `${CHAT.offsetWidth + 8}px` : '';
+    BTN_FOCUS?.classList.toggle('text-primary', this.focus);
+    BTN_FOCUS_CHAT?.classList.toggle('text-primary', this.focus && this.focusChat);
     SIDEBAR?.classList.toggle('panel-collapsed', !this.state.explorer);
     EXPLORER_RESIZER?.classList.toggle('panel-collapsed', !this.state.explorer);
     CHAT?.classList.toggle('panel-collapsed', !this.state.chat);
@@ -156,7 +220,7 @@ export class PanelLayout {
         changed = true;
       }
     }
-    if (CHAT && this.state.chat && !this.fullscreen && CHAT.offsetWidth > 0) {
+    if (CHAT && this.state.chat && !this.fullscreen && !this.focus && CHAT.offsetWidth > 0) {
       const w = Math.round(CHAT.offsetWidth);
       if (w !== this.state.chatWidth) {
         this.state.chatWidth = w;

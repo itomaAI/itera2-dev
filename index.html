@@ -31,6 +31,7 @@
 
     <!-- Header (Keys button removed) -->
     <header
+      id="shell-header"
       class="h-10 bg-panel border-b border-border-main flex items-center justify-between px-4 shrink-0 z-20 shadow-sm relative"
     >
       <div class="flex items-center gap-2">
@@ -203,7 +204,10 @@
 
       <!-- 2. CENTER -->
       <div class="flex-1 flex flex-col bg-app min-w-0 relative h-full pb-14 md:pb-0">
-        <div class="h-10 bg-panel border-b border-border-main flex items-center px-4 gap-2 shrink-0 z-10">
+        <div
+          id="center-toolbar"
+          class="h-10 bg-panel border-b border-border-main flex items-center px-4 gap-2 shrink-0 z-10"
+        >
           <button
             id="btn-toggle-explorer"
             class="hidden md:inline-flex text-text-muted hover:text-text-main p-1 rounded hover:bg-hover transition"
@@ -314,6 +318,22 @@
               </svg>
             </button>
           </div>
+          <!-- 集中モード（T-0641）: 上の帯・エクスプローラ・この道具帯を隠し、主画面をアプリだけにする。並びは「全画面化」「チャット開閉」 -->
+          <button
+            id="btn-focus"
+            class="hidden md:inline-flex text-text-muted hover:text-text-main p-1 rounded hover:bg-hover transition"
+            title="Focus mode"
+            data-i18n-title="shell.focus"
+          >
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M4 8V4h4M20 8V4h-4M4 16v4h4M20 16v4h-4"
+              ></path>
+            </svg>
+          </button>
           <button
             id="btn-toggle-chat"
             class="hidden md:inline-flex text-text-muted hover:text-text-main p-1 rounded hover:bg-hover transition"
@@ -340,6 +360,43 @@
               <div class="loader mx-auto mb-3"></div>
               <span class="text-xs text-text-muted font-medium tracking-wide">Compiling...</span>
             </div>
+          </div>
+
+          <!-- 集中モードのときだけ出る浮き釦（チャットの引き出し・終了）。iframe の上に載るので、ここに置く -->
+          <div
+            id="focus-controls"
+            class="hidden absolute top-2 right-2 z-20 items-center gap-1 bg-panel/90 backdrop-blur border border-border-main rounded shadow px-1 py-0.5"
+          >
+            <button
+              id="btn-focus-exit"
+              class="text-text-muted hover:text-text-main p-1 rounded hover:bg-hover transition"
+              title="Exit focus mode (Esc)"
+              data-i18n-title="shell.focusExit"
+            >
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M9 4H4v5M15 4h5v5M9 20H4v-5M15 20h5v-5"
+                ></path>
+              </svg>
+            </button>
+            <button
+              id="btn-focus-chat"
+              class="text-text-muted hover:text-text-main p-1 rounded hover:bg-hover transition"
+              title="Chat"
+              data-i18n-title="shell.focusChat"
+            >
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M8 10h8M8 14h5M21 12a8 8 0 01-11.6 7.1L4 20l1.1-4.2A8 8 0 1121 12z"
+                ></path>
+              </svg>
+            </button>
           </div>
 
           <!-- Editor Overlay (Host Fallback) -->

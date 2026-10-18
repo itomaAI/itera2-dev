@@ -54,6 +54,9 @@ export const EN = {
   'shell.reload': 'Reload',
   'shell.recentApps': 'Recent Apps',
   'shell.toggleChat': 'Toggle Chat',
+  'shell.focus': 'Focus mode',
+  'shell.focusExit': 'Exit focus mode (Esc)',
+  'shell.focusChat': 'Chat',
   'shell.statusbar.runtime': 'Itera Runtime (V2)',
 
   // ---- shell (chat panel chrome)
