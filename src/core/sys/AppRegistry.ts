@@ -25,6 +25,8 @@ export interface AppManifest {
   path: string;
   description?: string;
   fileHandlers?: FileHandler[];
+  /** true なら、このアプリが前面に出たとき OS が集中モードに入る（上の帯・エクスプローラを隠す。T-0641） */
+  immersive?: boolean;
 }
 
 export interface ServiceManifest {

@@ -44,6 +44,26 @@ body {
     }
 }
 
+/* --- 集中モード（T-0641）。上の帯・エクスプローラ・中央の道具帯を隠し、主画面をアプリだけにする。
+   チャットは右から重なる引き出し（#chat-panel に .focus-chat-open）。PC のみ。スマホはもともと引き出し。
+   #chat-panel は開閉の .panel-collapsed を持っていても出す（引き出しの開閉は focus-chat-open だけで決まる） --- */
+@media (min-width: 768px) {
+    body.focus-mode #shell-header,
+    body.focus-mode #center-toolbar,
+    body.focus-mode #sidebar,
+    body.focus-mode #explorer-resizer,
+    body.focus-mode #chat-resizer { display: none !important; }
+    body.focus-mode #chat-panel {
+        display: flex !important;
+        position: absolute; top: 0; bottom: 0; right: 0; width: var(--chat-w, 400px);
+        z-index: 45; transform: translateX(100%); transition: transform 0.2s ease;
+        box-shadow: -8px 0 24px rgba(0, 0, 0, 0.25);
+    }
+    body.focus-mode #chat-panel.focus-chat-open { transform: none; }
+    body.focus-mode #focus-controls { display: flex; }
+    body.focus-mode #btn-chat-fullscreen { display: none; } /* 引き出しの中では全画面に行かない */
+}
+
 .loader {
     border: 3px solid rgb(var(--c-bg-card)); border-top: 3px solid rgb(var(--c-accent-primary)); border-radius: 50%;
     width: 24px; height: 24px; animation: spin 1s linear infinite;

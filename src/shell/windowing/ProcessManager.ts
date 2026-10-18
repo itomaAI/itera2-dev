@@ -329,6 +329,10 @@ export class ProcessManager {
     targetProc.iframe.style.opacity = '1';
     targetProc.iframe.style.pointerEvents = 'auto';
     targetProc.iframe.style.zIndex = '10';
+    // 前面が替わったことを知らせる（集中モードの自動の入り／出に使う。T-0641）
+    if (this.events['foreground_changed']) {
+      this.events['foreground_changed'].forEach((cb) => cb(targetProc));
+    }
   }
 
   private _enforceLRU(): void {
