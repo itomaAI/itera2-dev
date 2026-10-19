@@ -7,6 +7,7 @@ import type { ToolRegistry } from '../ToolRegistry';
 import type { VfsService } from '../../vfs/VfsService';
 import { AGENT_PRINCIPAL } from '../../vfs/types';
 import { parseEditBlocks, applyEditBlocks } from './editBlocks';
+import { ToolError } from '../ToolError';
 
 export function registerFSTools(registry: ToolRegistry): void {
   const setId = 'system:fs';
@@ -17,7 +18,7 @@ export function registerFSTools(registry: ToolRegistry): void {
     description: 'Reads file content.',
     impl: async (params: any, context: { vfs: VfsService }) => {
       const vfs = context.vfs;
-      if (!vfs.exists(AGENT_PRINCIPAL, params.path)) throw new Error(`File not found.`);
+      if (!vfs.exists(AGENT_PRINCIPAL, params.path)) throw new ToolError(`File not found.`);
 
       const stat = vfs.stat(AGENT_PRINCIPAL, params.path);
 
@@ -119,7 +120,7 @@ export function registerFSTools(registry: ToolRegistry): void {
     impl: async (params: any, context: { vfs: VfsService }) => {
       const isOverwrite = params.overwrite === 'true';
       if (!isOverwrite && context.vfs.exists(AGENT_PRINCIPAL, params.path)) {
-        throw new Error(
+        throw new ToolError(
           `File already exists at ${params.path}. Set overwrite="true" if you intend to completely overwrite it, or use <edit_file> to modify it.`,
         );
       }
@@ -144,7 +145,7 @@ export function registerFSTools(registry: ToolRegistry): void {
 
       // 行ベースの編集モード
       if (params.mode) {
-        if (!vfs.exists(AGENT_PRINCIPAL, params.path)) throw new Error(`File not found: ${params.path}`);
+        if (!vfs.exists(AGENT_PRINCIPAL, params.path)) throw new ToolError(`File not found: ${params.path}`);
         const fileContent = await vfs.readFile(AGENT_PRINCIPAL, params.path);
         let lines = fileContent.split(/\r?\n/);
 
@@ -162,7 +163,7 @@ export function registerFSTools(registry: ToolRegistry): void {
         let log = '';
 
         if (params.mode === 'replace') {
-          if (isNaN(eLine)) throw new Error('End line required for replace.');
+          if (isNaN(eLine)) throw new ToolError('End line required for replace.');
           const count = Math.max(0, eLine - sLine + 1);
           while (lines.length < sIdx) lines.push('');
           lines.splice(sIdx, count, ...insertLines);
@@ -172,7 +173,7 @@ export function registerFSTools(registry: ToolRegistry): void {
           lines.splice(sIdx, 0, ...insertLines);
           log = `Inserted at line ${sLine}`;
         } else if (params.mode === 'delete') {
-          if (isNaN(eLine)) throw new Error('End line required for delete.');
+          if (isNaN(eLine)) throw new ToolError('End line required for delete.');
           const count = Math.max(0, eLine - sLine + 1);
           lines.splice(sIdx, count);
           log = `Deleted lines ${sLine}-${eLine}`;
@@ -180,7 +181,7 @@ export function registerFSTools(registry: ToolRegistry): void {
           lines.push(...insertLines);
           log = `Appended to end of file`;
         } else {
-          throw new Error(`Unknown mode: ${params.mode}`);
+          throw new ToolError(`Unknown mode: ${params.mode}`);
         }
 
         await vfs.writeFile(AGENT_PRINCIPAL, params.path, lines.join('\n'), {
@@ -204,7 +205,7 @@ export function registerFSTools(registry: ToolRegistry): void {
         return { log: blockMsg, ui: `✏️ Replaced content in ${params.path}` };
       }
 
-      throw new Error("Invalid <edit_file> content. Use SEARCH markers or specify 'mode' attribute.");
+      throw new ToolError("Invalid <edit_file> content. Use SEARCH markers or specify 'mode' attribute.");
     },
   });
 
@@ -212,7 +213,7 @@ export function registerFSTools(registry: ToolRegistry): void {
     name: 'file_info',
     description: 'Get detailed metadata of a file or directory.',
     impl: async (params: any, context: { vfs: VfsService }) => {
-      if (!params.path) throw new Error("Attribute 'path' is required.");
+      if (!params.path) throw new ToolError("Attribute 'path' is required.");
       const stat = context.vfs.stat(AGENT_PRINCIPAL, params.path);
 
       let acl;

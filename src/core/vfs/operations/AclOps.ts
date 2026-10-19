@@ -5,6 +5,7 @@
 
 import { BaseOperation } from './BaseOperation';
 import type { Principal, AccessControlList } from '../types';
+import { VfsError } from '../VfsError';
 
 export class SetAclOp extends BaseOperation<{ path: string; acl: AccessControlList }, void> {
   async execute(principal: Principal, args: { path: string; acl: AccessControlList }): Promise<void> {
@@ -12,7 +13,7 @@ export class SetAclOp extends BaseOperation<{ path: string; acl: AccessControlLi
 
     return this.ctx.lockManager.acquire(normPath, async () => {
       const id = this.ctx.pathResolver.getIdByPath(normPath);
-      if (!id) throw new Error(`Not found: ${normPath}`);
+      if (!id) throw new VfsError('ENOENT', `Not found: ${normPath}`);
 
       this.ctx.auth.checkNodePermission(principal, id, 'manage');
       const node = this.ctx.nodeStore.getNode(id)!;
@@ -32,7 +33,7 @@ export class SetAclRecursiveOp extends BaseOperation<{ path: string; acl: Access
 
     return this.ctx.lockManager.acquire(normPath, async () => {
       const id = this.ctx.pathResolver.getIdByPath(normPath);
-      if (!id) throw new Error(`Not found: ${normPath}`);
+      if (!id) throw new VfsError('ENOENT', `Not found: ${normPath}`);
 
       this.ctx.auth.checkNodePermission(principal, id, 'manage');
 

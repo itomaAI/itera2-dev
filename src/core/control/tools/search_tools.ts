@@ -6,6 +6,7 @@
 import type { ToolRegistry } from '../ToolRegistry';
 import type { VfsService } from '../../vfs/VfsService';
 import { AGENT_PRINCIPAL } from '../../vfs/types';
+import { ToolError } from '../ToolError';
 
 const yieldToMain = () => new Promise((resolve) => setTimeout(resolve, 0));
 
@@ -71,7 +72,7 @@ export function registerSearchTools(registry: ToolRegistry): void {
     description: 'Search text inside files.',
     impl: async (params: any, context: { vfs: VfsService }) => {
       const query = params.query;
-      if (!query) throw new Error("Attribute 'query' is required.");
+      if (!query) throw new ToolError("Attribute 'query' is required.");
 
       const rootPath = String(params.path || '').replace(/\/+$/, '');
       const extensions = params.include

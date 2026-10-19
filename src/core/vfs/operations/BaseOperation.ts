@@ -15,6 +15,7 @@ import { VfsTransaction } from '../VfsTransaction';
 import type { ProviderManager } from '../ProviderManager';
 import { generateId } from '../../../utils/id';
 import { VFS_HARD_LIMITS } from '../../../config/constants';
+import { VfsError } from '../VfsError';
 
 export interface VfsContext {
   nodeStore: NodeStore;
@@ -69,7 +70,7 @@ export abstract class BaseOperation<TArgs, TReturn> {
     }
 
     if (newSize > limit) {
-      throw new Error(`VFS Quota Exceeded. Storage is full.`);
+      throw new VfsError('ENOSPC', `VFS Quota Exceeded. Storage is full.`);
     }
   }
 
@@ -95,7 +96,7 @@ export abstract class BaseOperation<TArgs, TReturn> {
     const existingId = this.ctx.pathResolver.getIdByPath(normPath);
     if (existingId !== undefined && existingId !== null) {
       const node = this.ctx.nodeStore.getNode(existingId);
-      if (node?.kind !== 'directory') throw new Error(`Path exists but is not a directory: ${normPath}`);
+      if (node?.kind !== 'directory') throw new VfsError('ENOTDIR', `Path exists but is not a directory: ${normPath}`);
       return existingId;
     }
 
@@ -109,7 +110,8 @@ export abstract class BaseOperation<TArgs, TReturn> {
       const reCheckId = this.ctx.pathResolver.getIdByPath(normPath);
       if (reCheckId !== undefined && reCheckId !== null) {
         const node = this.ctx.nodeStore.getNode(reCheckId);
-        if (node?.kind !== 'directory') throw new Error(`Path exists but is not a directory: ${normPath}`);
+        if (node?.kind !== 'directory')
+          throw new VfsError('ENOTDIR', `Path exists but is not a directory: ${normPath}`);
         return reCheckId;
       }
 

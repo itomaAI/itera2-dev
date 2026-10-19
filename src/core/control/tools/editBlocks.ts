@@ -19,6 +19,8 @@
  * 衝突したときにだけ効く規則へ格下げしている（受けるほうは緩く、書き方の作法は据え置き）。
  */
 
+import { ToolError } from '../ToolError';
+
 export interface EditBlock {
   /** 探す文字列（regex="true" のときは正規表現そのもの） */
   pattern: string;
@@ -87,13 +89,13 @@ function pick(label: string, cands: Marker[], n: number, headerLine: number, ch:
 
   const list = cands.map((c) => `line ${c.line} (${c.len} '${ch}')`).join(', ');
   if (exact.length === 0) {
-    throw new Error(
+    throw new ToolError(
       `Ambiguous ${label} for the SEARCH block starting at line ${headerLine} of this edit_file content: ` +
         `${cands.length} candidate lines (${list}), none of which is ${n} characters long like the opening marker. ` +
         `Make the intended ${label} exactly ${n} '${ch}' characters. No changes were made to the file.`,
     );
   }
-  throw new Error(
+  throw new ToolError(
     `Ambiguous ${label} for the SEARCH block starting at line ${headerLine} of this edit_file content: ` +
       `${exact.length} of the ${cands.length} candidate lines (${list}) are ${n} characters long, ` +
       `so the block cannot be delimited. Use longer markers (e.g. ${n + 3} characters for all three) ` +
@@ -119,7 +121,7 @@ export function parseEditBlocks(content: string): EditBlock[] {
     });
   }
   if (heads.length === 0) {
-    throw new Error(
+    throw new ToolError(
       "No SEARCH block found. The opening marker must be a line of its own that starts with at least four '<' " +
         'followed by SEARCH (e.g. `<<<<<SEARCH`). No changes were made to the file.',
     );
@@ -141,7 +143,7 @@ export function parseEditBlocks(content: string): EditBlock[] {
     let seps = findMarkers(SEPARATOR, content, bodyStart, Math.max(bound, bodyStart), shift);
     if (seps.length === 0) seps = findMarkers(SEPARATOR, content, bodyStart, content.length, shift);
     if (seps.length === 0) {
-      throw new Error(
+      throw new ToolError(
         `No separator found for the SEARCH block starting at line ${h.line} of this edit_file content. ` +
           `Expected a line of ${h.len} '=' characters between the text to find and the replacement. ` +
           `No changes were made to the file.`,
@@ -153,7 +155,7 @@ export function parseEditBlocks(content: string): EditBlock[] {
     let closers = findMarkers(CLOSER, content, repStart, Math.max(bound, repStart), shift);
     if (closers.length === 0) closers = findMarkers(CLOSER, content, repStart, content.length, shift);
     if (closers.length === 0) {
-      throw new Error(
+      throw new ToolError(
         `No closing marker found for the SEARCH block starting at line ${h.line} of this edit_file content. ` +
           `Expected a line of ${h.len} '>' characters after the replacement. ` +
           `No changes were made to the file.`,
@@ -164,7 +166,7 @@ export function parseEditBlocks(content: string): EditBlock[] {
     const pattern = content.slice(bodyStart, sep.index).replace(/\r?\n$/, '');
     const replacement = content.slice(repStart, closer.index).replace(/\r?\n$/, '');
     if (pattern.length === 0) {
-      throw new Error(
+      throw new ToolError(
         `The SEARCH block starting at line ${h.line} of this edit_file content has nothing to find ` +
           `(the part above the separator is empty). ` +
           `No changes were made to the file.`,
@@ -250,7 +252,7 @@ export function applyEditBlocks(fileContent: string, blocks: EditBlock[], opts: 
     const where = `block ${i + 1} (its SEARCH marker is on line ${b.line} of this edit_file content)`;
 
     if (b.replacement === b.pattern) {
-      throw new Error(
+      throw new ToolError(
         `${where} would not change anything (both sides are identical). No changes were made to the file.`,
       );
     }
@@ -260,25 +262,25 @@ export function applyEditBlocks(fileContent: string, blocks: EditBlock[], opts: 
     try {
       hits = findHits(source, text);
     } catch (e) {
-      throw new Error(`Invalid RegExp in ${where}: ${(e as Error).message}. No changes were made to the file.`);
+      throw new ToolError(`Invalid RegExp in ${where}: ${(e as Error).message}. No changes were made to the file.`);
     }
 
     if (hits.length === 0) {
-      throw new Error(
+      throw new ToolError(
         `Search pattern not found for ${where}.${notFoundHint(text, b.pattern, isRegex)} No changes were made to the file.`,
       );
     }
     if (hits.length > 1) {
       const shown = hits.slice(0, 8).map((h) => lineOf(text, h.index));
       const more = hits.length > shown.length ? ', ...' : '';
-      throw new Error(
+      throw new ToolError(
         `The SEARCH pattern of ${where} matched ${hits.length} times in the file (lines ${shown.join(', ')}${more}), ` +
           `but it must match exactly once. Add surrounding lines to the block until it is unique. ` +
           `No changes were made to the file.`,
       );
     }
     if (hits[0].length === 0) {
-      throw new Error(`The SEARCH pattern of ${where} matched an empty string. No changes were made to the file.`);
+      throw new ToolError(`The SEARCH pattern of ${where} matched an empty string. No changes were made to the file.`);
     }
 
     text = text.slice(0, hits[0].index) + b.replacement + text.slice(hits[0].index + hits[0].length);

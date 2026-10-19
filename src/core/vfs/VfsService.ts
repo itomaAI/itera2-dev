@@ -33,6 +33,7 @@ import { DeleteFileOp, RenameOp, CopyOp, RestoreOp } from './operations/Transfer
 import { SetAclOp, SetAclRecursiveOp } from './operations/AclOps';
 import type { ProviderManager } from './ProviderManager';
 import { VFS_HARD_LIMITS } from '../../config/constants';
+import { VfsError } from './VfsError';
 
 export class VfsService {
   private nodeStore: NodeStore;
@@ -120,7 +121,7 @@ export class VfsService {
 
   stat(principal: Principal, path: string): VfsStat {
     const id = this.pathResolver.getIdByPath(path);
-    if (id === undefined) throw new Error(`File or directory not found: ${path}`);
+    if (id === undefined) throw new VfsError('ENOENT', `File or directory not found: ${path}`);
 
     this.auth.checkNodePermission(principal, id, 'read');
 
@@ -188,7 +189,7 @@ export class VfsService {
     const rootPath = this.pathResolver.normalizePath(options.path || '');
     const rootId = this.pathResolver.getIdByPath(rootPath);
 
-    if (rootId === undefined) throw new Error(`Path not found: ${rootPath}`);
+    if (rootId === undefined) throw new VfsError('ENOENT', `Path not found: ${rootPath}`);
     this.auth.checkNodePermission(principal, rootId, 'read');
 
     if (rootId !== null) {
@@ -289,7 +290,7 @@ export class VfsService {
     const rootPath = this.pathResolver.normalizePath(path);
     const rootId = this.pathResolver.getIdByPath(rootPath);
 
-    if (rootId === undefined) throw new Error(`Path not found: ${rootPath}`);
+    if (rootId === undefined) throw new VfsError('ENOENT', `Path not found: ${rootPath}`);
     this.auth.checkNodePermission(principal, rootId, 'read');
 
     const result: SyncStateTree = {};
@@ -334,7 +335,7 @@ export class VfsService {
   getAcl(principal: Principal, path: string): AccessControlList {
     const normPath = this.pathResolver.normalizePath(path);
     const id = this.pathResolver.getIdByPath(normPath);
-    if (!id) throw new Error(`Not found: ${normPath}`);
+    if (!id) throw new VfsError('ENOENT', `Not found: ${normPath}`);
 
     this.auth.checkNodePermission(principal, id, 'read');
     const node = this.nodeStore.getNode(id)!;
@@ -365,17 +366,17 @@ export class VfsService {
     const normPath = this.pathResolver.normalizePath(path);
     const id = this.pathResolver.getIdByPath(normPath);
 
-    if (id === undefined || id === null) throw new Error(`File not found: ${normPath}`);
+    if (id === undefined || id === null) throw new VfsError('ENOENT', `File not found: ${normPath}`);
     this.auth.checkNodePermission(principal, id, 'read');
 
     let node = this.nodeStore.getNode(id)!;
-    if (node.kind !== 'file') throw new Error(`Cannot read directory as file: ${normPath}`);
+    if (node.kind !== 'file') throw new VfsError('EISDIR', `Cannot read directory as file: ${normPath}`);
 
     if (node.meta.syncState === 'stub' && !opts.bypassFetch) {
       if (!this.providerManager) throw new Error(`File is a stub but ProviderManager is not initialized.`);
 
       const success = await this.providerManager.fetchContent(normPath);
-      if (!success) throw new Error(`Failed to fetch missing content for ${normPath}`);
+      if (!success) throw new VfsError('ESTUB', `Failed to fetch missing content for ${normPath}`);
 
       node = this.nodeStore.getNode(id)!;
       if (!node || node.meta.syncState === 'stub')

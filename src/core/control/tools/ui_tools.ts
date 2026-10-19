@@ -7,6 +7,7 @@ import type { ToolRegistry } from '../ToolRegistry';
 import type { VfsService } from '../../vfs/VfsService';
 import { SYSTEM_PRINCIPAL, USER_PRINCIPAL } from '../../vfs/types';
 import { isProbablyText, TEXT_SNIFF_BYTES } from '../../sys/textDetect';
+import { ToolError, asToolFailure, isToolError } from '../ToolError';
 
 export function registerUITools(registry: ToolRegistry): void {
   const setId = 'system:ui';
@@ -17,7 +18,7 @@ export function registerUITools(registry: ToolRegistry): void {
     description: 'Spawn process.',
     impl: async (params: any, context: any) => {
       const path = params.path;
-      if (!path) throw new Error("Attribute 'path' is required.");
+      if (!path) throw new ToolError("Attribute 'path' is required.");
 
       const pid = params.pid || undefined;
       const type = params.type || undefined;
@@ -51,7 +52,7 @@ export function registerUITools(registry: ToolRegistry): void {
     description: 'Open a file using default app.',
     impl: async (params: any, context: any) => {
       const path = params.path;
-      if (!path) throw new Error("Attribute 'path' is required.");
+      if (!path) throw new ToolError("Attribute 'path' is required.");
 
       if (context.shell?.resolver) {
         try {
@@ -62,7 +63,7 @@ export function registerUITools(registry: ToolRegistry): void {
             // ディレクトリの受け皿はホストのエクスプローラパネル（解決器が決める）
             const reveal = context.shell._revealInExplorer;
             if (typeof reveal !== 'function') throw new Error('Explorer is not available.');
-            if (!reveal(path)) throw new Error(`Directory not found in explorer: ${path}`);
+            if (!reveal(path)) throw new ToolError(`Directory not found in explorer: ${path}`);
             return { log: `Revealed folder ${path} in Explorer`, ui: `📂 Opened folder` };
           } else if (resolvedApp.appId === 'HostEditor') {
             // 関連付けの無いバイナリ（xlsm など）はエディタに出さず、ビューワー（ダウンロード）へ（T-0389）
@@ -114,7 +115,12 @@ export function registerUITools(registry: ToolRegistry): void {
             };
           }
         } catch (e: any) {
-          throw new Error(`Failed to open: ${e.message}`);
+          // 開けない理由（VFS の拒否・上で投げた ToolError）はそのまま期待される失敗として返す。
+          // それ以外（配線の欠け・起動の中の例外）は実装の例外なので包まずに通す（T-0677）
+          const failure = asToolFailure(e);
+          if (isToolError(failure))
+            throw new ToolError(`Failed to open: ${failure.message}`, { cause: e, code: failure.code });
+          throw e;
         }
       }
       return { log: 'Shell not available.', error: true };
@@ -126,7 +132,7 @@ export function registerUITools(registry: ToolRegistry): void {
     description: 'Kill process.',
     impl: async (params: any, context: any) => {
       const pid = params.pid;
-      if (!pid) throw new Error("Attribute 'pid' is required.");
+      if (!pid) throw new ToolError("Attribute 'pid' is required.");
 
       if (context.shell?.processManager) {
         const success = context.shell.processManager.kill(pid);
@@ -174,10 +180,10 @@ export function registerUITools(registry: ToolRegistry): void {
             const capturable = Array.from(procs.values())
               .filter((p: any) => p.type !== 'daemon')
               .map((p: any) => p.pid);
-            throw new Error(`Process not found: ${wanted}. Capturable apps: ${capturable.join(', ') || '(none)'}`);
+            throw new ToolError(`Process not found: ${wanted}. Capturable apps: ${capturable.join(', ') || '(none)'}`);
           }
           if (proc.type === 'daemon') {
-            throw new Error(`Cannot capture a daemon (it has no visible window): ${wanted}`);
+            throw new ToolError(`Cannot capture a daemon (it has no visible window): ${wanted}`);
           }
         }
 
@@ -247,14 +253,14 @@ export function registerUITools(registry: ToolRegistry): void {
           else pid = 'app_apps_home_html';
         }
       }
-      if (!code.trim()) throw new Error('No code provided.');
+      if (!code.trim()) throw new ToolError('No code provided.');
 
       if (context.shell?.processManager) {
         const pm = context.shell.processManager;
         const proc = pm.processes.get(pid);
 
         if (!proc || !proc.iframe || !proc.iframe.contentWindow) {
-          throw new Error(`Target process '${pid}' is not running.`);
+          throw new ToolError(`Target process '${pid}' is not running.`);
         }
 
         try {
