@@ -4,6 +4,7 @@
  */
 
 import type { VfsService } from '../../core/vfs/VfsService';
+import { formatBytes } from '../../core/chat/attachmentGate';
 import type { Turn } from '../../core/state/HistoryManager';
 import type { Principal } from '../../core/vfs/types';
 import { USER_PRINCIPAL } from '../../core/vfs/types';
@@ -313,7 +314,8 @@ export class ChatPanel {
       const div = document.createElement('div');
       div.className =
         'bg-card border border-border-main rounded pl-2 pr-1 py-1 text-xs flex items-center gap-2 text-text-muted select-none';
-      div.innerHTML = `<span class="truncate max-w-[150px]" title="${file.name}">📎 ${file.name}</span><button class="text-text-muted hover:text-error w-5 h-5 flex items-center justify-center">×</button>`;
+      // 大きさを添える（T-0672。文字は先頭だけが本文に展開されるので、大きいものは一目で分かるように）
+      div.innerHTML = `<span class="truncate max-w-[150px]" title="${file.name}">📎 ${file.name}</span><span class="opacity-70 shrink-0">${formatBytes(file.size)}</span><button class="text-text-muted hover:text-error w-5 h-5 flex items-center justify-center">×</button>`;
       div.querySelector('button')!.onclick = () => {
         this.pendingUploads.splice(index, 1);
         this._renderUploadPreviews();

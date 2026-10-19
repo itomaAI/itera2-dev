@@ -2,7 +2,15 @@
  * MetaOS.chat の規則（T-0634）。ホストの実体に触らない純関数の試験。
  */
 import { describe, it, expect } from 'vitest';
-import { buildAppendPlan, buildResetPlan, latestContextUsage, buildChatStatus, mimeOfAttachment } from './chatApi';
+import {
+  buildAppendPlan,
+  buildResetPlan,
+  latestContextUsage,
+  buildChatStatus,
+  mimeOfAttachment,
+  resolveAttachments,
+  attachmentPathsOf,
+} from './chatApi';
 
 describe('chat.append の計画', () => {
   it('文字列は user の text 1 つになり、既定では起こさない・画面に出す', () => {
@@ -31,16 +39,39 @@ describe('chat.append の計画', () => {
     expect(q.visible).toBe(false);
   });
 
-  it('添付は ai:ask と同じ並び（media 全部 → 注記 全部 → 本文）', () => {
+  it('添付は ai:ask と同じ並び（media 全部 → 注記 全部 → 本文）。判定を渡さなければ中身は読まない', () => {
     const p = buildAppendPlan({ role: 'user', content: 'see', opts: { attachments: ['a/b.png', 'c.txt'] } }, 'x');
     if (!p.ok) throw new Error(p.reason);
     expect(p.content).toEqual([
       { media: { path: 'a/b.png', mimeType: 'image/png', metadata: {} } },
-      { media: { path: 'c.txt', mimeType: 'application/octet-stream', metadata: {} } },
-      { text: '<user_attachment path="a/b.png">[Attachment]</user_attachment>' },
-      { text: '<user_attachment path="c.txt">[Attachment]</user_attachment>' },
+      { text: '<user_attachment name="b.png" path="a/b.png">[Binary File: b.png]</user_attachment>' },
+      {
+        text: '<user_attachment name="c.txt" path="c.txt" bytes="0" truncated="true">[Text file not expanded: its content could not be read. Use read_file on the path.]</user_attachment>',
+      },
       { text: 'see' },
     ]);
+  });
+
+  it('文字の添付は門を通して先頭だけ本文に展開する（resolveAttachments → buildAppendPlan）', async () => {
+    const files: Record<string, string> = { 'notes/a.md': '# title\nbody', 'x/big.csv': 'h\n1\n2\n3\n' };
+    const resolved = await resolveAttachments(['notes/a.md', 'img.webp', 'x/big.csv', 'missing.txt'], async (path) => {
+      if (!(path in files)) throw new Error('not found');
+      const bytes = new TextEncoder().encode(files[path]);
+      return { size: bytes.length, bytes: async () => bytes };
+    });
+    expect(resolved.map((r) => r.decision.route)).toEqual(['inline', 'media', 'inline', 'reference']);
+    const p = buildAppendPlan({ role: 'user', content: 'see', opts: { attachments: ['ignored'] } }, 'x', resolved);
+    if (!p.ok) throw new Error(p.reason);
+    expect(p.content[0]).toEqual({ media: { path: 'img.webp', mimeType: 'image/webp', metadata: {} } });
+    expect(p.content[1]).toEqual({
+      text: '<user_attachment name="a.md" path="notes/a.md" lines="2" bytes="12">\n# title\nbody\n</user_attachment>',
+    });
+    expect((p.content[2] as any).text).toContain('[Binary File: img.webp]');
+    expect((p.content[3] as any).text).toContain('lines="4"');
+    expect((p.content[4] as any).text).toContain('could not be read');
+    expect(p.content[5]).toEqual({ text: 'see' });
+    expect(attachmentPathsOf({ attachments: ['a', '', 3, 'b'] })).toEqual(['a', 'b']);
+    expect(attachmentPathsOf(null)).toEqual([]);
   });
 
   it('parts の配列は text と media だけを受け、media の mimeType は無ければ拡張子から', () => {
@@ -54,7 +85,7 @@ describe('chat.append の計画', () => {
     if (!p.ok) throw new Error(p.reason);
     expect(p.content).toEqual([
       { text: 'a' },
-      { media: { path: 'p.jpg', mimeType: 'image/png', metadata: {} } },
+      { media: { path: 'p.jpg', mimeType: 'image/jpeg', metadata: {} } },
       { media: { path: 'q.bin', mimeType: 'x/y', metadata: {} } },
     ]);
     expect(buildAppendPlan({ role: 'user', content: [{ foo: 1 }] }, 'x')).toMatchObject({ ok: false });
@@ -74,9 +105,12 @@ describe('chat.append の計画', () => {
     });
   });
 
-  it('MIME は従来の判定（画像の拡張子は image/png）', () => {
-    expect(mimeOfAttachment('x.webp')).toBe('image/png');
-    expect(mimeOfAttachment('x.pdf')).toBe('application/octet-stream');
+  it('MIME はパスから（画像と PDF は正しい種別、文字の候補は text/plain、他は octet-stream）', () => {
+    expect(mimeOfAttachment('x.webp')).toBe('image/webp');
+    expect(mimeOfAttachment('x.png')).toBe('image/png');
+    expect(mimeOfAttachment('x.pdf')).toBe('application/pdf');
+    expect(mimeOfAttachment('x.md')).toBe('text/plain');
+    expect(mimeOfAttachment('x.zip')).toBe('application/octet-stream');
   });
 });
 

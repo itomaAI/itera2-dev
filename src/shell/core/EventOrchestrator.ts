@@ -17,6 +17,8 @@ import type { VfsEventBus } from '../../core/vfs/VfsEventBus';
 import type { ConfigManager } from '../../core/sys/ConfigManager';
 import { VfsEventFormatter } from '../../core/vfs/VfsEventFormatter';
 import { isProbablyText, TEXT_SNIFF_BYTES } from '../../core/sys/textDetect';
+import { decideAttachment, isInlineCandidate, renderUserAttachmentNode } from '../../core/chat/attachmentGate';
+import { ATTACHMENT_POLICY } from '../../config/attachment_policy';
 import { t } from '../../i18n/i18n';
 
 /**
@@ -585,50 +587,32 @@ export class EventOrchestrator {
     }
 
     // 2. アップロードされたファイルの処理
+    //   置き方は添付の門（core/chat/attachmentGate）が決める。文字は先頭だけを本文に展開し、
+    //   残りは VFS の実体を read_file で読ませる（T-0672）。実体はどの経路でも元のバイト列のまま書く
+    //   （UTF-8 でないものも壊さない。以前は readAsText で読み替えていた）
     for (const file of attachments) {
-      const isText =
-        file.type.startsWith('text/') ||
-        file.type === 'application/json' ||
-        file.type === 'application/xml' ||
-        !!file.name.match(/\.(txt|md|js|json|html|css|xml|yml|yaml|csv|log|sh|py)$/i);
-
-      const reader = new FileReader();
-      const data = await new Promise<string>((r) => {
-        reader.onload = () => r(reader.result as string);
-        if (isText) reader.readAsText(file);
-        else reader.readAsDataURL(file);
-      });
+      const info = { name: file.name, mimeType: file.type, size: file.size };
+      const candidate = isInlineCandidate(info);
+      const bytes =
+        candidate && file.size <= ATTACHMENT_POLICY.inline.skipAboveBytes
+          ? new Uint8Array(await file.arrayBuffer())
+          : null;
+      const decision = decideAttachment(info, bytes);
 
       const timestamp = Date.now();
       const safeName = file.name.replace(/[\/\\:*?"<>|\x00-\x1F]/g, '_');
       const path = `${CACHE_DIR}/${timestamp}_${safeName}`;
 
       try {
-        if (isText) {
-          await this.vfs.writeFile(this.desktop.getActivePrincipal(), path, data, {
-            system: true,
-            overwrite: true,
-          });
-          content.push({
-            text: `<user_attachment name="${file.name}" path="${path}">\n${data}\n</user_attachment>`,
-          });
-        } else {
-          // バイナリは Blob のまま VFS の ContentStore (OPFS) に逃がす
-          await this.vfs.writeFile(this.desktop.getActivePrincipal(), path, file, {
-            system: true,
-            overwrite: true,
-          });
-          content.push({
-            media: {
-              path: path,
-              mimeType: file.type || 'application/octet-stream',
-              metadata: {},
-            },
-          });
-          content.push({
-            text: `<user_attachment path="${path}">[Binary File: ${file.name}]</user_attachment>`,
-          });
+        // Blob のまま VFS の ContentStore (OPFS) へ（文字でも同じ。中身は元のまま）
+        await this.vfs.writeFile(this.desktop.getActivePrincipal(), path, file, {
+          system: true,
+          overwrite: true,
+        });
+        if (decision.route === 'media') {
+          content.push({ media: { path, mimeType: decision.mimeType, metadata: {} } });
         }
+        content.push({ text: renderUserAttachmentNode(decision, { name: file.name, path }) });
       } catch (e: any) {
         console.error(`[EventOrchestrator] Failed to save upload: ${path}`, e);
         if (window.AppUI) window.AppUI.notify(t('notify.attachmentSaveFailed', { reason: e.message }), 'error');

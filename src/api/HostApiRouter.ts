@@ -11,7 +11,14 @@ import type { DynamicToolRegistration, ProcessInfo } from './HostApiContract';
 import { resolvePrincipal } from './principal';
 import type { SpawnOptions } from '../shell/windowing/ProcessManager';
 import { USER_PRINCIPAL } from '../core/vfs/types';
-import { buildAppendPlan, buildChatStatus, buildResetPlan, readLatestContextUsage } from './chatApi';
+import {
+  attachmentPathsOf,
+  buildAppendPlan,
+  buildChatStatus,
+  buildResetPlan,
+  readLatestContextUsage,
+  resolveAttachments,
+} from './chatApi';
 import { VfsEventFormatter } from '../core/vfs/VfsEventFormatter';
 import { buildGuestThemeCss } from '../shell/windowing/guestThemeCss';
 import { base64ToBlob, blobToDataUrl, dataUrlToBlob } from '../utils/binary';
@@ -341,7 +348,17 @@ export class HostApiRouter {
 
     t.registerHandler('chat:append', async ({ role, content, opts }, sourcePid) => {
       if (!d.engine || !d.history) throw new Error('Chat is not available.');
-      const plan = buildAppendPlan({ role, content, opts }, sourcePid);
+      // 添付は門を通す（T-0672）。文字は呼び手の権限で読み、先頭だけ本文に展開する。読めなければ注記だけ
+      const principal = getPrincipal(sourcePid);
+      const resolved = await resolveAttachments(attachmentPathsOf(opts), async (path) => {
+        const stat = d.vfs.stat(principal, path);
+        if (stat.kind !== 'file') return null;
+        return {
+          size: stat.size,
+          bytes: async () => new Uint8Array(await (await d.vfs.readBlob(principal, path)).arrayBuffer()),
+        };
+      });
+      const plan = buildAppendPlan({ role, content, opts }, sourcePid, resolved);
       if (!plan.ok) throw new Error(`chat.append: ${plan.reason}`);
       const chat = chatPanel();
       if (plan.role === 'user') {

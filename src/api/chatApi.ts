@@ -8,6 +8,13 @@
 
 import type { Turn, TurnContent, TurnMeta } from '../core/state/HistoryManager';
 import { SYSTEM_PRINCIPAL, type Principal } from '../core/vfs/types';
+import {
+  decideAttachment,
+  mimeOfPath,
+  renderUserAttachmentNode,
+  type AttachmentDecision,
+} from '../core/chat/attachmentGate';
+import { ATTACHMENT_POLICY } from '../config/attachment_policy';
 
 export type ChatRole = 'user' | 'system';
 
@@ -18,7 +25,7 @@ export interface ChatAppendOpts {
   visible?: boolean;
   /** system のとき `<event type="…">` の種類（画面で隠す判定に使う）。既定 'app_event' */
   eventType?: string;
-  /** VFS の添付。`{media}` と `<user_attachment>` の注記に展開する */
+  /** VFS の添付。添付の門（core/chat/attachmentGate）を通し、画像・PDF は `{media}`、文字は先頭だけ本文に展開する */
   attachments?: string[];
 }
 
@@ -69,9 +76,51 @@ export interface ChatStatus {
   context: ContextUsage | null;
 }
 
-/** 添付の MIME。従来（ai:ask）と同じ判定: 画像の拡張子なら image/png、それ以外は octet-stream */
+/** 添付の MIME（パスだけから。画像と PDF は正しい種別、文字の候補は text/plain、他は octet-stream） */
 export function mimeOfAttachment(path: string): string {
-  return /\.(png|jpg|jpeg|gif|webp)$/i.test(path) ? 'image/png' : 'application/octet-stream';
+  return mimeOfPath(path);
+}
+
+/** `opts.attachments` のうち使える形のもの（文字列・空でない） */
+export function attachmentPathsOf(opts: unknown): string[] {
+  if (!isPlainObject(opts) || !Array.isArray(opts.attachments)) return [];
+  return opts.attachments.filter((p): p is string => typeof p === 'string' && p.length > 0);
+}
+
+export interface ResolvedAttachment {
+  path: string;
+  decision: AttachmentDecision;
+}
+
+/**
+ * 添付のパスごとに門の判定を取る（API 経路）。中身を読むのは文字の候補だけ、しかも上限以内のとき。
+ * `read` は VFS から大きさとバイト列を返す。読めなければ null（→ 'unreadable' の注記になる。投げない）。
+ */
+export async function resolveAttachments(
+  paths: string[],
+  read: (path: string) => Promise<{ size: number; bytes: () => Promise<Uint8Array> } | null>,
+): Promise<ResolvedAttachment[]> {
+  const out: ResolvedAttachment[] = [];
+  for (const path of paths) {
+    const probe = decideAttachment({ name: path, size: 0 }, null);
+    if (probe.route === 'media') {
+      out.push({ path, decision: probe });
+      continue;
+    }
+    let decision: AttachmentDecision;
+    try {
+      const f = await read(path);
+      if (!f) decision = decideAttachment({ name: path, size: 0 }, null);
+      else {
+        const bytes = f.size <= ATTACHMENT_POLICY.inline.skipAboveBytes ? await f.bytes() : null;
+        decision = decideAttachment({ name: path, size: f.size }, bytes);
+      }
+    } catch {
+      decision = decideAttachment({ name: path, size: 0 }, null);
+    }
+    out.push({ path, decision });
+  }
+  return out;
 }
 
 function isPlainObject(v: unknown): v is Record<string, unknown> {
@@ -108,25 +157,35 @@ function normalizeContent(content: unknown): { ok: true; parts: any[] } | { ok: 
 /**
  * chat.append の要求をターン 1 つの計画にする。
  * 添付は従来の ai:ask と同じ並び（media を全部 → `<user_attachment>` の注記を全部 → 本文）。
+ * 文字の添付は注記の中に先頭だけ展開される（門の判定は `resolved` で渡す。無ければ中身を読まない判定）。
  * `source` は呼び手の pid。履歴の meta に残す（画面と LLM が出どころを見分けられる）。
  */
-export function buildAppendPlan(req: ChatAppendRequest, source: string): ChatAppendPlan {
+export function buildAppendPlan(
+  req: ChatAppendRequest,
+  source: string,
+  resolved?: ResolvedAttachment[],
+): ChatAppendPlan {
   const role = req.role;
   if (role !== 'user' && role !== 'system') return { ok: false, reason: "role must be 'user' or 'system'" };
   const opts = isPlainObject(req.opts) ? (req.opts as ChatAppendOpts) : {};
   const wake = opts.wake === true;
   const visible = opts.visible !== false;
 
-  const attachments = Array.isArray(opts.attachments)
-    ? opts.attachments.filter((p): p is string => typeof p === 'string' && p.length > 0)
-    : [];
+  const attachments =
+    resolved ??
+    attachmentPathsOf(opts).map((path) => ({ path, decision: decideAttachment({ name: path, size: 0 }, null) }));
   const normalized = normalizeContent(req.content);
   if (!normalized.ok) return normalized;
 
   const content: any[] = [];
-  for (const path of attachments) content.push({ media: { path, mimeType: mimeOfAttachment(path), metadata: {} } });
-  for (const path of attachments)
-    content.push({ text: `<user_attachment path="${path}">[Attachment]</user_attachment>` });
+  for (const a of attachments) {
+    if (a.decision.route === 'media')
+      content.push({ media: { path: a.path, mimeType: a.decision.mimeType, metadata: {} } });
+  }
+  for (const a of attachments) {
+    const name = a.path.split('/').pop() || a.path;
+    content.push({ text: renderUserAttachmentNode(a.decision, { name, path: a.path }) });
+  }
   content.push(...normalized.parts);
   if (content.length === 0) return { ok: false, reason: 'content is empty' };
 
