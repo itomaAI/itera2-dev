@@ -6,6 +6,8 @@ import type { GuestToolInvoker } from '../../core/control/GuestToolInvoker';
 import type { ToolParams } from '../../core/types/tools';
 import type { HostTransport } from '../../ipc/HostTransport';
 import type { ProcessManager } from '../windowing/ProcessManager';
+import { RpcRemoteError } from '../../ipc/RpcManager';
+import { ToolError } from '../../core/control/ToolError';
 
 export class HostGuestToolInvoker implements GuestToolInvoker {
   private processManager: ProcessManager;
@@ -22,6 +24,13 @@ export class HostGuestToolInvoker implements GuestToolInvoker {
       throw new Error(`Target process '${pid}' is no longer available.`);
     }
 
-    return this.transport.invokeGuest(pid, 'execute_tool', { name, params }, proc.iframe.contentWindow);
+    try {
+      return await this.transport.invokeGuest(pid, 'execute_tool', { name, params }, proc.iframe.contentWindow);
+    } catch (err: unknown) {
+      // ゲストの handler が投げた（＝ゲストが返した error）は、その道具の契約上の答えなので ToolError にする。
+      // RPC の timeout・transport の失敗はそのまま投げる（ToolRegistry が実装の例外として記録する。T-0677）
+      if (err instanceof RpcRemoteError) throw new ToolError(err.message, { cause: err });
+      throw err;
+    }
   }
 }

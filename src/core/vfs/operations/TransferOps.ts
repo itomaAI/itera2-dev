@@ -5,6 +5,7 @@
 
 import { BaseOperation } from './BaseOperation';
 import type { Principal, VfsNode, DeleteOptions, RenameOptions, CopyOptions, RestoreOptions } from '../types';
+import { VfsError } from '../VfsError';
 
 export class DeleteFileOp extends BaseOperation<{ path: string; opts: DeleteOptions }, string> {
   async execute(principal: Principal, args: { path: string; opts: DeleteOptions }): Promise<string> {
@@ -33,8 +34,8 @@ export class DeleteFileOp extends BaseOperation<{ path: string; opts: DeleteOpti
         }
 
         const id = this.ctx.pathResolver.getIdByPath(normPath);
-        if (id === undefined) throw new Error(`Not found: ${normPath}`);
-        if (id === null) throw new Error(`Cannot delete root directory.`);
+        if (id === undefined) throw new VfsError('ENOENT', `Not found: ${normPath}`);
+        if (id === null) throw new VfsError('EINVAL', `Cannot delete root directory.`);
 
         this.ctx.auth.checkNodePermission(principal, id, 'write');
         const node = this.ctx.nodeStore.getNode(id)!;
@@ -95,8 +96,8 @@ export class RenameOp extends BaseOperation<{ oldPath: string; newPath: string; 
     const normOld = this.ctx.pathResolver.normalizePath(oldPath);
     const normNew = this.ctx.pathResolver.normalizePath(newPath);
 
-    if (!normOld) throw new Error('Cannot rename root.');
-    if (!normNew) throw new Error('Invalid destination path.');
+    if (!normOld) throw new VfsError('EINVAL', 'Cannot rename root.');
+    if (!normNew) throw new VfsError('EINVAL', 'Invalid destination path.');
 
     await this.ctx.vfs._hydrateIfNeeded(principal, normOld, normNew);
 
@@ -115,20 +116,21 @@ export class RenameOp extends BaseOperation<{ oldPath: string; newPath: string; 
         }
 
         const oldId = this.ctx.pathResolver.getIdByPath(normOld);
-        if (oldId === undefined || oldId === null) throw new Error(`Source not found or cannot be root: ${normOld}`);
+        if (oldId === undefined || oldId === null)
+          throw new VfsError('ENOENT', `Source not found or cannot be root: ${normOld}`);
 
         this.ctx.auth.checkNodePermission(principal, oldId, 'write');
         const node = this.ctx.nodeStore.getNode(oldId)!;
         if (node.parentId !== null) this.ctx.auth.checkNodePermission(principal, node.parentId, 'write');
 
         const newId = this.ctx.pathResolver.getIdByPath(normNew);
-        if (newId !== undefined) throw new Error(`Destination already exists: ${normNew}`);
+        if (newId !== undefined) throw new VfsError('EEXIST', `Destination already exists: ${normNew}`);
         this.ctx.auth.checkNodePermission(principal, newParentId, 'write');
 
         if (node.kind === 'directory') {
           let cur: string | null = newParentId;
           while (cur !== null) {
-            if (cur === node.id) throw new Error('Cannot move a directory into its own subfolder.');
+            if (cur === node.id) throw new VfsError('EINVAL', 'Cannot move a directory into its own subfolder.');
             const parentNode = this.ctx.nodeStore.getNode(cur);
             cur = parentNode ? parentNode.parentId : null;
           }
@@ -171,15 +173,16 @@ export class RestoreOp extends BaseOperation<{ path: string; opts: RestoreOption
   async execute(principal: Principal, args: { path: string; opts: RestoreOptions }): Promise<string> {
     const { path, opts } = args;
     const normPath = this.ctx.pathResolver.normalizePath(path);
-    if (!normPath.startsWith('trash/')) throw new Error(`Not in trash: ${normPath}`);
+    if (!normPath.startsWith('trash/')) throw new VfsError('EINVAL', `Not in trash: ${normPath}`);
 
     const id = this.ctx.pathResolver.getIdByPath(normPath);
-    if (id === undefined || id === null) throw new Error(`Not found: ${normPath}`);
+    if (id === undefined || id === null) throw new VfsError('ENOENT', `Not found: ${normPath}`);
     const node = this.ctx.nodeStore.getNode(id)!;
 
     const wanted = opts.to ? this.ctx.pathResolver.normalizePath(opts.to) : node.meta.trashedFrom;
-    if (!wanted) throw new Error(`Original location unknown: ${normPath} (specify opts.to)`);
-    if (wanted === 'trash' || wanted.startsWith('trash/')) throw new Error(`Cannot restore into trash: ${wanted}`);
+    if (!wanted) throw new VfsError('EINVAL', `Original location unknown: ${normPath} (specify opts.to)`);
+    if (wanted === 'trash' || wanted.startsWith('trash/'))
+      throw new VfsError('EINVAL', `Cannot restore into trash: ${wanted}`);
 
     const target = uniquePath(wanted, (p) => this.ctx.pathResolver.getIdByPath(p) !== undefined);
     const parts = target.split('/');
@@ -198,12 +201,12 @@ export class RestoreOp extends BaseOperation<{ path: string; opts: RestoreOption
           return null;
         }
         const curId = this.ctx.pathResolver.getIdByPath(normPath);
-        if (curId === undefined || curId === null) throw new Error(`Not found: ${normPath}`);
+        if (curId === undefined || curId === null) throw new VfsError('ENOENT', `Not found: ${normPath}`);
         const cur = this.ctx.nodeStore.getNode(curId)!;
         this.ctx.auth.checkNodePermission(principal, curId, 'write');
         if (cur.parentId !== null) this.ctx.auth.checkNodePermission(principal, cur.parentId, 'write');
         if (this.ctx.pathResolver.getIdByPath(target) !== undefined)
-          throw new Error(`Destination already exists: ${target}`);
+          throw new VfsError('EEXIST', `Destination already exists: ${target}`);
         this.ctx.auth.checkNodePermission(principal, newParentId, 'write');
 
         const meta = { ...cur.meta, updatedAt: Date.now(), version: cur.meta.version + 1 };
@@ -241,7 +244,7 @@ export function uniquePath(path: string, exists: (p: string) => boolean): string
     const candidate = `${dir}${stem} (${n})${ext}`;
     if (!exists(candidate)) return candidate;
   }
-  throw new Error(`Cannot find a free name for: ${path}`);
+  throw new VfsError('EEXIST', `Cannot find a free name for: ${path}`);
 }
 
 export class CopyOp extends BaseOperation<{ srcPath: string; destPath: string; opts: CopyOptions }, string> {
@@ -267,12 +270,13 @@ export class CopyOp extends BaseOperation<{ srcPath: string; destPath: string; o
         }
 
         const srcId = this.ctx.pathResolver.getIdByPath(normSrc);
-        if (srcId === undefined || srcId === null) throw new Error(`Source not found or cannot be root: ${normSrc}`);
+        if (srcId === undefined || srcId === null)
+          throw new VfsError('ENOENT', `Source not found or cannot be root: ${normSrc}`);
 
         this.ctx.auth.checkNodePermission(principal, srcId, 'read');
 
         const destId = this.ctx.pathResolver.getIdByPath(normDest);
-        if (destId !== undefined) throw new Error(`Destination already exists: ${normDest}`);
+        if (destId !== undefined) throw new VfsError('EEXIST', `Destination already exists: ${normDest}`);
 
         this.ctx.auth.checkNodePermission(principal, destParentId, 'write');
         const srcNode = this.ctx.nodeStore.getNode(srcId)!;

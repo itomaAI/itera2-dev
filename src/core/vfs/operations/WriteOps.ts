@@ -5,6 +5,7 @@
 
 import { BaseOperation } from './BaseOperation';
 import type { Principal, VfsNode, VfsNodeMeta, WriteOptions, MkdirOptions, StubOptions } from '../types';
+import { VfsError } from '../VfsError';
 
 export class MkdirOp extends BaseOperation<{ path: string; opts: MkdirOptions }, string> {
   async execute(principal: Principal, args: { path: string; opts: MkdirOptions }): Promise<string> {
@@ -27,7 +28,7 @@ export class MkdirOp extends BaseOperation<{ path: string; opts: MkdirOptions },
         }
 
         const existingId = this.ctx.pathResolver.getIdByPath(normPath);
-        if (existingId !== undefined) throw new Error(`Path already exists: ${normPath}`);
+        if (existingId !== undefined) throw new VfsError('EEXIST', `Path already exists: ${normPath}`);
 
         this.ctx.auth.checkNodePermission(principal, parentId, 'write');
 
@@ -64,7 +65,7 @@ export class WriteFileOp extends BaseOperation<
   ): Promise<string> {
     const { path, content, opts } = args;
     const normPath = this.ctx.pathResolver.normalizePath(path);
-    if (!normPath) throw new Error('Cannot write to root path.');
+    if (!normPath) throw new VfsError('EINVAL', 'Cannot write to root path.');
 
     const parts = normPath.split('/');
     const name = parts.pop()!;
@@ -86,12 +87,13 @@ export class WriteFileOp extends BaseOperation<
         let eventType = 'create';
 
         if (existingId !== undefined && existingId !== null) {
-          if (!opts.overwrite) throw new Error(`File already exists at ${normPath}. Set overwrite=true to overwrite.`);
+          if (!opts.overwrite)
+            throw new VfsError('EEXIST', `File already exists at ${normPath}. Set overwrite=true to overwrite.`);
           this.ctx.auth.checkNodePermission(principal, existingId, 'write');
 
           const existingNode = this.ctx.nodeStore.getNode(existingId)!;
           if (existingNode.kind === 'directory')
-            throw new Error(`Cannot write file: A directory exists at ${normPath}`);
+            throw new VfsError('EISDIR', `Cannot write file: A directory exists at ${normPath}`);
 
           node = { ...existingNode };
           // opts.meta は「実体化」のための口。スタブの中身を取り寄せただけで
@@ -151,7 +153,7 @@ export class AppendFileOp extends BaseOperation<{ path: string; content: string;
   async execute(principal: Principal, args: { path: string; content: string; opts: WriteOptions }): Promise<string> {
     const { path, content, opts } = args;
     const normPath = this.ctx.pathResolver.normalizePath(path);
-    if (!normPath) throw new Error('Cannot write to root path.');
+    if (!normPath) throw new VfsError('EINVAL', 'Cannot write to root path.');
 
     const parts = normPath.split('/');
     const name = parts.pop()!;
@@ -175,7 +177,8 @@ export class AppendFileOp extends BaseOperation<{ path: string; content: string;
         if (existingId !== undefined && existingId !== null) {
           this.ctx.auth.checkNodePermission(principal, existingId, 'write');
           const existingNode = this.ctx.nodeStore.getNode(existingId)!;
-          if (existingNode.kind === 'directory') throw new Error(`Cannot append: A directory exists at ${normPath}`);
+          if (existingNode.kind === 'directory')
+            throw new VfsError('EISDIR', `Cannot append: A directory exists at ${normPath}`);
 
           if (existingNode.contentRef) {
             existingContent = await this.ctx.contentStore.readText(existingNode.contentRef);
@@ -235,7 +238,7 @@ export class CreateStubOp extends BaseOperation<
     const { path, meta } = args;
     const normPath = this.ctx.pathResolver.normalizePath(path);
 
-    if (!normPath) throw new Error('Cannot create stub at root.');
+    if (!normPath) throw new VfsError('EINVAL', 'Cannot create stub at root.');
 
     const parts = normPath.split('/');
     const name = parts.pop()!;
@@ -258,7 +261,8 @@ export class CreateStubOp extends BaseOperation<
         if (existingId !== undefined && existingId !== null) {
           this.ctx.auth.checkNodePermission(principal, existingId, 'write');
           const existingNode = this.ctx.nodeStore.getNode(existingId)!;
-          if (existingNode.kind === 'directory') throw new Error(`Cannot create stub: Directory exists at ${normPath}`);
+          if (existingNode.kind === 'directory')
+            throw new VfsError('EISDIR', `Cannot create stub: Directory exists at ${normPath}`);
 
           if (existingNode.contentRef) {
             await this.ctx.contentStore.delete(existingNode.contentRef);

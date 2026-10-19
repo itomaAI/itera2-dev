@@ -11,9 +11,12 @@
  *     3. 1 本の定義（getToolDefinition）は <define_tag> の全文を返し、無ければ null
  */
 
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import { ToolRegistry } from './ToolRegistry';
 import { registerSysTools } from './tools/sys_tools';
+import { registerFSTools } from './tools/fs_tools';
+import { ToolError } from './ToolError';
+import { VfsError } from '../vfs/VfsError';
 import { SessionManager } from '../../shell/services/SessionManager';
 
 function registryWithTools() {
@@ -162,5 +165,113 @@ describe('ToolRegistry: 登録されていないタグ（T-0593）', () => {
       expect(res?.log).toContain('[LPML Protocol Violation]');
       expect(res?.log).toContain('NOT executed');
     }
+  });
+});
+
+describe('ToolRegistry: 失敗のログの出し分け（T-0677）', () => {
+  // ツールの契約上の答え（SEARCH 不一致・ファイル無し・属性の欠け）は、結果の error: true と tool_events に残れば足りる。
+  // コンソールに赤で出すのは実装の例外だけ。両方が同じ赤で出ていたので、OS の不具合と AI の入力の誤りが見分けられなかった。
+  function harness() {
+    const records: any[] = [];
+    const r = new ToolRegistry(undefined, { record: (e: any) => records.push(e) } as any);
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => {});
+    vi.spyOn(console, 'debug').mockImplementation(() => {});
+    const impl = (fn: () => Promise<any>) =>
+      r.registerSystemTool('system:test', 'Test', { name: 't', description: '', impl: fn });
+    const run = () => r.execute({ type: 't', params: { path: 'x' } }, { shell: {}, engine: {} });
+    return { r, records, errors, impl, run };
+  }
+  afterEach(() => vi.restoreAllMocks());
+
+  it('system: ToolError は console.error を呼ばない。結果は error: true、tool_events には name と message が残る', async () => {
+    const h = harness();
+    h.impl(async () => {
+      throw new ToolError('Search pattern not found in block 1.');
+    });
+    const res = await h.run();
+    expect(res?.error).toBe(true);
+    expect(res?.log).toBe('Error executing <t>: Search pattern not found in block 1.');
+    expect(h.errors).not.toHaveBeenCalled();
+    expect(h.records[0].status).toBe('error');
+    expect(h.records[0].error).toMatchObject({ name: 'ToolError', message: 'Search pattern not found in block 1.' });
+  });
+
+  it('system: VFS の拒否（VfsError）も期待される失敗。ToolError に包まれ、code が tool_events に残る', async () => {
+    const h = harness();
+    h.impl(async () => {
+      throw new VfsError('ENOENT', 'File not found: memory/journals/2026-10-19.md');
+    });
+    const res = await h.run();
+    expect(res?.error).toBe(true);
+    expect(res?.ui).toBe('❌ Error: File not found: memory/journals/2026-10-19.md');
+    expect(h.errors).not.toHaveBeenCalled();
+    expect(h.records[0].error).toMatchObject({ name: 'ToolError', code: 'ENOENT' });
+  });
+
+  it('system: それ以外の例外（実装の欠陥）は console.error を呼ぶ。結果の形は同じ', async () => {
+    const h = harness();
+    h.impl(async () => {
+      throw new TypeError("Cannot read properties of undefined (reading 'split')");
+    });
+    const res = await h.run();
+    expect(res?.error).toBe(true);
+    expect(res?.log).toContain("Cannot read properties of undefined (reading 'split')");
+    expect(h.errors).toHaveBeenCalledTimes(1);
+    expect(String(h.errors.mock.calls[0][0])).toContain('Error executing system tool <t>');
+    expect(h.records[0].error).toMatchObject({ name: 'TypeError' });
+  });
+
+  it('system: 実際のツール — 無いファイルの read_file と、一致しない SEARCH の edit_file は赤を出さない', async () => {
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => {});
+    vi.spyOn(console, 'debug').mockImplementation(() => {});
+    const r = new ToolRegistry();
+    registerFSTools(r);
+    const vfs: any = {
+      exists: (_p: any, path: string) => path === 'a.txt',
+      stat: () => ({ kind: 'file', size: 5 }),
+      readFile: async () => 'hello',
+      writeFile: async () => 'ok',
+    };
+    const ctx = { shell: {}, engine: {}, vfs };
+    const missing = await r.execute({ type: 'read_file', params: { path: 'nope.txt' } }, ctx);
+    expect(missing?.error).toBe(true);
+    expect(missing?.log).toContain('File not found');
+    const mismatch = await r.execute(
+      { type: 'edit_file', params: { path: 'a.txt', content: '<<<<<SEARCH\nbye\n=====\nciao\n>>>>>' } },
+      ctx,
+    );
+    expect(mismatch?.error).toBe(true);
+    expect(mismatch?.log).toContain('not found');
+    expect(errors).not.toHaveBeenCalled();
+  });
+
+  it('dynamic: invoker が ToolError を投げれば（ゲストが返した error）赤を出さない。RPC の例外はそのまま赤', async () => {
+    const h = harness();
+    h.r.registerDynamicTool('g', 'guest_pid', { description: 'g' });
+    const guestSaid = new ToolError('Tool handler not found: g');
+    h.r.setGuestToolInvoker({ invokeTool: async () => Promise.reject(guestSaid) });
+    const quiet = await h.r.execute({ type: 'g', params: {} }, { shell: {}, engine: {} });
+    expect(quiet?.error).toBe(true);
+    expect(quiet?.log).toBe('Error executing dynamic tool <g>: Tool handler not found: g');
+    expect(h.errors).not.toHaveBeenCalled();
+
+    h.r.setGuestToolInvoker({
+      invokeTool: async () => Promise.reject(new Error('RPC Timeout: Request x exceeded 150000ms')),
+    });
+    const loud = await h.r.execute({ type: 'g', params: {} }, { shell: {}, engine: {} });
+    expect(loud?.error).toBe(true);
+    expect(loud?.log).toContain('RPC Timeout');
+    expect(h.errors).toHaveBeenCalledTimes(1);
+  });
+
+  it('dynamic: ゲストが error: true の結果を返した（投げていない）場合は従来どおり結果のまま。赤も出ない', async () => {
+    const h = harness();
+    h.r.registerDynamicTool('g', 'guest_pid', { description: 'g' });
+    h.r.setGuestToolInvoker({ invokeTool: async () => ({ log: '[Error] bad arg', error: true }) });
+    const res = await h.r.execute({ type: 'g', params: {} }, { shell: {}, engine: {} });
+    expect(res?.error).toBe(true);
+    expect(res?.log).toBe('[Error] bad arg');
+    expect(h.errors).not.toHaveBeenCalled();
+    expect(h.records[0].status).toBe('error');
   });
 });

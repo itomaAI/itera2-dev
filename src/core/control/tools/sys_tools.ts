@@ -6,6 +6,7 @@
 import type { ToolRegistry } from '../ToolRegistry';
 import type { PresentedFile } from '../../types/tools';
 import { USER_PRINCIPAL } from '../../vfs/types';
+import { ToolError } from '../ToolError';
 
 /**
  * files の本文からパスを取り出す。1 行 1 パス。
@@ -77,7 +78,7 @@ export function registerSysTools(registry: ToolRegistry): void {
     description: 'Present files to user.',
     impl: async (params: any, context: any) => {
       const paths = parsePresentedPaths(params.content || '');
-      if (paths.length === 0) throw new Error('No file path given. Write one VFS path per line inside <files>.');
+      if (paths.length === 0) throw new ToolError('No file path given. Write one VFS path per line inside <files>.');
 
       const files: PresentedFile[] = paths.map((path) => {
         const name = path.split('/').pop() || path;
@@ -92,7 +93,7 @@ export function registerSysTools(registry: ToolRegistry): void {
 
       const missing = files.filter((f) => f.missing).map((f) => f.path);
       if (missing.length === files.length) {
-        throw new Error(`File not found: ${missing.join(', ')}`);
+        throw new ToolError(`File not found: ${missing.join(', ')}`);
       }
       const shown = files.length - missing.length;
       const log =
@@ -112,7 +113,7 @@ export function registerSysTools(registry: ToolRegistry): void {
     description: 'Set async timer.',
     impl: async (params: any, context: any) => {
       const delay = parseInt(params.delay, 10);
-      if (isNaN(delay) || delay <= 0) throw new Error('Invalid delay.');
+      if (isNaN(delay) || delay <= 0) throw new ToolError('Invalid delay.');
       const message = params.message || 'Timer expired.';
 
       setTimeout(() => {

@@ -3,6 +3,18 @@
  * Itera OS v2: RPC Timeout and Promise Management
  */
 
+/**
+ * 相手（ゲスト）が「エラー」の返事を返したときの例外（T-0677）。
+ * timeout や clearAll の例外（こちらの都合で届かなかった）と区別するためのもの。
+ * 受け取る側はこれなら「相手の答え」、それ以外なら「経路の失敗」として扱える。
+ */
+export class RpcRemoteError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'RpcRemoteError';
+  }
+}
+
 interface PendingRequest {
   resolve: (value: any) => void;
   reject: (reason?: any) => void;
@@ -37,7 +49,7 @@ export class RpcManager {
       this.pendingRequests.delete(id);
 
       if (error) {
-        reject(new Error(error));
+        reject(new RpcRemoteError(error));
       } else {
         resolve(result);
       }

@@ -9,6 +9,7 @@ import type { ToolExecutionRecorder } from './ToolExecutionRecorder';
 import { normalizeDynamicToolResult } from './ToolResultNormalizer';
 import type { ToolParams, ToolResult } from '../types/tools';
 import { RESERVED_SYSTEM_TAGS } from '../cognitive/Translator';
+import { asToolFailure, isToolError } from './ToolError';
 
 export interface ToolDef {
   name: string;
@@ -58,6 +59,12 @@ export function unknownToolResult(actionType: string): ToolResult {
     ui: `❌ Error: Unknown tool <${actionType}>`,
     error: true,
   };
+}
+
+function errorMessage(err: unknown): string {
+  if (err instanceof Error) return err.message;
+  if (typeof err === 'object' && err !== null && 'message' in err) return String((err as { message: unknown }).message);
+  return String(err);
 }
 
 export class ToolRegistry {
@@ -319,11 +326,14 @@ export class ToolRegistry {
         const result = await foundTool.impl(action.params, context);
         this._recordExecution(action, foundSet, startedAt, result);
         return result;
-      } catch (err: any) {
-        console.error(`[ToolRegistry] Error executing system tool <${action.type}>:`, err);
+      } catch (raw: unknown) {
+        // 期待される失敗（ToolError。VFS の拒否もここで ToolError に揃う）は、結果と tool_events に残せば足りる。
+        // コンソールに赤で出すのは実装の例外だけ（T-0677）。
+        const err = asToolFailure(raw);
+        this._logFailure('system tool', action.type, err);
         const result: ToolResult = {
-          log: `Error executing <${action.type}>: ${err.message}`,
-          ui: `❌ Error: ${err.message}`,
+          log: `Error executing <${action.type}>: ${errorMessage(err)}`,
+          ui: `❌ Error: ${errorMessage(err)}`,
           error: true,
         };
         this._recordExecution(action, foundSet, startedAt, result, err);
@@ -343,16 +353,31 @@ export class ToolRegistry {
       const result = normalizeDynamicToolResult(rawResult, action.type);
       this._recordExecution(action, foundSet, startedAt, result, undefined, rawResultSnapshot);
       return result;
-    } catch (err: any) {
-      console.error(`[ToolRegistry] Error executing dynamic tool <${action.type}>:`, err);
+    } catch (err: unknown) {
+      // ゲストの handler が投げた／error を返した失敗は、invoker が ToolError にして渡す（ゲストの契約上の答え）。
+      // RPC の例外（プロセスが居ない・150 秒の timeout・transport）はそのまま届くので、実装の例外として赤で出す。
+      this._logFailure('dynamic tool', action.type, err);
       const result: ToolResult = {
-        log: `Error executing dynamic tool <${action.type}>: ${err.message}`,
-        ui: `❌ Error: ${err.message}`,
+        log: `Error executing dynamic tool <${action.type}>: ${errorMessage(err)}`,
+        ui: `❌ Error: ${errorMessage(err)}`,
         error: true,
       };
       this._recordExecution(action, foundSet, startedAt, result, err);
       return result;
     }
+  }
+
+  /**
+   * 失敗の記録の出し分け（T-0677）。
+   *   ToolError … 期待される失敗。結果（<tool_output status="error">）と tool_events に残る。コンソールは debug だけ
+   *   それ以外 … 実装の例外。console.error（人の目に触れるべきもの）
+   */
+  private _logFailure(kind: 'system tool' | 'dynamic tool', toolName: string, err: unknown): void {
+    if (isToolError(err)) {
+      console.debug(`[ToolRegistry] <${toolName}> (${kind}) refused: ${err.message}`);
+      return;
+    }
+    console.error(`[ToolRegistry] Error executing ${kind} <${toolName}>:`, err);
   }
 
   private _recordExecution(

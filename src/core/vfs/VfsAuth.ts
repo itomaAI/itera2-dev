@@ -5,6 +5,7 @@
 
 import type { NodeStore } from './NodeStore';
 import { AGENT_PRINCIPAL, type Principal, type PermissionType, type VfsNode, type AccessControlList } from './types';
+import { VfsError } from './VfsError';
 
 export class VfsAuth {
   private nodeStore: NodeStore;
@@ -57,7 +58,8 @@ export class VfsAuth {
     if (!node) return;
 
     if (!this.hasPermission(principal, node, action)) {
-      throw new Error(
+      throw new VfsError(
+        'EACCES',
         `Permission Denied: Principal '${principal.type}:${principal.id}' cannot perform '${action}' on '${node.name}'`,
       );
     }
