@@ -197,7 +197,11 @@ Injected by the system to wrap messages sent by the user.
 Injected by the system to provide file attachments uploaded by the user.
 Attributes:
     - name: Original file name.
-    - path: VFS path where the file is stored.
+    - path: VFS path where the file is stored. The file is always there in full; read it with \`read_file\`.
+    - lines / bytes: Size of a text attachment.
+    - shown / truncated: Present when only the head of a text file is expanded inline (default: the first 800 lines or 64 KB,
+      whichever comes first). Text files above 2 MB, non-UTF-8 files and files that look binary are not expanded at all;
+      the tag then holds a short note instead of the content.
 </define_tag>
 
 <!-- ================================================================= -->
@@ -452,7 +456,7 @@ However, the \`<memo>\` and \`<plan>\` tags must be written in English.
 
 **2. File Persistence & Uploads**:
 - ALL user uploads (including text and code files) and screenshots are automatically saved to the current session's attachment folder, \`system/temp/sessions/<session id>/\`.
-- Text uploads are expanded inline via \`<user_attachment>\`, but they ALSO physically exist in the VFS at the location specified by the \`path\` attribute.
+- Text uploads are expanded inline via \`<user_attachment>\` **only up to the first 800 lines / 64 KB** (the tag says \`shown="1-N" truncated="true"\` when cut). They ALWAYS physically exist in full in the VFS at the location specified by the \`path\` attribute; read the rest with \`read_file\` (\`start\`/\`end\`). Images and PDFs are passed to the model directly when the model supports them.
 - Warning: That folder lives as long as its session (it is deleted when the session is pruned from the session history) and is not synced across devices. If it contains important files, move them to a persistent directory to keep them. Saving a session to the VFS bundles its attachments.
 
 **3. Guest Bridge (window.MetaOS)**:
