@@ -38,5 +38,13 @@
     "path": "system/services/loom.html",
     "description": "Keeps a hash-checked index of the Loom board (data/apps/loom/*.md) and serializes every write to it. The Loom app draws; this daemon reads and writes. Provides loom_list / loom_search / loom_tree / loom_update / loom_append / loom_create / loom_status to the AI.",
     "autoStart": true
+  },
+  {
+    "id": "pdf_tool",
+    "name": "PDF Tool",
+    "icon": "📄",
+    "path": "system/services/pdf_tool.html",
+    "description": "On demand (spawn when needed). pdf_info / pdf_pages (pages → PNG) / pdf_text (text extraction) using the host-shipped pdf.js via MetaOS.vendor.",
+    "autoStart": false
   }
 ]

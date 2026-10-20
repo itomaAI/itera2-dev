@@ -1,0 +1,322 @@
+<!doctype html>
+<html lang="ja">
+  <body>
+    <script src="/system/lib/pdf_text.js"></script>
+    <script>
+      /**
+       * PDF Tool Daemon — PDF を「ページ数を知る／ページを画像に／文字を取り出す」（T-0686）
+       *
+       * なぜ要るか:
+       *   ホストの道具は「テキストを読む／ファイルを丸ごと添付する」だけで、PDF の分割を知らない。
+       *   PDF を丸ごと添付すると全ページが AI の文脈に入る（40 ページなら 40 ページ分のクレジット）。
+       *   形式ごとの処理（分割・変換）は VFS → VFS の道具としてゲストに置く。これはその最初の 1 つ。
+       *
+       * 使い方（AI）:
+       *   常駐しない。要るときに spawn する（system/services/pdf_tool.html・pid pdf_tool）→ 道具が届く。
+       *   pdf_info で全体を見る → pdf_pages でページを PNG に落とす → 読むページだけ添付する。
+       *   字形の埋め込みが無い PDF（CAD・積算ソフトの書き出し）は画像では名称が空白に見えるが、
+       *   文字の流れは残っているので pdf_text で読める（pdf.js が CMap で符号を文字に戻す）。
+       *
+       * 仕組み:
+       *   pdf.js はホストが同梱している（MetaOS.vendor.resolve('pdfjs')。vfs_root には置かない —— 4 MB が
+       *   利用者全員の VFS に配信されてしまう）。文字の行組みは system/lib/pdf_text.js（純粋な部品）。
+       *   外部のサービスには出さない。暗号化された PDF は扱わない。表の列の順（見た目）は保証しない。
+       */
+      (async () => {
+        const M = window.MetaOS;
+        const P = window.PdfText;
+        const NAMES = ['pdf_info', 'pdf_pages', 'pdf_text', 'pdf_to_text'];
+        const MAX_PAGES_PER_CALL = 20;
+        const DEFAULT_SIZE = 1568; // 長辺 px。Anthropic がこれより大きい画像を縮めるので、これ以上は無駄になる
+        const MAX_SIZE = 4096;
+        const log = (msg) => {
+          console.log('[PdfTool] ' + msg);
+          M.ai.log('[PdfTool Daemon] ' + msg, 'info', { silent: true });
+        };
+
+        let lib = null;
+        async function pdfjs() {
+          if (lib) return lib;
+          // ホストの配置はホストに訊く（window.top.location を覗かない。T-0685）
+          const v = await M.vendor.resolve('pdfjs');
+          const mod = await import(v.entry);
+          mod.GlobalWorkerOptions.workerSrc = v.worker;
+          lib = { mod, url: v.url, version: v.version };
+          return lib;
+        }
+
+        function basename(path) {
+          const name = path.split('/').pop() || 'pdf';
+          return name.replace(/\.pdf$/i, '');
+        }
+        function dirname(path) {
+          const i = path.lastIndexOf('/');
+          return i < 0 ? '' : path.slice(0, i);
+        }
+        function join(dir, name) {
+          return dir ? dir.replace(/\/+$/, '') + '/' + name : name;
+        }
+        function kb(bytes) {
+          return (bytes / 1024).toFixed(bytes < 10240 ? 1 : 0) + ' KB';
+        }
+        function errText(e, path) {
+          const m = e && e.message ? e.message : String(e);
+          const name = e && e.name ? e.name : '';
+          if (name === 'PasswordException' || /password|encrypt/i.test(m))
+            return '[Error] 暗号化された PDF は扱えない: ' + path;
+          if (name === 'InvalidPDFException' || /invalid pdf/i.test(m))
+            return '[Error] PDF として読めない（壊れているか PDF ではない）: ' + path;
+          return '[Error] ' + m;
+        }
+
+        /** PDF を開いて fn(doc) を走らせ、必ず閉じる */
+        async function withDoc(path, fn) {
+          if (!path) throw new Error('path が要る');
+          if (!/\.pdf$/i.test(path)) throw new Error('PDF ではない: ' + path);
+          if (!(await M.fs.exists(path))) throw new Error('見つからない: ' + path);
+          const { mod, url } = await pdfjs();
+          const data = await M.fs.read(path, { encoding: 'binary' });
+          if (!data || !data.length) throw new Error('ファイルが空: ' + path);
+          const bytes = data.length; // getDocument は data を worker へ移す（transfer）ので、あとでは 0 になる
+          const task = mod.getDocument({
+            data,
+            cMapUrl: url + 'cmaps/',
+            cMapPacked: true,
+            standardFontDataUrl: url + 'standard_fonts/',
+            isEvalSupported: false,
+          });
+          const doc = await task.promise;
+          try {
+            return await fn(doc, bytes);
+          } finally {
+            await task.destroy().catch(() => {});
+          }
+        }
+
+        async function ensureDir(dir) {
+          if (!dir) return;
+          if (await M.fs.exists(dir)) return;
+          await M.fs.mkdir(dir, { recursive: true });
+        }
+
+        async function countChars(page) {
+          const content = await page.getTextContent();
+          return content.items.reduce((a, it) => a + (it.str ? it.str.trim().length : 0), 0);
+        }
+
+        // ---- pdf_info ----
+        async function info(p) {
+          const path = String(p.path || '').trim();
+          return withDoc(path, async (doc, bytes) => {
+            const n = doc.numPages;
+            const pages = p.pages ? P.parsePages(p.pages, n) : P.parsePages('all', n);
+            const lines = [];
+            let withText = 0;
+            let total = 0;
+            for (const i of pages) {
+              const page = await doc.getPage(i);
+              const vp = page.getViewport({ scale: 1 });
+              const chars = await countChars(page);
+              if (chars > 0) withText++;
+              total += chars;
+              lines.push('  p.' + i + ': ' + Math.round(vp.width) + '×' + Math.round(vp.height) + ' pt・文字 ' + chars);
+              page.cleanup();
+            }
+            let msg = path + ': 全 ' + n + ' ページ・' + kb(bytes) + '（pdf.js ' + lib.version + '）\n';
+            msg +=
+              '文字のあるページ ' +
+              withText +
+              ' / 無い（画像だけ＝スキャンの可能性）' +
+              (pages.length - withText) +
+              '・合計 ' +
+              total.toLocaleString() +
+              ' 文字\n';
+            msg += lines.join('\n');
+            msg +=
+              '\n次: 読むページを決めて pdf_pages（画像に）か pdf_text（文字に）。丸ごと添付すると全 ' +
+              n +
+              ' ページ分の費用になる。';
+            return msg;
+          });
+        }
+
+        // ---- pdf_pages ----
+        async function render(p) {
+          const path = String(p.path || '').trim();
+          const format = String(p.format || 'png').toLowerCase() === 'jpeg' ? 'jpeg' : 'png';
+          let size = parseInt(p.size, 10);
+          if (!Number.isFinite(size) || size < 64) size = DEFAULT_SIZE;
+          if (size > MAX_SIZE) size = MAX_SIZE;
+          return withDoc(path, async (doc) => {
+            const pages = P.parsePages(p.pages, doc.numPages);
+            if (pages.length > MAX_PAGES_PER_CALL) {
+              throw new Error(
+                'ページが多すぎる（' +
+                  pages.length +
+                  ' 枚）。1 回に ' +
+                  MAX_PAGES_PER_CALL +
+                  ' 枚まで。pages を分けるか、読むページを絞る',
+              );
+            }
+            const out = String(p.out || join('system/temp/pdf/' + basename(path), '')).replace(/\/+$/, '');
+            await ensureDir(out);
+            const written = [];
+            for (const i of pages) {
+              const page = await doc.getPage(i);
+              const vp1 = page.getViewport({ scale: 1 });
+              const scale = size / Math.max(vp1.width, vp1.height);
+              const vp = page.getViewport({ scale });
+              const canvas = document.createElement('canvas');
+              canvas.width = Math.round(vp.width);
+              canvas.height = Math.round(vp.height);
+              const ctx = canvas.getContext('2d');
+              ctx.fillStyle = '#fff';
+              ctx.fillRect(0, 0, canvas.width, canvas.height);
+              await page.render({ canvasContext: ctx, viewport: vp }).promise;
+              const blob = await new Promise((res, rej) =>
+                canvas.toBlob((b) => (b ? res(b) : rej(new Error('画像にできなかった'))), 'image/' + format, 0.85),
+              );
+              const file = join(out, 'p' + String(i).padStart(3, '0') + '.' + format);
+              await M.fs.write(file, blob, { overwrite: true });
+              written.push({ i, file, w: canvas.width, h: canvas.height, bytes: blob.size });
+              page.cleanup();
+              canvas.width = 0;
+              canvas.height = 0;
+            }
+            let msg = '書いた: ' + written.length + ' 枚 → ' + out + '/（全 ' + doc.numPages + ' ページ中）\n';
+            msg += written
+              .map((w) => '  p.' + w.i + ': ' + w.file + '（' + w.w + '×' + w.h + '・' + kb(w.bytes) + '）')
+              .join('\n');
+            msg += '\n次: 読むページの画像だけを添付する（1 枚ずつ。全部を一度に入れない）。';
+            return msg;
+          });
+        }
+
+        // ---- pdf_text ----
+        async function text(p, spec) {
+          const path = String(p.path || '').trim();
+          const form = p.form === 'items' ? 'items' : 'lines';
+          return withDoc(path, async (doc) => {
+            const pages = P.parsePages(spec == null ? 'all' : spec, doc.numPages);
+            const out = String(p.out || path.replace(/\.pdf$/i, '.txt'));
+            const parts = [];
+            for (const i of pages) {
+              const page = await doc.getPage(i);
+              const viewport = page.getViewport({ scale: 1 });
+              const content = await page.getTextContent();
+              const lines =
+                form === 'items'
+                  ? P.itemsWithPositions(content.items, viewport.transform)
+                  : P.itemsToLines(content.items, viewport.transform);
+              const chars = content.items.reduce((a, it) => a + (it.str ? it.str.trim().length : 0), 0);
+              parts.push({ i, chars, text: P.renderPage(i, lines) });
+              page.cleanup();
+            }
+            const body = parts.map((x) => x.text).join('\n');
+            await M.fs.write(out, body, { overwrite: true });
+            const chars = parts.reduce((a, x) => a + x.chars, 0);
+            const empty = parts.filter((x) => x.chars === 0).map((x) => x.i);
+            let msg =
+              '書いた: ' +
+              out +
+              '（' +
+              parts.length +
+              ' ページ / 全 ' +
+              doc.numPages +
+              ' ページ・' +
+              chars.toLocaleString() +
+              ' 文字）\n';
+            msg += '文字数: ' + parts.map((x) => 'p.' + x.i + ':' + x.chars).join(' ');
+            if (empty.length)
+              msg +=
+                '\n文字が無いページ（画像だけ＝スキャンの可能性。pdf_pages で画像にして見る）: ' + empty.join(', ');
+            if (String(p.preview) === 'true') msg += '\n\n--- 先頭 ---\n' + body.slice(0, 1500);
+            return msg;
+          });
+        }
+
+        const defs = [
+          '<define_tag name="pdf_info">',
+          'PDF の全体を見る: ページ数・大きさ・ページごとの寸法と文字数。読む前にまずこれ（丸ごと添付すると全ページ分の費用になる）。',
+          'Attributes:',
+          '  - path (required): VFS 上の PDF',
+          '  - pages (optional): 見るページ（"3-5" など。省略は全ページ）',
+          'Returns: ページ数・ファイルの大きさ・ページごとの「寸法 pt・文字数」。文字 0 のページは画像だけ（スキャン）。',
+          '</define_tag>',
+          '<define_tag name="pdf_pages">',
+          'PDF の指定したページを画像（PNG / JPEG）にして VFS に書く。読むページの画像だけを添付する（全ページを一度に入れない）。',
+          'Attributes:',
+          '  - path (required): VFS 上の PDF',
+          '  - pages (required): "3" / "3-5" / "1,4,7-9" / "all"（1 始まり。範囲外は断る）。1 回に 20 枚まで',
+          '  - out (optional): 書き出すディレクトリ。既定 system/temp/pdf/<名前>/（セッションの初期化で消える。残すなら利用者の領域を指定）',
+          '  - size (optional): 長辺の px。既定 1568（これより大きい画像はモデル側で縮められる）。上限 4096',
+          '  - format (optional): "png"（既定）| "jpeg"（写真・スキャンは小さくなる）',
+          'Returns: 書いたファイルの一覧（p003.png の形・寸法・大きさ）。',
+          '</define_tag>',
+          '<define_tag name="pdf_text">',
+          'PDF から文字を取り出して .txt に書く（この端末の中だけで処理。外部には出さない）。',
+          '字形の埋め込みが無い PDF（CAD・積算ソフトの書き出し）は画像では名称が空白に見えるが、これなら読める。スキャン（文字 0）は読めない → pdf_pages。',
+          'Attributes:',
+          '  - path (required): VFS 上の PDF',
+          '  - pages (optional): "3-5" など（省略は全ページ）',
+          '  - out (optional): 書き出し先。既定は path の拡張子を .txt に変えたもの',
+          '  - form (optional): "lines"（既定。位置で行に組む）| "items"（断片を「y<TAB>x<TAB>文字」の 1 行ずつ。表の列や 2 段の行を自分で組み直すとき）',
+          '  - preview (optional): "true" で先頭 1500 文字を戻り値に含める',
+          'Returns: 「書いた: <out>（…）」とページごとの文字数。出力はページごとに「--- p.N ---」の見出し。表の列の順（見た目）は保証しない。暗号化された PDF は扱わない。',
+          'Note: 読み取りの確かめは、該当ページだけを読む（全ページを読み直さない）。',
+          '</define_tag>',
+        ].join('\n');
+
+        const guard = (fn) => async (params) => {
+          const p = params || {};
+          try {
+            return await fn(p);
+          } catch (e) {
+            return errText(e, String(p.path || ''));
+          }
+        };
+
+        M.tools.register({
+          name: 'pdf_info',
+          description: 'PDF overview: page count, size, per-page dimensions and text char counts.',
+          definition: defs,
+          handler: guard(info),
+        });
+        M.tools.register({
+          name: 'pdf_pages',
+          description: 'Render selected PDF pages to PNG/JPEG files in the VFS (pdf.js, in-browser).',
+          definition: defs,
+          handler: guard(render),
+        });
+        M.tools.register({
+          name: 'pdf_text',
+          description: 'Extract text from selected PDF pages into a .txt (pdf.js, in-browser, no external service).',
+          definition: defs,
+          handler: guard((p) => text(p, p.pages)),
+        });
+        // 旧名（T-0681 の pdf_to_text。from / to）。しばらく残す
+        M.tools.register({
+          name: 'pdf_to_text',
+          description: 'Alias of pdf_text (from / to instead of pages).',
+          definition:
+            '<define_tag name="pdf_to_text">pdf_text の旧名。from / to でページ範囲。新しい呼び出しは pdf_text を使う。</define_tag>',
+          handler: guard((p) => {
+            const a = parseInt(p.from, 10);
+            const b = parseInt(p.to, 10);
+            const spec =
+              Number.isFinite(a) || Number.isFinite(b)
+                ? (Number.isFinite(a) ? a : '') + '-' + (Number.isFinite(b) ? b : '')
+                : 'all';
+            return text(p, spec);
+          }),
+        });
+
+        M.ai.log(defs, 'tool_available');
+        log('起動した（pdf_info / pdf_pages / pdf_text）。');
+        window.addEventListener('unload', () => {
+          for (const n of NAMES) M.tools.unregister(n);
+        });
+      })();
+    </script>
+  </body>
+</html>
