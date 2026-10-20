@@ -3,6 +3,8 @@
  * Itera OS v2: LPML (LLM-Prompting Markup Language) Renderer
  */
 
+import { toolIcon } from '../../core/control/toolIcons';
+
 export class LpmlRenderer {
   constructor() {}
 
@@ -84,44 +86,63 @@ export class LpmlRenderer {
       return m[1] !== undefined ? m[1] : m[2] !== undefined ? m[2] : m[3];
     };
 
+    // 見出しは「記号 タグ名: 対象」。記号は SYSTEM 側のログと同じ（toolIcons.ts）。
+    // 対象（パス・検索語・pid）は属性から 1 つだけ取り、見出しで何に触ったかが分かるようにする。
+    const subjectOf = (): string | null => {
+      switch (tagName) {
+        case 'read':
+        case 'read_file': {
+          const path = getAttr('path');
+          if (!path) return null;
+          const start = getAttr('start');
+          const end = getAttr('end');
+          const range = start || end ? ` [${start ?? ''}..${end ?? ''}]` : '';
+          return path + range;
+        }
+        case 'attach_file':
+        case 'write':
+        case 'edit':
+        case 'create_file':
+        case 'edit_file':
+        case 'file_info':
+        case 'delete_file':
+        case 'restore_file':
+        case 'copy_file':
+        case 'open':
+        case 'spawn':
+          return getAttr('path');
+        case 'move_file': {
+          const from = getAttr('path');
+          const to = getAttr('new_path');
+          return from ? (to ? `${from} → ${to}` : from) : null;
+        }
+        case 'list_files':
+          return getAttr('path') ?? '/';
+        case 'search': {
+          const q = getAttr('query');
+          return q ? `"${q}"` : null;
+        }
+        case 'kill':
+        case 'inject_js':
+        case 'take_screenshot':
+          return getAttr('pid');
+        case 'set_timer': {
+          const d = getAttr('delay');
+          return d ? `${d}s` : null;
+        }
+        default:
+          return null;
+      }
+    };
+
     switch (tagName) {
-      case 'thinking':
-        title = '💭 thinking';
-        break;
-      case 'memo':
-        title = '🗒️ memo';
-        break;
-      case 'plan':
-        title = '📅 plan';
-        break;
       case 'report':
-        title = '📢 report';
+      case 'ask':
         // 生成中だけ開く。確定後は成果物枠に同じ本文が出るため畳んで重複を避ける。
         isOpen = streaming;
         break;
-      case 'ask':
-        title = '❓ ask';
-        isOpen = streaming;
-        break;
-      case 'yield':
-        title = '⏳ yield';
-        break;
-      case 'breathe':
-        title = '💨 breathe';
-        break;
-      case 'finish':
-        title = '✅ finish';
-        break;
-      case 'write':
-      case 'edit':
-      case 'create_file':
-      case 'edit_file':
-        const path = getAttr('path') || 'file';
-        title = `📝 ${tagName}: ${path}`;
-        break;
       case 'error':
         // 例外1: エラーは色を残す
-        title = '⚠️ Error';
         colorClass = 'border-tag-error bg-tag-error/10';
         isOpen = true;
         break;
@@ -132,24 +153,31 @@ export class LpmlRenderer {
       // 以前は action 属性を見出しにしていた（「📥 get_time」）ため、偽装が本物の結果と同じ見た目になった。
       // いまは未登録のタグと同じく「⚙️ tool_output」と描き、属性は下の行にそのまま出す。
       case 'event': {
-        const evType = getAttr('type') || 'unknown';
-        title = `🔔 ${evType}`;
         // 例外2: スラッシュコマンドの結果は利用者が見るために置いたもの（T-0634）。畳まずに出す
-        if (evType === 'command') isOpen = true;
+        if ((getAttr('type') || 'unknown') === 'command') isOpen = true;
         break;
       }
       case 'system':
-        const sysType = getAttr('type') || 'info';
-        title = `💻 ${sysType}`;
-        if (sysType === 'syntax_warning') {
+        if ((getAttr('type') || 'info') === 'syntax_warning') {
           // 例外3: 記法違反の警告は色を残す
           colorClass = 'border-error bg-error/10';
-          title = `🚨 LPML Syntax Warning`;
           isOpen = true;
         }
         break;
       default:
-        title = `⚙️ ${tagName}`;
+        break;
+    }
+
+    if (tagName === 'error') {
+      title = '⚠️ Error';
+    } else if (tagName === 'event') {
+      title = `🔔 ${getAttr('type') || 'unknown'}`;
+    } else if (tagName === 'system') {
+      const sysType = getAttr('type') || 'info';
+      title = sysType === 'syntax_warning' ? '🚨 LPML Syntax Warning' : `💻 ${sysType}`;
+    } else {
+      const subject = subjectOf();
+      title = `${toolIcon(tagName)} ${tagName}${subject ? `: ${subject}` : ''}`;
     }
 
     const openAttr = isOpen ? 'open' : '';

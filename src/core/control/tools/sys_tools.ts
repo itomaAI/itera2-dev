@@ -101,7 +101,7 @@ export function registerSysTools(registry: ToolRegistry): void {
 
       return {
         log,
-        ui: `📎 files (${shown})`,
+        ui: `🗂️ files (${shown})`,
         artifact: { kind: 'files' as const, title: params.title || undefined, files },
         trigger_llm: false,
       };

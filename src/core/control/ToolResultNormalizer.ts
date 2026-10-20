@@ -4,12 +4,13 @@
  */
 
 import type { ToolResult } from '../types/tools';
+import { toolIcon } from './toolIcons';
 
 export function normalizeDynamicToolResult(value: unknown, toolName: string): ToolResult {
   if (typeof value !== 'object' || value === null) {
     return {
       log: String(value),
-      ui: `⚙️ ${toolName}`,
+      ui: `${toolIcon(toolName)} ${toolName}`,
     };
   }
 
@@ -18,7 +19,7 @@ export function normalizeDynamicToolResult(value: unknown, toolName: string): To
     result.log = JSON.stringify(result);
   }
   if (!result.ui) {
-    result.ui = `⚙️ ${toolName}`;
+    result.ui = `${toolIcon(toolName)} ${toolName}`;
   }
 
   return result;

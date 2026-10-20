@@ -425,7 +425,7 @@ export function registerFSTools(registry: ToolRegistry): void {
         params.path,
         params.new_path ? { to: params.new_path } : {},
       );
-      return { log: `Restored: ${params.path} -> ${dest}`, ui: `♻️ Restored ${dest}` };
+      return { log: `Restored: ${params.path} -> ${dest}`, ui: `↩️ Restored ${dest}` };
     },
   });
 

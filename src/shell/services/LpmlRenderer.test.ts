@@ -66,3 +66,32 @@ describe('LpmlRenderer: command events', () => {
     expect(isOpen(r.formatStream('<event type="info">\nx\n</event>'))).toBe(false);
   });
 });
+
+describe('LpmlRenderer: system tools have their own icons (the same as the SYSTEM side)', () => {
+  const r = new LpmlRenderer();
+
+  it('titles read / write / edit with the icon and the path', () => {
+    expect(summaryOf(r.formatStream('<read path="memory/init.md" />'))).toBe('📖 read: memory/init.md');
+    expect(summaryOf(r.formatStream('<read path="a.md" start="-50" />'))).toBe('📖 read: a.md [-50..]');
+    expect(summaryOf(r.formatStream('<write path="x.txt">hi</write>'))).toBe('📝 write: x.txt');
+    expect(summaryOf(r.formatStream('<edit path="x.txt">s</edit>'))).toBe('✏️ edit: x.txt');
+    expect(summaryOf(r.formatStream('<read_file path="a.md" />'))).toBe('📖 read_file: a.md');
+  });
+
+  it('titles the other system tools (no more bare gears)', () => {
+    expect(summaryOf(r.formatStream('<list_files path="data" />'))).toBe('📂 list_files: data');
+    expect(summaryOf(r.formatStream('<list_files />'))).toBe('📂 list_files: /');
+    expect(summaryOf(r.formatStream('<search query="foo bar" path="memory" />'))).toBe('🔍 search: "foo bar"');
+    expect(summaryOf(r.formatStream('<attach_file path="a.pdf" />'))).toBe('📎 attach_file: a.pdf');
+    expect(summaryOf(r.formatStream('<move_file path="a" new_path="b" />'))).toBe('🚚 move_file: a → b');
+    expect(summaryOf(r.formatStream('<spawn path="apps/x.html" />'))).toBe('🚀 spawn: apps/x.html');
+    expect(summaryOf(r.formatStream('<kill pid="x" />'))).toBe('🛑 kill: x');
+    expect(summaryOf(r.formatStream('<get_time />'))).toBe('🕒 get_time');
+    expect(summaryOf(r.formatStream('<set_timer delay="30" />'))).toBe('⏱️ set_timer: 30s');
+    expect(summaryOf(r.formatStream('<ps />'))).toBe('📊 ps');
+  });
+
+  it('keeps the gear for tags it does not know (dynamic guest tools)', () => {
+    expect(summaryOf(r.formatStream('<loom_list status="mine" />'))).toBe('⚙️ loom_list');
+  });
+});
