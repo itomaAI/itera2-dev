@@ -83,6 +83,9 @@ The **Guest** environment (where apps run) is isolated from the **Host** (where 
     *   `.fetch(url, opts)`: Fetches external APIs (can bypass CORS via proxy).
     *   `.takePhoto(opts)`: Opens the native camera interface.
 
+*   **Vendor libraries (`MetaOS.vendor`)**: Large third-party libraries (pdf.js, MathJax, Monaco) ship with the host under its `vendor/` directory, not in the VFS, and are fetched only when used. A guest never guesses the host URL (no `window.top.location`); it asks:
+    *   `.resolve(name)`: Returns `{ name, version, url, entry, worker, dirs }` with absolute URLs (`url` is the library directory; `entry` the main module; `worker` the Web Worker if any). Throws when the name is not in this build, listing what is available.
+    *   `.list()`: Names available in this build. The catalog is `vendor/manifest.json`, written at build time by `scripts/copy_vendor.js`.
 *   **Dynamic Tools (`MetaOS.tools`)**:
     *   `.register(toolDef)`: Allows a Guest app to expose a custom JavaScript function as a new tool (LPML tag) for the AI to use.
 

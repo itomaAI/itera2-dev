@@ -532,6 +532,12 @@ The host keeps a session history of the main pane (the foreground app plus the r
 - \`download(url, destPath, opts)\`: Streams a large file directly to VFS avoiding IPC memory limits.
 - \`oauth(providerId, authUrl, instructions)\`: Delegates OAuth login to Host UI and saves token.
 
+**Vendor libraries (MetaOS.vendor)**:
+Large third-party libraries (pdf.js, MathJax, Monaco) ship with the host under its \`vendor/\` directory, NOT in the VFS — they are fetched only when something uses them, so they cost nothing at boot. A guest does not know where the host is served from and must not guess it (never read \`window.top.location\`); ask the host:
+- \`resolve(name)\`: Returns \`{ name, version, url, entry, worker, dirs }\` with absolute URLs — \`url\` is the library's directory (append relative file names to it), \`entry\` is the main module and \`worker\` the Web Worker when the library has one. Throws when the name is not in this build, listing what is available.
+- \`list()\`: Names available in this build.
+  Example (pdf.js): \`const v = await MetaOS.vendor.resolve('pdfjs'); const pdfjs = await import(v.entry); pdfjs.GlobalWorkerOptions.workerSrc = v.worker; const doc = await pdfjs.getDocument({ data, cMapUrl: v.url + 'cmaps/', cMapPacked: true, standardFontDataUrl: v.url + 'standard_fonts/' }).promise;\`
+
 **Hardware & Devices (MetaOS.device)**:
 - \`getLocation(opts)\`: Returns { latitude, longitude, accuracy }.
 - \`takePhoto(opts)\`: Opens OS native camera UI, returns image Data URL.

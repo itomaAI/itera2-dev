@@ -6,6 +6,7 @@
 import type { HostTransport } from '../ipc/HostTransport';
 import type { VfsService } from '../core/vfs/VfsService';
 import type { ConfigManager } from '../core/sys/ConfigManager';
+import type { VendorCatalog } from '../core/sys/VendorCatalog';
 import type { Role, Turn, TurnContent, TurnMeta } from '../core/state/HistoryManager';
 import type { DynamicToolRegistration, ProcessInfo } from './HostApiContract';
 import { resolvePrincipal } from './principal';
@@ -104,6 +105,8 @@ export interface RouterDeps {
   shell?: IShell;
   toolRegistry?: IToolRegistry;
   sessionManager?: ISessionManager;
+  /** 同梱の vendor ライブラリの目録（MetaOS.vendor。T-0685） */
+  vendorCatalog?: VendorCatalog;
 }
 
 export class HostApiRouter {
@@ -280,6 +283,16 @@ export class HostApiRouter {
     t.registerHandler('fs:resolve_url', async ({ path }, sourcePid) => {
       if (!d.processManager) throw new Error('ProcessManager not connected.');
       return d.processManager.resolveUrl(path, sourcePid);
+    });
+
+    // 同梱の vendor ライブラリ（pdf.js など）をゲストへ。ゲストはホストの配置を知らないので名前で引く（T-0685）
+    t.registerHandler('vendor:resolve', async ({ name }) => {
+      if (!d.vendorCatalog) throw new Error('Vendor catalog not connected.');
+      return d.vendorCatalog.resolve(name);
+    });
+    t.registerHandler('vendor:list', async () => {
+      if (!d.vendorCatalog) throw new Error('Vendor catalog not connected.');
+      return d.vendorCatalog.list();
     });
 
     t.registerHandler('fs:get_acl', async ({ path }, sourcePid) => {
