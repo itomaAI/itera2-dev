@@ -19,7 +19,7 @@ This architecture grants the AI "Time" (a continuous existence) and a "Body" (th
     *   Based on observations, the AI plans its next move.
     *   It generates a sequence of thoughts and decides which tools to use.
 3.  **Act**:
-    *   The AI executes specific tools (e.g., `create_file`, `spawn` process) to manipulate the environment.
+    *   The AI executes specific tools (e.g., `write`, `spawn` process) to manipulate the environment.
     *   This is not a simulation; files are actually written to the browser's IndexedDB and OPFS.
 4.  **Update**:
     *   The results of the actions are immediately reflected in the UI (Dashboard/Apps).

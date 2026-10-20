@@ -299,7 +299,7 @@
           name: 'pdf_to_text',
           description: 'Alias of pdf_text (from / to instead of pages).',
           definition:
-            '<define_tag name="pdf_to_text">pdf_text の旧名。from / to でページ範囲。新しい呼び出しは pdf_text を使う。</define_tag>',
+            '<define_tag name="pdf_to_text">pdf_text の旧名。from / to でページ範囲。新しい呼び出しは pdf_text を使う。Returns: pdf_text と同じ。</define_tag>',
           handler: guard((p) => {
             const a = parseInt(p.from, 10);
             const b = parseInt(p.to, 10);

@@ -48,6 +48,9 @@ export interface ParseResult extends Array<ParsedAction> {
   trailingTags: string[];
 }
 
+/** 同じファイルへの行指定の編集を下から順に並べる対象（T-0683: edit と旧名 edit_file） */
+const EDIT_TAGS = new Set(['edit', 'edit_file']);
+
 export class Translator {
   static PATTERN_ATTRIBUTE = /\s+([^"'/<>=\s]+)=(?:"((?:[^"\\]|\\.)*)"|'((?:[^'\\]|\\.)*)')/g;
   static ATTR_PART_NO_CAPTURE = '\\s+[^"\'/<>=\\s]+=(?:"(?:[^"\\\\]|\\\\.)*"|\'(?:[^\'\\\\]|\\\\.)*\')';
@@ -64,6 +67,9 @@ export class Translator {
 
   constructor() {
     this.defaultExcludeTags = [
+      // 中身をそのまま持つ道具（T-0683 で write / edit に。旧名もしばらく残る）
+      'write',
+      'edit',
       'create_file',
       'edit_file',
       'thinking',
@@ -345,8 +351,8 @@ export class Translator {
       if (isIntA && !isIntB) return 1;
       if (!isIntA && isIntB) return -1;
 
-      // 2. 両方が edit_file で、かつ対象パスが同じ場合のみ行番号の降順 (下から上)
-      if (a.type === 'edit_file' && b.type === 'edit_file' && a.params.path === b.params.path) {
+      // 2. 両方が edit（旧名 edit_file）で、かつ対象パスが同じ場合のみ行番号の降順 (下から上)
+      if (EDIT_TAGS.has(a.type) && EDIT_TAGS.has(b.type) && a.params.path === b.params.path) {
         const startA = parseInt(a.params.start || '0', 10);
         const startB = parseInt(b.params.start || '0', 10);
         if (startA !== startB) {

@@ -158,7 +158,7 @@ describe('行番号 —— 二つの座標系を取り違えさせない', () =>
   it('塊の位置と、当たった位置を、それぞれどこの行か言う', () => {
     const file = ['x', '## S', 'y', '## S'].join('\n');
     expect(() => edit(file, '<<<<<SEARCH\n## S\n=====\n## S\n- z\n>>>>>')).toThrow(
-      /line 1 of this edit_file content.*matched 2 times in the file \(lines 2, 4\)/,
+      /line 1 of this <edit> content.*matched 2 times in the file \(lines 2, 4\)/,
     );
   });
 
@@ -166,18 +166,18 @@ describe('行番号 —— 二つの座標系を取り違えさせない', () =>
     // <edit_file …> の直後で行を変えて書くので、中身は改行で始まる。
     // 素朴に数えると「1 行目に書いた SEARCH」が 2 行目として報告される
     expect(() => applyEditBlocks('a\n', parseEditBlocks('\n<<<<<SEARCH\nzzz\n=====\nb\n>>>>>'))).toThrow(
-      /its SEARCH marker is on line 1 of this edit_file content/,
+      /its SEARCH marker is on line 1 of this <edit> content/,
     );
   });
 
   it('先頭の改行が無ければ、そのまま数える', () => {
     expect(() => applyEditBlocks('a\n', parseEditBlocks('<<<<<SEARCH\nzzz\n=====\nb\n>>>>>'))).toThrow(
-      /its SEARCH marker is on line 1 of this edit_file content/,
+      /its SEARCH marker is on line 1 of this <edit> content/,
     );
   });
 
   it('2 つ目の塊の位置も、先頭の改行を差し引いて出す', () => {
     const blocks = '\n<<<<<SEARCH\na\n=====\nA\n>>>>>\n<<<<<SEARCH\nb\n=====\nB\n';
-    expect(() => parseEditBlocks(blocks)).toThrow(/starting at line 6 of this edit_file content/);
+    expect(() => parseEditBlocks(blocks)).toThrow(/starting at line 6 of this <edit> content/);
   });
 });

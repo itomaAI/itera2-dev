@@ -112,6 +112,8 @@ export class LpmlRenderer {
       case 'finish':
         title = '✅ finish';
         break;
+      case 'write':
+      case 'edit':
       case 'create_file':
       case 'edit_file':
         const path = getAttr('path') || 'file';

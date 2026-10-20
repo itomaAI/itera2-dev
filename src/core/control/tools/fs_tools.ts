@@ -8,205 +8,297 @@ import type { VfsService } from '../../vfs/VfsService';
 import { AGENT_PRINCIPAL } from '../../vfs/types';
 import { parseEditBlocks, applyEditBlocks } from './editBlocks';
 import { ToolError } from '../ToolError';
+import { mimeOfPath } from '../../chat/attachmentGate';
+import type { ToolResult } from '../../types/tools';
 
 export function registerFSTools(registry: ToolRegistry): void {
   const setId = 'system:fs';
   const setName = 'System: File Operations';
 
+  // ------------------------------------------------------------------
+  // 中身の三つ組 {read, edit, write} と、物としての attach_file（T-0683）
+  //
+  //   読む（read）   … テキストを行の範囲で文脈へ。履歴にはテキストが入る
+  //   添付（attach_file） … ファイルを丸ごと、メディア参照として履歴へ。線形化はプロバイダ任せ。範囲は無い
+  //
+  // 以前の read_file はこの 2 つを 1 つの名前に畳んでいて、PDF に start/end を渡しても黙って
+  // 全ページを送っていた（ミャク楽で「40 ページ全部入った」が繰り返し起きた）。
+  // 形式ごとの処理（PDF のページ → PNG など）はホストに置かず、ゲストの道具（pdf_tool）に任せる。
+  // 旧名（read_file / create_file / edit_file）は別名として残す（挙動は旧のまま。しばらくして外す）。
+  // ------------------------------------------------------------------
+
+  const BINARY_EXTS =
+    /\.(png|jpg|jpeg|gif|webp|svg|ico|bmp|pdf|zip|tar|gz|7z|rar|mp3|wav|mp4|webm|ogg|wasm|bin|exe|dll|so|dylib|class|jar)$/i;
+
+  const LEGACY_READ =
+    '[read_file is a legacy name. Use <read> for text (line ranges) or <attach_file> for the whole file as media.]\n';
+  const LEGACY_CREATE = '[create_file is a legacy name. Use <write> (overwrite="true" / append="true").]\n';
+  const LEGACY_EDIT = '[edit_file is a legacy name. Use <edit>; for mode="append" use <write append="true">.]\n';
+
+  /** 添付の形で返す（attach_file の本体。read_file の旧挙動もこれ） */
+  function attachResult(vfs: VfsService, path: string): ToolResult {
+    const stat = vfs.stat(AGENT_PRINCIPAL, path);
+    if (stat.kind === 'directory') throw new ToolError(`${path} is a directory. attach_file takes a file.`);
+    let mimeType = mimeOfPath(path);
+    if (mimeType === 'application/octet-stream' && stat.mimeType) mimeType = stat.mimeType;
+    const isPdf = mimeType === 'application/pdf';
+    let log = `Attached ${path} (${mimeType}, ${stat.size} bytes). The whole file is in the context.`;
+    if (isPdf) {
+      log +=
+        ' Every page of the PDF was sent. To read selected pages next time, spawn system/services/pdf_tool.html and use pdf_info / pdf_pages / pdf_text.';
+    }
+    return {
+      log,
+      ui: `📎 Attached ${path}`,
+      media: { path, mimeType, metadata: {} },
+    };
+  }
+
+  /** テキストを行の範囲で読む（read の本体） */
+  async function readTextResult(
+    vfs: VfsService,
+    params: any,
+    opts: { legacyName?: boolean } = {},
+  ): Promise<ToolResult> {
+    const path: string = params.path;
+    if (!path) throw new ToolError("Attribute 'path' is required.");
+    if (!vfs.exists(AGENT_PRINCIPAL, path)) throw new ToolError(`File not found.`);
+
+    const refuse = (why: string): never => {
+      const mime = mimeOfPath(path);
+      const hint =
+        mime === 'application/pdf'
+          ? 'To read selected pages, spawn system/services/pdf_tool.html and use pdf_info / pdf_pages / pdf_text. To put the WHOLE document in the context, use <attach_file>.'
+          : 'Use <attach_file path="..."> to put the whole file in the context as media.';
+      throw new ToolError(`${path} is not a text file (${why}). <read> returns text only. ${hint}`);
+    };
+
+    let content = '';
+    if (path.match(BINARY_EXTS)) {
+      if (opts.legacyName) return attachResult(vfs, path);
+      refuse(mimeOfPath(path));
+    }
+    content = await vfs.readFile(AGENT_PRINCIPAL, path);
+    // テキストとして読み込んだ結果、Nullバイトが含まれていればバイナリとみなす
+    if (content.indexOf('\0') !== -1) {
+      if (opts.legacyName) return attachResult(vfs, path);
+      refuse('binary content');
+    }
+
+    const lines = content.split(/\r?\n/);
+
+    const s = parseInt(params.start, 10);
+    const e = parseInt(params.end, 10);
+
+    const hasStart = !isNaN(s);
+    const hasEnd = !isNaN(e);
+
+    let startIdx = 0;
+    let endIdx = lines.length;
+
+    if (hasStart) {
+      if (s < 0) {
+        startIdx = Math.max(0, lines.length + s);
+      } else if (s > 0) {
+        startIdx = Math.max(0, s - 1);
+      } else {
+        startIdx = 0;
+      }
+    }
+
+    if (hasEnd) {
+      if (e < 0) {
+        endIdx = Math.max(0, Math.min(lines.length, lines.length + e + 1));
+      } else if (e > 0) {
+        endIdx = Math.min(lines.length, e);
+      } else {
+        endIdx = 0;
+      }
+    } else if (!hasStart) {
+      // デフォルト: 開始/終了の指定が両方ない場合は、コンテキスト溢れ防止のため先頭800行に制限
+      endIdx = Math.min(lines.length, 800);
+    }
+
+    const sliced = lines.slice(startIdx, endIdx);
+    const showNum = params.line_numbers === 'true';
+
+    // startIdx を基準にすることで、負のインデックス指定時でも元のファイル内の正しい行番号を算出
+    const contentStr = showNum ? sliced.map((l, i) => `${startIdx + i + 1} | ${l}`).join('\n') : sliced.join('\n');
+
+    let logMsg = `Lines ${startIdx + 1}-${endIdx} of ${lines.length}:\n${contentStr}`;
+
+    if (endIdx < lines.length) {
+      const tag = opts.legacyName ? 'read_file' : 'read';
+      logMsg += `\n\n... (File truncated. ${lines.length - endIdx} more lines. Use <${tag} start="${endIdx + 1}"> to read more)`;
+    }
+
+    return { log: logMsg, ui: `📖 Read ${path}` };
+  }
+
+  /** ファイルを書く（write の本体。create_file の旧挙動は append 無し） */
+  async function writeResult(vfs: VfsService, params: any): Promise<ToolResult> {
+    const path: string = params.path;
+    if (!path) throw new ToolError("Attribute 'path' is required.");
+    const isOverwrite = params.overwrite === 'true';
+    const isAppend = params.append === 'true';
+    if (isOverwrite && isAppend) throw new ToolError('Choose one of overwrite="true" or append="true".');
+
+    let content: string = params.content || '';
+    content = content.replace(/^\r?\n/, '').replace(/\r?\n$/, '');
+
+    if (isAppend) {
+      if (!vfs.exists(AGENT_PRINCIPAL, path)) {
+        const msg = await vfs.writeFile(AGENT_PRINCIPAL, path, content, { overwrite: false });
+        return { log: `${msg} (created; nothing to append to)`, ui: `📝 Created ${path}` };
+      }
+      const current = await vfs.readFile(AGENT_PRINCIPAL, path);
+      const joined = current.length && !current.endsWith('\n') ? current + '\n' + content : current + content;
+      await vfs.writeFile(AGENT_PRINCIPAL, path, joined, { overwrite: true });
+      return { log: `Appended to end of ${path}`, ui: `📝 Appended ${path}` };
+    }
+
+    if (!isOverwrite && vfs.exists(AGENT_PRINCIPAL, path)) {
+      throw new ToolError(
+        `File already exists at ${path}. Set overwrite="true" to replace it, append="true" to add to its end, or use <edit> to modify part of it.`,
+      );
+    }
+    const msg = await vfs.writeFile(AGENT_PRINCIPAL, path, content, { overwrite: isOverwrite });
+    return {
+      log: msg,
+      ui: `📝 ${isOverwrite ? 'Overwrote' : 'Created'} ${path}`,
+    };
+  }
+
+  /** 一部を直す（edit の本体。append は write へ） */
+  async function editResult(vfs: VfsService, params: any, opts: { legacyName?: boolean } = {}): Promise<ToolResult> {
+    const path: string = params.path;
+    if (!path) throw new ToolError("Attribute 'path' is required.");
+    const content: string = params.content || '';
+    const tag = opts.legacyName ? 'edit_file' : 'edit';
+
+    // 行ベースの編集モード
+    if (params.mode) {
+      if (params.mode === 'append' && !opts.legacyName) {
+        throw new ToolError('mode="append" is not part of <edit>. Use <write path="..." append="true">.');
+      }
+      if (!vfs.exists(AGENT_PRINCIPAL, path)) throw new ToolError(`File not found: ${path}`);
+      const fileContent = await vfs.readFile(AGENT_PRINCIPAL, path);
+      let lines = fileContent.split(/\r?\n/);
+
+      let insertLines: string[] = [];
+      if (content) {
+        let clean = content;
+        if (clean.startsWith('\n')) clean = clean.substring(1);
+        if (clean.endsWith('\n')) clean = clean.substring(0, clean.length - 1);
+        insertLines = clean.split(/\r?\n/);
+      }
+
+      const sLine = parseInt(params.start, 10);
+      const sIdx = Math.max(0, sLine - 1);
+      const eLine = parseInt(params.end, 10);
+      let log = '';
+
+      if (params.mode === 'replace') {
+        if (isNaN(eLine)) throw new ToolError('End line required for replace.');
+        const count = Math.max(0, eLine - sLine + 1);
+        while (lines.length < sIdx) lines.push('');
+        lines.splice(sIdx, count, ...insertLines);
+        log = `Replaced lines ${sLine}-${eLine}`;
+      } else if (params.mode === 'insert') {
+        while (lines.length < sIdx) lines.push('');
+        lines.splice(sIdx, 0, ...insertLines);
+        log = `Inserted at line ${sLine}`;
+      } else if (params.mode === 'delete') {
+        if (isNaN(eLine)) throw new ToolError('End line required for delete.');
+        const count = Math.max(0, eLine - sLine + 1);
+        lines.splice(sIdx, count);
+        log = `Deleted lines ${sLine}-${eLine}`;
+      } else if (params.mode === 'append') {
+        // 旧名 edit_file だけ。新しい形は <write append="true">
+        lines.push(...insertLines);
+        log = `Appended to end of file`;
+      } else {
+        throw new ToolError(`Unknown mode: ${params.mode}`);
+      }
+
+      await vfs.writeFile(AGENT_PRINCIPAL, path, lines.join('\n'), {
+        overwrite: true,
+      });
+      return { log, ui: `✏️ Edited ${path} (${params.mode})` };
+    }
+
+    // SEARCH ブロック編集モード
+    // 切り出しと適用は editBlocks.ts（VFS に触らない純粋な文字列処理）。ここは橋渡しだけを持つ。
+    // どちらも例外を投げうるが、書き込みはその後なので **失敗すれば 1 文字も書かれない**。
+    if (/<{4,}SEARCH/.test(content)) {
+      const blocks = parseEditBlocks(content);
+      const currentFileContent = await vfs.readFile(AGENT_PRINCIPAL, path);
+      const newContent = applyEditBlocks(currentFileContent, blocks, { regex: params.regex === 'true' });
+
+      await vfs.writeFile(AGENT_PRINCIPAL, path, newContent, {
+        overwrite: true,
+      });
+      const blockMsg = blocks.length > 1 ? `${blocks.length} blocks updated` : 'Content replaced';
+      return { log: blockMsg, ui: `✏️ Replaced content in ${path}` };
+    }
+
+    throw new ToolError(`Invalid <${tag}> content. Use SEARCH markers or specify 'mode' attribute.`);
+  }
+
+  const withNote = (note: string, r: ToolResult): ToolResult => ({ ...r, log: note + (r.log || '') });
+
   registry.registerSystemTool(setId, setName, {
-    name: 'read_file',
-    description: 'Reads file content.',
-    impl: async (params: any, context: { vfs: VfsService }) => {
-      const vfs = context.vfs;
-      if (!vfs.exists(AGENT_PRINCIPAL, params.path)) throw new ToolError(`File not found.`);
-
-      const stat = vfs.stat(AGENT_PRINCIPAL, params.path);
-
-      const BINARY_EXTS =
-        /\.(png|jpg|jpeg|gif|webp|svg|ico|bmp|pdf|zip|tar|gz|7z|rar|mp3|wav|mp4|webm|ogg|wasm|bin|exe|dll|so|dylib|class|jar)$/i;
-      let isBinary = !!params.path.match(BINARY_EXTS);
-
-      let content = '';
-      if (!isBinary) {
-        content = await vfs.readFile(AGENT_PRINCIPAL, params.path);
-        // テキストとして読み込んだ結果、Nullバイトが含まれていればバイナリとみなす
-        if (content.indexOf('\0') !== -1) {
-          isBinary = true;
-        }
-      }
-
-      if (isBinary) {
-        let mimeType = stat.mimeType || 'application/octet-stream';
-        const ext = params.path.split('.').pop()?.toLowerCase();
-
-        if (ext === 'pdf') mimeType = 'application/pdf';
-        else if (ext === 'png') mimeType = 'image/png';
-        else if (ext === 'jpg' || ext === 'jpeg') mimeType = 'image/jpeg';
-        else if (ext === 'gif') mimeType = 'image/gif';
-        else if (ext === 'webp') mimeType = 'image/webp';
-        else if (ext === 'svg') mimeType = 'image/svg+xml';
-        else if (ext === 'mp3') mimeType = 'audio/mpeg';
-        else if (ext === 'wav') mimeType = 'audio/wav';
-        else if (ext === 'mp4') mimeType = 'video/mp4';
-        else if (ext === 'webm') mimeType = 'video/webm';
-        else if (ext === 'ogg') mimeType = 'audio/ogg';
-        else if (ext === 'zip') mimeType = 'application/zip';
-        else if (ext === 'wasm') mimeType = 'application/wasm';
-
-        return {
-          log: `Read binary file: ${mimeType}`,
-          ui: `📦 Read Binary ${params.path}`,
-          media: {
-            path: params.path,
-            mimeType: mimeType,
-            metadata: {},
-          },
-        };
-      }
-
-      const lines = content.split(/\r?\n/);
-
-      const s = parseInt(params.start, 10);
-      const e = parseInt(params.end, 10);
-
-      const hasStart = !isNaN(s);
-      const hasEnd = !isNaN(e);
-
-      let startIdx = 0;
-      let endIdx = lines.length;
-
-      if (hasStart) {
-        if (s < 0) {
-          startIdx = Math.max(0, lines.length + s);
-        } else if (s > 0) {
-          startIdx = Math.max(0, s - 1);
-        } else {
-          startIdx = 0;
-        }
-      }
-
-      if (hasEnd) {
-        if (e < 0) {
-          endIdx = Math.max(0, Math.min(lines.length, lines.length + e + 1));
-        } else if (e > 0) {
-          endIdx = Math.min(lines.length, e);
-        } else {
-          endIdx = 0;
-        }
-      } else if (!hasStart) {
-        // デフォルト: 開始/終了の指定が両方ない場合は、コンテキスト溢れ防止のため先頭800行に制限
-        endIdx = Math.min(lines.length, 800);
-      }
-
-      const sliced = lines.slice(startIdx, endIdx);
-      const showNum = params.line_numbers === 'true';
-
-      // startIdx を基準にすることで、負のインデックス指定時でも元のファイル内の正しい行番号を算出
-      const contentStr = showNum ? sliced.map((l, i) => `${startIdx + i + 1} | ${l}`).join('\n') : sliced.join('\n');
-
-      let logMsg = `Lines ${startIdx + 1}-${endIdx} of ${lines.length}:\n${contentStr}`;
-
-      if (endIdx < lines.length) {
-        logMsg += `\n\n... (File truncated. ${lines.length - endIdx} more lines. Use start=${endIdx + 1} to read more)`;
-      }
-
-      return { log: logMsg, ui: `📖 Read ${params.path}` };
-    },
+    name: 'read',
+    description: 'Reads a text file (line range) into the context. Refuses binary files.',
+    impl: async (params: any, context: { vfs: VfsService }) => readTextResult(context.vfs, params),
   });
 
   registry.registerSystemTool(setId, setName, {
-    name: 'create_file',
-    description: 'Creates a new file.',
+    name: 'attach_file',
+    description: 'Puts a whole file into the context as media (image / PDF / audio / text document). No range.',
     impl: async (params: any, context: { vfs: VfsService }) => {
-      const isOverwrite = params.overwrite === 'true';
-      if (!isOverwrite && context.vfs.exists(AGENT_PRINCIPAL, params.path)) {
+      const vfs = context.vfs;
+      if (!params.path) throw new ToolError("Attribute 'path' is required.");
+      if (params.start !== undefined || params.end !== undefined || params.pages !== undefined) {
         throw new ToolError(
-          `File already exists at ${params.path}. Set overwrite="true" if you intend to completely overwrite it, or use <edit_file> to modify it.`,
+          'attach_file has no range: the whole file is attached. For a line range use <read>; for PDF pages use pdf_tool (pdf_pages / pdf_text).',
         );
       }
-
-      let content = params.content || '';
-      content = content.replace(/^\r?\n/, '').replace(/\r?\n$/, '');
-      const msg = await context.vfs.writeFile(AGENT_PRINCIPAL, params.path, content, { overwrite: isOverwrite });
-
-      return {
-        log: msg,
-        ui: `📝 ${isOverwrite ? 'Overwrote' : 'Created'} ${params.path}`,
-      };
+      if (!vfs.exists(AGENT_PRINCIPAL, params.path)) throw new ToolError(`File not found.`);
+      return attachResult(vfs, params.path);
     },
   });
 
   registry.registerSystemTool(setId, setName, {
+    name: 'write',
+    description: 'Writes a text file: create, overwrite="true", or append="true".',
+    impl: async (params: any, context: { vfs: VfsService }) => writeResult(context.vfs, params),
+  });
+
+  registry.registerSystemTool(setId, setName, {
+    name: 'edit',
+    description: 'Edits part of a text file via SEARCH blocks or line mode (insert / replace / delete).',
+    impl: async (params: any, context: { vfs: VfsService }) => editResult(context.vfs, params),
+  });
+
+  // 旧名（別名）。挙動は旧のまま。結果の先頭で新名を教える
+  registry.registerSystemTool(setId, setName, {
+    name: 'read_file',
+    description: 'Legacy alias: <read> for text, <attach_file> for binary.',
+    impl: async (params: any, context: { vfs: VfsService }) =>
+      withNote(LEGACY_READ, await readTextResult(context.vfs, params, { legacyName: true })),
+  });
+  registry.registerSystemTool(setId, setName, {
+    name: 'create_file',
+    description: 'Legacy alias of <write>.',
+    impl: async (params: any, context: { vfs: VfsService }) =>
+      withNote(LEGACY_CREATE, await writeResult(context.vfs, { ...params, append: undefined })),
+  });
+  registry.registerSystemTool(setId, setName, {
     name: 'edit_file',
-    description: 'Edits a file via search replace or line mode.',
-    impl: async (params: any, context: { vfs: VfsService }) => {
-      const vfs = context.vfs;
-      const content = params.content || '';
-
-      // 行ベースの編集モード
-      if (params.mode) {
-        if (!vfs.exists(AGENT_PRINCIPAL, params.path)) throw new ToolError(`File not found: ${params.path}`);
-        const fileContent = await vfs.readFile(AGENT_PRINCIPAL, params.path);
-        let lines = fileContent.split(/\r?\n/);
-
-        let insertLines: string[] = [];
-        if (content) {
-          let clean = content;
-          if (clean.startsWith('\n')) clean = clean.substring(1);
-          if (clean.endsWith('\n')) clean = clean.substring(0, clean.length - 1);
-          insertLines = clean.split(/\r?\n/);
-        }
-
-        const sLine = parseInt(params.start, 10);
-        const sIdx = Math.max(0, sLine - 1);
-        const eLine = parseInt(params.end, 10);
-        let log = '';
-
-        if (params.mode === 'replace') {
-          if (isNaN(eLine)) throw new ToolError('End line required for replace.');
-          const count = Math.max(0, eLine - sLine + 1);
-          while (lines.length < sIdx) lines.push('');
-          lines.splice(sIdx, count, ...insertLines);
-          log = `Replaced lines ${sLine}-${eLine}`;
-        } else if (params.mode === 'insert') {
-          while (lines.length < sIdx) lines.push('');
-          lines.splice(sIdx, 0, ...insertLines);
-          log = `Inserted at line ${sLine}`;
-        } else if (params.mode === 'delete') {
-          if (isNaN(eLine)) throw new ToolError('End line required for delete.');
-          const count = Math.max(0, eLine - sLine + 1);
-          lines.splice(sIdx, count);
-          log = `Deleted lines ${sLine}-${eLine}`;
-        } else if (params.mode === 'append') {
-          lines.push(...insertLines);
-          log = `Appended to end of file`;
-        } else {
-          throw new ToolError(`Unknown mode: ${params.mode}`);
-        }
-
-        await vfs.writeFile(AGENT_PRINCIPAL, params.path, lines.join('\n'), {
-          overwrite: true,
-        });
-        return { log, ui: `✏️ Edited ${params.path} (${params.mode})` };
-      }
-
-      // SEARCH ブロック編集モード
-      // 切り出しと適用は editBlocks.ts（VFS に触らない純粋な文字列処理）。ここは橋渡しだけを持つ。
-      // どちらも例外を投げうるが、書き込みはその後なので **失敗すれば 1 文字も書かれない**。
-      if (/<{4,}SEARCH/.test(content)) {
-        const blocks = parseEditBlocks(content);
-        const currentFileContent = await vfs.readFile(AGENT_PRINCIPAL, params.path);
-        const newContent = applyEditBlocks(currentFileContent, blocks, { regex: params.regex === 'true' });
-
-        await vfs.writeFile(AGENT_PRINCIPAL, params.path, newContent, {
-          overwrite: true,
-        });
-        const blockMsg = blocks.length > 1 ? `${blocks.length} blocks updated` : 'Content replaced';
-        return { log: blockMsg, ui: `✏️ Replaced content in ${params.path}` };
-      }
-
-      throw new ToolError("Invalid <edit_file> content. Use SEARCH markers or specify 'mode' attribute.");
-    },
+    description: 'Legacy alias of <edit> (mode="append" included).',
+    impl: async (params: any, context: { vfs: VfsService }) =>
+      withNote(LEGACY_EDIT, await editResult(context.vfs, params, { legacyName: true })),
   });
 
   registry.registerSystemTool(setId, setName, {
@@ -228,6 +320,10 @@ export function registerFSTools(registry: ToolRegistry): void {
       log += `Type: ${stat.kind}\n`;
       if (stat.mimeType) log += `MIME: ${stat.mimeType}\n`;
       log += `Size: ${stat.size} bytes\n`;
+      // PDF のページ数はホストで数えない（pdf.js を持つのはゲストの pdf_tool。推測の数字を出さない）
+      if (stat.kind === 'file' && /\.pdf$/i.test(stat.name || '')) {
+        log += `PDF: page count and text layer → <pdf_info> (spawn system/services/pdf_tool.html). <attach_file> sends every page.\n`;
+      }
       log += `Created: ${new Date(stat.createdAt).toISOString()}\n`;
       log += `Updated: ${new Date(stat.updatedAt).toISOString()}\n`;
 

@@ -25,7 +25,7 @@
        * 何をしないか:
        *   🔴 **要約しない。説明書を作らない。**（T-0055: ctx_brief が要約の空欄を「決定なし」と答え、
        *      完全性の錯覚を作った。P-0013 の文脈「道具を賢くして規律を機械に読ませる」は却下済み）
-       *      道具は「どの札のどの行か」を返すだけ。祖先を根まで読むのは Itera が read_file でやる。
+       *      道具は「どの札のどの行か」を返すだけ。祖先を根まで読むのは Itera が read でやる。
        *   🔴 **ダイアログを出さない。** 人に訊くのは画面の仕事。ここは訊かずに理由を返す。
        *   🔴 **写しを唯一の正にしない。** 正はいつも札のファイル。写しが無い・古い・壊れていても、
        *      読み直しに落ちるだけで答えは正しい（上がるのは費用だけ）。
@@ -1018,7 +1018,7 @@ Attributes:
   - sort (optional): "id"（既定）| "updated" | "scheduled"
   - limit (optional): 既定 100
 Returns: 1 行 1 枚「id [状態] 優先度 予定 親 更新 | 題」。先頭に件数。
-Note: 要約はしない。着手前に親を根まで読むのは read_file で（loom_tree がパスを出す）。
+Note: 要約はしない。着手前に親を根まで読むのは read で（loom_tree がパスを出す）。
 </define_tag>`,
           async (ctx) => {
             const { a } = attrsOf(ctx);
@@ -1051,7 +1051,7 @@ Attributes:
   - status / kind / under (optional): loom_list と同じ絞り込み
   - section (optional): この節（例: "進捗"・"履歴"）の中だけ
   - limit (optional): 既定 40 行
-Returns: 「id Lnn [節] (状態) 行の中身」。nn はファイルの行番号（read_file の start/end にそのまま使える）。
+Returns: 「id Lnn [節] (状態) 行の中身」。nn はファイルの行番号（read の start/end にそのまま使える）。
          先頭に 当たった行数・当たった札の数・探した札の数。
 </define_tag>`,
           async (ctx) => {
@@ -1104,7 +1104,7 @@ Returns: 「id Lnn [節] (状態) 行の中身」。nn はファイルの行番�
 札の系譜を出す（祖先を根まで・所属プロジェクト・前任／後継・直下の子）。**パスを返すだけで中身は返さない。**
 Attributes:
   - id (required): 札の id
-Returns: 各行「id [状態] 題 — パス」。着手前に読むべき札（祖先）はこの順に read_file する。
+Returns: 各行「id [状態] 題 — パス」。着手前に読むべき札（祖先）はこの順に read する。
 </define_tag>`,
           async (ctx) => {
             const { a } = attrsOf(ctx);
@@ -1218,7 +1218,7 @@ Note: 観測した時刻と書いた時刻が違うなら、本文に観測の�
               `${a.id} の ## ${r.section} に書いた（${r.stamp}${a.status ? `・status → ${r.status}` : ''}）。` +
               (v.ok
                 ? `ファイルの ${v.from}〜${v.to} 行目（全 ${v.total} 行）で確認した`
-                : '🔴 読み直しで見つからなかった。read_file で確かめること')
+                : '🔴 読み直しで見つからなかった。read で確かめること')
             );
           },
         );
