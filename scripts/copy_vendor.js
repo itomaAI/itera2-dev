@@ -2,7 +2,7 @@
  * scripts/copy_vendor.js
  * Itera OS v2: Vendor Asset Copier
  *
- * Copies static assets (MathJax, Monaco Editor, pdf.js) from node_modules into public/vendor/
+ * Copies static assets (MathJax, Monaco Editor, pdf.js, pdf-lib) from node_modules into public/vendor/
  * and writes public/vendor/manifest.json — the catalog the host serves to guests via
  * MetaOS.vendor.resolve(name) (T-0685). Guests must not guess the host URL; they ask the catalog.
  */
@@ -72,7 +72,18 @@ function copyVendorAssets() {
     console.warn(`[Copy Vendor] Warning: Source directory '${pdfjsSrc}' does not exist.`);
   }
 
-  // 4. 目録（ホストの VendorCatalog が読む）。入っているものだけ書く — 無いものを書くと「在る」と嘘をつく
+  // 4. pdf-lib（保守版 @cantoo/pdf-lib）: ゲストの PDF の道具が「ページを別の PDF に切り出す」ときに引く（T-0687）。
+  //    pdf.js は読む・描く専用で PDF を書けないので、書くほうはこれ。ESM 1 本。使うまで降りてこない
+  const pdflibSrc = path.join(ROOT_DIR, 'node_modules/@cantoo/pdf-lib/dist/pdf-lib.esm.min.js');
+  const pdflibDest = path.join(PUBLIC_VENDOR_DIR, 'pdflib');
+  if (fs.existsSync(pdflibSrc)) {
+    fs.mkdirSync(pdflibDest, { recursive: true });
+    fs.copyFileSync(pdflibSrc, path.join(pdflibDest, 'pdf-lib.esm.min.js'));
+  } else {
+    console.warn(`[Copy Vendor] Warning: Source file '${pdflibSrc}' does not exist.`);
+  }
+
+  // 5. 目録（ホストの VendorCatalog が読む）。入っているものだけ書く — 無いものを書くと「在る」と嘘をつく
   const manifest = {};
   const put = (name, pkg, entry) => {
     const version = readVersion(pkg);
@@ -86,6 +97,7 @@ function copyVendorAssets() {
     worker: 'pdf.worker.min.js',
     dirs: ['cmaps/', 'standard_fonts/'],
   });
+  put('pdflib', '@cantoo/pdf-lib', { base: 'pdflib/', entry: 'pdf-lib.esm.min.js' });
   fs.writeFileSync(path.join(PUBLIC_VENDOR_DIR, 'manifest.json'), JSON.stringify(manifest, null, 2) + '\n');
 
   console.log(`[Copy Vendor] ✅ Vendor assets copied successfully (${Object.keys(manifest).join(', ')}).`);

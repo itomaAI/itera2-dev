@@ -4,7 +4,7 @@
     <script src="/system/lib/pdf_text.js"></script>
     <script>
       /**
-       * PDF Tool Daemon — PDF を「ページ数を知る／ページを画像に／文字を取り出す」（T-0686）
+       * PDF Tool Daemon — PDF を「ページ数を知る／ページを別の PDF に切り出す／ページを画像に／文字を取り出す」（T-0686 / T-0687）
        *
        * なぜ要るか:
        *   ホストの道具は「テキストを読む／ファイルを丸ごと添付する」だけで、PDF の分割を知らない。
@@ -13,19 +13,24 @@
        *
        * 使い方（AI）:
        *   常駐しない。要るときに spawn する（system/services/pdf_tool.html・pid pdf_tool）→ 道具が届く。
-       *   pdf_info で全体を見る → pdf_pages でページを PNG に落とす → 読むページだけ添付する。
+       *   pdf_info で全体を見る → pdf_extract で読むページだけの PDF に切り出す → attach_file で添付する
+       *   （PDF のまま渡すと文字層が残る。LLM の API の多くは PDF の中の文字を読むので、画像にすると落ちる情報がある）。
+       *   見た目が要るとき（図面・レイアウト・文字 0 のスキャン）だけ pdf_pages で PNG に。文字だけでよければ pdf_text。
        *   字形の埋め込みが無い PDF（CAD・積算ソフトの書き出し）は画像では名称が空白に見えるが、
        *   文字の流れは残っているので pdf_text で読める（pdf.js が CMap で符号を文字に戻す）。
        *
        * 仕組み:
        *   pdf.js はホストが同梱している（MetaOS.vendor.resolve('pdfjs')。vfs_root には置かない —— 4 MB が
        *   利用者全員の VFS に配信されてしまう）。文字の行組みは system/lib/pdf_text.js（純粋な部品）。
+       *   pdf.js は読む・描く専用で PDF を書けないので、切り出し（pdf_extract）は pdf-lib（MetaOS.vendor.resolve('pdflib')・
+       *   保守版 @cantoo/pdf-lib）で copyPages する。元のページの文字層・フォント・画像・ページ単位の注釈はそのまま写る。
+       *   文書全体の栞（アウトライン）は写さない。
        *   外部のサービスには出さない。暗号化された PDF は扱わない。表の列の順（見た目）は保証しない。
        */
       (async () => {
         const M = window.MetaOS;
         const P = window.PdfText;
-        const NAMES = ['pdf_info', 'pdf_pages', 'pdf_text', 'pdf_to_text'];
+        const NAMES = ['pdf_info', 'pdf_extract', 'pdf_pages', 'pdf_text', 'pdf_to_text'];
         const MAX_PAGES_PER_CALL = 20;
         const DEFAULT_SIZE = 1568; // 長辺 px。Anthropic がこれより大きい画像を縮めるので、これ以上は無駄になる
         const MAX_SIZE = 4096;
@@ -45,6 +50,14 @@
           return lib;
         }
 
+        let pdflibMod = null;
+        async function pdflib() {
+          if (pdflibMod) return pdflibMod;
+          const v = await M.vendor.resolve('pdflib');
+          pdflibMod = await import(v.entry);
+          return pdflibMod;
+        }
+
         function basename(path) {
           const name = path.split('/').pop() || 'pdf';
           return name.replace(/\.pdf$/i, '');
@@ -62,7 +75,7 @@
         function errText(e, path) {
           const m = e && e.message ? e.message : String(e);
           const name = e && e.name ? e.name : '';
-          if (name === 'PasswordException' || /password|encrypt/i.test(m))
+          if (name === 'PasswordException' || name === 'EncryptedPDFError' || /password|encrypt/i.test(m))
             return '[Error] 暗号化された PDF は扱えない: ' + path;
           if (name === 'InvalidPDFException' || /invalid pdf/i.test(m))
             return '[Error] PDF として読めない（壊れているか PDF ではない）: ' + path;
@@ -133,11 +146,64 @@
               ' 文字\n';
             msg += lines.join('\n');
             msg +=
-              '\n次: 読むページを決めて pdf_pages（画像に）か pdf_text（文字に）。丸ごと添付すると全 ' +
+              '\n次: 読むページを決めて pdf_extract（そのページだけの PDF に → attach_file。文字層が残る）。' +
+              '見た目が要るなら pdf_pages（画像に）、文字だけなら pdf_text。丸ごと添付すると全 ' +
               n +
               ' ページ分の費用になる。';
             return msg;
           });
+        }
+
+        // ---- pdf_extract ----
+        async function extract(p) {
+          const path = String(p.path || '').trim();
+          if (!path) throw new Error('path が要る');
+          if (!/\.pdf$/i.test(path)) throw new Error('PDF ではない: ' + path);
+          if (!(await M.fs.exists(path))) throw new Error('見つからない: ' + path);
+          const data = await M.fs.read(path, { encoding: 'binary' });
+          if (!data || !data.length) throw new Error('ファイルが空: ' + path);
+          const { PDFDocument } = await pdflib();
+          // 暗号化された PDF は断る（pdf.js と同じ扱い。ignoreEncryption で無理に開くと壊れた写しができる）
+          const src = await PDFDocument.load(data, { ignoreEncryption: false, updateMetadata: false });
+          const n = src.getPageCount();
+          const pages = P.parsePages(p.pages, n);
+          if (pages.length === n && !p.out)
+            throw new Error(
+              '全ページの指定（' + n + ' ページ）。切り出す意味が無いので、元の PDF をそのまま attach_file する',
+            );
+          const out = String(
+            p.out || join('system/temp/pdf/' + basename(path), basename(path) + '_' + P.pagesLabel(pages) + '.pdf'),
+          );
+          if (!/\.pdf$/i.test(out)) throw new Error('out は .pdf で終わる必要がある: ' + out);
+          const dst = await PDFDocument.create();
+          const copied = await dst.copyPages(
+            src,
+            pages.map((i) => i - 1),
+          );
+          for (const pg of copied) dst.addPage(pg);
+          const title = src.getTitle();
+          if (title) dst.setTitle(title + ' (' + P.pagesLabel(pages) + ')');
+          const bytes = await dst.save({ useObjectStreams: true });
+          await ensureDir(dirname(out));
+          await M.fs.write(out, bytes, { overwrite: true });
+          let msg =
+            '書いた: ' +
+            out +
+            '（' +
+            pages.length +
+            ' ページ / 全 ' +
+            n +
+            ' ページ・' +
+            kb(bytes.length) +
+            '。元 ' +
+            kb(data.length) +
+            '）\n';
+          msg += 'ページ: ' + pages.join(', ') + '（元の番号）\n';
+          msg +=
+            '次: attach_file でこの PDF を添付する（文字層・画像ごと。添付の費用は ' +
+            pages.length +
+            ' ページ分）。見た目だけが要るなら pdf_pages で画像に。';
+          return msg;
         }
 
         // ---- pdf_pages ----
@@ -243,8 +309,17 @@
           '  - pages (optional): 見るページ（"3-5" など。省略は全ページ）',
           'Returns: ページ数・ファイルの大きさ・ページごとの「寸法 pt・文字数」。文字 0 のページは画像だけ（スキャン）。',
           '</define_tag>',
+          '<define_tag name="pdf_extract">',
+          'PDF の指定したページを、別の（小さい）PDF として VFS に書く。切り出した PDF を attach_file で添付すれば、文字層・フォント・画像がそのまま届く（画像にすると文字の情報が落ちる）。大きい PDF の一部を読むときの基本の経路。',
+          'Attributes:',
+          '  - path (required): VFS 上の PDF',
+          '  - pages (required): "3" / "3-5" / "1,4,7-9"（1 始まり。範囲外は断る。全ページなら元をそのまま添付する）',
+          '  - out (optional): 書き出し先（.pdf）。既定 system/temp/pdf/<名前>/<名前>_p003-005.pdf（セッションの初期化で消える。残すなら利用者の領域を指定）',
+          'Returns: 「書いた: <out>（n ページ / 全 N ページ・大きさ）」。暗号化された PDF は扱わない。文書全体の栞（アウトライン）は写さない。',
+          'Note: 添付の費用はページ数で決まる。読むページだけを切り出す。',
+          '</define_tag>',
           '<define_tag name="pdf_pages">',
-          'PDF の指定したページを画像（PNG / JPEG）にして VFS に書く。読むページの画像だけを添付する（全ページを一度に入れない）。',
+          'PDF の指定したページを画像（PNG / JPEG）にして VFS に書く。見た目が要るとき（図面・レイアウト・文字 0 のスキャン）に。文字を読むだけなら pdf_extract か pdf_text。',
           'Attributes:',
           '  - path (required): VFS 上の PDF',
           '  - pages (required): "3" / "3-5" / "1,4,7-9" / "all"（1 始まり。範囲外は断る）。1 回に 20 枚まで',
@@ -283,6 +358,13 @@
           handler: guard(info),
         });
         M.tools.register({
+          name: 'pdf_extract',
+          description:
+            'Extract selected pages of a PDF into a new smaller PDF (pdf-lib, in-browser). Attach that with attach_file to keep the text layer.',
+          definition: defs,
+          handler: guard(extract),
+        });
+        M.tools.register({
           name: 'pdf_pages',
           description: 'Render selected PDF pages to PNG/JPEG files in the VFS (pdf.js, in-browser).',
           definition: defs,
@@ -312,7 +394,7 @@
         });
 
         M.ai.log(defs, 'tool_available');
-        log('起動した（pdf_info / pdf_pages / pdf_text）。');
+        log('起動した（pdf_info / pdf_extract / pdf_pages / pdf_text）。');
         window.addEventListener('unload', () => {
           for (const n of NAMES) M.tools.unregister(n);
         });

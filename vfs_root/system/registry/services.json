@@ -44,7 +44,7 @@
     "name": "PDF Tool",
     "icon": "📄",
     "path": "system/services/pdf_tool.html",
-    "description": "On demand (spawn when needed). pdf_info / pdf_pages (pages → PNG) / pdf_text (text extraction) using the host-shipped pdf.js via MetaOS.vendor.",
+    "description": "On demand (spawn when needed). pdf_info / pdf_extract (pages → smaller PDF) / pdf_pages (pages → PNG) / pdf_text (text extraction) using the host-shipped pdf.js and pdf-lib via MetaOS.vendor.",
     "autoStart": false
   }
 ]
