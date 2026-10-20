@@ -147,6 +147,11 @@ describe('regex="true"', () => {
   it('正規表現でも 2 か所に当たればエラー', () => {
     expect(() => edit('foo1\nfoo2\n', '<<<<<SEARCH\n^foo\\d$\n=====\nBAR\n>>>>>', true)).toThrow(/matched 2 times/);
   });
+
+  it('置換側は文字どおり —— $1 / \\1 / $& は展開しない（別環境の Itera の指摘。T-0683。定義文にもそう書いた）', () => {
+    const out = edit('key=old\n', '<<<<<SEARCH\n^key=(\\w+)$\n=====\nkey=$1 \\1 $& new\n>>>>>', true);
+    expect(out).toBe('key=$1 \\1 $& new\n');
+  });
 });
 
 describe('行番号 —— 二つの座標系を取り違えさせない', () => {
