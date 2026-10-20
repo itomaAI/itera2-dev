@@ -15,6 +15,7 @@ import { rootIconsFor } from '../panels/nodeOrder';
 
 // System Core & State
 import { ConfigManager } from '../../core/sys/ConfigManager';
+import { VendorCatalog, vendorHrefOf } from '../../core/sys/VendorCatalog';
 import { AppRegistry } from '../../core/sys/AppRegistry';
 import { FileAssociationResolver } from '../../core/sys/FileAssociationResolver';
 import { HistoryManager } from '../../core/state/HistoryManager';
@@ -287,6 +288,7 @@ export class SystemBootstrapper {
       engine,
       toolRegistry,
       sessionManager,
+      vendorCatalog: new VendorCatalog(vendorHrefOf(import.meta.env.BASE_URL, document.baseURI)),
       shell: shellFacade as any,
     });
 

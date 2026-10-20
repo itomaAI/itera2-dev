@@ -352,6 +352,11 @@
       oauth: async (providerId, authUrl, instructions) =>
         transport.requestHost('net:oauth', { providerId, authUrl, instructions }),
     },
+    // ホストが同梱する vendor ライブラリ（pdf.js など）。配置はホストが知る。window.top.location を覗かない（T-0685）
+    vendor: {
+      resolve: async (name) => transport.requestHost('vendor:resolve', { name }),
+      list: async () => transport.requestHost('vendor:list', {}),
+    },
     device: {
       getLocation: async (options = {}) => transport.requestHost('dev:location', { options }),
       takePhoto: async (options = {}) => transport.requestHost('dev:photo', { options }),
