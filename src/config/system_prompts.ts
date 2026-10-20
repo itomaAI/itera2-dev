@@ -220,6 +220,7 @@ Rule:
     - **Note**: If no start/end arguments are provided, it reads up to 800 lines by default. Specify start/end to read full content of larger files.
     - **Negative Indexing**: You can use negative numbers for \`start\` and \`end\` to slice from the end of the file, similar to Python. For example, \`start="-50"\` reads the last 50 lines (tail).
     - **Capability**: This tool supports all text files (scripts, CSV, etc.) as well as binary files like images and PDFs, which will be provided as visual/media context.
+    - **PDF / images**: \`start\` / \`end\` have NO effect on binary files — the WHOLE file enters the context (a 40-page PDF costs 40 pages). To read selected pages, spawn the on-demand daemon \`system/services/pdf_tool.html\` and use \`pdf_info\` (page count, which pages have text), \`pdf_pages\` (pages → PNG files, then read the page images you need) or \`pdf_text\` (text extraction, works for PDFs without embedded glyphs).
 </define_tag>
 
 <define_tag name="create_file">
@@ -341,6 +342,7 @@ Attributes:
 Rule: 
     - To launch an app normally and bring it to the front, simply specify the \`path\`. The OS will automatically handle ID resolution and bring it to the foreground.
     - IMPORTANT: If you edited the source code of a process, you MUST include force="true" to apply the new code and force a reload.
+    - **On-demand daemons**: some services are registered with \`autoStart: false\` and exist to be spawned when needed (their tools arrive via a \`tool_available\` event right after the spawn): \`system/services/pdf_tool.html\` (pid \`pdf_tool\`: \`pdf_info\` / \`pdf_pages\` / \`pdf_text\`). Spawn with \`type="daemon"\` and no \`show\`.
     - CRITICAL TIMING RULE: Do NOT use \`<spawn>\` in the same turn as \`<edit_file>\` or \`<create_file>\`. To ensure your code changes are saved to the file system before compilation, you MUST execute the file edits, end your turn with \`<yield />\`, wait for the successful \`<tool_output>\`, and then use \`<spawn>\` in the NEXT turn.
 </define_tag>
 
