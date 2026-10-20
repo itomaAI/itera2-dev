@@ -3,7 +3,7 @@
  * 添付の門（T-0672）。チャットに添付されたファイルを、履歴にどう置くかを 1 か所で決める。
  *
  *   'inline'    … 文字として本文（`<user_attachment>` の中）に展開する。先頭の N 行・M バイトまで。
- *                 残りは VFS の実体を `read_file` で読ませる
+ *                 残りは VFS の実体を `read` で読ませる
  *   'reference' … 文字ファイルだが展開しない（大きすぎる／UTF-8 でない）。置き場と理由だけを伝える
  *   'media'     … 画像・PDF など。`{media}` として投影に渡す（送れるかどうかは投影側の門が決める）
  *
@@ -49,6 +49,14 @@ const IMAGE_MIMES: Record<string, string> = {
   gif: 'image/gif',
   webp: 'image/webp',
 };
+/** 音声・動画（attach_file が引く。旧 read_file が持っていた表をここに一本化した。T-0683） */
+const AV_MIMES: Record<string, string> = {
+  mp3: 'audio/mpeg',
+  wav: 'audio/wav',
+  ogg: 'audio/ogg',
+  mp4: 'video/mp4',
+  webm: 'video/webm',
+};
 
 export function extensionOf(name: string): string {
   const base = name.split(/[\\/]/).pop() || '';
@@ -58,11 +66,12 @@ export function extensionOf(name: string): string {
 
 /**
  * パスだけから決める MIME（API 経路。`File` が無いので拡張子で）。
- * 画像と PDF は正しい種別、文字の候補は text/plain、それ以外は octet-stream。
+ * 画像・音声・動画と PDF は正しい種別、文字の候補は text/plain、それ以外は octet-stream。
  */
 export function mimeOfPath(path: string, policy: AttachmentPolicy = ATTACHMENT_POLICY): string {
   const ext = extensionOf(path);
   if (IMAGE_MIMES[ext]) return IMAGE_MIMES[ext];
+  if (AV_MIMES[ext]) return AV_MIMES[ext];
   if (ext === 'pdf') return 'application/pdf';
   if (policy.inline.extensions.includes(ext)) return 'text/plain';
   return 'application/octet-stream';
@@ -94,7 +103,7 @@ export function decodeUtf8Strict(bytes: Uint8Array): string | null {
   }
 }
 
-/** 行数（末尾の改行は行に数えない。`read_file` の行番号と同じ数え方） */
+/** 行数（末尾の改行は行に数えない。`read` の行番号と同じ数え方） */
 export function countLines(text: string): number {
   if (text.length === 0) return 0;
   let n = 0;
@@ -210,12 +219,12 @@ export function renderUserAttachmentNode(
     attrs.push(`bytes="${decision.size}"`, `truncated="true"`);
     const why =
       decision.reason === 'too_large'
-        ? `${formatBytes(decision.size)} exceeds the inline limit of ${formatBytes(policy.inline.skipAboveBytes)}. Read it with read_file (start/end; it reads 800 lines at a time).`
+        ? `${formatBytes(decision.size)} exceeds the inline limit of ${formatBytes(policy.inline.skipAboveBytes)}. Read it with <read> (start/end; it reads 800 lines at a time).`
         : decision.reason === 'binary'
           ? `its content looks binary (NUL bytes or a known file signature) despite the name. Inspect it from a script.`
           : decision.reason === 'not_utf8'
             ? `it is not valid UTF-8 (e.g. Shift_JIS). Convert it first, or read it as binary from a script.`
-            : `its content could not be read. Use read_file on the path.`;
+            : `its content could not be read. Use <read> on the path.`;
     return `<user_attachment ${attrs.join(' ')}>[Text file not expanded: ${why}]</user_attachment>`;
   }
   const { clip } = decision;
@@ -225,6 +234,6 @@ export function renderUserAttachmentNode(
   const what = clip.partialLine
     ? `the first ${formatBytes(policy.inline.maxBytes)} of line 1 (the line is ${formatBytes(clip.totalBytes)})`
     : `lines 1-${clip.shownLines} of ${clip.totalLines} (${formatBytes(policy.inline.maxBytes)} of ${formatBytes(clip.totalBytes)})`;
-  const next = clip.partialLine ? '' : ` Read the rest with read_file (start="${clip.shownLines + 1}").`;
+  const next = clip.partialLine ? '' : ` Read the rest with <read start="${clip.shownLines + 1}">.`;
   return `<user_attachment ${attrs.join(' ')}>\n${clip.text}\n[Truncated: showing ${what}.${next}]\n</user_attachment>`;
 }

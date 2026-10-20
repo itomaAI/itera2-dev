@@ -46,7 +46,7 @@ describe('chat.append の計画', () => {
       { media: { path: 'a/b.png', mimeType: 'image/png', metadata: {} } },
       { text: '<user_attachment name="b.png" path="a/b.png">[Binary File: b.png]</user_attachment>' },
       {
-        text: '<user_attachment name="c.txt" path="c.txt" bytes="0" truncated="true">[Text file not expanded: its content could not be read. Use read_file on the path.]</user_attachment>',
+        text: '<user_attachment name="c.txt" path="c.txt" bytes="0" truncated="true">[Text file not expanded: its content could not be read. Use <read> on the path.]</user_attachment>',
       },
       { text: 'see' },
     ]);

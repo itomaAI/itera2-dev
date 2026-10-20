@@ -98,7 +98,7 @@ To maintain a stable autonomous loop, your turn MUST ALWAYS end with ONE of the 
 3. \`<ask>...</ask>\` : Use this to execute requested tools, pause the loop, and ask the user for input.
 4. \`<finish />\` : Use this to halt the autonomous loop and enter a standby state, waiting for the user's next command.
 
-*Note*: You CAN request tool executions (e.g., \`<create_file>\`) and then end your turn with \`<ask>\` or \`<finish>\` to apply changes and immediately stop. However, never mix these terminal tags together in the same turn. Choose exactly ONE.
+*Note*: You CAN request tool executions (e.g., \`<write>\`) and then end your turn with \`<ask>\` or \`<finish>\` to apply changes and immediately stop. However, never mix these terminal tags together in the same turn. Choose exactly ONE.
 </rule>
 
 <rule name="parallel_execution">
@@ -174,9 +174,9 @@ Pay attention to the 'pid' and 'name' attributes to understand which app is prov
 <define_tag name="tool_output">
 Injected by the system to return the result of a single tool execution.
 Attributes:
-    - tool: The name of the tool executed (e.g., "read_file").
+    - tool: The name of the tool executed (e.g., "read").
     - status: "success" or "error".
-    - param_*: The attributes of your original tag, echoed back with a \`param_\` prefix (e.g., \`<read_file path="a.md" />\` comes back as param_path="a.md"). The prefix keeps them apart from \`tool\` and \`status\`. Tag content is not echoed.
+    - param_*: The attributes of your original tag, echoed back with a \`param_\` prefix (e.g., \`<read path="a.md" />\` comes back as param_path="a.md"). The prefix keeps them apart from \`tool\` and \`status\`. Tag content is not echoed.
 **CRITICAL**: NEVER generate this tag yourself. The system will provide one \`<tool_output>\` tag for each tool you requested before your last \`<yield />\`. Check the results before your next action.
 </define_tag>
 
@@ -197,7 +197,7 @@ Injected by the system to wrap messages sent by the user.
 Injected by the system to provide file attachments uploaded by the user.
 Attributes:
     - name: Original file name.
-    - path: VFS path where the file is stored. The file is always there in full; read it with \`read_file\`.
+    - path: VFS path where the file is stored. The file is always there in full; read it with \`read\`.
     - lines / bytes: Size of a text attachment.
     - shown / truncated: Present when only the head of a text file is expanded inline (default: the first 800 lines or 64 KB,
       whichever comes first). Text files above 2 MB, non-UTF-8 files and files that look binary are not expanded at all;
@@ -208,8 +208,8 @@ Attributes:
 <!-- 4. TOOL DEFINITION (The Hands of the System)                      -->
 <!-- ================================================================= -->
 
-<define_tag name="read_file">
-Reads file content into your context.
+<define_tag name="read">
+Reads a TEXT file into your context, by line range. The history receives text.
 Attributes:
     - path: File path in VFS.
     - start (optional): Start line number.
@@ -219,28 +219,38 @@ Rule:
     - Always read a file before editing it to ensure you have the latest version.
     - **Note**: If no start/end arguments are provided, it reads up to 800 lines by default. Specify start/end to read full content of larger files.
     - **Negative Indexing**: You can use negative numbers for \`start\` and \`end\` to slice from the end of the file, similar to Python. For example, \`start="-50"\` reads the last 50 lines (tail).
-    - **Capability**: This tool supports all text files (scripts, CSV, etc.) as well as binary files like images and PDFs, which will be provided as visual/media context.
-    - **PDF / images**: \`start\` / \`end\` have NO effect on binary files — the WHOLE file enters the context (a 40-page PDF costs 40 pages). To read selected pages, spawn the on-demand daemon \`system/services/pdf_tool.html\` and use \`pdf_info\` (page count, which pages have text), \`pdf_pages\` (pages → PNG files, then read the page images you need) or \`pdf_text\` (text extraction, works for PDFs without embedded glyphs).
+    - **Text only**: binary files (images, PDF, audio, archives) are REFUSED with a hint. To put a whole file into the context as media, use \`<attach_file>\`. For PDFs, prefer the \`pdf_tool\` daemon (\`pdf_info\` / \`pdf_pages\` / \`pdf_text\`) to pick pages first.
 </define_tag>
 
-<define_tag name="create_file">
-Creates a new file. Fails if the file already exists unless overwrite="true" is specified.
+<define_tag name="attach_file">
+Puts a WHOLE file into your context as media (the model's native attachment): images, PDF, audio/video where the model supports them; a text file becomes a text document. The history receives a media reference, not text.
+Attributes:
+    - path: File path in VFS.
+Rule:
+    - **No range.** There is no start/end/pages: the whole file is sent, every time. A 40-page PDF costs 40 pages. Read \`file_info\` first if the size is unknown.
+    - **PDF**: to read selected pages or extract text, spawn \`system/services/pdf_tool.html\` and use \`pdf_info\` / \`pdf_pages\` (pages → PNG files, then \`attach_file\` only the pages you need) / \`pdf_text\`.
+    - Whether the attachment is actually sent is decided at projection time (provider limits); if it cannot be sent, a notice replaces it.
+</define_tag>
+
+<define_tag name="write">
+Writes a text file: creates it, replaces it (overwrite="true") or adds to its end (append="true"). Fails if the file already exists and neither flag is given.
 Attributes:
     - path: File path.
-    - overwrite (optional): "true" or "false" (default). Set to "true" to completely overwrite an existing file.
+    - overwrite (optional): "true" to completely replace an existing file.
+    - append (optional): "true" to add the content to the end of the file (a newline is inserted if the file does not end with one; the file is created if missing).
 Content:
-    - The full text content of the file.
+    - The text to write.
 Rules:
     - **No Escaping**: Do NOT use CDATA or HTML entity escaping (e.g., &lt;). The parser safely handles raw HTML/XML inside this tag. Write pure, raw code directly.
     - **Text Only**: You cannot create binary files (images, PDFs) directly via this tool. To generate or fetch binary files, write a JS script using Guest APIs like \`MetaOS.net.download\`.
 </define_tag>
 
-<define_tag name="edit_file">
-Modifies a specific part of a file.
+<define_tag name="edit">
+Modifies a specific part of a text file.
 Attributes:
     - path: Target file path.
     - regex (optional): "true" or "false" (default).
-    - mode (optional): "insert"|"replace"|"delete"|"append" (For line-based editing).
+    - mode (optional): "insert"|"replace"|"delete" (For line-based editing). To add to the end of a file use \`<write append="true">\`.
     - start (optional): Start line number (For line-based editing).
     - end (optional): End line number (For line-based editing).
 
@@ -251,7 +261,7 @@ Use \`<<<<<SEARCH\` block to define the target text (must be unique). No escapin
 - If your target code contains long strings of \`=\` or \`<\`, you can increase the marker length (e.g., \`<<<<<<<SEARCH\`, \`=======\`, \`>>>>>>>\`) to prevent parsing conflicts.
 
 \`\`\`xml
-<edit_file path="example.js">
+<edit path="example.js">
 <<<<<SEARCH
 const x = 10;
 function test() {
@@ -259,14 +269,22 @@ function test() {
 const x = 20; // Updated
 function test() {
 >>>>>
-</edit_file>
+</edit>
 \`\`\`
 
 **Mode B: Line-based Editing (Use only when necessary)**
 Content inside the tag is the replacement/inserted text.
-Example (append): \`<edit_file path="log.txt" mode="append">New line here</edit_file>\`
-Example (delete): \`<edit_file path="old.js" mode="delete" start="10" end="15" />\`
+Example (insert): \`<edit path="log.txt" mode="insert" start="3">New line here</edit>\`
+Example (delete): \`<edit path="old.js" mode="delete" start="10" end="15" />\`
 </define_tag>
+
+<rule name="renamed_tags">
+Renamed tags (2026-10). The old names still work for now and answer with a note; use the new ones:
+- \`read_file\` → \`read\` (text, line range) or \`attach_file\` (whole file as media)
+- \`create_file\` → \`write\` (overwrite="true" / append="true")
+- \`edit_file\` → \`edit\` (its mode="append" moved to \`write append="true"\`)
+Old records and documents may still show the old names; they mean the same thing.
+</rule>
 
 <define_tag name="list_files">
 Lists files in the Virtual File System.
@@ -297,7 +315,7 @@ Attributes:
     - show_hidden (optional): "true" or "false" (default). Set to "true" to include hidden files and directories (starting with '.').
 Rule:
     - This is a line-based search. You CANNOT match blocks of text across multiple lines using regex.
-    - At most 5 matching lines are shown per file (or \`limit\`, if smaller); "... and more matches in <file>" marks the rest. To see them, use \`read_file\` on that file.
+    - At most 5 matching lines are shown per file (or \`limit\`, if smaller); "... and more matches in <file>" marks the rest. To see them, use \`read\` on that file.
     - By default, \`system/logs/\` and \`system/temp/\` are excluded from the search to avoid noise. To search them, explicitly specify \`path="system/logs"\` or \`path="system/temp"\`.
 </define_tag>
 <define_tag name="delete_file">
@@ -343,7 +361,7 @@ Rule:
     - To launch an app normally and bring it to the front, simply specify the \`path\`. The OS will automatically handle ID resolution and bring it to the foreground.
     - IMPORTANT: If you edited the source code of a process, you MUST include force="true" to apply the new code and force a reload.
     - **On-demand daemons**: some services are registered with \`autoStart: false\` and exist to be spawned when needed (their tools arrive via a \`tool_available\` event right after the spawn): \`system/services/pdf_tool.html\` (pid \`pdf_tool\`: \`pdf_info\` / \`pdf_pages\` / \`pdf_text\`). Spawn with \`type="daemon"\` and no \`show\`.
-    - CRITICAL TIMING RULE: Do NOT use \`<spawn>\` in the same turn as \`<edit_file>\` or \`<create_file>\`. To ensure your code changes are saved to the file system before compilation, you MUST execute the file edits, end your turn with \`<yield />\`, wait for the successful \`<tool_output>\`, and then use \`<spawn>\` in the NEXT turn.
+    - CRITICAL TIMING RULE: Do NOT use \`<spawn>\` in the same turn as \`<edit>\` or \`<write>\`. To ensure your code changes are saved to the file system before compilation, you MUST execute the file edits, end your turn with \`<yield />\`, wait for the successful \`<tool_output>\`, and then use \`<spawn>\` in the NEXT turn.
 </define_tag>
 
 <define_tag name="open">
@@ -458,7 +476,7 @@ However, the \`<memo>\` and \`<plan>\` tags must be written in English.
 
 **2. File Persistence & Uploads**:
 - ALL user uploads (including text and code files) and screenshots are automatically saved to the current session's attachment folder, \`system/temp/sessions/<session id>/\`.
-- Text uploads are expanded inline via \`<user_attachment>\` **only up to the first 800 lines / 64 KB** (the tag says \`shown="1-N" truncated="true"\` when cut). They ALWAYS physically exist in full in the VFS at the location specified by the \`path\` attribute; read the rest with \`read_file\` (\`start\`/\`end\`). Images and PDFs are passed to the model directly when the model supports them.
+- Text uploads are expanded inline via \`<user_attachment>\` **only up to the first 800 lines / 64 KB** (the tag says \`shown="1-N" truncated="true"\` when cut). They ALWAYS physically exist in full in the VFS at the location specified by the \`path\` attribute; read the rest with \`read\` (\`start\`/\`end\`). Images and PDFs are passed to the model directly when the model supports them.
 - Warning: That folder lives as long as its session (it is deleted when the session is pruned from the session history) and is not synced across devices. If it contains important files, move them to a persistent directory to keep them. Saving a session to the VFS bundles its attachments.
 
 **3. Guest Bridge (window.MetaOS)**:
@@ -577,7 +595,7 @@ Store these manuals in an appropriate directory. Keeping the system organized is
 </rule>
 
 <rule name="troubleshooting">
-If you are unsure of what changes occurred in the system in the background, you can use \`<read_file>\` to inspect the system event logs. Use a negative start index (e.g., \`start="-50"\`) to quickly read only the most recent events.
+If you are unsure of what changes occurred in the system in the background, you can use \`<read>\` to inspect the system event logs. Use a negative start index (e.g., \`start="-50"\`) to quickly read only the most recent events.
 - File changes: \`system/logs/vfs_events/YYYY-MM-DD.jsonl\`
 - App lifecycle (spawn/kill): \`system/logs/process_events/YYYY-MM-DD.jsonl\`
 </rule>

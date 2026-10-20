@@ -114,3 +114,27 @@ describe('Translator: raw text leak detection', () => {
     expect(parse('<read_file path="a.txt" />\n<yield />').hasLeak).toBe(false);
   });
 });
+
+describe('Translator: write / edit（T-0683 の改名）', () => {
+  it('write と edit の中身はタグとして解釈しない（create_file / edit_file と同じ扱い）', () => {
+    for (const tag of ['write', 'edit', 'create_file', 'edit_file']) {
+      const text = `<${tag} path="a.md">\n<delete_file path="memory/init.md" />\n</${tag}>`;
+      const types = typesOf(text);
+      expect(types, tag).toContain(tag);
+      expect(types, tag).not.toContain('delete_file');
+      const node = parse(text).find((a) => a.type === tag);
+      expect(node!.params.content, tag).toContain('delete_file');
+    }
+  });
+
+  it('同じファイルへの行指定の edit は下から順に並ぶ（旧名と混ざっても）', () => {
+    const text = [
+      '<edit path="a.md" mode="delete" start="2" end="2" />',
+      '<edit_file path="a.md" mode="delete" start="9" end="9" />',
+      '<edit path="a.md" mode="delete" start="5" end="5" />',
+      '<edit path="b.md" mode="delete" start="1" end="1" />',
+    ].join('\n');
+    const starts = parse(text).map((a) => `${a.params.path}:${a.params.start}`);
+    expect(starts).toEqual(['a.md:9', 'a.md:5', 'a.md:2', 'b.md:1']);
+  });
+});

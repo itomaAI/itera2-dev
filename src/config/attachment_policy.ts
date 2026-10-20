@@ -5,7 +5,7 @@
  * 利用者がチャットに添付したファイル（画面経路）と、アプリが `chat.append` の `attachments` で渡した
  * VFS のファイル（API 経路）は、同じ門（`decideAttachment`）を通る。門はこの方針で
  *   - どのファイルを「文字として本文に展開する」候補にするか（拡張子・MIME）
- *   - 展開するとき先頭の何行・何バイトまでにするか（残りは `read_file` で読ませる）
+ *   - 展開するとき先頭の何行・何バイトまでにするか（残りは `read` で読ませる）
  *   - 何バイトを超えたら展開そのものをやめるか
  * を決める。展開は UTF-8 として読めるものだけ（方針ではなく門の規則）。
  *
@@ -17,7 +17,7 @@ export interface InlineTextPolicy {
   extensions: readonly string[];
   /** 本文に展開する候補とみなす MIME。`text/*` のように `/*` で前方一致、それ以外は完全一致 */
   mimes: readonly string[];
-  /** 展開する行数の上限（`read_file` の既定と同じ 800）。これを超える分は `read_file` で読ませる */
+  /** 展開する行数の上限（`read` の既定と同じ 800）。これを超える分は `read` で読ませる */
   maxLines: number;
   /** 展開するバイト数の上限（UTF-8）。行数より先に当たればそこで切る */
   maxBytes: number;

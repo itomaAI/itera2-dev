@@ -128,14 +128,14 @@ describe('添付の門: 履歴に置く文', () => {
     );
   });
 
-  it('切ったときは shown / truncated と、続きを read_file で読む注記', () => {
+  it('切ったときは shown / truncated と、続きを read で読む注記', () => {
     const d = decideAttachment({ name: 'memo.md', size: 9 }, enc('1\n2\n3\n4\n5'), small);
     const s = renderUserAttachmentNode(d, file, small);
     expect(s).toContain('lines="5"');
     expect(s).toContain('shown="1-3"');
     expect(s).toContain('truncated="true"');
     expect(s).toContain('\n1\n2\n3\n[Truncated: showing lines 1-3 of 5');
-    expect(s).toContain('read_file (start="4")');
+    expect(s).toContain('<read start="4">');
     expect(s.startsWith('<user_attachment name="memo.md" path=')).toBe(true);
   });
 

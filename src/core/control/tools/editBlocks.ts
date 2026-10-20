@@ -1,6 +1,6 @@
 /**
  * src/core/control/tools/editBlocks.ts
- * <edit_file> の SEARCH ブロック — 切り出しと適用（T-0407）
+ * <edit>（旧名 <edit_file>）の SEARCH ブロック — 切り出しと適用（T-0407）
  *
  * VFS に触らない純粋な文字列処理として分けてある。単体で試験するため、
  * そしてミャク楽（myaku-raku-v2/agent）へファイル 1 本で横流しするため。
@@ -57,7 +57,7 @@ function afterLine(text: string, end: number): number {
 }
 
 /**
- * <edit_file> の中身は改行で始まる（`<edit_file …>` の直後で行を変えて書くため）。
+ * <edit> の中身は改行で始まる（`<edit …>` の直後で行を変えて書くため）。
  * 素朴に数えると「1 行目に書いた SEARCH」が 2 行目として報告され、読む側が一度つまずく。
  * ここで差し引いて、書いた側の見た目と揃えておく。
  */
@@ -90,13 +90,13 @@ function pick(label: string, cands: Marker[], n: number, headerLine: number, ch:
   const list = cands.map((c) => `line ${c.line} (${c.len} '${ch}')`).join(', ');
   if (exact.length === 0) {
     throw new ToolError(
-      `Ambiguous ${label} for the SEARCH block starting at line ${headerLine} of this edit_file content: ` +
+      `Ambiguous ${label} for the SEARCH block starting at line ${headerLine} of this <edit> content: ` +
         `${cands.length} candidate lines (${list}), none of which is ${n} characters long like the opening marker. ` +
         `Make the intended ${label} exactly ${n} '${ch}' characters. No changes were made to the file.`,
     );
   }
   throw new ToolError(
-    `Ambiguous ${label} for the SEARCH block starting at line ${headerLine} of this edit_file content: ` +
+    `Ambiguous ${label} for the SEARCH block starting at line ${headerLine} of this <edit> content: ` +
       `${exact.length} of the ${cands.length} candidate lines (${list}) are ${n} characters long, ` +
       `so the block cannot be delimited. Use longer markers (e.g. ${n + 3} characters for all three) ` +
       `so that only the intended line matches. No changes were made to the file.`,
@@ -104,7 +104,7 @@ function pick(label: string, cands: Marker[], n: number, headerLine: number, ch:
 }
 
 /**
- * <edit_file> の中身から塊を切り出す。
+ * <edit> の中身から塊を切り出す。
  * 壊れた塊を黙って読み飛ばさない —— どれか 1 つでも決まらなければ例外を投げる。
  */
 export function parseEditBlocks(content: string): EditBlock[] {
@@ -144,7 +144,7 @@ export function parseEditBlocks(content: string): EditBlock[] {
     if (seps.length === 0) seps = findMarkers(SEPARATOR, content, bodyStart, content.length, shift);
     if (seps.length === 0) {
       throw new ToolError(
-        `No separator found for the SEARCH block starting at line ${h.line} of this edit_file content. ` +
+        `No separator found for the SEARCH block starting at line ${h.line} of this <edit> content. ` +
           `Expected a line of ${h.len} '=' characters between the text to find and the replacement. ` +
           `No changes were made to the file.`,
       );
@@ -156,7 +156,7 @@ export function parseEditBlocks(content: string): EditBlock[] {
     if (closers.length === 0) closers = findMarkers(CLOSER, content, repStart, content.length, shift);
     if (closers.length === 0) {
       throw new ToolError(
-        `No closing marker found for the SEARCH block starting at line ${h.line} of this edit_file content. ` +
+        `No closing marker found for the SEARCH block starting at line ${h.line} of this <edit> content. ` +
           `Expected a line of ${h.len} '>' characters after the replacement. ` +
           `No changes were made to the file.`,
       );
@@ -167,7 +167,7 @@ export function parseEditBlocks(content: string): EditBlock[] {
     const replacement = content.slice(repStart, closer.index).replace(/\r?\n$/, '');
     if (pattern.length === 0) {
       throw new ToolError(
-        `The SEARCH block starting at line ${h.line} of this edit_file content has nothing to find ` +
+        `The SEARCH block starting at line ${h.line} of this <edit> content has nothing to find ` +
           `(the part above the separator is empty). ` +
           `No changes were made to the file.`,
       );
@@ -215,13 +215,11 @@ function notFoundHint(text: string, pattern: string, isRegex: boolean): string {
   if (normalizeSpace(text, false).includes(normalizeSpace(pattern, false))) {
     return (
       ' The same text is present but the trailing whitespace or the line endings differ —' +
-      ' copy the lines exactly as read_file shows them.'
+      ' copy the lines exactly as <read> shows them.'
     );
   }
   if (normalizeSpace(text, true).includes(normalizeSpace(pattern, true))) {
-    return (
-      ' The same text is present but the indentation differs —' + ' copy the lines exactly as read_file shows them.'
-    );
+    return ' The same text is present but the indentation differs —' + ' copy the lines exactly as <read> shows them.';
   }
   const first = pattern.split('\n').find((l) => l.trim().length > 0);
   if (first) {
@@ -249,7 +247,7 @@ export function applyEditBlocks(fileContent: string, blocks: EditBlock[], opts: 
   for (let i = 0; i < blocks.length; i++) {
     const b = blocks[i];
     // 行番号は 2 つの座標系を行き来する。どちらの話をしているかを必ず言葉で添える
-    const where = `block ${i + 1} (its SEARCH marker is on line ${b.line} of this edit_file content)`;
+    const where = `block ${i + 1} (its SEARCH marker is on line ${b.line} of this <edit> content)`;
 
     if (b.replacement === b.pattern) {
       throw new ToolError(
