@@ -13,6 +13,7 @@
  *   renderPage(pageNo, lines)         … `--- p.N ---` の見出しつきの文字
  *   parseRange(from, to, numPages)    … 1 始まりのページ範囲。範囲外は詰める
  *   parsePages(spec, numPages)        … "3" / "3-5" / "1,4,7-9" / "all" を 1 始まりのページ番号の配列に。範囲外は断る（詰めない）
+ *   pagesLabel(pages)                 … [3,4,5] → "p003-005"、[1,4,7,8,9] → "p001_004_007-009"（切り出した PDF の名前に）
  */
 (function (global) {
   function transform(m1, m2) {
@@ -138,7 +139,18 @@
     return Array.from(out).sort((x, y) => x - y);
   }
 
-  const api = { transform, itemsToLines, itemsWithPositions, renderPage, parseRange, parsePages };
+  function pagesLabel(pages) {
+    const runs = [];
+    for (const i of pages) {
+      const last = runs[runs.length - 1];
+      if (last && last[1] === i - 1) last[1] = i;
+      else runs.push([i, i]);
+    }
+    const pad = (n) => String(n).padStart(3, '0');
+    return 'p' + runs.map(([a, b]) => (a === b ? pad(a) : pad(a) + '-' + pad(b))).join('_');
+  }
+
+  const api = { transform, itemsToLines, itemsWithPositions, renderPage, parseRange, parsePages, pagesLabel };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   global.PdfText = api;
 })(typeof window !== 'undefined' ? window : globalThis);

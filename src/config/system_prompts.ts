@@ -219,7 +219,7 @@ Rule:
     - Always read a file before editing it to ensure you have the latest version.
     - **Note**: If no start/end arguments are provided, it reads up to 800 lines by default. Specify start/end to read full content of larger files.
     - **Negative Indexing**: You can use negative numbers for \`start\` and \`end\` to slice from the end of the file, similar to Python. For example, \`start="-50"\` reads the last 50 lines (tail).
-    - **Text only**: binary files (images, PDF, audio, archives) are REFUSED with a hint. To put a whole file into the context as media, use \`<attach_file>\`. For PDFs, prefer the \`pdf_tool\` daemon (\`pdf_info\` / \`pdf_pages\` / \`pdf_text\`) to pick pages first.
+    - **Text only**: binary files (images, PDF, audio, archives) are REFUSED with a hint. To put a whole file into the context as media, use \`<attach_file>\`. For a large PDF, pick pages first with the \`pdf_tool\` daemon (\`pdf_info\` → \`pdf_extract\` → \`attach_file\`).
 </define_tag>
 
 <define_tag name="attach_file">
@@ -228,7 +228,7 @@ Attributes:
     - path: File path in VFS.
 Rule:
     - **No range.** There is no start/end/pages: the whole file is sent, every time. A 40-page PDF costs 40 pages. Read \`file_info\` first if the size is unknown.
-    - **PDF**: to read selected pages or extract text, spawn \`system/services/pdf_tool.html\` and use \`pdf_info\` / \`pdf_pages\` (pages → PNG files, then \`attach_file\` only the pages you need) / \`pdf_text\`.
+    - **PDF**: a PDF attachment keeps its text layer — providers that accept PDFs read the embedded text, which a rendered image loses. So prefer attaching a PDF over images of its pages. For a large PDF, spawn \`system/services/pdf_tool.html\` and use \`pdf_info\` (page count, chars per page) → \`pdf_extract\` (the pages you need, as a new smaller PDF) → \`attach_file\` on that. Use \`pdf_pages\` (pages → PNG) only when the look of the page matters (layout, drawings, scans with no text), and \`pdf_text\` when plain text in the history is enough.
     - Whether the attachment is actually sent is decided at projection time (provider limits); if it cannot be sent, a notice replaces it.
 </define_tag>
 
@@ -360,7 +360,7 @@ Attributes:
 Rule: 
     - To launch an app normally and bring it to the front, simply specify the \`path\`. The OS will automatically handle ID resolution and bring it to the foreground.
     - IMPORTANT: If you edited the source code of a process, you MUST include force="true" to apply the new code and force a reload.
-    - **On-demand daemons**: some services are registered with \`autoStart: false\` and exist to be spawned when needed (their tools arrive via a \`tool_available\` event right after the spawn): \`system/services/pdf_tool.html\` (pid \`pdf_tool\`: \`pdf_info\` / \`pdf_pages\` / \`pdf_text\`). Spawn with \`type="daemon"\` and no \`show\`.
+    - **On-demand daemons**: some services are registered with \`autoStart: false\` and exist to be spawned when needed (their tools arrive via a \`tool_available\` event right after the spawn): \`system/services/pdf_tool.html\` (pid \`pdf_tool\`: \`pdf_info\` / \`pdf_extract\` / \`pdf_pages\` / \`pdf_text\`). Spawn with \`type="daemon"\` and no \`show\`.
     - CRITICAL TIMING RULE: Do NOT use \`<spawn>\` in the same turn as \`<edit>\` or \`<write>\`. To ensure your code changes are saved to the file system before compilation, you MUST execute the file edits, end your turn with \`<yield />\`, wait for the successful \`<tool_output>\`, and then use \`<spawn>\` in the NEXT turn.
 </define_tag>
 

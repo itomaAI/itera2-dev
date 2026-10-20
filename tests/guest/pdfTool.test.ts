@@ -99,6 +99,14 @@ describe('parsePages', () => {
   });
 });
 
+describe('pagesLabel', () => {
+  it('連番は範囲に、飛びは _ で', () => {
+    expect(P.pagesLabel([3, 4, 5])).toBe('p003-005');
+    expect(P.pagesLabel([1, 4, 7, 8, 9])).toBe('p001_004_007-009');
+    expect(P.pagesLabel([12])).toBe('p012');
+  });
+});
+
 describe('置き場と配線', () => {
   it('pdf.js は vfs_root に置かず、デーモンはホストの目録（MetaOS.vendor）で引く', () => {
     expect(existsSync(resolve(ROOT, 'vfs_root/system/vendor/pdf.min.js'))).toBe(false);
@@ -108,14 +116,26 @@ describe('置き場と配線', () => {
     expect(daemon).not.toContain('document.referrer');
     expect(daemon).toContain('<script src="/system/lib/pdf_text.js">');
     expect(read('scripts/copy_vendor.js')).toContain("put('pdfjs', 'pdfjs-dist'");
+    // 切り出し（pdf_extract）は pdf-lib。これも vfs_root ではなく目録から（T-0687）
+    expect(daemon).toContain("M.vendor.resolve('pdflib')");
+    expect(existsSync(resolve(ROOT, 'vfs_root/system/vendor/pdf-lib.esm.min.js'))).toBe(false);
+    expect(read('scripts/copy_vendor.js')).toContain("put('pdflib', '@cantoo/pdf-lib'");
   });
-  it('3 つの道具と旧名を登録し、常駐しない', () => {
+  it('4 つの道具と旧名を登録し、常駐しない', () => {
     const daemon = read('vfs_root/system/services/pdf_tool.html');
-    for (const n of ['pdf_info', 'pdf_pages', 'pdf_text', 'pdf_to_text']) expect(daemon).toContain(`name: '${n}'`);
+    for (const n of ['pdf_info', 'pdf_extract', 'pdf_pages', 'pdf_text', 'pdf_to_text'])
+      expect(daemon).toContain(`name: '${n}'`);
     const reg = JSON.parse(read('vfs_root/system/registry/services.json'));
     expect(reg.find((s: { id: string }) => s.id === 'pdf_tool')).toMatchObject({
       autoStart: false,
       path: 'system/services/pdf_tool.html',
     });
+  });
+  it('attach_file の定義は「PDF は切り出して PDF のまま添付」を先に言い、画像化は見た目が要るときだけ', () => {
+    const sp = read('src/config/system_prompts.ts');
+    const def = sp.slice(sp.indexOf('<define_tag name="attach_file">'), sp.indexOf('<define_tag name="write">'));
+    expect(def).toContain('pdf_extract');
+    expect(def).toContain('text layer');
+    expect(def.indexOf('pdf_extract')).toBeLessThan(def.indexOf('pdf_pages'));
   });
 });
