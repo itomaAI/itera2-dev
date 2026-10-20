@@ -76,7 +76,7 @@
   }
 
   function renderPage(pageNo, lines) {
-    const body = lines && lines.length ? lines.join('\n') : '（文字なし）';
+    const body = lines && lines.length ? lines.join('\n') : '(no text)';
     return `--- p.${pageNo} ---\n${body}\n`;
   }
 
@@ -115,8 +115,8 @@
   function parsePages(spec, numPages) {
     const n = Math.max(0, numPages | 0);
     const s = String(spec == null ? '' : spec).trim();
-    if (!s) throw new Error('pages が要る（例: "3" / "3-5" / "1,4,7-9" / "all"）');
-    if (n < 1) throw new Error('この PDF にページが無い');
+    if (!s) throw new Error('pages is required (e.g. "3" / "3-5" / "1,4,7-9" / "all")');
+    if (n < 1) throw new Error('This PDF has no pages');
     if (/^all$/i.test(s)) return Array.from({ length: n }, (_, i) => i + 1);
     const out = new Set();
     for (const part0 of s.split(',')) {
@@ -126,16 +126,16 @@
       let a;
       let b;
       if (m) {
-        if (!m[1] && !m[2]) throw new Error(`読めないページ指定: "${part}"`);
+        if (!m[1] && !m[2]) throw new Error(`Unreadable page spec: "${part}"`);
         a = m[1] ? parseInt(m[1], 10) : 1;
         b = m[2] ? parseInt(m[2], 10) : n;
       } else if (/^\d+$/.test(part)) {
         a = b = parseInt(part, 10);
-      } else throw new Error(`読めないページ指定: "${part}"`);
-      if (a < 1 || b > n || a > b) throw new Error(`ページ "${part}" は範囲外（この PDF は 1〜${n} ページ）`);
+      } else throw new Error(`Unreadable page spec: "${part}"`);
+      if (a < 1 || b > n || a > b) throw new Error(`Page "${part}" is out of range (this PDF has pages 1-${n})`);
       for (let i = a; i <= b; i++) out.add(i);
     }
-    if (!out.size) throw new Error('pages が空');
+    if (!out.size) throw new Error('pages is empty');
     return Array.from(out).sort((x, y) => x - y);
   }
 

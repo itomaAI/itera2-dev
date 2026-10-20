@@ -61,7 +61,7 @@ describe('itemsToLines', () => {
   });
   it('文字が無ければ空', () => {
     expect(P.itemsToLines([], VT)).toEqual([]);
-    expect(P.renderPage(3, [])).toBe('--- p.3 ---\n（文字なし）\n');
+    expect(P.renderPage(3, [])).toBe('--- p.3 ---\n(no text)\n');
   });
 });
 
@@ -90,12 +90,12 @@ describe('parsePages', () => {
   });
   it('範囲外・読めない指定・空は断る（詰めない）', () => {
     expect(() => P.parsePages('', 10)).toThrow(/pages/);
-    expect(() => P.parsePages('0', 10)).toThrow(/範囲外/);
-    expect(() => P.parsePages('11', 10)).toThrow(/1〜10/);
-    expect(() => P.parsePages('5-3', 10)).toThrow(/範囲外/);
-    expect(() => P.parsePages('x', 10)).toThrow(/読めない/);
-    expect(() => P.parsePages('-', 10)).toThrow(/読めない/);
-    expect(() => P.parsePages('1', 0)).toThrow(/ページが無い/);
+    expect(() => P.parsePages('0', 10)).toThrow(/out of range/);
+    expect(() => P.parsePages('11', 10)).toThrow(/1-10/);
+    expect(() => P.parsePages('5-3', 10)).toThrow(/out of range/);
+    expect(() => P.parsePages('x', 10)).toThrow(/Unreadable/);
+    expect(() => P.parsePages('-', 10)).toThrow(/Unreadable/);
+    expect(() => P.parsePages('1', 0)).toThrow(/no pages/);
   });
 });
 
@@ -130,6 +130,11 @@ describe('置き場と配線', () => {
       autoStart: false,
       path: 'system/services/pdf_tool.html',
     });
+  });
+  it('道具の定義（define_tag）は英語（Itera の見えるところは英語）', () => {
+    const daemon = read('vfs_root/system/services/pdf_tool.html');
+    const defs = daemon.slice(daemon.indexOf('const defs = ['), daemon.indexOf('].join('));
+    expect(defs).not.toMatch(/[\u3040-\u30ff\u4e00-\u9fff]/);
   });
   it('attach_file の定義は「PDF は切り出して PDF のまま添付」を先に言い、画像化は見た目が要るときだけ', () => {
     const sp = read('src/config/system_prompts.ts');

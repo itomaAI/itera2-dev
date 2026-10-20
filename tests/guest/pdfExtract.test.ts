@@ -85,7 +85,7 @@ describe('pdf_extract の土台（pdf-lib の copyPages）', () => {
   });
   it('範囲外は断る（詰めない）', async () => {
     const src = await makeSource(['ALPHA', 'BRAVO']);
-    await expect(extract(src, '3')).rejects.toThrow(/範囲外/);
+    await expect(extract(src, '3')).rejects.toThrow(/out of range/);
   });
   it('暗号化された PDF は断る', async () => {
     // 暗号化の印だけを持つ最小の PDF（本文は無い）。pdf-lib は ignoreEncryption:false なら load で投げる
