@@ -249,7 +249,7 @@ Rules:
 Modifies a specific part of a text file.
 Attributes:
     - path: Target file path.
-    - regex (optional): "true" or "false" (default).
+    - regex (optional): "true" or "false" (default). Applies to the SEARCH side only: the SEARCH body is then a raw regular expression (write \`\\d\` as-is — the double-escaping rule of \`lpml_syntax\` is for attribute values, not for tag content). The replacement side is ALWAYS literal text: \`$1\`, \`\\1\`, \`$&\` are written as they are, never expanded.
     - mode (optional): "insert"|"replace"|"delete" (For line-based editing). To add to the end of a file use \`<write append="true">\`.
     - start (optional): Start line number (For line-based editing).
     - end (optional): End line number (For line-based editing).
