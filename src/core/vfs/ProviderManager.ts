@@ -9,9 +9,19 @@ import type { HostTransport } from '../../ipc/HostTransport';
 import type { ProcessManager } from '../../shell/windowing/ProcessManager';
 import type { PathResolver } from './PathResolver';
 
+/**
+ * プロバイダが申し出る機能（T-0689）。ブリッジが handlers にある関数の有無から導く（別に宣言させない ——
+ * 宣言と実装がずれられないように）。核はこれを見て、プロバイダに任せるか自分でやるかを決める。
+ */
+export interface ProviderCapabilities {
+  /** 同じプロバイダの中の改名・移動を向こう側でも動かせる（onMove を持つ）。無ければ核が stub を実体化してから動かす */
+  move: boolean;
+}
+
 export interface ProviderInfo {
   mountPath: string;
   pid: string;
+  capabilities: ProviderCapabilities;
 }
 
 export class ProviderManager {
@@ -54,13 +64,16 @@ export class ProviderManager {
    * その優先規則を、ツリー走査を自前で行うデーモンからも参照可能にするもの。
    */
   listMounts(): ProviderInfo[] {
-    return Array.from(this.mounts.values()).map((info) => ({ ...info }));
+    return Array.from(this.mounts.values()).map((info) => ({ ...info, capabilities: { ...info.capabilities } }));
   }
 
-  registerProvider(path: string, pid: string): void {
+  registerProvider(path: string, pid: string, capabilities: Partial<ProviderCapabilities> = {}): void {
     const normPath = this.pathResolver.normalizePath(path);
-    this.mounts.set(normPath, { mountPath: normPath, pid });
-    console.log(`[ProviderManager] Registered Sync Provider: PID '${pid}' at '/${normPath}'`);
+    const caps: ProviderCapabilities = { move: capabilities.move === true };
+    this.mounts.set(normPath, { mountPath: normPath, pid, capabilities: caps });
+    console.log(
+      `[ProviderManager] Registered Sync Provider: PID '${pid}' at '/${normPath}' (move: ${caps.move ? 'yes' : 'no'})`,
+    );
     this._notifyMountChange(normPath);
   }
 
@@ -123,6 +136,27 @@ export class ProviderManager {
    */
   isProviderAlive(pid: string): boolean {
     return this._liveWindow(pid) !== null;
+  }
+
+  /**
+   * 同じプロバイダの中の改名・移動を、向こう側でも動かすよう担当に頼む（T-0689）。
+   * 担当が move を申し出ていない・応じられない・false を返した・例外 → false（「何も変えていない」と読む）。
+   * 判定の材料（申し出・生死）はここで揃える。呼ぶ側（VfsService）は true なら実体化を飛ばすだけ。
+   */
+  async moveContent(oldPath: string, newPath: string): Promise<boolean> {
+    const info = this.findProviderForPath(oldPath);
+    if (!info || !info.capabilities.move) return false;
+
+    const win = this._liveWindow(info.pid);
+    if (!win) return false;
+
+    try {
+      const res = await this.transport.invokeGuest(info.pid, 'fs:move_content', { oldPath, newPath }, win);
+      return res === true;
+    } catch (e) {
+      console.warn(`[ProviderManager] Move failed for ${oldPath} -> ${newPath} (falling back to hydration):`, e);
+      return false;
+    }
   }
 
   async fetchContent(path: string): Promise<boolean> {

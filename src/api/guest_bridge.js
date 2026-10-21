@@ -139,6 +139,23 @@
   const transport = new GuestTransport(MY_PID);
   const localToolHandlers = new Map();
   const mountHandlers = new Map();
+  // マウントごとの onMove（T-0689）。持つマウントだけ入る。提示（capabilities.move）はこの有無から導く
+  const moveHandlers = new Map();
+  // 最長一致でマウントの担当を引く（ルート '' は他の深いマウントに必ず負ける）
+  const matchMountHandler = (map, path) => {
+    let longestMatch = '';
+    let matched = null;
+    for (const [mountedPath, handler] of map.entries()) {
+      if (mountedPath === '' || path === mountedPath || path.startsWith(mountedPath + '/')) {
+        if (mountedPath === '' && longestMatch !== '') continue;
+        if (mountedPath.length >= longestMatch.length) {
+          longestMatch = mountedPath;
+          matched = handler;
+        }
+      }
+    }
+    return matched;
+  };
 
   const reportedErrors = new Set();
   let errorCount = 0;
@@ -184,24 +201,19 @@
   });
 
   transport.registerHandler('fs:resolve_missing', async (payload) => {
-    let longestMatch = '';
-    let matchedHandler = null;
-    for (const [mountedPath, handler] of mountHandlers.entries()) {
-      // ルートマウント('')の場合は常にマッチさせる
-      if (mountedPath === '' || payload.path === mountedPath || payload.path.startsWith(mountedPath + '/')) {
-        // 空文字の場合は length が 0 なので、他のより深いマウントポイントがあればそちらが優先される
-        if (mountedPath === '' && longestMatch !== '') continue;
-
-        if (mountedPath.length >= longestMatch.length) {
-          longestMatch = mountedPath;
-          matchedHandler = handler;
-        }
-      }
-    }
+    const matchedHandler = matchMountHandler(mountHandlers, payload.path);
     if (matchedHandler) {
       return await matchedHandler(payload.path);
     }
     return false;
+  });
+
+  // 同じプロバイダの中の改名・移動を向こう側でも動かす（T-0689）。核は手元を動かす前にこれを呼ぶ。
+  // true 以外（false・例外・担当なし）は「何も変えていない」として核が実体化の経路に戻る
+  transport.registerHandler('fs:move_content', async (payload) => {
+    const handler = matchMountHandler(moveHandlers, payload.oldPath);
+    if (!handler) return false;
+    return (await handler(payload.oldPath, payload.newPath)) === true;
   });
 
   transport.registerHandler('execute_tool', async (payload) => {
@@ -238,6 +250,10 @@
       registerSyncProvider: async (path, handlers) => {
         let normPath = path.replace(/\\/g, '/').replace(/^\/+/, '').replace(/\/+$/, '');
         if (handlers.onFetchContent) mountHandlers.set(normPath, handlers.onFetchContent);
+        // 提示は関数の有無から導く（別に宣言させると実装とずれられる）
+        const canMove = typeof handlers.onMove === 'function';
+        if (canMove) moveHandlers.set(normPath, handlers.onMove);
+        else moveHandlers.delete(normPath);
 
         if (handlers.onMutate) {
           transport.on('sync:onMutate', (payload) => {
@@ -245,11 +261,12 @@
           });
         }
 
-        return transport.requestHost('fs:register_provider', { path: normPath });
+        return transport.requestHost('fs:register_provider', { path: normPath, capabilities: { move: canMove } });
       },
       unregisterSyncProvider: async (path) => {
         let normPath = path.replace(/\\/g, '/').replace(/^\/+/, '').replace(/\/+$/, '');
         mountHandlers.delete(normPath);
+        moveHandlers.delete(normPath);
         return transport.requestHost('fs:unregister_provider', { path: normPath });
       },
       createStub: async (path, meta, opts = {}) => transport.requestHost('fs:create_stub', { path, meta, opts }),

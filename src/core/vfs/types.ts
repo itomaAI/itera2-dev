@@ -134,6 +134,14 @@ export interface VfsMutation {
 export interface SyncProviderConfig {
   onMutate: (mutations: VfsMutation[]) => Promise<void>;
   onFetchContent: (path: string) => Promise<boolean>;
+  /**
+   * 同じプロバイダの中の改名・移動を、向こう側（Storage / Drive / host）でも動かす（T-0689・任意）。
+   * 核は手元を動かす**前**に呼び、true なら stub を実体化せずに動かす。false／例外なら
+   * 「何も変えていない」として扱い、実体化してから動かす経路に戻る。
+   * 持たないプロバイダ（既定）では、核が部分木の stub をすべて実体化してから動かす。
+   * 持つかどうかはブリッジが関数の有無から導いてホストに提示する（別に宣言させない）。
+   */
+  onMove?: (oldPath: string, newPath: string) => Promise<boolean>;
 }
 
 // ==========================================
