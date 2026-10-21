@@ -5,6 +5,8 @@ import {
   decideAttachment,
   decodeUtf8Strict,
   extensionOf,
+  hintFor,
+  isDirectMedia,
   isInlineCandidate,
   mimeOfPath,
   renderUserAttachmentNode,
@@ -20,6 +22,12 @@ const small: AttachmentPolicy = {
     maxLines: 3,
     maxBytes: 20,
     skipAboveBytes: 100,
+  },
+  media: {
+    directMimes: ['image/*'],
+    directExtensions: ['png'],
+    maxBytes: 50,
+    hints: { 'application/pdf': 'Use pdf_tool.', 'audio/*': 'Listen with attach_file.', default: 'Inspect it.' },
   },
 };
 
@@ -83,15 +91,50 @@ describe('添付の門: 切り詰め', () => {
 });
 
 describe('添付の門: 経路の決定', () => {
-  it('候補でなければ media（bytes を見ない。MIME が無ければ拡張子から）', () => {
+  it('候補でなく方針の media に当たれば media（bytes を見ない。MIME が無ければ拡張子から）', () => {
     expect(decideAttachment({ name: 'a.png', mimeType: 'image/png', size: 9 }, null, small)).toEqual({
       route: 'media',
       mimeType: 'image/png',
     });
-    expect(decideAttachment({ name: 'a.pdf', mimeType: '', size: 9 }, null, small)).toEqual({
+    expect(decideAttachment({ name: 'a.png', mimeType: '', size: 9 }, null, small)).toEqual({
       route: 'media',
-      mimeType: 'application/pdf',
+      mimeType: 'image/png',
     });
+    expect(decideAttachment({ name: 'a.webp', mimeType: '', size: 9 }, null, small)).toEqual({
+      route: 'media',
+      mimeType: 'image/webp', // MIME が無くても拡張子の表で image/* に当たる
+    });
+  });
+
+  it('候補でなく media にも当たらなければ stored（PDF・音声・zip …。bytes を見ない）', () => {
+    expect(decideAttachment({ name: 'a.pdf', mimeType: '', size: 9 }, null, small)).toEqual({
+      route: 'stored',
+      mimeType: 'application/pdf',
+      size: 9,
+    });
+    expect(decideAttachment({ name: 'a.mp3', mimeType: 'audio/mpeg', size: 9 }, null, small)).toMatchObject({
+      route: 'stored',
+      mimeType: 'audio/mpeg',
+    });
+    expect(decideAttachment({ name: 'a.zip', mimeType: '', size: 9 }, null, small)).toMatchObject({
+      route: 'stored',
+      mimeType: 'application/octet-stream',
+    });
+    // 既定の方針でも PDF は stored、画像は media
+    expect(decideAttachment({ name: 'a.pdf', mimeType: 'application/pdf', size: 9 }, null).route).toBe('stored');
+    expect(decideAttachment({ name: 'a.jpg', mimeType: 'image/jpeg', size: 9 }, null).route).toBe('media');
+  });
+
+  it('media の上限（maxBytes）を超えた画像は stored。未指定なら大きさを見ない', () => {
+    expect(decideAttachment({ name: 'a.png', mimeType: 'image/png', size: 51 }, null, small)).toMatchObject({
+      route: 'stored',
+      size: 51,
+    });
+    expect(isDirectMedia({ name: 'a.png', size: 50 }, 'image/png', small)).toBe(true);
+    const noLimit: AttachmentPolicy = { ...small, media: { ...small.media, maxBytes: undefined } };
+    expect(decideAttachment({ name: 'a.png', mimeType: 'image/png', size: 10 ** 9 }, null, noLimit).route).toBe(
+      'media',
+    );
   });
 
   it('候補で UTF-8 なら inline（切り詰めつき）', () => {
@@ -157,5 +200,20 @@ describe('添付の門: 履歴に置く文', () => {
     expect(renderUserAttachmentNode(d, { name: 'a.png', path: 'p/a.png' })).toBe(
       '<user_attachment name="a.png" path="p/a.png">[Binary File: a.png]</user_attachment>',
     );
+  });
+
+  it('stored は置き場・種別・大きさと、方針の一言（MIME で引く。無ければ default）', () => {
+    const pdf = decideAttachment({ name: 'a.pdf', mimeType: 'application/pdf', size: 2048 }, null, small);
+    expect(renderUserAttachmentNode(pdf, { name: 'a.pdf', path: 'p/a.pdf' }, small)).toBe(
+      '<user_attachment name="a.pdf" path="p/a.pdf" bytes="2048">[File saved to the VFS, not attached: application/pdf, 2.0 KB. Use pdf_tool.]</user_attachment>',
+    );
+    const mp3 = decideAttachment({ name: 'a.mp3', mimeType: 'audio/mpeg', size: 1 }, null, small);
+    expect(renderUserAttachmentNode(mp3, { name: 'a.mp3', path: 'p/a.mp3' }, small)).toContain(
+      'Listen with attach_file.',
+    );
+    const zip = decideAttachment({ name: 'a.zip', mimeType: '', size: 1 }, null, small);
+    expect(renderUserAttachmentNode(zip, { name: 'a.zip', path: 'p/a.zip' }, small)).toContain('Inspect it.');
+    expect(hintFor('application/pdf')).toContain('pdf_extract'); // 既定の方針の一言
+    expect(renderUserAttachmentNode(pdf, { name: 'a.pdf', path: 'p/a.pdf' }, small)).not.toContain('[Binary File');
   });
 });
