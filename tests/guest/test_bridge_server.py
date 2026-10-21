@@ -214,3 +214,48 @@ def test_watcher_honours_per_root_ignore(tmp_path):
 
     scanner = mod.RootScanner("t", str(root), ["skipme"])
     assert _watched_rel(mod, root, scanner) == [".", "keep"]
+
+
+# ---------- 改名・移動（T-0691） ----------
+def test_move_renames_on_disk_and_updates_the_listing_at_once(srv, tmp_path):
+    d = srv["dir"]
+    (d / "A" / "sub").mkdir(parents=True)
+    (d / "A" / "x.txt").write_text("x", encoding="utf-8")
+    (d / "A" / "sub" / "y.txt").write_text("y", encoding="utf-8")
+    (d / "A2").mkdir()
+    (d / "A2" / "z.txt").write_text("z", encoding="utf-8")
+    srv["scanner"].scan()
+    rev_before = srv["scanner"].rev
+
+    res = srv["client"].post("/api/root_a/move", json={"from": "A", "to": "B/A"})
+    assert res.status_code == 200
+    assert res.json()["ok"] is True
+    assert res.json()["moved"] == 4  # A, A/sub, A/x.txt, A/sub/y.txt
+
+    assert not (d / "A").exists()
+    assert (d / "B" / "A" / "sub" / "y.txt").read_text(encoding="utf-8") == "y"
+    assert (d / "A2" / "z.txt").exists()  # 隣は巻き込まない
+
+    # 走査を待たずに一覧が動いている（次の調停が「新パスはホストに無い」と読まないため）
+    meta = srv["client"].get("/api/root_a/meta").json()
+    assert "B/A/x.txt" in meta and "B/A/sub/y.txt" in meta and "B/A" in meta and "B" in meta
+    assert "A/x.txt" not in meta and "A" not in meta
+    assert "A2/z.txt" in meta
+    assert srv["scanner"].rev > rev_before
+
+    # その後の走査でも同じ（ディスクと一覧が食い違っていない）
+    srv["scanner"].scan()
+    meta2 = srv["client"].get("/api/root_a/meta").json()
+    assert set(k for k in meta2 if k == "B" or k.startswith("B/")) == {"B", "B/A", "B/A/sub", "B/A/x.txt", "B/A/sub/y.txt"}
+
+
+def test_move_refuses_bad_requests(srv):
+    c = srv["client"]
+    assert c.post("/api/root_a/move", json={"from": "", "to": "x"}).status_code == 400
+    assert c.post("/api/root_a/move", json={"from": "nope.txt", "to": "x.txt"}).status_code == 404
+    assert c.post("/api/root_a/move", json={"from": "a.txt", "to": "a.txt"}).status_code == 409  # 行き先が在る
+    assert c.post("/api/root_a/move", json={"from": "a.txt", "to": "../out.txt"}).status_code == 400
+    (srv["dir"] / "D").mkdir()
+    srv["scanner"].scan()
+    assert c.post("/api/root_a/move", json={"from": "D", "to": "D/inner"}).status_code == 400
+    assert (srv["dir"] / "a.txt").exists()

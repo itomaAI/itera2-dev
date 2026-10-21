@@ -36,7 +36,7 @@ import time
 import uuid
 from pathlib import Path
 
-VERSION = "3.7.0"
+VERSION = "3.8.0"
 # long-poll（変更があるまで応答を保留する）の上限と刻み。
 # 刻みは応答の遅れの下限になるので細かく、ただし空回りが目に見えない程度に。
 MAX_LONG_POLL_SEC = 60.0
@@ -257,6 +257,34 @@ class RootScanner:
             self.meta.pop(rel, None)
             self.dirty = True
             self.rev += 1
+
+    def move(self, old_rel, new_rel):
+        """改名・移動を一覧に即時に反映する（T-0691）。
+
+        次の走査を待つと、その間の調停が「新パスはホストに無い」と読んで VFS 側を消し、次の周で
+        stub を作り直す（PUT の直後と同じ往復）。同期デーモンは onMove の直後に調停するので、
+        一覧はここで動かしておく。old_rel そのものと old_rel/ 配下を同じ相対位置で new_rel の下へ。
+        """
+        with self.lock:
+            moved = {}
+            for rel in list(self.meta.keys()):
+                if rel == old_rel or rel.startswith(old_rel + "/"):
+                    moved[new_rel + rel[len(old_rel) :]] = self.meta.pop(rel)
+            self.meta.update(moved)
+            for rel in moved:
+                self.tombstones.pop(rel, None)
+            # 行き先のために作った親ディレクトリも載せる（走査を待たせない）
+            parent = new_rel.rsplit("/", 1)[0] if "/" in new_rel else ""
+            while parent and parent not in self.meta:
+                try:
+                    mtime = int(os.stat(self.path / parent).st_mtime * 1000)
+                except OSError:
+                    break
+                self.meta[parent] = {"kind": "directory", "size": 0, "updatedAt": mtime, "hash": None}
+                parent = parent.rsplit("/", 1)[0] if "/" in parent else ""
+            self.dirty = True
+            self.rev += 1
+            return len(moved)
 
     def touch(self):
         with self.lock:
@@ -545,6 +573,34 @@ def build_app(bridge):
             raise HTTPException(status_code=404, detail="No such file")
         scanner.mark_deleted(rel)
         return {"ok": True}
+
+    @app.post("/api/{root}/move")
+    def move_path(root: str, payload: dict):
+        """改名・移動（T-0691）。同期デーモンの onMove が呼ぶ。VFS 側を動かす**前**に呼ばれるので、
+        ここで動かせなければ 4xx を返す（デーモンは false を返し、OS が実体化してから動かす）。
+        """
+        scanner = get_scanner(root)
+        old_rel = str(payload.get("from") or "").strip("/")
+        new_rel = str(payload.get("to") or "").strip("/")
+        if not old_rel or not new_rel:
+            raise HTTPException(status_code=400, detail="from / to are required")
+        src = resolve(scanner, old_rel)
+        dst = resolve(scanner, new_rel)
+        if src == scanner.path or dst == scanner.path:
+            raise HTTPException(status_code=400, detail="The root itself cannot be moved")
+        if not src.exists():
+            raise HTTPException(status_code=404, detail="No such file")
+        if dst.exists():
+            raise HTTPException(status_code=409, detail="The destination already exists")
+        if src in dst.parents:
+            raise HTTPException(status_code=400, detail="Cannot move a directory into itself")
+        dst.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            os.replace(src, dst)
+        except OSError:
+            shutil.move(str(src), str(dst))
+        moved = scanner.move(old_rel, new_rel)
+        return {"ok": True, "moved": moved}
 
     @app.post("/api/{root}/verify")
     def verify(root: str, payload: dict):
