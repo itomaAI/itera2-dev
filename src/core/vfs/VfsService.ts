@@ -70,39 +70,84 @@ export class VfsService {
     return this.providerManager;
   }
 
-  public async _hydrateIfNeeded(principal: Principal, srcPath: string, destPath: string): Promise<void> {
-    if (!this.providerManager) return;
-
-    const srcInfo = this.providerManager.findProviderForPath(srcPath);
-    const destInfo = this.providerManager.findProviderForPath(destPath);
-
-    if (srcInfo?.pid === destInfo?.pid) return; // プロバイダが同じなら実体化不要
-    if (!srcInfo) return; // 移動元にプロバイダが存在しなければ実体化不要
-
+  /**
+   * パスを変える操作（改名・移動・ゴミ箱・復元・複製）の前に、部分木の stub をすべて実体化する（T-0689）。
+   *
+   * ★ 移動元と移動先のプロバイダが同じでも実体化する。
+   *   以前は「同じプロバイダなら向こうで追従できる」として飛ばしていたが、追従できるプロバイダは 1 本も無い
+   *   （firebase_sync / gdrive_sync / local_bridge はいずれもパスを鍵にした 3-way 照合で、
+   *   ディレクトリの改名は親 1 件の DETACH / ATTACH しか出ない）。stub の中身を取りに行く鍵はパスだけなので、
+   *   パスを変えた瞬間に新パスでは取れず、旧パスは次の照合で「ローカルで消された」と読まれて向こう側からも消える
+   *   —— 唯一の実体が失われる（ミャク楽で実際に起きた）。
+   * ★ 1 本でも取れなければ VfsError('ESTUB') を投げ、操作そのものを止める（何も動かさない）。
+   *   取れない stub を運ぶと、その時点で中身を取り戻す手段が無くなる。以前は warn して続行していた。
+   * ★ 量では断らない（2026-10-21 山内さん）。「向こう側で動かす」は利用者にはできないので、断ると詰む。
+   *   遅くても落とし切る。
+   * ★ 例外は、プロバイダ自身が「向こう側でも動かせる」と申し出ている改名・移動（`opts.delegateMove`。
+   *   RenameOp だけが付ける）。同じプロバイダの中で、行き先がゴミ箱でなく、動かすのがそのプロバイダ自身でなければ、
+   *   先に onMove を頼み、true なら実体化せずに動かす（向こうを先に動かし、成功してから手元を動かす。
+   *   逆だと手元の巻き戻しが要る）。false／例外は「何も変えていない」と読み、実体化の経路に戻る。
+   *   複製・ゴミ箱・復元・プロバイダ跨ぎは常に実体化（複製には向こうに口が無く、trash/ は同期の外）。
+   */
+  public async _hydrateIfNeeded(
+    principal: Principal,
+    srcPath: string,
+    destPath: string,
+    opts: { delegateMove?: boolean } = {},
+  ): Promise<void> {
     const id = this.pathResolver.getIdByPath(srcPath);
     if (!id) return;
 
-    const traverseAndHydrate = async (nodeId: string, currentPath: string) => {
+    if (opts.delegateMove && (await this._delegateMove(principal, srcPath, destPath))) return;
+
+    const stubs: string[] = [];
+    const collect = (nodeId: string, currentPath: string) => {
       const node = this.nodeStore.getNode(nodeId);
       if (!node) return;
-
       if (node.kind === 'file') {
-        if (node.meta.syncState === 'stub') {
-          try {
-            await this.readBlob(principal, currentPath);
-          } catch (e) {
-            console.warn(`[VfsService] Failed to hydrate ${currentPath} before moving/copying:`, e);
-          }
-        }
+        if (node.meta.syncState === 'stub') stubs.push(currentPath);
       } else if (node.kind === 'directory') {
-        const children = this.nodeStore.getChildren(nodeId);
-        for (const child of children) {
-          await traverseAndHydrate(child.id, `${currentPath}/${child.name}`);
-        }
+        for (const child of this.nodeStore.getChildren(nodeId)) collect(child.id, `${currentPath}/${child.name}`);
       }
     };
+    collect(id, srcPath);
+    if (stubs.length === 0) return;
 
-    await traverseAndHydrate(id, srcPath);
+    if (!this.providerManager) {
+      throw new VfsError(
+        'ESTUB',
+        `Cannot move or copy ${srcPath} to ${destPath}: ${stubs[0]} has no contents on this device and no provider can fetch it. Nothing was changed.`,
+      );
+    }
+
+    for (const path of stubs) {
+      try {
+        await this.readBlob(principal, path);
+      } catch (e: any) {
+        throw new VfsError(
+          'ESTUB',
+          `Cannot move or copy ${srcPath} to ${destPath}: the contents of ${path} are not on this device and could not be fetched` +
+            ` (${stubs.length} stub file(s) under ${srcPath}). Nothing was changed. Fetch it first (is its sync provider running?)` +
+            ` or delete it permanently. Reason: ${e?.message || e}`,
+        );
+      }
+    }
+  }
+
+  /** 改名・移動を担当プロバイダに任せられるか試す（T-0689）。条件が揃わなければ頼まずに false */
+  private async _delegateMove(principal: Principal, srcPath: string, destPath: string): Promise<boolean> {
+    if (!this.providerManager) return false;
+    if (destPath === 'trash' || destPath.startsWith('trash/')) return false;
+    if (this.pathResolver.getIdByPath(destPath) !== undefined) return false; // 行き先が在れば改名は失敗する。向こうを先に動かさない
+
+    const srcInfo = this.providerManager.findProviderForPath(srcPath);
+    const destInfo = this.providerManager.findProviderForPath(destPath);
+    if (!srcInfo || !destInfo || srcInfo.pid !== destInfo.pid) return false;
+    if (!srcInfo.capabilities.move) return false;
+    // プロバイダ自身の改名（衝突の写し `(Conflicted Copy)` など）は手元だけの操作。向こうへ跳ね返さない（エコー）
+    if (principal.id === srcInfo.pid) return false;
+
+    return await this.providerManager.moveContent(srcPath, destPath);
   }
 
   exists(principal: Principal, path: string): boolean {

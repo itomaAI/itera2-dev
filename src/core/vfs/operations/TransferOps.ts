@@ -99,7 +99,8 @@ export class RenameOp extends BaseOperation<{ oldPath: string; newPath: string; 
     if (!normOld) throw new VfsError('EINVAL', 'Cannot rename root.');
     if (!normNew) throw new VfsError('EINVAL', 'Invalid destination path.');
 
-    await this.ctx.vfs._hydrateIfNeeded(principal, normOld, normNew);
+    // 改名・移動だけはプロバイダに任せられる（onMove を持つとき。T-0689）
+    await this.ctx.vfs._hydrateIfNeeded(principal, normOld, normNew, { delegateMove: true });
 
     const parts = normNew.split('/');
     const newName = parts.pop()!;

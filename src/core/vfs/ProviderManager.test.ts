@@ -183,3 +183,71 @@ describe('ProviderManager listMounts', () => {
     expect(ctx.manager.listMounts()[0].mountPath).toBe('drive');
   });
 });
+
+describe('ProviderManager capabilities / moveContent（T-0689）', () => {
+  it('registerProvider は申し出を持ち、既定は move: false。listMounts に出る', () => {
+    const ctx = setup();
+    ctx.manager.registerProvider('', 'root_sync_daemon');
+    ctx.manager.registerProvider('drive', 'gdrive_sync_daemon', { move: true });
+
+    const byPath = Object.fromEntries(ctx.manager.listMounts().map((m) => [m.mountPath, m.capabilities]));
+    expect(byPath['']).toEqual({ move: false });
+    expect(byPath['drive']).toEqual({ move: true });
+  });
+
+  it('listMounts の capabilities は写し（外から書いても表は変わらない）', () => {
+    const ctx = setup();
+    ctx.manager.registerProvider('drive', 'gdrive_sync_daemon', { move: true });
+    ctx.manager.listMounts()[0].capabilities.move = false;
+    expect(ctx.manager.listMounts()[0].capabilities.move).toBe(true);
+  });
+
+  it('move を申し出ていないプロバイダには頼まず false', async () => {
+    const ctx = setup();
+    ctx.registerProcess('sync');
+    ctx.manager.registerProvider('', 'sync');
+    const calls: any[] = [];
+    (ctx.manager as any).transport.invokeGuest = async (...args: any[]) => {
+      calls.push(args);
+      return true;
+    };
+    expect(await ctx.manager.moveContent('a', 'b')).toBe(false);
+    expect(calls).toHaveLength(0);
+  });
+
+  it('申し出があり生きていれば fs:move_content を頼み、true のときだけ true', async () => {
+    const ctx = setup();
+    ctx.registerProcess('sync');
+    ctx.manager.registerProvider('', 'sync', { move: true });
+    const calls: any[] = [];
+    (ctx.manager as any).transport.invokeGuest = async (pid: string, name: string, payload: any) => {
+      calls.push([pid, name, payload]);
+      return payload.oldPath === 'ok/x' ? true : 'not-a-boolean';
+    };
+    expect(await ctx.manager.moveContent('ok/x', 'ok/y')).toBe(true);
+    expect(await ctx.manager.moveContent('ng/x', 'ng/y')).toBe(false);
+    expect(calls).toEqual([
+      ['sync', 'fs:move_content', { oldPath: 'ok/x', newPath: 'ok/y' }],
+      ['sync', 'fs:move_content', { oldPath: 'ng/x', newPath: 'ng/y' }],
+    ]);
+  });
+
+  it('担当が死んでいれば頼まず false（登録は残る）', async () => {
+    const ctx = setup();
+    ctx.manager.registerProvider('', 'sync', { move: true });
+    (ctx.manager as any).transport.invokeGuest = async () => {
+      throw new Error('should not be called');
+    };
+    expect(await ctx.manager.moveContent('a', 'b')).toBe(false);
+  });
+
+  it('向こうが例外を投げたら false（何も変えていないと読む）', async () => {
+    const ctx = setup();
+    ctx.registerProcess('sync');
+    ctx.manager.registerProvider('', 'sync', { move: true });
+    (ctx.manager as any).transport.invokeGuest = async () => {
+      throw new Error('remote move failed');
+    };
+    expect(await ctx.manager.moveContent('a', 'b')).toBe(false);
+  });
+});

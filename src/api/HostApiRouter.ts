@@ -315,8 +315,9 @@ export class HostApiRouter {
     });
 
     // 新しいSync Provider API
-    t.registerHandler('fs:register_provider', async ({ path }, sourcePid) => {
-      d.vfs.getProviderManager()?.registerProvider(path, sourcePid);
+    // capabilities はブリッジが handlers の関数の有無から導いたもの（T-0689）。ゲストが直に書く値ではない
+    t.registerHandler('fs:register_provider', async ({ path, capabilities }, sourcePid) => {
+      d.vfs.getProviderManager()?.registerProvider(path, sourcePid, capabilities || {});
       return true;
     });
 
@@ -347,6 +348,7 @@ export class HostApiRouter {
       // 🔴 管轄の除外（根をマウントするデーモンが他プロバイダの部分木を避ける処理）は、
       //   alive ではなく **mountPath で判断すること**。相手が一時的に落ちている間に除外を外すと、
       //   取り込みが相手の管轄のディレクトリを削除し、その削除が利用者の実機まで伝播しうる。
+      // capabilities … 担当の申し出（move: 同じプロバイダ内の改名を向こう側でも動かせる。T-0689）
       return pm.listMounts().map((m) => ({ ...m, registered: true, alive: pm.isProviderAlive(m.pid) }));
     });
 
