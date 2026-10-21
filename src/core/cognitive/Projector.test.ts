@@ -183,7 +183,11 @@ describe('添付を組み立てられたとき', () => {
     const result = await (projector as any)._resolveMediaFileAnthropic(pdf, fakeVfs());
     expect(result).toEqual({
       ok: true,
-      value: { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: 'QUJD' } },
+      value: {
+        type: 'document',
+        source: { type: 'base64', media_type: 'application/pdf', data: 'QUJD' },
+        title: 'doc.pdf',
+      },
     });
   });
 
@@ -199,7 +203,11 @@ describe('添付を組み立てられたとき', () => {
     const result = await (projector as any)._resolveMediaFileAnthropic(media, fakeVfs({ text: 'ほんぶん' }));
     expect(result).toEqual({
       ok: true,
-      value: { type: 'document', source: { type: 'text', media_type: 'text/plain', data: 'ほんぶん' } },
+      value: {
+        type: 'document',
+        source: { type: 'text', media_type: 'text/plain', data: 'ほんぶん' },
+        title: 'note.txt',
+      },
     });
   });
 

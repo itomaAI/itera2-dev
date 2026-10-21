@@ -27,25 +27,32 @@ export function registerFSTools(registry: ToolRegistry): void {
   // 旧名（read_file / create_file / edit_file）は別名として残す（挙動は旧のまま。しばらくして外す）。
   // ------------------------------------------------------------------
 
+  // svg は XML（文字）なのでここに入れない（read で読める・attach_file は text 文書として送る。T-0690）
   const BINARY_EXTS =
-    /\.(png|jpg|jpeg|gif|webp|svg|ico|bmp|pdf|zip|tar|gz|7z|rar|mp3|wav|mp4|webm|ogg|wasm|bin|exe|dll|so|dylib|class|jar)$/i;
+    /\.(png|jpg|jpeg|gif|webp|ico|bmp|pdf|zip|tar|gz|7z|rar|mp3|wav|mp4|webm|ogg|wasm|bin|exe|dll|so|dylib|class|jar|docx|xlsx|pptx)$/i;
+  const PDF_PAGES_HINT =
+    'spawn system/services/pdf_tool.html and use pdf_info → pdf_extract → attach_file (pdf_pages only when the look matters, pdf_text for plain text)';
 
   const LEGACY_READ =
     '[read_file is a legacy name. Use <read> for text (line ranges) or <attach_file> for the whole file as media.]\n';
   const LEGACY_CREATE = '[create_file is a legacy name. Use <write> (overwrite="true" / append="true").]\n';
   const LEGACY_EDIT = '[edit_file is a legacy name. Use <edit>; for mode="append" use <write append="true">.]\n';
 
-  /** 添付の形で返す（attach_file の本体。read_file の旧挙動もこれ） */
+  /**
+   * 添付の形で返す（attach_file の本体。read_file の旧挙動もこれ）。
+   * 道具がするのは「履歴に media を積む」までで、**モデルに届くかは投影（プロバイダの対応 MIME・大きさ）が決める**。
+   * だから文は「積んだ」とだけ言い、届かなかったときは投影の注記がその場に出る（道具の成否と添付の成否は別。T-0690 山内さん）。
+   */
   function attachResult(vfs: VfsService, path: string): ToolResult {
     const stat = vfs.stat(AGENT_PRINCIPAL, path);
     if (stat.kind === 'directory') throw new ToolError(`${path} is a directory. attach_file takes a file.`);
     let mimeType = mimeOfPath(path);
     if (mimeType === 'application/octet-stream' && stat.mimeType) mimeType = stat.mimeType;
     const isPdf = mimeType === 'application/pdf';
-    let log = `Attached ${path} (${mimeType}, ${stat.size} bytes). The whole file is in the context.`;
+    const kind = mimeType.startsWith('text/') ? 'a text document' : 'media';
+    let log = `Placed ${path} (${mimeType}, ${stat.size} bytes) in the history as ${kind}. Whether the model receives it depends on the model (supported format and size limit); if it cannot be sent, a notice replaces it here.`;
     if (isPdf) {
-      log +=
-        ' Every page of the PDF was sent. To read selected pages next time, spawn system/services/pdf_tool.html and use pdf_info / pdf_pages / pdf_text.';
+      log += ` Every page of the PDF is included. To read selected pages next time, ${PDF_PAGES_HINT}.`;
     }
     return {
       log,
@@ -68,7 +75,7 @@ export function registerFSTools(registry: ToolRegistry): void {
       const mime = mimeOfPath(path);
       const hint =
         mime === 'application/pdf'
-          ? 'To read selected pages, spawn system/services/pdf_tool.html and use pdf_info / pdf_pages / pdf_text. To put the WHOLE document in the context, use <attach_file>.'
+          ? `To read selected pages, ${PDF_PAGES_HINT}. To put the WHOLE document in the context, use <attach_file>.`
           : 'Use <attach_file path="..."> to put the whole file in the context as media.';
       throw new ToolError(`${path} is not a text file (${why}). <read> returns text only. ${hint}`);
     };
@@ -261,7 +268,7 @@ export function registerFSTools(registry: ToolRegistry): void {
       if (!params.path) throw new ToolError("Attribute 'path' is required.");
       if (params.start !== undefined || params.end !== undefined || params.pages !== undefined) {
         throw new ToolError(
-          'attach_file has no range: the whole file is attached. For a line range use <read>; for PDF pages use pdf_tool (pdf_pages / pdf_text).',
+          'attach_file has no range: the whole file is attached. For a line range use <read>; for PDF pages use pdf_tool (pdf_info → pdf_extract → attach_file).',
         );
       }
       if (!vfs.exists(AGENT_PRINCIPAL, params.path)) throw new ToolError(`File not found.`);
@@ -322,7 +329,7 @@ export function registerFSTools(registry: ToolRegistry): void {
       log += `Size: ${stat.size} bytes\n`;
       // PDF のページ数はホストで数えない（pdf.js を持つのはゲストの pdf_tool。推測の数字を出さない）
       if (stat.kind === 'file' && /\.pdf$/i.test(stat.name || '')) {
-        log += `PDF: page count and text layer → <pdf_info> (spawn system/services/pdf_tool.html). <attach_file> sends every page.\n`;
+        log += `PDF: page count and text layer → <pdf_info> (spawn system/services/pdf_tool.html); selected pages → <pdf_extract> then <attach_file>. <attach_file> on the original sends every page.\n`;
       }
       log += `Created: ${new Date(stat.createdAt).toISOString()}\n`;
       log += `Updated: ${new Date(stat.updatedAt).toISOString()}\n`;

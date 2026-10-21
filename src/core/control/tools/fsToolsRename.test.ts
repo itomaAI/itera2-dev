@@ -63,7 +63,12 @@ describe('read', () => {
   });
   it('PDF は断って pdf_tool と attach_file へ', async () => {
     const { ctx } = fakeVfs({ 'd.pdf': '%PDF' });
-    await expect(tools().read.impl({ path: 'd.pdf' }, ctx)).rejects.toThrow(/pdf_tool.*pdf_pages.*<attach_file>/);
+    await expect(tools().read.impl({ path: 'd.pdf' }, ctx)).rejects.toThrow(/pdf_tool.*pdf_extract.*<attach_file>/);
+  });
+  it('svg は文字（XML）として読める', async () => {
+    const { ctx } = fakeVfs({ 'logo.svg': '<svg xmlns="http://www.w3.org/2000/svg"></svg>' });
+    const r = await tools().read.impl({ path: 'logo.svg' }, ctx);
+    expect(r.log).toContain('<svg');
   });
   it('拡張子がテキストでも NUL を含めば断る', async () => {
     const { ctx } = fakeVfs({ 'odd.txt': 'ab\0cd' });
@@ -78,16 +83,26 @@ describe('read', () => {
 });
 
 describe('attach_file', () => {
-  it('丸ごと media で返す。MIME はパスから', async () => {
-    const { ctx } = fakeVfs({ 'x.png': 'PNG', 'd.pdf': '%PDF', 'n.md': '# hi' });
+  it('丸ごと media で返す。MIME はパスから。文は「積んだ」だけで「成功」とは言わない', async () => {
+    const { ctx } = fakeVfs({ 'x.png': 'PNG', 'd.pdf': '%PDF', 'n.md': '# hi', 'a.pptx': 'PK', 'logo.svg': '<svg/>' });
     const t = tools();
     const png = await t.attach_file.impl({ path: 'x.png' }, ctx);
     expect(png.media).toEqual({ path: 'x.png', mimeType: 'image/png', metadata: {} });
+    expect(png.log).toMatch(
+      /Placed x\.png .* in the history as media\. Whether the model receives it depends on the model/,
+    );
+    expect(png.log).not.toMatch(/whole file is in the context/);
     const pdf = await t.attach_file.impl({ path: 'd.pdf' }, ctx);
     expect(pdf.media.mimeType).toBe('application/pdf');
-    expect(pdf.log).toMatch(/Every page of the PDF was sent.*pdf_tool/);
+    expect(pdf.log).toMatch(/Every page of the PDF is included.*pdf_info → pdf_extract → attach_file/);
     const md = await t.attach_file.impl({ path: 'n.md' }, ctx);
     expect(md.media.mimeType).toBe('text/plain');
+    expect(md.log).toContain('as a text document');
+    // Office は正しい型（octet-stream ではない）。svg は文字の文書
+    const pptx = await t.attach_file.impl({ path: 'a.pptx' }, ctx);
+    expect(pptx.media.mimeType).toBe('application/vnd.openxmlformats-officedocument.presentationml.presentation');
+    const svg = await t.attach_file.impl({ path: 'logo.svg' }, ctx);
+    expect(svg.media.mimeType).toBe('text/plain');
   });
   it('範囲の属性が付いていたら断る（黙って無視しない）', async () => {
     const { ctx } = fakeVfs({ 'd.pdf': '%PDF' });

@@ -72,6 +72,7 @@ export const ATTACHMENT_POLICY: AttachmentPolicy = {
       'log',
       'sh',
       'py',
+      'svg', // XML。画像ではなく文字として扱う（media の image/* に当てない。T-0690）
     ],
     mimes: [
       'text/*',
@@ -84,6 +85,7 @@ export const ATTACHMENT_POLICY: AttachmentPolicy = {
       'application/typescript',
       'application/x-sh',
       'application/x-ndjson',
+      'image/svg+xml',
     ],
     maxLines: 800,
     maxBytes: 64 * 1024,

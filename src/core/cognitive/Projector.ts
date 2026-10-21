@@ -29,6 +29,11 @@ export interface LlmCapabilities {
  */
 export type MediaAttachFailure = 'missing' | 'no_credentials' | 'upload_failed';
 
+/** Anthropic の document ブロックの `title`（ファイル名。パスの最後の段） */
+export function documentTitle(path: string): string {
+  return (path || '').split('/').pop() || path;
+}
+
 export type MediaAttachResult<T> = { ok: true; value: T } | { ok: false; reason: MediaAttachFailure };
 
 /**
@@ -851,12 +856,16 @@ export class AnthropicProjector extends BaseProjector {
         const text = await blob.text();
         return {
           ok: true,
-          value: { type: 'document', source: { type: 'text', media_type: 'text/plain', data: text } },
+          value: {
+            type: 'document',
+            source: { type: 'text', media_type: 'text/plain', data: text },
+            title: documentTitle(mediaObj.path),
+          },
         };
       }
 
       const base64 = await this._blobToBase64(blob);
-      return { ok: true, value: this._buildAnthropicContentBlock(base64, mimeType) };
+      return { ok: true, value: this._buildAnthropicContentBlock(base64, mimeType, documentTitle(mediaObj.path)) };
     } catch (e) {
       console.error('[Projector] Anthropic media encode failed:', e);
       return { ok: false, reason: 'missing' };
@@ -883,7 +892,10 @@ export class AnthropicProjector extends BaseProjector {
 
     const cached = mediaObj.metadata?.relay?.anthropic;
     if (cached && cached.fileId) {
-      return { ok: true, value: this._buildAnthropicFileBlock(cached.fileId, mediaObj.mimeType) };
+      return {
+        ok: true,
+        value: this._buildAnthropicFileBlock(cached.fileId, mediaObj.mimeType, documentTitle(mediaObj.path)),
+      };
     }
 
     if (!vfs.exists(SYSTEM_PRINCIPAL, mediaObj.path)) return { ok: false, reason: 'missing' };
@@ -915,7 +927,7 @@ export class AnthropicProjector extends BaseProjector {
 
       if (!mediaObj.metadata) mediaObj.metadata = {};
       mediaObj.metadata.relay = { ...(mediaObj.metadata.relay || {}), anthropic: { fileId: uploaded.id } };
-      return { ok: true, value: this._buildAnthropicFileBlock(uploaded.id, mimeType) };
+      return { ok: true, value: this._buildAnthropicFileBlock(uploaded.id, mimeType, documentTitle(mediaObj.path)) };
     } catch (e) {
       if (signal?.aborted) throw e;
       console.warn('[Projector] Relay file upload failed; embedding inline instead:', e);
@@ -924,15 +936,20 @@ export class AnthropicProjector extends BaseProjector {
   }
 
   /** Files API に上げた添付を指すブロック（`source.type: 'file'`）。 */
-  private _buildAnthropicFileBlock(fileId: string, mimeType: string): any {
+  private _buildAnthropicFileBlock(fileId: string, mimeType: string, title?: string): any {
     if ((mimeType || '').startsWith('image/')) return { type: 'image', source: { type: 'file', file_id: fileId } };
-    return { type: 'document', source: { type: 'file', file_id: fileId } };
+    return { type: 'document', source: { type: 'file', file_id: fileId }, ...(title ? { title } : {}) };
   }
 
-  private _buildAnthropicContentBlock(base64: string, mimeType: string): any {
+  /** 文書（PDF など）には `title` を付ける —— 無いと上流が 'file' と呼び、どの添付か並び順でしか分からない（T-0690）。画像には無い */
+  private _buildAnthropicContentBlock(base64: string, mimeType: string, title?: string): any {
     if (mimeType.startsWith('image/')) {
       return { type: 'image', source: { type: 'base64', media_type: mimeType, data: base64 } };
     }
-    return { type: 'document', source: { type: 'base64', media_type: mimeType, data: base64 } };
+    return {
+      type: 'document',
+      source: { type: 'base64', media_type: mimeType, data: base64 },
+      ...(title ? { title } : {}),
+    };
   }
 }

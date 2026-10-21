@@ -58,7 +58,10 @@ describe('添付の門: 候補の判定', () => {
     expect(mimeOfPath('x.JPG')).toBe('image/jpeg');
     expect(mimeOfPath('x.pdf')).toBe('application/pdf');
     expect(mimeOfPath('x.md')).toBe('text/plain');
-    expect(mimeOfPath('x.zip')).toBe('application/octet-stream');
+    expect(mimeOfPath('x.zip')).toBe('application/zip');
+    expect(mimeOfPath('x.pptx')).toBe('application/vnd.openxmlformats-officedocument.presentationml.presentation');
+    expect(mimeOfPath('x.svg')).toBe('text/plain'); // XML は文字として扱う
+    expect(mimeOfPath('x.bin')).toBe('application/octet-stream');
   });
 });
 
@@ -95,14 +98,17 @@ describe('添付の門: 経路の決定', () => {
     expect(decideAttachment({ name: 'a.png', mimeType: 'image/png', size: 9 }, null, small)).toEqual({
       route: 'media',
       mimeType: 'image/png',
+      size: 9,
     });
     expect(decideAttachment({ name: 'a.png', mimeType: '', size: 9 }, null, small)).toEqual({
       route: 'media',
       mimeType: 'image/png',
+      size: 9,
     });
     expect(decideAttachment({ name: 'a.webp', mimeType: '', size: 9 }, null, small)).toEqual({
       route: 'media',
       mimeType: 'image/webp', // MIME が無くても拡張子の表で image/* に当たる
+      size: 9,
     });
   });
 
@@ -117,6 +123,10 @@ describe('添付の門: 経路の決定', () => {
       mimeType: 'audio/mpeg',
     });
     expect(decideAttachment({ name: 'a.zip', mimeType: '', size: 9 }, null, small)).toMatchObject({
+      route: 'stored',
+      mimeType: 'application/zip',
+    });
+    expect(decideAttachment({ name: 'a.bin', mimeType: '', size: 9 }, null, small)).toMatchObject({
       route: 'stored',
       mimeType: 'application/octet-stream',
     });
@@ -195,11 +205,17 @@ describe('添付の門: 履歴に置く文', () => {
     expect(sjis).toContain('not valid UTF-8');
   });
 
-  it('media は従来の注記のまま', () => {
+  it('media の注記には種別と大きさが付く', () => {
     const d = decideAttachment({ name: 'a.png', mimeType: 'image/png', size: 9 }, null, small);
     expect(renderUserAttachmentNode(d, { name: 'a.png', path: 'p/a.png' })).toBe(
-      '<user_attachment name="a.png" path="p/a.png">[Binary File: a.png]</user_attachment>',
+      '<user_attachment name="a.png" path="p/a.png" bytes="9">[Binary File: a.png (image/png, 9 B)]</user_attachment>',
     );
+  });
+
+  it('svg は画像ではなく文字の候補（既定の方針。image/* の media に当てない）', () => {
+    expect(isInlineCandidate({ name: 'logo.svg', mimeType: 'image/svg+xml', size: 5 })).toBe(true);
+    const d = decideAttachment({ name: 'logo.svg', mimeType: 'image/svg+xml', size: 5 }, enc('<svg/>'));
+    expect(d.route).toBe('inline');
   });
 
   it('stored は置き場・種別・大きさと、方針の一言（MIME で引く。無ければ default）', () => {
