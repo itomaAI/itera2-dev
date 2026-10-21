@@ -7,7 +7,13 @@
  *   - どのファイルを「文字として本文に展開する」候補にするか（拡張子・MIME）
  *   - 展開するとき先頭の何行・何バイトまでにするか（残りは `read` で読ませる）
  *   - 何バイトを超えたら展開そのものをやめるか
+ *   - 文字でないもののうち、どれを履歴に media として置く（投影がモデルへ送る）か（`media`）。それ以外は VFS に置いて
+ *     パスと一言だけ伝える（`stored`）。読むかどうか・どう読むかはモデルが決める（`attach_file` / `pdf_tool`）
  * を決める。展開は UTF-8 として読めるものだけ（方針ではなく門の規則）。
+ *
+ * media は履歴に残る限り毎ターン送り直される（投影は毎回 MIME と大きさを見る）。PDF を既定で media にしないのは
+ * そのため（35 ページを 1 度貼ると以後のターン全部にその費用が乗る）と、OS 側で解析してから渡す方がよい PDF が多いため
+ * （フォントを埋め込まない積算ソフトの出力は、モデル側の PDF 処理で名称が消える —— `pdf_text` なら読める。2026-10-21 T-0690）。
  *
  * ここは利用者に触らせない（ゲストの `system/config/` には出さない）。壊れると会話の入口が壊れる割に、
  * 調整したい値ではないため（T-0672 山内さん）。`wake_policy.ts` と同じ置き方で、ミャク楽とは値だけが違いうる。
@@ -25,8 +31,23 @@ export interface InlineTextPolicy {
   skipAboveBytes: number;
 }
 
+export interface MediaPolicy {
+  /** 履歴に media として置く MIME。`image/*` のように `/*` で前方一致、それ以外は完全一致 */
+  directMimes: readonly string[];
+  /** MIME が分からない／octet-stream のときに media とみなす拡張子（小文字・ドット無し） */
+  directExtensions: readonly string[];
+  /** これを超えるものは media にせず stored。未指定なら大きさを見ない（投影側の上限 `maxMediaSizeMB` が効く） */
+  maxBytes?: number;
+  /**
+   * stored の注記に添える一言（モデルが読む。英語）。鍵は MIME（`/*` の前方一致か完全一致）。当たらなければ `default`。
+   * ここに置くのは「どう読めばよいか」であって、読むかどうかの判断ではない
+   */
+  hints: Readonly<Record<string, string>>;
+}
+
 export interface AttachmentPolicy {
   inline: InlineTextPolicy;
+  media: MediaPolicy;
 }
 
 export const ATTACHMENT_POLICY: AttachmentPolicy = {
@@ -67,5 +88,19 @@ export const ATTACHMENT_POLICY: AttachmentPolicy = {
     maxLines: 800,
     maxBytes: 64 * 1024,
     skipAboveBytes: 2 * 1024 * 1024,
+  },
+  media: {
+    directMimes: ['image/*'],
+    directExtensions: ['png', 'jpg', 'jpeg', 'gif', 'webp'],
+    // 画像の大きさは見ない（モデル側で一定の解像度に落とされるので、容量とトークンは比例しない。2026-10-21 山内さん）。
+    // 上限を置きたい配布物は数値を入れる
+    maxBytes: undefined,
+    hints: {
+      'application/pdf':
+        'To read it whole, use <attach_file> (a PDF keeps its text layer). For a large one, spawn system/services/pdf_tool.html and use pdf_info → pdf_extract → attach_file (or pdf_text for plain text).',
+      'audio/*': 'To listen to it, use <attach_file> (if the model accepts audio).',
+      'video/*': 'To watch it, use <attach_file> (if the model accepts video).',
+      default: 'Inspect it from a script, or use <attach_file> if the model accepts this type.',
+    },
   },
 };

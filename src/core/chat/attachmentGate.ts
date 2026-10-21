@@ -5,7 +5,9 @@
  *   'inline'    … 文字として本文（`<user_attachment>` の中）に展開する。先頭の N 行・M バイトまで。
  *                 残りは VFS の実体を `read` で読ませる
  *   'reference' … 文字ファイルだが展開しない（大きすぎる／UTF-8 でない）。置き場と理由だけを伝える
- *   'media'     … 画像・PDF など。`{media}` として投影に渡す（送れるかどうかは投影側の門が決める）
+ *   'media'     … 画像など、方針の `media.directMimes` に当たるもの。`{media}` として投影に渡す（送れるかどうかは投影側の門が決める）
+ *   'stored'    … それ以外（PDF・音声・動画・Office・zip …）。VFS に置いてパスと一言だけ伝える。読むならモデルが
+ *                 `attach_file` / `pdf_tool` で（T-0690。既定では履歴に入れない）
  *
  * 画面経路（`EventOrchestrator._handleChatSend`）と API 経路（`chat.append` の `attachments`）の両方が
  * ここを呼ぶ。判定を 2 か所に置かない。数字と拡張子の列は `config/attachment_policy.ts`（配布物ごと）。
@@ -39,6 +41,7 @@ export type ReferenceReason = 'too_large' | 'binary' | 'not_utf8' | 'unreadable'
 
 export type AttachmentDecision =
   | { route: 'media'; mimeType: string }
+  | { route: 'stored'; mimeType: string; size: number }
   | { route: 'inline'; clip: ClipResult }
   | { route: 'reference'; reason: ReferenceReason; size: number; totalLines: number | null };
 
@@ -86,6 +89,27 @@ function mimeMatches(mime: string, patterns: readonly string[]): boolean {
     } else if (base === p.toLowerCase()) return true;
   }
   return false;
+}
+
+/** 履歴に media として置くか（方針の `media.directMimes` / `directExtensions` に当たり、`maxBytes` 以内） */
+export function isDirectMedia(
+  info: AttachmentInfo,
+  mimeType: string,
+  policy: AttachmentPolicy = ATTACHMENT_POLICY,
+): boolean {
+  const m = policy.media;
+  const hit = mimeMatches(mimeType, m.directMimes) || m.directExtensions.includes(extensionOf(info.name));
+  if (!hit) return false;
+  return m.maxBytes === undefined || info.size <= m.maxBytes;
+}
+
+/** stored の注記に添える一言（方針の `media.hints`。MIME で引き、当たらなければ default） */
+export function hintFor(mimeType: string, policy: AttachmentPolicy = ATTACHMENT_POLICY): string {
+  const hints = policy.media.hints;
+  for (const key of Object.keys(hints)) {
+    if (key !== 'default' && mimeMatches(mimeType, [key])) return hints[key];
+  }
+  return hints.default || '';
 }
 
 /** 文字として本文に展開する候補か（拡張子か MIME のどちらかが方針に当たる） */
@@ -171,7 +195,9 @@ export function decideAttachment(
   policy: AttachmentPolicy = ATTACHMENT_POLICY,
 ): AttachmentDecision {
   if (!isInlineCandidate(info, policy)) {
-    return { route: 'media', mimeType: info.mimeType || mimeOfPath(info.name, policy) };
+    const mimeType = info.mimeType || mimeOfPath(info.name, policy);
+    if (isDirectMedia(info, mimeType, policy)) return { route: 'media', mimeType };
+    return { route: 'stored', mimeType, size: info.size };
   }
   if (info.size > policy.inline.skipAboveBytes) {
     return {
@@ -213,6 +239,11 @@ export function renderUserAttachmentNode(
   const attrs = [`name="${file.name}"`, `path="${file.path}"`];
   if (decision.route === 'media') {
     return `<user_attachment ${attrs.join(' ')}>[Binary File: ${file.name}]</user_attachment>`;
+  }
+  if (decision.route === 'stored') {
+    attrs.push(`bytes="${decision.size}"`);
+    const hint = hintFor(decision.mimeType, policy);
+    return `<user_attachment ${attrs.join(' ')}>[File saved to the VFS, not attached: ${decision.mimeType}, ${formatBytes(decision.size)}.${hint ? ' ' + hint : ''}]</user_attachment>`;
   }
   if (decision.route === 'reference') {
     if (decision.totalLines !== null) attrs.push(`lines="${decision.totalLines}"`);

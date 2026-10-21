@@ -103,8 +103,8 @@ export async function resolveAttachments(
   const out: ResolvedAttachment[] = [];
   for (const path of paths) {
     const probe = decideAttachment({ name: path, size: 0 }, null);
-    if (probe.route === 'media') {
-      out.push({ path, decision: probe });
+    if (probe.route === 'media' && ATTACHMENT_POLICY.media.maxBytes === undefined) {
+      out.push({ path, decision: probe }); // 大きさを見ない方針なら画像の実体に触らない
       continue;
     }
     let decision: AttachmentDecision;
@@ -112,7 +112,11 @@ export async function resolveAttachments(
       const f = await read(path);
       if (!f) decision = decideAttachment({ name: path, size: 0 }, null);
       else {
-        const bytes = f.size <= ATTACHMENT_POLICY.inline.skipAboveBytes ? await f.bytes() : null;
+        // 中身を読むのは文字の候補だけ（stored・media は大きさだけ）
+        const bytes =
+          probe.route !== 'media' && probe.route !== 'stored' && f.size <= ATTACHMENT_POLICY.inline.skipAboveBytes
+            ? await f.bytes()
+            : null;
         decision = decideAttachment({ name: path, size: f.size }, bytes);
       }
     } catch {

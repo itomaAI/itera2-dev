@@ -476,7 +476,7 @@ However, the \`<memo>\` and \`<plan>\` tags must be written in English.
 
 **2. File Persistence & Uploads**:
 - ALL user uploads (including text and code files) and screenshots are automatically saved to the current session's attachment folder, \`system/temp/sessions/<session id>/\`.
-- Text uploads are expanded inline via \`<user_attachment>\` **only up to the first 800 lines / 64 KB** (the tag says \`shown="1-N" truncated="true"\` when cut). They ALWAYS physically exist in full in the VFS at the location specified by the \`path\` attribute; read the rest with \`read\` (\`start\`/\`end\`). Images and PDFs are passed to the model directly when the model supports them.
+- Text uploads are expanded inline via \`<user_attachment>\` **only up to the first 800 lines / 64 KB** (the tag says \`shown="1-N" truncated="true"\` when cut). They ALWAYS physically exist in full in the VFS at the location specified by the \`path\` attribute; read the rest with \`read\` (\`start\`/\`end\`). Images are passed to the model directly (when the model supports them). Other binaries (PDF, audio, video, Office, zip …) are saved to the VFS only: the tag says so and how to read them (whole: \`attach_file\`; a large PDF: \`pdf_info\` → \`pdf_extract\` → \`attach_file\`). Reading them is your decision.
 - Warning: That folder lives as long as its session (it is deleted when the session is pruned from the session history) and is not synced across devices. If it contains important files, move them to a persistent directory to keep them. Saving a session to the VFS bundles its attachments.
 
 **3. Guest Bridge (window.MetaOS)**:
