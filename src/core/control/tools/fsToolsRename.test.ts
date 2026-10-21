@@ -191,3 +191,30 @@ describe('旧名（別名）', () => {
     expect(store['a.md']).toBe('line 1\nline 2\nline 3\nline 4');
   });
 });
+
+describe('delete_file', () => {
+  const vfsWith = () => {
+    const calls: any[] = [];
+    const ctx = {
+      vfs: { deleteFile: async (_p: unknown, path: string, opts: any) => (calls.push([path, opts]), `ok ${path}`) },
+    } as any;
+    return { ctx, calls };
+  };
+  it('既定はゴミ箱へ（permanent を付けない）', async () => {
+    const { ctx, calls } = vfsWith();
+    await tools().delete_file.impl({ path: 'a.md' }, ctx);
+    expect(calls).toEqual([['a.md', {}]]);
+  });
+  it('permanent="true" で永久削除（stub の逃げ道・T-0689）', async () => {
+    const { ctx, calls } = vfsWith();
+    const r = await tools().delete_file.impl({ path: 'a.md', permanent: 'true' }, ctx);
+    expect(calls).toEqual([['a.md', { permanent: true }]]);
+    expect(r.ui).toContain('Permanently');
+  });
+  it('"false" や他の値は永久にしない', async () => {
+    const { ctx, calls } = vfsWith();
+    await tools().delete_file.impl({ path: 'a.md', permanent: 'false' }, ctx);
+    await tools().delete_file.impl({ path: 'a.md', permanent: 'yes' }, ctx);
+    expect(calls.map((c) => c[1])).toEqual([{}, {}]);
+  });
+});

@@ -128,7 +128,7 @@ export class VfsService {
           'ESTUB',
           `Cannot move or copy ${srcPath} to ${destPath}: the contents of ${path} are not on this device and could not be fetched` +
             ` (${stubs.length} stub file(s) under ${srcPath}). Nothing was changed. Fetch it first (is its sync provider running?)` +
-            ` or delete it permanently. Reason: ${e?.message || e}`,
+            ` or delete it permanently ({ permanent: true }). Reason: ${e?.message || e}`,
         );
       }
     }

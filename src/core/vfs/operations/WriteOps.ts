@@ -155,6 +155,17 @@ export class AppendFileOp extends BaseOperation<{ path: string; content: string;
     const normPath = this.ctx.pathResolver.normalizePath(path);
     if (!normPath) throw new VfsError('EINVAL', 'Cannot write to root path.');
 
+    // 追記は元の中身に依存する。stub（中身が手元に無い）のまま進めると「空に追記した結果」が置かれ、
+    // 次の同期で向こうの中身がそれで上書きされる（T-0689）。先に実体化する（取れなければ ESTUB で止まる）。
+    // ★ ロックの外で行う —— 実体化はプロバイダが同じパスへ write するので、ロックの中で待つと互いに待って止まる。
+    const stubId = this.ctx.pathResolver.getIdByPath(normPath);
+    if (stubId) {
+      const existing = this.ctx.nodeStore.getNode(stubId);
+      if (existing && existing.kind === 'file' && existing.meta.syncState === 'stub') {
+        await this.ctx.vfs.readBlob(principal, normPath);
+      }
+    }
+
     const parts = normPath.split('/');
     const name = parts.pop()!;
     const parentPath = parts.join('/');

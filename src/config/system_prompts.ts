@@ -322,6 +322,8 @@ Rule:
 Moves a file or directory to \`trash/\` (as \`trash/<deletedAt>_<name>\`, remembering the original path). Paths already under \`trash/\`, \`system/temp/\` or \`system/logs/\` are destroyed instead.
 Attributes:
     - path: File path.
+    - permanent (optional): "true" destroys it instead of moving it to \`trash/\`. Nothing can be restored afterwards.
+      A stub (contents not on this device) is fetched before it goes to \`trash/\`, so that it can be restored; when that fails (\`ESTUB\`: its sync provider is not running or no longer has it) this is the only way to delete it. The provider will delete the remote copy when it next reconciles.
 </define_tag>
 
 <define_tag name="restore_file">

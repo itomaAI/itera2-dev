@@ -417,8 +417,11 @@ export function registerFSTools(registry: ToolRegistry): void {
     name: 'delete_file',
     description: 'Deletes a file.',
     impl: async (params: any, context: { vfs: VfsService }) => {
-      const msg = await context.vfs.deleteFile(AGENT_PRINCIPAL, params.path);
-      return { log: msg, ui: `🗑️ Deleted ${params.path}` };
+      // permanent="true" はゴミ箱を経ずに消す（T-0689）。stub の中身を取りに行かないので、
+      // プロバイダが応じないときの唯一の逃げ道でもある（向こうの実体は次の照合で消える）
+      const permanent = String(params.permanent).toLowerCase() === 'true';
+      const msg = await context.vfs.deleteFile(AGENT_PRINCIPAL, params.path, permanent ? { permanent: true } : {});
+      return { log: msg, ui: permanent ? `🗑️ Permanently deleted ${params.path}` : `🗑️ Deleted ${params.path}` };
     },
   });
 
