@@ -978,6 +978,32 @@
           };
         }
 
+        /**
+         * 改名・移動をホストに任せてよいか（T-0691）。純粋関数（試験で押さえる）。
+         * local_bridge は複数のマウントを 1 つの pid で持つので、核の「同じプロバイダ」では足りない ——
+         * **同じマウントの中**でなければ断る（別のルート・別の機械へは動かせない）。
+         * どちらかが無視パターンに当たるときも断る（無視の中へ動かすのは「消す」が正しい）。
+         */
+        function planBridgeMove(mountPath, oldFull, newFull, compiledIgnore) {
+          const inside = (p) => p === mountPath || p.startsWith(mountPath + '/');
+          if (!inside(oldFull) || !inside(newFull)) return { ok: false, reason: 'not inside the same mount' };
+          const oldRel = oldFull.substring(mountPath.length + 1);
+          const newRel = newFull.substring(mountPath.length + 1);
+          if (!oldRel || !newRel) return { ok: false, reason: 'the mount itself cannot be moved' };
+          if (newRel === oldRel || newRel.startsWith(oldRel + '/')) return { ok: false, reason: 'into itself' };
+          // 祖先のどれかが無視に当たれば、その下も走査に載らない（サーバーは枝刈りする）
+          const anyIgnored = (rel) => {
+            let cur = '';
+            for (const seg of rel.split('/')) {
+              cur = cur ? `${cur}/${seg}` : seg;
+              if (isIgnoredCompiled(cur, compiledIgnore)) return true;
+            }
+            return false;
+          };
+          if (anyIgnored(oldRel) || anyIgnored(newRel)) return { ok: false, reason: 'ignored path' };
+          return { ok: true, oldRel, newRel };
+        }
+
         // ---------- マウント管理 ----------
         async function mountRoot(conn, rootInfo) {
           const root = rootInfo.name;
@@ -1030,6 +1056,30 @@
               // 直後にホスト由来の同期が来ても、書き込みの最中に踏み込まないための目印。
               mount.lastMutateAt = Date.now();
               scheduleSync(mount);
+            },
+            // 改名・移動をホスト側で済ませる（T-0691）。核は手元を動かす前にこれを呼び、true なら
+            // 部分木の stub を実体化せずに動かす。false なら実体化してから動かす（遅いが正しい）。
+            // アンカーは触らない —— 次の調停で 新パス: 手元＝ホスト（分岐 7）／旧パス: 両方に無い で揃う。
+            onMove: async (oldFull, newFull) => {
+              const plan = planBridgeMove(mountPath, oldFull, newFull, compiledIgnoreFor(conn, root));
+              if (!plan.ok) {
+                log(`onMove ${oldFull} -> ${newFull}: left to the host (${plan.reason})`);
+                return false;
+              }
+              if (mount.halted) return false;
+              try {
+                const res = await getJson(api(conn, `/api/${root}/move`), {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ from: plan.oldRel, to: plan.newRel }),
+                });
+                mount.lastMutateAt = Date.now();
+                return res && res.ok === true;
+              } catch (e) {
+                // 旧サーバー（v3.7 以前）は 404。どの失敗もホストの実体化に落とす
+                log(`onMove ${oldFull} -> ${newFull}: left to the host (${e.message})`);
+                return false;
+              }
             },
           });
 
@@ -1749,7 +1799,7 @@ Attributes:
         }
 
         MetaOS.ai.log(
-          'Local Bridge (daemon v3.12) started\n' + (summary.join('\n') || '(no enabled connections)'),
+          'Local Bridge (daemon v3.13) started\n' + (summary.join('\n') || '(no enabled connections)'),
           'system',
         );
       })();
