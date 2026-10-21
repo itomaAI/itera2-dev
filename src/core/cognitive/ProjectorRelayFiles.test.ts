@@ -157,7 +157,10 @@ describe('Anthropic: 中継があるとき', () => {
       metadata: { relay: { anthropic: { fileId: 'file_pdf' } } },
     };
     const result = await (projector as any)._resolveMediaFileAnthropic(media, fakeVfs());
-    expect(result).toEqual({ ok: true, value: { type: 'document', source: { type: 'file', file_id: 'file_pdf' } } });
+    expect(result).toEqual({
+      ok: true,
+      value: { type: 'document', source: { type: 'file', file_id: 'file_pdf' }, title: 'a.pdf' },
+    });
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
@@ -171,7 +174,7 @@ describe('Anthropic: 中継があるとき', () => {
     const result = await (projector as any)._resolveMediaFileAnthropic({ path: 'n.txt', mimeType: 'text/plain' }, vfs);
     expect(result).toEqual({
       ok: true,
-      value: { type: 'document', source: { type: 'text', media_type: 'text/plain', data: 'abc' } },
+      value: { type: 'document', source: { type: 'text', media_type: 'text/plain', data: 'abc' }, title: 'n.txt' },
     });
     expect(fetchMock).not.toHaveBeenCalled();
   });

@@ -40,7 +40,7 @@ export interface ClipResult {
 export type ReferenceReason = 'too_large' | 'binary' | 'not_utf8' | 'unreadable';
 
 export type AttachmentDecision =
-  | { route: 'media'; mimeType: string }
+  | { route: 'media'; mimeType: string; size: number }
   | { route: 'stored'; mimeType: string; size: number }
   | { route: 'inline'; clip: ClipResult }
   | { route: 'reference'; reason: ReferenceReason; size: number; totalLines: number | null };
@@ -60,6 +60,18 @@ const AV_MIMES: Record<string, string> = {
   mp4: 'video/mp4',
   webm: 'video/webm',
 };
+/** 文書・書庫（stored の注記と attach_file の型を揃えるため。モデルが受けるかは投影が決める。T-0690） */
+const DOC_MIMES: Record<string, string> = {
+  docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  doc: 'application/msword',
+  xls: 'application/vnd.ms-excel',
+  ppt: 'application/vnd.ms-powerpoint',
+  zip: 'application/zip',
+  gz: 'application/gzip',
+  '7z': 'application/x-7z-compressed',
+};
 
 export function extensionOf(name: string): string {
   const base = name.split(/[\\/]/).pop() || '';
@@ -76,7 +88,8 @@ export function mimeOfPath(path: string, policy: AttachmentPolicy = ATTACHMENT_P
   if (IMAGE_MIMES[ext]) return IMAGE_MIMES[ext];
   if (AV_MIMES[ext]) return AV_MIMES[ext];
   if (ext === 'pdf') return 'application/pdf';
-  if (policy.inline.extensions.includes(ext)) return 'text/plain';
+  if (policy.inline.extensions.includes(ext)) return 'text/plain'; // svg も文字（XML）としてここに当たる
+  if (DOC_MIMES[ext]) return DOC_MIMES[ext];
   return 'application/octet-stream';
 }
 
@@ -196,7 +209,7 @@ export function decideAttachment(
 ): AttachmentDecision {
   if (!isInlineCandidate(info, policy)) {
     const mimeType = info.mimeType || mimeOfPath(info.name, policy);
-    if (isDirectMedia(info, mimeType, policy)) return { route: 'media', mimeType };
+    if (isDirectMedia(info, mimeType, policy)) return { route: 'media', mimeType, size: info.size };
     return { route: 'stored', mimeType, size: info.size };
   }
   if (info.size > policy.inline.skipAboveBytes) {
@@ -238,7 +251,8 @@ export function renderUserAttachmentNode(
 ): string {
   const attrs = [`name="${file.name}"`, `path="${file.path}"`];
   if (decision.route === 'media') {
-    return `<user_attachment ${attrs.join(' ')}>[Binary File: ${file.name}]</user_attachment>`;
+    attrs.push(`bytes="${decision.size}"`);
+    return `<user_attachment ${attrs.join(' ')}>[Binary File: ${file.name} (${decision.mimeType}, ${formatBytes(decision.size)})]</user_attachment>`;
   }
   if (decision.route === 'stored') {
     attrs.push(`bytes="${decision.size}"`);

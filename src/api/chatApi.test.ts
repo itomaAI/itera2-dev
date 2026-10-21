@@ -44,7 +44,9 @@ describe('chat.append の計画', () => {
     if (!p.ok) throw new Error(p.reason);
     expect(p.content).toEqual([
       { media: { path: 'a/b.png', mimeType: 'image/png', metadata: {} } },
-      { text: '<user_attachment name="b.png" path="a/b.png">[Binary File: b.png]</user_attachment>' },
+      {
+        text: '<user_attachment name="b.png" path="a/b.png" bytes="0">[Binary File: b.png (image/png, 0 B)]</user_attachment>',
+      },
       {
         text: '<user_attachment name="c.txt" path="c.txt" bytes="0" truncated="true">[Text file not expanded: its content could not be read. Use <read> on the path.]</user_attachment>',
       },
@@ -66,7 +68,7 @@ describe('chat.append の計画', () => {
     expect(p.content[1]).toEqual({
       text: '<user_attachment name="a.md" path="notes/a.md" lines="2" bytes="12">\n# title\nbody\n</user_attachment>',
     });
-    expect((p.content[2] as any).text).toContain('[Binary File: img.webp]');
+    expect((p.content[2] as any).text).toContain('[Binary File: img.webp (image/webp, 0 B)]');
     expect((p.content[3] as any).text).toContain('lines="4"');
     expect((p.content[4] as any).text).toContain('could not be read');
     expect(p.content[5]).toEqual({ text: 'see' });
@@ -110,7 +112,8 @@ describe('chat.append の計画', () => {
     expect(mimeOfAttachment('x.png')).toBe('image/png');
     expect(mimeOfAttachment('x.pdf')).toBe('application/pdf');
     expect(mimeOfAttachment('x.md')).toBe('text/plain');
-    expect(mimeOfAttachment('x.zip')).toBe('application/octet-stream');
+    expect(mimeOfAttachment('x.zip')).toBe('application/zip');
+    expect(mimeOfAttachment('x.bin')).toBe('application/octet-stream');
   });
 });
 
