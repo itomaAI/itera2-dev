@@ -1,26 +1,26 @@
 # system/credentials/
 
-**認証情報の一元管理領域。**
+**The single place for credentials.**
 
-## 目的
+## Purpose
 
-PAT・API キー・OAuth トークンなどをここに集約する。
+PATs, API keys, OAuth tokens and the like are gathered here.
 
-散在させないのは、**クラウド同期の除外を「1 ディレクトリ」で表現するため**である。
-認証情報が `system/config/` や `memory/` に紛れていると、同期対象を広げるたびに
-除外漏れが生まれ、**認証情報が平文でクラウドへ流出する。**
+They are not scattered around so that **the cloud-sync exclusion can be expressed as "one directory"**.
+If credentials hide in `system/config/` or `memory/`, every widening of the sync scope risks missing one,
+and **a credential leaks to the cloud in plain text.**
 
-## ルール
+## Rules
 
-- 🔴 **この領域をクラウド同期の対象に含めてはならない。**
-- 端末を移行する場合、認証情報は同期ではなく**各端末で個別に設定する。**
-- 権限は R/W（デーモンが読み、認証アダプタが書くため）。
-  したがってゲストアプリからも読める。**秘匿性が要る値をここ以外に置かないこと**と同時に、
-  **信頼できないアプリを動かさないこと**が前提になる。
+- 🔴 **This area must never be included in cloud sync.**
+- When moving to another device, credentials are **set up on each device individually**, not synced.
+- Permission is R/W (daemons read, auth adapters write).
+  So guest apps can read it too. This assumes both that **nothing secret is kept anywhere else** and
+  that **untrusted apps are not run**.
 
-## 命名
+## Naming
 
-プロバイダごとに 1 ファイル。
+One file per provider.
 
 ```
 system/credentials/github.json     { "pat": "..." }
@@ -28,10 +28,9 @@ system/credentials/telegram.json   { "botToken": "...", "chatId": "..." }
 system/credentials/gdrive.json     { "clientId": "..." }
 ```
 
-## 注意
+## Notes
 
-- **短命なトークン（OAuth のアクセストークン等）は `system/temp/` に置いてよい。**
-  セッションリセットで破棄されるため、そちらのほうが安全な場合がある。
-  いずれにせよ `system/temp/` も同期対象外である。
-- 値を確認するときは、ファイルを直接開かず**キー構造だけ**を見ること。
-  会話ログに平文で残る。
+- **Short-lived tokens (OAuth access tokens etc.) may live in `system/temp/`.**
+  They are discarded on session reset, which can be the safer place. Either way, `system/temp/` is excluded from sync as well.
+- When checking a value, do not open the file: look at **the key structure only**.
+  The contents would remain in the conversation log in plain text.
