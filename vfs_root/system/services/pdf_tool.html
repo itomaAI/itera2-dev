@@ -307,46 +307,57 @@
           });
         }
 
-        const defs = [
-          '<define_tag name="pdf_info">',
-          'PDF overview: page count, file size, and per-page dimensions and text character counts. Call this first (attaching the whole file costs every page).',
-          'Attributes:',
-          '  - path (required): PDF in the VFS',
-          '  - pages (optional): pages to inspect (e.g. "3-5"; default all)',
-          'Returns: page count, file size, and per page "W×H pt, N chars". A page with 0 chars is image only (a scan).',
-          '</define_tag>',
-          '<define_tag name="pdf_extract">',
-          'Writes selected pages of a PDF as a new, smaller PDF in the VFS. Attach that file with attach_file: the text layer, fonts and images survive (rendering to images loses the text). The default route for reading part of a large PDF.',
-          'Attributes:',
-          '  - path (required): PDF in the VFS',
-          '  - pages (required): "3" / "3-5" / "1,4,7-9" (1-based; out-of-range is refused; for all pages attach the original instead)',
-          '  - out (optional): output path (.pdf). Default system/temp/pdf/<name>/<name>_p003-005.pdf (cleared on session reset; write to the user area to keep it)',
-          'Returns: "Wrote: <out> (n of N pages, size)". Encrypted PDFs are refused. The document outline (bookmarks) is not copied.',
-          'Note: an attachment costs by page count; extract only the pages you need.',
-          '</define_tag>',
-          '<define_tag name="pdf_pages">',
-          'Renders selected pages of a PDF to images (PNG / JPEG) in the VFS. For when the look matters (drawings, layout, scans with 0 chars). To read text, prefer pdf_extract or pdf_text.',
-          'Attributes:',
-          '  - path (required): PDF in the VFS',
-          '  - pages (required): "3" / "3-5" / "1,4,7-9" / "all" (1-based; out-of-range is refused). At most 20 per call',
-          '  - out (optional): output directory. Default system/temp/pdf/<name>/ (cleared on session reset; write to the user area to keep it)',
-          '  - size (optional): long edge in px. Default 1568 (larger images are downscaled by the model). Max 4096',
-          '  - format (optional): "png" (default) | "jpeg" (smaller for photos and scans)',
-          'Returns: the list of files written (p003.png form, dimensions, size).',
-          '</define_tag>',
-          '<define_tag name="pdf_text">',
-          'Extracts the text of a PDF into a .txt (processed on this device; nothing is sent out).',
-          'PDFs without embedded glyphs (CAD / estimating software exports) show blank names when rendered, but their text is readable this way. Scans (0 chars) cannot be read → pdf_pages.',
-          'Attributes:',
-          '  - path (required): PDF in the VFS',
-          '  - pages (optional): e.g. "3-5" (default all)',
-          '  - out (optional): output path. Default: path with the extension changed to .txt',
-          '  - form (optional): "lines" (default; fragments arranged into lines by position) | "items" (one fragment per line as "y<TAB>x<TAB>text", for rebuilding table columns or two-tier rows yourself)',
-          '  - preview (optional): "true" to include the first 1500 chars in the result',
-          'Returns: "Wrote: <out> (...)" and chars per page. The output has a "--- p.N ---" heading per page. Column order of tables (as seen) is not guaranteed. Encrypted PDFs are refused.',
-          'Note: to verify a reading, read only the page in question (do not re-read everything).',
-          '</define_tag>',
-        ].join('\n');
+        // 道具ごとに自分の define_tag だけを登録する（T-0694。4 本で同じ全文を渡すと、
+        // リセット時の「Restored Dynamic Tools」と tool_catalog に 4 本分が 4 重に出る）
+        const DEF = {
+          pdf_info: [
+            '<define_tag name="pdf_info">',
+            'PDF overview: page count, file size, and per-page dimensions and text character counts. Call this first (attaching the whole file costs every page).',
+            'Attributes:',
+            '  - path (required): PDF in the VFS',
+            '  - pages (optional): pages to inspect (e.g. "3-5"; default all)',
+            'Returns: page count, file size, and per page "W×H pt, N chars". A page with 0 chars is image only (a scan).',
+            '</define_tag>',
+          ].join('\n'),
+          pdf_extract: [
+            '<define_tag name="pdf_extract">',
+            'Writes selected pages of a PDF as a new, smaller PDF in the VFS. Attach that file with attach_file: the text layer, fonts and images survive (rendering to images loses the text). The default route for reading part of a large PDF.',
+            'Attributes:',
+            '  - path (required): PDF in the VFS',
+            '  - pages (required): "3" / "3-5" / "1,4,7-9" (1-based; out-of-range is refused; for all pages attach the original instead)',
+            '  - out (optional): output path (.pdf). Default system/temp/pdf/<name>/<name>_p003-005.pdf (cleared on session reset; write to the user area to keep it)',
+            'Returns: "Wrote: <out> (n of N pages, size)". Encrypted PDFs are refused. The document outline (bookmarks) is not copied.',
+            'Note: an attachment costs by page count; extract only the pages you need.',
+            '</define_tag>',
+          ].join('\n'),
+          pdf_pages: [
+            '<define_tag name="pdf_pages">',
+            'Renders selected pages of a PDF to images (PNG / JPEG) in the VFS. For when the look matters (drawings, layout, scans with 0 chars). To read text, prefer pdf_extract or pdf_text.',
+            'Attributes:',
+            '  - path (required): PDF in the VFS',
+            '  - pages (required): "3" / "3-5" / "1,4,7-9" / "all" (1-based; out-of-range is refused). At most 20 per call',
+            '  - out (optional): output directory. Default system/temp/pdf/<name>/ (cleared on session reset; write to the user area to keep it)',
+            '  - size (optional): long edge in px. Default 1568 (larger images are downscaled by the model). Max 4096',
+            '  - format (optional): "png" (default) | "jpeg" (smaller for photos and scans)',
+            'Returns: the list of files written (p003.png form, dimensions, size).',
+            '</define_tag>',
+          ].join('\n'),
+          pdf_text: [
+            '<define_tag name="pdf_text">',
+            'Extracts the text of a PDF into a .txt (processed on this device; nothing is sent out).',
+            'PDFs without embedded glyphs (CAD / estimating software exports) show blank names when rendered, but their text is readable this way. Scans (0 chars) cannot be read → pdf_pages.',
+            'Attributes:',
+            '  - path (required): PDF in the VFS',
+            '  - pages (optional): e.g. "3-5" (default all)',
+            '  - out (optional): output path. Default: path with the extension changed to .txt',
+            '  - form (optional): "lines" (default; fragments arranged into lines by position) | "items" (one fragment per line as "y<TAB>x<TAB>text", for rebuilding table columns or two-tier rows yourself)',
+            '  - preview (optional): "true" to include the first 1500 chars in the result',
+            'Returns: "Wrote: <out> (...)" and chars per page. The output has a "--- p.N ---" heading per page. Column order of tables (as seen) is not guaranteed. Encrypted PDFs are refused.',
+            'Note: to verify a reading, read only the page in question (do not re-read everything).',
+            '</define_tag>',
+          ].join('\n'),
+        };
+        const defs = Object.values(DEF).join('\n');
 
         const guard = (fn) => async (params) => {
           const p = params || {};
@@ -360,26 +371,26 @@
         M.tools.register({
           name: 'pdf_info',
           description: 'PDF overview: page count, size, per-page dimensions and text char counts.',
-          definition: defs,
+          definition: DEF.pdf_info,
           handler: guard(info),
         });
         M.tools.register({
           name: 'pdf_extract',
           description:
             'Extract selected pages of a PDF into a new smaller PDF (pdf-lib, in-browser). Attach that with attach_file to keep the text layer.',
-          definition: defs,
+          definition: DEF.pdf_extract,
           handler: guard(extract),
         });
         M.tools.register({
           name: 'pdf_pages',
           description: 'Render selected PDF pages to PNG/JPEG files in the VFS (pdf.js, in-browser).',
-          definition: defs,
+          definition: DEF.pdf_pages,
           handler: guard(render),
         });
         M.tools.register({
           name: 'pdf_text',
           description: 'Extract text from selected PDF pages into a .txt (pdf.js, in-browser, no external service).',
-          definition: defs,
+          definition: DEF.pdf_text,
           handler: guard((p) => text(p, p.pages)),
         });
         // 旧名（T-0681 の pdf_to_text。from / to）。しばらく残す
