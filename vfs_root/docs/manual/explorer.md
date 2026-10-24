@@ -1,28 +1,30 @@
-# ファイル（`system/apps/explorer.html`）
+# Files (`system/apps/explorer.html`)
 
-置き場（**data／memory／apps／docs／services**）を見て回るアプリ。ホストの左側にあるエクスプローラパネルとは別物で、
-利用者向けの語彙と操作に絞ってある。ミャク楽の `system/apps/explorer.html` と同じソースで、置き場の定義（`ROOTS`）だけが違う。正はすべて VFS。アプリが持つ状態は「いまどこを見ているか」と「何を選んでいるか」だけ。
+An app for browsing the user areas (**data / memory / apps / docs / services**). It is separate from the explorer panel
+on the left of the host and is limited to the vocabulary and operations a user needs. It shares its source with the
+`system/apps/explorer.html` of Myaku-Raku; only the definition of the areas (`ROOTS`) differs. The VFS is the only truth.
+The app keeps just two things: "where am I looking" and "what is selected".
 
-## 画面
+## Screen
 
-| 場所 | 何ができるか |
+| Where | What you can do |
 | :-- | :-- |
-| 左の木 | 置き場の根とフォルダ。押すとそのフォルダへ |
-| 上のパンくず | いまの場所。押すと上のフォルダへ |
-| 一覧 | 名前・大きさ・更新。クリックで選ぶ（Ctrl で複数、Shift で範囲）。**ダブルクリックか Enter で開く** |
-| 取り込む | PC のファイルをいまのフォルダへ。**一覧にドラッグ&ドロップしても同じ**。同じ名前があれば置き換えるか訊く |
-| ＋ フォルダ／名前の変更／ゴミ箱へ | ゴミ箱へは `trash/` に移すだけ（消さない。Delete キーでも） |
-| ⚡ AI に渡す | 選んだファイルを添付してチャットへ。フォルダはパスだけ渡す（中身は AI が `list_files` で見る） |
-| パネルで見る | ホストのエクスプローラパネルでその場所を展開・選択（`MetaOS.host.revealInExplorer`。無いホストでは出ない） |
+| Tree on the left | The roots of the areas and their folders. Click to go there |
+| Breadcrumb at the top | The current location. Click to go up |
+| List | Name, size, modified. Click to select (Ctrl for several, Shift for a range). **Double-click or Enter opens** |
+| Import | Files from your PC into the current folder. **Dragging and dropping onto the list does the same.** If a file of the same name exists, you are asked whether to replace it |
+| + Folder / Rename / Move to Trash | "Move to Trash" only moves to `trash/` (nothing is destroyed; the Delete key does the same) |
+| ⚡ Hand to AI | Attaches the selected files to the chat. For a folder only the path is passed (the AI lists it with `list_files`) |
+| Show in panel | Expands and selects the location in the host's explorer panel (`MetaOS.host.revealInExplorer`; hidden on hosts that do not have it) |
 
-## 開くときの決め方
+## How a file is opened
 
-拡張子で `system/registry/associations.json` → 各アプリの `fileHandlers`（`apps.json`）の順に引き、見つかったアプリを
-`{ file }` 付きで起動する（例: `.md` → notes）。
-`.html` はそれ自体を起動、文字のファイルはホストのエディタ、それ以外（画像など）はホストのパネルで選ぶだけ。
+By extension: `system/registry/associations.json` first, then each app's `fileHandlers` (`apps.json`); the app found is
+launched with `{ file }` (e.g. `.md` → notes).
+`.html` is launched as itself, text files open in the host editor, everything else (images and so on) is only selected in the host panel.
 
-## 入口
+## Entry points
 
-* 起動引数 `{ path }` でその場所から始める（ミャク楽ではホームの「ファイルの置き場」がこれ。Itera のホームには置き場の節が無い）
-* 既に開いていれば `route_changed` で移る
-* VFS が変わったら（`vfs_mutation`）いまのフォルダを読み直す（200 ms まとめ）
+* The launch argument `{ path }` starts at that location (in Myaku-Raku the "file areas" entry on the home screen uses this; the Itera home has no such section)
+* If already open, `route_changed` moves it
+* When the VFS changes (`vfs_mutation`) the current folder is re-read (batched for 200 ms)

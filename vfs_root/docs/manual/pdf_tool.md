@@ -1,50 +1,51 @@
-# PDF の道具（`pdf_tool`）— ページ数を知る・ページを別の PDF に切り出す・ページを画像に・文字を取り出す
+# PDF tools (`pdf_tool`) — page count, extract pages into a new PDF, render pages to images, extract text
 
-**場所**: `system/services/pdf_tool.html`（デーモン・pid `pdf_tool`）／部品 `system/lib/pdf_text.js`
-**常駐しない**（`services.json` で `autoStart: false`）。要るときに `spawn` する。
+**Where**: `system/services/pdf_tool.html` (daemon, pid `pdf_tool`) / helper `system/lib/pdf_text.js`
+**Not resident** (`autoStart: false` in `services.json`). `spawn` it when needed.
 
-## なぜ在るか
+## Why it exists
 
-ホストの道具は「テキストを読む／ファイルを丸ごと添付する」だけで、PDF の分割を知らない。
-PDF を丸ごと添付すると**全ページ**が AI の文脈に入る（40 ページなら 40 ページ分の費用）。
-形式ごとの処理（分割・変換）は VFS → VFS の道具としてゲストに置く —— これはその最初の 1 つ。
+The host tools only "read text" or "attach a whole file"; they know nothing about splitting a PDF.
+Attaching a whole PDF puts **every page** into the AI's context (40 pages cost 40 pages).
+Format-specific processing (splitting, converting) belongs in the guest as VFS → VFS tools — this is the first of them.
 
-pdf.js はホストが同梱している（`public/vendor/pdfjs/`・4 MB）。VFS には置かない（利用者全員に配信されてしまう）。
-デーモンは `MetaOS.vendor.resolve('pdfjs')` で場所を訊いてから読む（ホストの URL を自分で組まない）。
-pdf.js は読む・描く専用で PDF を**書けない**ので、切り出し（`pdf_extract`）は pdf-lib（保守版 `@cantoo/pdf-lib`・`public/vendor/pdflib/`・614 KB・
-`MetaOS.vendor.resolve('pdflib')`）で `copyPages` する。どちらも使うまで降りてこない。
-外部のサービスには出さない。暗号化された PDF は扱わない。
+pdf.js ships with the host (`public/vendor/pdfjs/`, 4 MB). It is not placed in the VFS (it would be distributed to every user).
+The daemon asks `MetaOS.vendor.resolve('pdfjs')` for its location before loading it (it never builds the host URL itself).
+pdf.js only reads and renders — it **cannot write** a PDF — so extraction (`pdf_extract`) uses pdf-lib
+(the maintained fork `@cantoo/pdf-lib`, `public/vendor/pdflib/`, 614 KB, `MetaOS.vendor.resolve('pdflib')`) and `copyPages`.
+Neither is downloaded until used. Nothing is sent to an external service. Encrypted PDFs are not handled.
 
-**PDF は PDF のまま添付するのが基本。** LLM の API の多くは PDF の中の文字（文字層）を読む。ページを画像にすると
-その情報が落ちる（字形の埋め込みが無い PDF では名称が空白に見える）。画像にするのは**見た目が要るとき**だけ。
+**Attach a PDF as a PDF by default.** Most LLM APIs read the text inside a PDF (the text layer). Rendering pages to images
+loses that information (in a PDF without embedded glyphs, names show up blank). Render to images **only when the look matters**.
 
-## 使い方（AI）
+## Usage (AI)
 
 ```
 <spawn path="system/services/pdf_tool.html" type="daemon" show="false" />
 ```
-→ `tool_available` で道具が届く。
+→ the tools arrive via `tool_available`.
 
-| 道具 | 何をする | 主な引数 |
+| Tool | What it does | Main arguments |
 | :-- | :-- | :-- |
-| `pdf_info` | ページ数・大きさ・ページごとの寸法と文字数。**読む前にまずこれ** | `path`・`pages`（省略は全ページ） |
-| `pdf_extract` | 指定したページを**別の（小さい）PDF** にして VFS に書く → `attach_file`。文字層・フォント・画像・ページの注釈はそのまま写る | `path`・`pages`（必須。`"3"` `"3-5"` `"1,4,7-9"`。全ページは断る＝元をそのまま添付する）・`out`（既定 `system/temp/pdf/<名前>/<名前>_p003-005.pdf`） |
-| `pdf_pages` | 指定したページを PNG / JPEG にして VFS に書く（見た目が要るとき: 図面・レイアウト・文字 0 のスキャン） | `path`・`pages`（必須。`"3"` `"3-5"` `"1,4,7-9"` `"all"`）・`out`（既定 `system/temp/pdf/<名前>/`）・`size`（長辺 px。既定 1568）・`format` |
-| `pdf_text` | 文字を取り出して .txt に書く。字形の埋め込みが無い PDF でも読める | `path`・`pages`・`out`・`form`（`lines` / `items`）・`preview` |
-| `pdf_to_text` | `pdf_text` の旧名（`from` / `to`） | — |
+| `pdf_info` | Page count, file size, per-page dimensions and character counts. **Call this first** | `path`, `pages` (default: all) |
+| `pdf_extract` | Writes the selected pages as a **new, smaller PDF** in the VFS → `attach_file`. The text layer, fonts, images and page annotations survive | `path`, `pages` (required: `"3"` `"3-5"` `"1,4,7-9"`; all pages is refused — attach the original instead), `out` (default `system/temp/pdf/<name>/<name>_p003-005.pdf`) |
+| `pdf_pages` | Renders the selected pages to PNG / JPEG in the VFS (when the look matters: drawings, layout, scans with 0 chars) | `path`, `pages` (required: `"3"` `"3-5"` `"1,4,7-9"` `"all"`), `out` (default `system/temp/pdf/<name>/`), `size` (long edge in px, default 1568), `format` |
+| `pdf_text` | Extracts the text into a .txt. Reads PDFs without embedded glyphs too | `path`, `pages`, `out`, `form` (`lines` / `items`), `preview` |
+| `pdf_to_text` | Old name of `pdf_text` (`from` / `to`) | — |
 
-流れ: `pdf_info` → 読むページを決める → `pdf_extract` でそのページだけの PDF に → **その PDF を `attach_file`**（費用はページ数ぶん）。
-見た目が要るページだけ `pdf_pages` で画像に。文字だけでよければ `pdf_text`（履歴に文字で入る。添付の費用が掛からない）。
-文字が 0 のページは画像だけ（スキャン）なので `pdf_text` では読めない → `pdf_pages`（PDF のまま添付しても、文字の無いページは画像として扱われる）。
+Flow: `pdf_info` → decide which pages to read → `pdf_extract` into a PDF of just those pages → **`attach_file` that PDF** (the cost is its page count).
+Use `pdf_pages` only for the pages whose look matters. If plain text is enough, `pdf_text` (it enters the history as text; no attachment cost).
+A page with 0 chars is image only (a scan) and cannot be read with `pdf_text` → `pdf_pages` (even when attached as a PDF, a page without text is treated as an image).
 
-## 限界
+## Limits
 
-* 表の列の順（見た目）は保証しない。表を組み直すなら `form="items"`（`y<TAB>x<TAB>文字`）で位置から
-* `pdf_pages` は 1 回に 20 枚まで（多いときは `pages` を分ける）
-* `pdf_extract` は文書全体の栞（アウトライン）を写さない。フォームの欄・リンクはページ単位で付いてくる
-* `system/temp/` に書いたものはセッションの初期化で消える。残すなら `out` に利用者の領域を指定する
-* この OS のタブが裏に回っていると描画（canvas）が遅れることがある
+* The column order of tables (as seen) is not guaranteed. To rebuild a table use `form="items"` (`y<TAB>x<TAB>text`) and the positions
+* `pdf_pages` renders at most 20 pages per call (split `pages` when you need more)
+* `pdf_extract` does not copy the document outline (bookmarks). Form fields and links come along per page
+* Anything written to `system/temp/` is cleared on session reset. To keep it, point `out` at the user area
+* Rendering (canvas) may lag while this OS's tab is in the background
 
-## 試験
+## Tests
 
-`tests/guest/pdfTool.test.ts`（行組み・`parsePages`・`pagesLabel`・置き場と配線）、`tests/guest/pdfExtract.test.ts`（pdf-lib の `copyPages` で切り出した PDF から pdf.js が元の文字を読めること）。描画は jsdom では動かないので、実機か headless Chromium で。
+`tests/guest/pdfTool.test.ts` (line assembly, `parsePages`, `pagesLabel`, locations and wiring), `tests/guest/pdfExtract.test.ts`
+(pdf.js can read the original text from a PDF cut out with pdf-lib's `copyPages`). Rendering does not run in jsdom: use a real browser or headless Chromium.
