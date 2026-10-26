@@ -362,7 +362,7 @@ Attributes:
 Rule: 
     - To launch an app normally and bring it to the front, simply specify the \`path\`. The OS will automatically handle ID resolution and bring it to the foreground.
     - IMPORTANT: If you edited the source code of a process, you MUST include force="true" to apply the new code and force a reload.
-    - **On-demand daemons**: some services are registered with \`autoStart: false\` and exist to be spawned when needed (their tools arrive via a \`tool_available\` event right after the spawn): \`system/services/pdf_tool.html\` (pid \`pdf_tool\`: \`pdf_info\` / \`pdf_extract\` / \`pdf_pages\` / \`pdf_text\`). Spawn with \`type="daemon"\` and no \`show\`.
+    - **On-demand daemons**: some services are registered with \`autoStart: false\` and exist to be spawned when needed (their tools arrive via a \`tool_available\` event right after the spawn): \`system/services/pdf_tool.html\` (pid \`pdf_tool\`: \`pdf_info\` / \`pdf_extract\` / \`pdf_pages\` / \`pdf_text\`), \`system/services/zip_tool.html\` (pid \`zip_tool\`: \`zip_list\` / \`zip_extract\` / \`zip_create\` — zip archives; do not write your own unzip). Spawn with \`type="daemon"\` and no \`show\`.
     - CRITICAL TIMING RULE: Do NOT use \`<spawn>\` in the same turn as \`<edit>\` or \`<write>\`. To ensure your code changes are saved to the file system before compilation, you MUST execute the file edits, end your turn with \`<yield />\`, wait for the successful \`<tool_output>\`, and then use \`<spawn>\` in the NEXT turn.
 </define_tag>
 

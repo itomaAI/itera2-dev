@@ -1,0 +1,477 @@
+<!doctype html>
+<html lang="ja">
+  <body>
+    <script src="/system/lib/zip_core.js"></script>
+    <script>
+      /**
+       * Zip Tool Daemon — zip を「中を見る／展開する／作る」（T-0712）
+       *
+       * なぜ要るか:
+       *   仕事の受け渡し（作業アプリ・資料の束）は zip で来る・zip で出す。ホストの道具はテキストを読む・
+       *   ファイルを丸ごと添付するだけで、書庫を知らない。Explorer の zip 書き出しは人の操作で、AI からは呼べない。
+       *   その結果、利用者ごとに AI が unzip のアプリを自作していた（ミャク楽の日誌で 6 アカウント以上）。
+       *   形式ごとの処理は VFS → VFS の道具としてゲストに置く（pdf_tool と同じ考え）。
+       *
+       * 使い方（AI）:
+       *   常駐しない。要るときに spawn する（system/services/zip_tool.html・pid zip_tool）→ 道具が届く。
+       *   zip_list で中を見る → zip_extract で展開（既定は zip の隣の同名ディレクトリ）／ zip_create でディレクトリを zip に。
+       *
+       * 仕組み:
+       *   形式の部品は system/lib/zip_core.js（純粋。試験はそこを評価する）。圧縮・展開はブラウザ標準の
+       *   CompressionStream / DecompressionStream（deflate-raw）。外部ライブラリは無く、外には何も出さない。
+       *   名前は UTF-8（旗つき）で書く。読むときは旗の無い名前を ASCII → UTF-8（厳密）→ cp932 の順で解釈する
+       *   （Windows の「送る → 圧縮」は cp932 で書く）。
+       *   扱わないもの: zip64（4 GB・65,535 項目超）、暗号化、分割。危険な名前（`..`・絶対パス）は飛ばす。
+       */
+      (async () => {
+        const M = window.MetaOS;
+        const Z = window.ZipCore;
+        const NAMES = ['zip_list', 'zip_extract', 'zip_create'];
+        const DEFAULT_LIST_LIMIT = 200;
+        const log = (msg) => {
+          console.log('[ZipTool] ' + msg);
+          M.ai.log('[ZipTool Daemon] ' + msg, 'info', { silent: true });
+        };
+
+        const basename = (path) => path.split('/').pop() || '';
+        const stripExt = (name) => name.replace(/\.zip$/i, '');
+        const dirname = (path) => {
+          const i = path.lastIndexOf('/');
+          return i < 0 ? '' : path.slice(0, i);
+        };
+        const join = (dir, name) => (dir ? dir.replace(/\/+$/, '') + '/' + name : name);
+        const norm = (p) =>
+          String(p || '')
+            .trim()
+            .replace(/^\/+/, '')
+            .replace(/\/+$/, '');
+        const truthy = (v) => String(v).toLowerCase() === 'true';
+
+        async function ensureDir(dir) {
+          if (!dir) return;
+          if (await M.fs.exists(dir)) return;
+          await M.fs.mkdir(dir, { recursive: true });
+        }
+        async function readZip(path) {
+          if (!path) throw new Error('path is required');
+          if (!(await M.fs.exists(path))) throw new Error('Not found: ' + path);
+          const st = await M.fs.stat(path);
+          if (st.kind !== 'file') throw new Error('Not a file: ' + path);
+          const bytes = await M.fs.read(path, { encoding: 'binary' });
+          if (!bytes || !bytes.length) throw new Error('File is empty: ' + path);
+          return bytes;
+        }
+        /** 一つの先頭ディレクトリに全部入っているなら、その名前（"app/" の形）。そうでなければ null */
+        function commonTop(entries) {
+          let top = null;
+          for (const e of entries) {
+            const i = e.name.indexOf('/');
+            if (i < 0) return null; // 根に直接ファイルがある
+            const t = e.name.slice(0, i + 1);
+            if (top === null) top = t;
+            else if (top !== t) return null;
+          }
+          return top;
+        }
+        function encodingNote(cd) {
+          const other = Object.keys(cd.encodings).filter((k) => k !== 'utf-8' && k !== 'ascii');
+          if (!other.length) return '';
+          return (
+            '\nNames: ' +
+            other.map((k) => cd.encodings[k] + ' read as ' + k).join(', ') +
+            ' (no UTF-8 flag; Windows-made zip). If they look wrong, pass encoding="utf-8" or another label.'
+          );
+        }
+        function errText(e) {
+          return '[Error] ' + (e && e.message ? e.message : String(e));
+        }
+
+        // ---- zip_list ----
+        async function list(p) {
+          const path = norm(p.path);
+          const bytes = await readZip(path);
+          const cd = Z.readCentralDirectory(bytes, { encoding: p.encoding ? String(p.encoding) : undefined });
+          const entries = cd.entries;
+          let limit = parseInt(p.limit, 10);
+          if (!Number.isFinite(limit) || limit < 1) limit = DEFAULT_LIST_LIMIT;
+          const files = entries.filter((e) => !e.dir);
+          const dirs = entries.length - files.length;
+          const total = files.reduce((a, e) => a + e.usize, 0);
+          const encrypted = files.filter((e) => e.encrypted).length;
+          const unsupported = files.filter((e) => !e.encrypted && e.method !== 0 && e.method !== 8).length;
+          const unsafe = entries.filter((e) => !Z.safeName(e.name)).length;
+          let msg =
+            path +
+            ': ' +
+            entries.length +
+            ' entries (' +
+            files.length +
+            ' files, ' +
+            dirs +
+            ' directories), ' +
+            Z.fmtSize(total) +
+            ' uncompressed, zip ' +
+            Z.fmtSize(bytes.length);
+          const shown = entries.slice(0, limit);
+          msg +=
+            '\n' +
+            shown
+              .map((e) => {
+                let line = '  ' + e.name;
+                if (!e.dir)
+                  line +=
+                    '  ' +
+                    Z.fmtSize(e.usize) +
+                    (e.method === 8 ? ' (deflate)' : e.method === 0 ? ' (store)' : ' (method ' + e.method + ')');
+                if (e.encrypted) line += ' [encrypted]';
+                if (!Z.safeName(e.name)) line += ' [unsafe name, will be skipped]';
+                return line;
+              })
+              .join('\n');
+          if (entries.length > shown.length)
+            msg +=
+              '\n  … ' + (entries.length - shown.length) + ' more (pass limit="' + entries.length + '" to list all)';
+          if (encrypted) msg += '\nEncrypted entries: ' + encrypted + ' (cannot be extracted)';
+          if (unsupported) msg += '\nEntries with an unsupported compression method: ' + unsupported;
+          if (unsafe) msg += '\nUnsafe names (absolute or with ".."): ' + unsafe + ' (skipped on extract)';
+          msg += encodingNote(cd);
+          const top = commonTop(entries);
+          const outDefault = join(dirname(path), stripExt(basename(path)));
+          msg +=
+            '\nNext: zip_extract path="' +
+            path +
+            '"' +
+            (top ? ' (everything is under "' + top + '"; pass strip="1" to drop that folder)' : '') +
+            '. Default out: ' +
+            outDefault +
+            '/. Use only="…" to extract a part.';
+          return msg;
+        }
+
+        // ---- zip_extract ----
+        async function extract(p) {
+          const path = norm(p.path);
+          const bytes = await readZip(path);
+          const cd = Z.readCentralDirectory(bytes, { encoding: p.encoding ? String(p.encoding) : undefined });
+          const out = norm(p.out) || join(dirname(path), stripExt(basename(path)));
+          if (!out) throw new Error('out is required when the zip is at the root');
+          if (await M.fs.exists(out)) {
+            const st = await M.fs.stat(out);
+            if (st.kind !== 'directory') throw new Error('out exists and is not a directory: ' + out);
+          }
+          const overwrite = truthy(p.overwrite);
+          const only = Z.parsePatterns(p.only);
+          let strip = parseInt(p.strip, 10);
+          if (!Number.isFinite(strip) || strip < 0) strip = 0;
+
+          const picked = [];
+          const skipped = { unsafe: [], encrypted: [], unsupported: [], filtered: 0, stripped: [] };
+          for (const e of cd.entries) {
+            const safe = Z.safeName(e.name);
+            if (!safe) {
+              skipped.unsafe.push(e.name);
+              continue;
+            }
+            const rel = Z.stripComponents(safe, strip);
+            // only は zip の中の名前にも、strip 後の名前（out から見た相対）にも当てる
+            if (only.length && !Z.matchesAny(safe, only) && !(rel && Z.matchesAny(rel, only))) {
+              skipped.filtered++;
+              continue;
+            }
+            if (!rel) {
+              if (!e.dir) skipped.stripped.push(e.name);
+              continue;
+            }
+            if (e.encrypted) {
+              skipped.encrypted.push(e.name);
+              continue;
+            }
+            if (!e.dir && e.method !== 0 && e.method !== 8) {
+              skipped.unsupported.push(e.name + ' (method ' + e.method + ')');
+              continue;
+            }
+            picked.push({ e, rel });
+          }
+          if (!picked.length)
+            throw new Error(
+              'Nothing to extract from ' +
+                path +
+                (only.length
+                  ? ' with only="' +
+                    only.join(',') +
+                    '" (a bare "*.md" matches only at the top; use "**/*.md" for any depth)'
+                  : ''),
+            );
+          const total = picked.reduce((a, x) => a + (x.e.dir ? 0 : x.e.usize), 0);
+          try {
+            const u = await M.fs.getUsage();
+            if (u && Number.isFinite(u.max)) {
+              const free = u.max - (u.reserved || 0) - u.used;
+              if (total > free)
+                throw new Error(
+                  'Not enough VFS space: ' + Z.fmtSize(total) + ' needed, ' + Z.fmtSize(Math.max(0, free)) + ' free',
+                );
+            }
+          } catch (e) {
+            if (/Not enough VFS space/.test(e.message)) throw e;
+            /* getUsage の無い環境は確かめずに進む */
+          }
+
+          await ensureDir(out);
+          const written = [];
+          const existing = [];
+          const failed = [];
+          let bytesWritten = 0;
+          const madeDirs = new Set([out]);
+          const mk = async (dir) => {
+            if (!dir || madeDirs.has(dir)) return;
+            await ensureDir(dir);
+            madeDirs.add(dir);
+          };
+          for (const { e, rel } of picked) {
+            const dest = join(out, rel.replace(/\/+$/, ''));
+            try {
+              if (e.dir) {
+                await mk(dest);
+                continue;
+              }
+              await mk(dirname(dest));
+              if (!overwrite && (await M.fs.exists(dest))) {
+                existing.push(rel);
+                continue;
+              }
+              const data = await Z.extractEntry(bytes, e);
+              const mt = e.mtime.getTime();
+              // zip の日時を保つ（unzip と同じ）。日時の無い項目（1980 年）はいまの時刻のまま
+              const opts =
+                mt > Date.UTC(1981, 0, 1) ? { overwrite: true, meta: { updatedAt: mt } } : { overwrite: true };
+              await M.fs.write(dest, data, opts);
+              written.push(rel);
+              bytesWritten += data.length;
+            } catch (err) {
+              failed.push(rel + ': ' + (err && err.message ? err.message : String(err)));
+            }
+          }
+
+          let msg =
+            'Extracted: ' +
+            written.length +
+            ' file(s), ' +
+            Z.fmtSize(bytesWritten) +
+            ' → ' +
+            out +
+            '/ (from ' +
+            path +
+            ', ' +
+            cd.entries.length +
+            ' entries)';
+          if (existing.length)
+            msg +=
+              '\nAlready there, not overwritten (pass overwrite="true" to replace): ' +
+              existing.length +
+              (existing.length <= 10 ? ' — ' + existing.join(', ') : ' — ' + existing.slice(0, 10).join(', ') + ', …');
+          if (skipped.filtered) msg += '\nNot matching only="' + only.join(',') + '": ' + skipped.filtered;
+          if (skipped.stripped.length)
+            msg += '\nDropped by strip="' + strip + '" (not deep enough): ' + skipped.stripped.join(', ');
+          if (skipped.unsafe.length) msg += '\nSkipped unsafe names: ' + skipped.unsafe.join(', ');
+          if (skipped.encrypted.length) msg += '\nSkipped encrypted entries: ' + skipped.encrypted.join(', ');
+          if (skipped.unsupported.length) msg += '\nSkipped (unsupported method): ' + skipped.unsupported.join(', ');
+          if (failed.length) msg += '\nFailed: ' + failed.join('; ');
+          msg += encodingNote(cd);
+          const top = strip ? null : commonTop(cd.entries.filter((e) => Z.safeName(e.name)));
+          if (top && written.length)
+            msg +=
+              '\nNote: everything went under ' +
+              join(out, top) +
+              ' (the zip has one top folder). strip="1" would have dropped it.';
+          if (written.length)
+            msg += '\nFiles: ' + (written.length <= 30 ? written.join(', ') : written.slice(0, 30).join(', ') + ', …');
+          return msg;
+        }
+
+        // ---- zip_create ----
+        const walk = async (dir, acc) => {
+          const names = await M.fs.list(dir);
+          let any = false;
+          for (const n of names || []) {
+            const raw = typeof n === 'string' ? n : n && (n.path || n.name);
+            if (!raw) continue;
+            const p = raw.includes('/') ? raw : join(dir, raw);
+            const st = await M.fs.stat(p);
+            any = true;
+            if (st.kind === 'directory') await walk(p, acc);
+            else acc.push({ path: p, size: st.size, mtime: st.updatedAt });
+          }
+          if (!any) acc.push({ path: dir, dir: true });
+          return acc;
+        };
+        async function create(p) {
+          const srcs = Z.parsePatterns(p.src).map(norm).filter(Boolean);
+          if (!srcs.length) throw new Error('src is required (a directory, or comma-separated files/directories)');
+          const stats = [];
+          for (const s of srcs) {
+            if (!(await M.fs.exists(s))) throw new Error('Not found: ' + s);
+            stats.push({ path: s, stat: await M.fs.stat(s) });
+          }
+          const single = srcs.length === 1 ? stats[0] : null;
+          let out = norm(p.out);
+          if (!out) {
+            if (!single) throw new Error('out is required when src has more than one item');
+            out = single.path + '.zip';
+          }
+          if (!/\.zip$/i.test(out)) throw new Error('out must end with .zip: ' + out);
+          let prefix =
+            p.prefix === undefined
+              ? single && single.stat.kind === 'directory'
+                ? basename(single.path)
+                : ''
+              : String(p.prefix);
+          prefix = prefix.replace(/^\/+|\/+$/g, '');
+          const methodOpt = String(p.method || 'deflate').toLowerCase();
+          if (methodOpt !== 'deflate' && methodOpt !== 'store') throw new Error('method must be "deflate" or "store"');
+          const exclude = Z.parsePatterns(p.exclude);
+
+          // 集める: { path, rel }
+          const items = [];
+          for (const { path, stat } of stats) {
+            if (stat.kind === 'directory') {
+              const files = await walk(path, []);
+              const base = single ? '' : basename(path);
+              for (const f of files) {
+                let rel = f.path.slice(path.length).replace(/^\/+/, '');
+                rel = base ? (rel ? base + '/' + rel : base) : rel;
+                if (f.dir) items.push({ path: f.path, rel: rel ? rel + '/' : '', dir: true });
+                else items.push({ path: f.path, rel, size: f.size, mtime: f.mtime });
+              }
+            } else items.push({ path, rel: basename(path), size: stat.size, mtime: stat.updatedAt });
+          }
+          const selected = items.filter((it) => {
+            if (!it.rel) return false;
+            if (it.path === out) return false; // 自分自身を入れない
+            if (exclude.length && Z.matchesAny(it.rel, exclude)) return false;
+            return true;
+          });
+          const files = selected.filter((it) => !it.dir);
+          if (!files.length && !selected.length) throw new Error('Nothing to add (empty, or everything excluded)');
+          if (selected.length > 65535)
+            throw new Error('Too many entries (' + selected.length + '); zip64 is not supported');
+
+          const zipItems = [];
+          let total = 0;
+          let stored = 0;
+          for (const it of selected) {
+            const name = prefix ? prefix + '/' + it.rel : it.rel;
+            if (it.dir) {
+              zipItems.push({ name, mtime: Date.now() });
+              continue;
+            }
+            const data = await M.fs.read(it.path, { encoding: 'binary' });
+            total += data.length;
+            let method = Z.METHOD_STORE;
+            let compressed;
+            if (methodOpt === 'deflate' && data.length > 0) {
+              compressed = await Z.deflateRaw(data);
+              if (compressed.length < data.length) method = Z.METHOD_DEFLATE;
+            }
+            if (method === Z.METHOD_STORE) stored++;
+            zipItems.push({ name, data, method, compressed, mtime: it.mtime });
+          }
+          const zip = Z.buildZip(zipItems);
+          await ensureDir(dirname(out));
+          await M.fs.write(out, zip, { overwrite: true });
+          let msg =
+            'Wrote: ' +
+            out +
+            ' (' +
+            files.length +
+            ' file(s), ' +
+            Z.fmtSize(total) +
+            ' → ' +
+            Z.fmtSize(zip.length) +
+            (total ? ', ' + Math.round((zip.length / total) * 100) + '%' : '') +
+            (prefix ? ', top folder "' + prefix + '/"' : ', no top folder') +
+            ')';
+          if (methodOpt === 'deflate' && stored) msg += '\nStored without compression (no gain): ' + stored;
+          if (exclude.length)
+            msg += '\nExcluded by exclude="' + exclude.join(',') + '": ' + (items.length - selected.length);
+          msg += '\nNames are UTF-8 (flag set); Windows Explorer and modern tools read them correctly.';
+          return msg;
+        }
+
+        // 道具ごとに自分の define_tag だけを登録する（pdf_tool と同じ。T-0694）
+        const DEF = {
+          zip_list: [
+            '<define_tag name="zip_list">',
+            'Lists the entries of a zip in the VFS without extracting anything (names, sizes, methods). Call this first to see what is inside and whether it has a single top folder.',
+            'Attributes:',
+            '  - path (required): the .zip in the VFS',
+            '  - encoding (optional): encoding for names without the UTF-8 flag (default: ASCII → UTF-8 → shift_jis). Pass "utf-8" to force UTF-8',
+            '  - limit (optional): entries to show (default 200)',
+            'Returns: counts and sizes, one line per entry, notes on encrypted / unsupported / unsafe entries, and the default extraction target.',
+            '</define_tag>',
+          ].join('\n'),
+          zip_extract: [
+            '<define_tag name="zip_extract">',
+            'Extracts a zip in the VFS into a directory (store and deflate; processed in this browser, nothing is sent out).',
+            'Attributes:',
+            '  - path (required): the .zip in the VFS',
+            '  - out (optional): target directory. Default: a directory next to the zip with the same name (a/b.zip → a/b/)',
+            '  - only (optional): comma-separated names / globs to extract ("docs/", "**/*.md", "app"); matched against the name in the zip and against the name after strip. Default: everything',
+            '  - strip (optional): number of leading folders to drop (strip="1" when the zip has one top folder and you want its contents directly in out)',
+            '  - overwrite (optional): "true" replaces existing files. Default: existing files are kept and listed',
+            '  - encoding (optional): as in zip_list',
+            'Returns: "Extracted: N file(s), size → out/" plus what was skipped (existing, filtered, unsafe names, encrypted, unsupported) and failures.',
+            'Note: entries with ".." or absolute paths are never written. Zip64 (over 4 GB / 65,535 entries) and encrypted zips are refused.',
+            '</define_tag>',
+          ].join('\n'),
+          zip_create: [
+            '<define_tag name="zip_create">',
+            'Creates a zip in the VFS from a directory (or files). Names are written as UTF-8 with the flag set; deflate is used unless it does not shrink the file.',
+            'Attributes:',
+            '  - src (required): a directory, or comma-separated files/directories',
+            '  - out (optional): the .zip to write (overwritten). Default: <src>.zip next to src (required when src has several items)',
+            '  - prefix (optional): top folder inside the zip. Default: the directory name when src is one directory, none otherwise. prefix="" for none',
+            '  - method (optional): "deflate" (default) | "store"',
+            '  - exclude (optional): comma-separated globs relative to src ("node_modules", "**/*.log", ".git/")',
+            'Returns: "Wrote: <out> (N file(s), size → size, ratio, top folder)". The output file itself is never included. Zip64 is not supported.',
+            '</define_tag>',
+          ].join('\n'),
+        };
+        const defs = Object.values(DEF).join('\n');
+
+        const guard = (fn) => async (params) => {
+          try {
+            return await fn(params || {});
+          } catch (e) {
+            return errText(e);
+          }
+        };
+
+        M.tools.register({
+          name: 'zip_list',
+          description: 'List the entries of a zip file in the VFS (no extraction).',
+          definition: DEF.zip_list,
+          handler: guard(list),
+        });
+        M.tools.register({
+          name: 'zip_extract',
+          description: 'Extract a zip file in the VFS into a directory (store / deflate, in-browser).',
+          definition: DEF.zip_extract,
+          handler: guard(extract),
+        });
+        M.tools.register({
+          name: 'zip_create',
+          description: 'Create a zip file in the VFS from a directory or files (deflate, UTF-8 names, in-browser).',
+          definition: DEF.zip_create,
+          handler: guard(create),
+        });
+
+        M.ai.log(defs, 'tool_available');
+        log('Started (zip_list / zip_extract / zip_create).');
+        window.addEventListener('unload', () => {
+          for (const n of NAMES) M.tools.unregister(n);
+        });
+      })();
+    </script>
+  </body>
+</html>
