@@ -231,6 +231,11 @@ describe('ToolRegistry: 失敗のログの出し分け（T-0677）', () => {
       stat: () => ({ kind: 'file', size: 5 }),
       readFile: async () => 'hello',
       writeFile: async () => 'ok',
+      // edit は版の照合の輪（updateFile）を通る（T-0715）。fn の例外（一致しない）はそのまま出る
+      updateFile: async (_p: any, _path: string, fn: (c: string, v: number) => string | null) => {
+        await fn('hello', 1);
+        return { message: 'ok', version: 2, attempts: 1 };
+      },
     };
     const ctx = { shell: {}, engine: {}, vfs };
     const missing = await r.execute({ type: 'read_file', params: { path: 'nope.txt' } }, ctx);

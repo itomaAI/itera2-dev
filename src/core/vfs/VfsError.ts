@@ -18,7 +18,8 @@ export type VfsErrorCode =
   | 'EACCES' // 権限が無い
   | 'EINVAL' // 操作として成り立たない（ルートを消す・ゴミ箱の外を restore する など）
   | 'ENOSPC' // 容量が無い
-  | 'ESTUB'; // 実体が無く、取ってくることもできなかった
+  | 'ESTUB' // 実体が無く、取ってくることもできなかった
+  | 'ESTALE'; // 版が古い（読んでから書くまでの間に誰かが書いた。T-0715）
 
 export class VfsError extends Error {
   readonly code: VfsErrorCode;

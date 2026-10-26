@@ -80,6 +80,7 @@ export class HostTransport {
         // Guestからのリクエスト処理
         let result: any = null;
         let error: string | null = null;
+        let errorCode: string | null = null;
 
         // セキュリティ: 送信元の厳密な検証
         if (this.sourceValidator && !this.sourceValidator(msg.source, e.source as Window)) {
@@ -92,6 +93,8 @@ export class HostTransport {
               result = await handler(msg.payload, msg.source);
             } catch (err: any) {
               error = err.message || String(err);
+              // VfsError などの code を添える（ゲストは ESTALE を見分けて読み直す。T-0715）
+              errorCode = typeof err?.code === 'string' ? err.code : null;
             }
           } else {
             error = `[HostTransport] No handler registered for action: ${msg.action}`;
@@ -99,13 +102,13 @@ export class HostTransport {
         }
 
         // レスポンスの返送
-        const res = IpcMessage.createResponse(msg, result, error);
+        const res = IpcMessage.createResponse(msg, result, error, errorCode);
         if (e.source && typeof (e.source as any).postMessage === 'function') {
           (e.source as Window).postMessage(res, '*');
         }
       } else if (msg.type === 'res') {
         // Guestからのレスポンス受け取り（待機中のPromiseを解決）
-        this.rpc.resolve(msg.id, msg.payload, msg.error);
+        this.rpc.resolve(msg.id, msg.payload, msg.error, msg.errorCode ?? null);
       }
     });
   }

@@ -8,6 +8,7 @@ import type { VfsService } from '../../vfs/VfsService';
 import { AGENT_PRINCIPAL } from '../../vfs/types';
 import { parseEditBlocks, applyEditBlocks } from './editBlocks';
 import { ToolError } from '../ToolError';
+import { isVfsError } from '../../vfs/VfsError';
 import { mimeOfPath } from '../../chat/attachmentGate';
 import type { ToolResult } from '../../types/tools';
 
@@ -143,7 +144,7 @@ export function registerFSTools(registry: ToolRegistry): void {
   }
 
   /** ファイルを書く（write の本体。create_file の旧挙動は append 無し） */
-  async function writeResultRaw(vfs: VfsService, params: any): Promise<ToolResult> {
+  async function writeResult(vfs: VfsService, params: any): Promise<ToolResult> {
     const path: string = params.path;
     if (!path) throw new ToolError("Attribute 'path' is required.");
     const isOverwrite = params.overwrite === 'true';
@@ -154,13 +155,19 @@ export function registerFSTools(registry: ToolRegistry): void {
     content = content.replace(/^\r?\n/, '').replace(/\r?\n$/, '');
 
     if (isAppend) {
+      // 無ければ「まだ無いはず」（ifVersion: 0）で作る。その間に誰かが作っていれば ESTALE → 下の追記へ
       if (!vfs.exists(AGENT_PRINCIPAL, path)) {
-        const msg = await vfs.writeFile(AGENT_PRINCIPAL, path, content, { overwrite: false });
-        return { log: `${msg} (created; nothing to append to)`, ui: `📝 Created ${path}` };
+        try {
+          const msg = await vfs.writeFile(AGENT_PRINCIPAL, path, content, { overwrite: false, ifVersion: 0 });
+          return { log: `${msg} (created; nothing to append to)`, ui: `📝 Created ${path}` };
+        } catch (err) {
+          if (!(isVfsError(err) && err.code === 'ESTALE')) throw err;
+        }
       }
-      const current = await vfs.readFile(AGENT_PRINCIPAL, path);
-      const joined = current.length && !current.endsWith('\n') ? current + '\n' + content : current + content;
-      await vfs.writeFile(AGENT_PRINCIPAL, path, joined, { overwrite: true });
+      // 読む→足す→書く を版の照合で（T-0715）。並んだ追記はどれも落ちず、順に積まれる
+      await vfs.updateFile(AGENT_PRINCIPAL, path, (current) =>
+        current.length && !current.endsWith('\n') ? current + '\n' + content : current + content,
+      );
       return { log: `Appended to end of ${path}`, ui: `📝 Appended ${path}` };
     }
 
@@ -177,7 +184,7 @@ export function registerFSTools(registry: ToolRegistry): void {
   }
 
   /** 一部を直す（edit の本体。append は write へ） */
-  async function editResultRaw(vfs: VfsService, params: any, opts: { legacyName?: boolean } = {}): Promise<ToolResult> {
+  async function editResult(vfs: VfsService, params: any, opts: { legacyName?: boolean } = {}): Promise<ToolResult> {
     const path: string = params.path;
     if (!path) throw new ToolError("Attribute 'path' is required.");
     const content: string = params.content || '';
@@ -189,8 +196,6 @@ export function registerFSTools(registry: ToolRegistry): void {
         throw new ToolError('mode="append" is not part of <edit>. Use <write path="..." append="true">.');
       }
       if (!vfs.exists(AGENT_PRINCIPAL, path)) throw new ToolError(`File not found: ${path}`);
-      const fileContent = await vfs.readFile(AGENT_PRINCIPAL, path);
-      let lines = fileContent.split(/\r?\n/);
 
       let insertLines: string[] = [];
       if (content) {
@@ -205,81 +210,54 @@ export function registerFSTools(registry: ToolRegistry): void {
       const eLine = parseInt(params.end, 10);
       let log = '';
 
-      if (params.mode === 'replace') {
-        if (isNaN(eLine)) throw new ToolError('End line required for replace.');
-        const count = Math.max(0, eLine - sLine + 1);
-        while (lines.length < sIdx) lines.push('');
-        lines.splice(sIdx, count, ...insertLines);
-        log = `Replaced lines ${sLine}-${eLine}`;
-      } else if (params.mode === 'insert') {
-        while (lines.length < sIdx) lines.push('');
-        lines.splice(sIdx, 0, ...insertLines);
-        log = `Inserted at line ${sLine}`;
-      } else if (params.mode === 'delete') {
-        if (isNaN(eLine)) throw new ToolError('End line required for delete.');
-        const count = Math.max(0, eLine - sLine + 1);
-        lines.splice(sIdx, count);
-        log = `Deleted lines ${sLine}-${eLine}`;
-      } else if (params.mode === 'append') {
-        // 旧名 edit_file だけ。新しい形は <write append="true">
-        lines.push(...insertLines);
-        log = `Appended to end of file`;
-      } else {
-        throw new ToolError(`Unknown mode: ${params.mode}`);
-      }
+      // 行の差し替えは「いまの中身」に対して行う。読む→直す→書く は版の照合で守る（T-0715）
+      const applyLines = (fileContent: string): string => {
+        const lines = fileContent.split(/\r?\n/);
+        if (params.mode === 'replace') {
+          if (isNaN(eLine)) throw new ToolError('End line required for replace.');
+          const count = Math.max(0, eLine - sLine + 1);
+          while (lines.length < sIdx) lines.push('');
+          lines.splice(sIdx, count, ...insertLines);
+          log = `Replaced lines ${sLine}-${eLine}`;
+        } else if (params.mode === 'insert') {
+          while (lines.length < sIdx) lines.push('');
+          lines.splice(sIdx, 0, ...insertLines);
+          log = `Inserted at line ${sLine}`;
+        } else if (params.mode === 'delete') {
+          if (isNaN(eLine)) throw new ToolError('End line required for delete.');
+          const count = Math.max(0, eLine - sLine + 1);
+          lines.splice(sIdx, count);
+          log = `Deleted lines ${sLine}-${eLine}`;
+        } else if (params.mode === 'append') {
+          // 旧名 edit_file だけ。新しい形は <write append="true">
+          lines.push(...insertLines);
+          log = `Appended to end of file`;
+        } else {
+          throw new ToolError(`Unknown mode: ${params.mode}`);
+        }
+        return lines.join('\n');
+      };
 
-      await vfs.writeFile(AGENT_PRINCIPAL, path, lines.join('\n'), {
-        overwrite: true,
-      });
+      await vfs.updateFile(AGENT_PRINCIPAL, path, applyLines);
       return { log, ui: `✏️ Edited ${path} (${params.mode})` };
     }
 
     // SEARCH ブロック編集モード
     // 切り出しと適用は editBlocks.ts（VFS に触らない純粋な文字列処理）。ここは橋渡しだけを持つ。
     // どちらも例外を投げうるが、書き込みはその後なので **失敗すれば 1 文字も書かれない**。
+    // 読む→当てる→書く は版の照合で守る（T-0715）。同じファイルへ並んだ edit は、先に書かれた分を
+    // 読み直して当て直す。当たらなくなっていれば、そのときだけ「一致しない」の失敗になる。
     if (/<{4,}SEARCH/.test(content)) {
       const blocks = parseEditBlocks(content);
-      const currentFileContent = await vfs.readFile(AGENT_PRINCIPAL, path);
-      const newContent = applyEditBlocks(currentFileContent, blocks, { regex: params.regex === 'true' });
-
-      await vfs.writeFile(AGENT_PRINCIPAL, path, newContent, {
-        overwrite: true,
-      });
+      await vfs.updateFile(AGENT_PRINCIPAL, path, (current) =>
+        applyEditBlocks(current, blocks, { regex: params.regex === 'true' }),
+      );
       const blockMsg = blocks.length > 1 ? `${blocks.length} blocks updated` : 'Content replaced';
       return { log: blockMsg, ui: `✏️ Replaced content in ${path}` };
     }
 
     throw new ToolError(`Invalid <${tag}> content. Use SEARCH markers or specify 'mode' attribute.`);
   }
-
-  // ------------------------------------------------------------------
-  // 同じパスへの書き換えは直列にする（T-0714）
-  //
-  // Engine はターンの道具を 50 ms 間隔で並行に開始する。edit と write append は
-  // 「読む → 直す → 書く」の 3 手で、VfsLockManager が守るのは読みと書きの 1 手ずつ。
-  // 同じファイルへ edit を 4 つ出すと、読みが 50 ms より遅いとき 4 つとも最初の中身を読み、
-  // SEARCH は全部一致して success を返し、書き込みは最後の 1 つだけが残る（前の 3 つが黙って消える。
-  // 2026-08-24 T-0197、ミャク楽 prod の日誌 2026-10-21・10-23）。
-  //
-  // VFS の錠をここで取ると、内側の WriteFileOp が同じパスの錠を待って止まる（再入不可）ので、
-  // 道具の層でパスごとの約束の鎖を持つ。別のパスどうしは今までどおり並行。
-  // 鎖は失敗しても切れない（catch で呑む）。最後尾が自分なら Map から消して漏らさない。
-  // ------------------------------------------------------------------
-  const pathChains = new Map<string, Promise<unknown>>();
-  function serializedOnPath<T>(path: string, task: () => Promise<T>): Promise<T> {
-    const key = String(path || '').replace(/^\/+|\/+$/g, '');
-    const prev = pathChains.get(key) ?? Promise.resolve();
-    const run = prev.catch(() => undefined).then(task);
-    const chained = run.catch(() => undefined);
-    pathChains.set(key, chained);
-    return run.finally(() => {
-      if (pathChains.get(key) === chained) pathChains.delete(key);
-    });
-  }
-  const writeResult = (vfs: VfsService, params: any): Promise<ToolResult> =>
-    serializedOnPath(params?.path, () => writeResultRaw(vfs, params));
-  const editResult = (vfs: VfsService, params: any, opts: { legacyName?: boolean } = {}): Promise<ToolResult> =>
-    serializedOnPath(params?.path, () => editResultRaw(vfs, params, opts));
 
   const withNote = (note: string, r: ToolResult): ToolResult => ({ ...r, log: note + (r.log || '') });
 

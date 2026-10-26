@@ -169,6 +169,12 @@ export class HostApiRouter {
 
     t.registerHandler('fs:read', async ({ path, opts }, sourcePid) => {
       const principal = getPrincipal(sourcePid);
+      // 文字と一緒に版を返す（MetaOS.fs.update が使う。T-0715）。文字専用
+      if (opts && opts.withVersion) {
+        if (opts.encoding && opts.encoding !== 'utf8')
+          throw new Error('withVersion is for text: do not combine it with encoding.');
+        return await d.vfs.readFileWithVersion(principal, path, opts);
+      }
       if (opts && opts.encoding) {
         if (opts.encoding === 'binary') {
           const blob = await d.vfs.readBlob(principal, path, opts);

@@ -16,6 +16,8 @@ import {
   type RenameOptions,
   type CopyOptions,
   type StubOptions,
+  type TextWithVersion,
+  type UpdateResult,
   type SyncStateTree,
   type TreeNode,
   type Principal,
@@ -33,7 +35,7 @@ import { DeleteFileOp, RenameOp, CopyOp, RestoreOp } from './operations/Transfer
 import { SetAclOp, SetAclRecursiveOp } from './operations/AclOps';
 import type { ProviderManager } from './ProviderManager';
 import { VFS_HARD_LIMITS } from '../../config/constants';
-import { VfsError } from './VfsError';
+import { VfsError, isVfsError } from './VfsError';
 
 export class VfsService {
   private nodeStore: NodeStore;
@@ -407,7 +409,26 @@ export class VfsService {
     return await blob.text();
   }
 
+  /**
+   * 文字として読み、そのときの版も返す（T-0715）。
+   * 版は**中身を読みに行く前**に取る。読みに行っている間に誰かが書いても、
+   * 「古い中身に新しい版」という組は決して返らない（逆の「新しい中身に古い版」は
+   * writeFile の ifVersion が ESTALE で断るだけなので害が無い）。
+   */
+  async readFileWithVersion(principal: Principal, path: string, opts: ReadOptions = {}): Promise<TextWithVersion> {
+    const { blob, version } = await this._readBlobAndVersion(principal, path, opts);
+    return { content: await blob.text(), version };
+  }
+
   async readBlob(principal: Principal, path: string, opts: ReadOptions = {}): Promise<Blob> {
+    return (await this._readBlobAndVersion(principal, path, opts)).blob;
+  }
+
+  private async _readBlobAndVersion(
+    principal: Principal,
+    path: string,
+    opts: ReadOptions,
+  ): Promise<{ blob: Blob; version: number }> {
     const normPath = this.pathResolver.normalizePath(path);
     const id = this.pathResolver.getIdByPath(normPath);
 
@@ -428,9 +449,48 @@ export class VfsService {
         throw new Error(`Provider claimed success but file is still a stub.`);
     }
 
-    if (!node.contentRef) return new Blob([]);
-    return await this.contentStore.readBlob(node.contentRef);
+    // 実体化のあとの版（実体化は writeFile なので版が上がる）。中身を読む前に取る
+    const version = node.meta.version;
+    if (!node.contentRef) return { blob: new Blob([]), version };
+    return { blob: await this.contentStore.readBlob(node.contentRef), version };
   }
+
+  /**
+   * 読んで→直して→書く を版の照合で守る（T-0715）。
+   * updater が返した文字列を `ifVersion` 付きで書き、その間に誰かが書いていれば（ESTALE）
+   * 読み直して updater をやり直す。updater が `null` を返したら書かない（変更なし）。
+   * updater の中で投げた例外はそのまま呼んだ側へ（SEARCH が当たらない など）。
+   * ファイルが無ければ ENOENT（作るのは writeFile の仕事）。
+   */
+  async updateFile(
+    principal: Principal,
+    path: string,
+    updater: (current: string, version: number) => string | null | Promise<string | null>,
+    opts: { maxAttempts?: number; system?: boolean } = {},
+  ): Promise<UpdateResult> {
+    const maxAttempts = Math.max(1, opts.maxAttempts ?? VfsService.UPDATE_MAX_ATTEMPTS);
+    let attempts = 0;
+    for (;;) {
+      attempts++;
+      const { content, version } = await this.readFileWithVersion(principal, path);
+      const next = await updater(content, version);
+      if (next === null) return { message: `Unchanged ${this.pathResolver.normalizePath(path)}`, version, attempts };
+      try {
+        const message = await this.writeFile(principal, path, next, {
+          overwrite: true,
+          ifVersion: version,
+          system: opts.system,
+        });
+        return { message, version: version + 1, attempts };
+      } catch (err) {
+        if (!(isVfsError(err) && err.code === 'ESTALE') || attempts >= maxAttempts) throw err;
+        // 誰かが先に書いた。読み直して当て直す
+      }
+    }
+  }
+
+  /** updateFile が ESTALE で読み直す上限。超えたら最後の ESTALE をそのまま投げる */
+  static readonly UPDATE_MAX_ATTEMPTS = 8;
 
   async createStub(
     principal: Principal,

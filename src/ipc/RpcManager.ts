@@ -9,9 +9,12 @@
  * 受け取る側はこれなら「相手の答え」、それ以外なら「経路の失敗」として扱える。
  */
 export class RpcRemoteError extends Error {
-  constructor(message: string) {
+  /** 相手が添えた短い名前（VfsError.code など）。無ければ undefined（T-0715） */
+  readonly code?: string;
+  constructor(message: string, code?: string | null) {
     super(message);
     this.name = 'RpcRemoteError';
+    if (code) this.code = code;
   }
 }
 
@@ -42,14 +45,14 @@ export class RpcManager {
     });
   }
 
-  resolve(id: string, result: any, error: string | null = null): void {
+  resolve(id: string, result: any, error: string | null = null, errorCode: string | null = null): void {
     if (this.pendingRequests.has(id)) {
       const { resolve, reject, timeoutId } = this.pendingRequests.get(id)!;
       clearTimeout(timeoutId);
       this.pendingRequests.delete(id);
 
       if (error) {
-        reject(new RpcRemoteError(error));
+        reject(new RpcRemoteError(error, errorCode));
       } else {
         resolve(result);
       }
