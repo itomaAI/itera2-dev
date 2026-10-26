@@ -143,7 +143,7 @@ export function registerFSTools(registry: ToolRegistry): void {
   }
 
   /** ファイルを書く（write の本体。create_file の旧挙動は append 無し） */
-  async function writeResult(vfs: VfsService, params: any): Promise<ToolResult> {
+  async function writeResultRaw(vfs: VfsService, params: any): Promise<ToolResult> {
     const path: string = params.path;
     if (!path) throw new ToolError("Attribute 'path' is required.");
     const isOverwrite = params.overwrite === 'true';
@@ -177,7 +177,7 @@ export function registerFSTools(registry: ToolRegistry): void {
   }
 
   /** 一部を直す（edit の本体。append は write へ） */
-  async function editResult(vfs: VfsService, params: any, opts: { legacyName?: boolean } = {}): Promise<ToolResult> {
+  async function editResultRaw(vfs: VfsService, params: any, opts: { legacyName?: boolean } = {}): Promise<ToolResult> {
     const path: string = params.path;
     if (!path) throw new ToolError("Attribute 'path' is required.");
     const content: string = params.content || '';
@@ -251,6 +251,35 @@ export function registerFSTools(registry: ToolRegistry): void {
 
     throw new ToolError(`Invalid <${tag}> content. Use SEARCH markers or specify 'mode' attribute.`);
   }
+
+  // ------------------------------------------------------------------
+  // 同じパスへの書き換えは直列にする（T-0714）
+  //
+  // Engine はターンの道具を 50 ms 間隔で並行に開始する。edit と write append は
+  // 「読む → 直す → 書く」の 3 手で、VfsLockManager が守るのは読みと書きの 1 手ずつ。
+  // 同じファイルへ edit を 4 つ出すと、読みが 50 ms より遅いとき 4 つとも最初の中身を読み、
+  // SEARCH は全部一致して success を返し、書き込みは最後の 1 つだけが残る（前の 3 つが黙って消える。
+  // 2026-08-24 T-0197、ミャク楽 prod の日誌 2026-10-21・10-23）。
+  //
+  // VFS の錠をここで取ると、内側の WriteFileOp が同じパスの錠を待って止まる（再入不可）ので、
+  // 道具の層でパスごとの約束の鎖を持つ。別のパスどうしは今までどおり並行。
+  // 鎖は失敗しても切れない（catch で呑む）。最後尾が自分なら Map から消して漏らさない。
+  // ------------------------------------------------------------------
+  const pathChains = new Map<string, Promise<unknown>>();
+  function serializedOnPath<T>(path: string, task: () => Promise<T>): Promise<T> {
+    const key = String(path || '').replace(/^\/+|\/+$/g, '');
+    const prev = pathChains.get(key) ?? Promise.resolve();
+    const run = prev.catch(() => undefined).then(task);
+    const chained = run.catch(() => undefined);
+    pathChains.set(key, chained);
+    return run.finally(() => {
+      if (pathChains.get(key) === chained) pathChains.delete(key);
+    });
+  }
+  const writeResult = (vfs: VfsService, params: any): Promise<ToolResult> =>
+    serializedOnPath(params?.path, () => writeResultRaw(vfs, params));
+  const editResult = (vfs: VfsService, params: any, opts: { legacyName?: boolean } = {}): Promise<ToolResult> =>
+    serializedOnPath(params?.path, () => editResultRaw(vfs, params, opts));
 
   const withNote = (note: string, r: ToolResult): ToolResult => ({ ...r, log: note + (r.log || '') });
 
