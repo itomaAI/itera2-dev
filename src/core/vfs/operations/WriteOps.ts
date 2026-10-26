@@ -86,6 +86,21 @@ export class WriteFileOp extends BaseOperation<
         const now = Date.now();
         let eventType = 'create';
 
+        // 版の照合（T-0715）。錠の中で見るので、ここで一致すれば書き終わるまで誰も割り込めない。
+        // 「無い」は版 0 とみなす。読んだ版と違えば、何も書かずに断る（呼んだ側が読み直す）。
+        if (opts.ifVersion !== undefined) {
+          const current =
+            existingId !== undefined && existingId !== null
+              ? (this.ctx.nodeStore.getNode(existingId)?.meta.version ?? 0)
+              : 0;
+          if (current !== opts.ifVersion) {
+            throw new VfsError(
+              'ESTALE',
+              `Stale write to ${normPath}: expected version ${opts.ifVersion} but the file is at version ${current}. Read it again and reapply the change.`,
+            );
+          }
+        }
+
         if (existingId !== undefined && existingId !== null) {
           if (!opts.overwrite)
             throw new VfsError('EEXIST', `File already exists at ${normPath}. Set overwrite=true to overwrite.`);

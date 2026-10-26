@@ -227,6 +227,25 @@ export interface WriteOptions {
    * 指定が無ければ従来どおり、書いた時刻が updatedAt になる。
    */
   meta?: { createdAt?: number; updatedAt?: number };
+  /**
+   * 版の照合（T-0715）。読んだときの版を添えると、書く瞬間にノードの版と比べ、違えば
+   * 1 文字も書かずに VfsError('ESTALE') で断る（その間に誰かが書いた）。
+   * 0 は「まだ無いはず」（既にあれば ESTALE）。省略すれば今までどおり比べない。
+   */
+  ifVersion?: number;
+}
+
+/** readFileWithVersion の戻り（T-0715）。version は中身を読みに行く前のノードの版 */
+export interface TextWithVersion {
+  content: string;
+  version: number;
+}
+
+/** updateFile の戻り（T-0715）。attempts は ESTALE で読み直した回数を含む試行の数 */
+export interface UpdateResult {
+  message: string;
+  version: number;
+  attempts: number;
 }
 
 export interface DeleteOptions {

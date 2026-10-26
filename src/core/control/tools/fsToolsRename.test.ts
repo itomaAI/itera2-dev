@@ -42,6 +42,13 @@ function fakeVfs(files: Record<string, string>) {
           store[path] = content;
           return `Wrote ${path}`;
         },
+        // 版の照合の輪（T-0715）。ここでは競合しないので、読んで→当てて→書く を 1 回
+        updateFile: async (_p: unknown, path: string, updater: (c: string, v: number) => string | null) => {
+          if (!(path in store)) throw new ToolError(`File not found: ${path}`);
+          const next = await updater(store[path], 1);
+          if (next !== null) store[path] = next;
+          return { message: `Wrote ${path}`, version: 2, attempts: 1 };
+        },
       },
     } as any,
   };

@@ -50,7 +50,9 @@ The **Guest** environment (where apps run) is isolated from the **Host** (where 
 
 *   **File System (`MetaOS.fs`)**:
     *   `.read(path)`: Reads a file.
-    *   `.write(path, content, opts)`: Writes a file. To overwrite an existing file, you MUST pass `{ overwrite: true }` in `opts`.
+    *   `.write(path, content, opts)`: Writes a file. To overwrite an existing file, you MUST pass `{ overwrite: true }` in `opts`. `opts.ifVersion` (optional) makes the write conditional: the host compares it with the file's current `version` inside the write lock and refuses with an error whose `code` is `'ESTALE'` — nothing is written — when they differ (`ifVersion: 0` = "must not exist yet"). Without `ifVersion` the last writer wins, as before.
+    *   `.read(path, { withVersion: true })`: Returns `{ content, version }` (text only). The version is taken before the content is read, so a stale content is never paired with a newer version.
+    *   `.update(path, updater, opts)`: Read-modify-write guarded by versions. Reads with the version, calls `updater(content, version)` (return the new text, or `null` to leave the file untouched), writes with `ifVersion`, and on `ESTALE` reads again and re-applies `updater` (up to `opts.maxAttempts`, default 8). Returns `{ message, version, attempts }`. Use this instead of a `read` + `write` pair whenever anything else (the AI, another app, a sync provider) may write the same file; a plain pair silently loses one of two concurrent edits. The AI's `edit` / `write append` tools go through the same mechanism.
     *   `.list(path, opts)`: Lists files and directories. (Returns `string[]` or an array of objects if `opts.detail=true`).
     *   `.stat(path)`: Returns file metadata as a plain object `{ id, path, name, kind, size, createdAt, updatedAt, mimeType, version, hash, flags, acl }`. *Note: Itera OS does NOT use Node.js `fs.Stats` objects. Check `kind === 'directory'` instead of calling `isDirectory()`.*
     *   `.getSyncState(path)`: Returns a lightweight, flat dictionary of file versions and hashes (`{ "path/to/file": { hash, version, updatedAt } }`) optimized for fast directory tree synchronization.

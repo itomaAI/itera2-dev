@@ -21,8 +21,8 @@
         error: null,
       };
     }
-    static createResponse(reqMessage, result, error = null) {
-      return {
+    static createResponse(reqMessage, result, error = null, errorCode = null) {
+      const res = {
         protocol: PROTOCOL_VERSION,
         type: 'res',
         id: reqMessage.id,
@@ -32,6 +32,8 @@
         payload: result,
         error: error ? String(error) : null,
       };
+      if (error && errorCode) res.errorCode = String(errorCode);
+      return res;
     }
     static createEvent(source, target, action, payload = {}) {
       return {
@@ -66,13 +68,17 @@
         this.pendingRequests.set(id, { resolve, reject, timeoutId });
       });
     }
-    resolve(id, result, error = null) {
+    resolve(id, result, error = null, errorCode = null) {
       if (this.pendingRequests.has(id)) {
         const pending = this.pendingRequests.get(id);
         clearTimeout(pending.timeoutId);
         this.pendingRequests.delete(id);
-        if (error) pending.reject(new Error(error));
-        else pending.resolve(result);
+        if (error) {
+          const err = new Error(error);
+          // ホストが添えた短い名前（VfsError.code など）。err.code で見分けられる（T-0715）
+          if (errorCode) err.code = String(errorCode);
+          pending.reject(err);
+        } else pending.resolve(result);
       }
     }
   }
@@ -114,19 +120,21 @@
         if (msg.type === 'req') {
           const handler = this.handlers.get(msg.action);
           let result = null,
-            error = null;
+            error = null,
+            errorCode = null;
           if (handler) {
             try {
               result = await handler(msg.payload);
             } catch (err) {
               error = err.message || String(err);
+              errorCode = err && typeof err.code === 'string' ? err.code : null;
             }
           } else {
             error = 'No handler registered for action: ' + msg.action;
           }
-          if (e.source) e.source.postMessage(IpcMessage.createResponse(msg, result, error), '*');
+          if (e.source) e.source.postMessage(IpcMessage.createResponse(msg, result, error, errorCode), '*');
         } else if (msg.type === 'res') {
-          this.rpc.resolve(msg.id, msg.payload, msg.error);
+          this.rpc.resolve(msg.id, msg.payload, msg.error, msg.errorCode || null);
         } else if (msg.type === 'event') {
           const listeners = this.eventListeners.get(msg.action);
           if (listeners) listeners.forEach((cb) => cb(msg.payload));
@@ -233,6 +241,27 @@
       read: async (path, opts = {}) => transport.requestHost('fs:read', { path, opts }),
       write: async (path, content, opts = {}) => transport.requestHost('fs:write', { path, content, opts }),
       append: async (path, content, opts = {}) => transport.requestHost('fs:append', { path, content, opts }),
+      // 読む→直す→書く を版の照合で守る（T-0715）。updater は (content, version) => 新しい中身 | null（null なら書かない）。
+      // 書く瞬間に版が違えば（その間に誰かが書いた）読み直して updater をやり直す。上限は opts.maxAttempts（既定 8）。
+      // updater はこの窓（ゲスト）で走るので、輪もここで回す（関数は iframe を越えられない）。
+      update: async (path, updater, opts = {}) => {
+        const maxAttempts = Math.max(1, opts.maxAttempts || 8);
+        for (let attempts = 1; ; attempts++) {
+          const { content, version } = await transport.requestHost('fs:read', { path, opts: { withVersion: true } });
+          const next = await updater(content, version);
+          if (next === null || next === undefined) return { message: 'Unchanged ' + path, version, attempts };
+          try {
+            const message = await transport.requestHost('fs:write', {
+              path,
+              content: next,
+              opts: { overwrite: true, ifVersion: version, silent: opts.silent },
+            });
+            return { message, version: version + 1, attempts };
+          } catch (err) {
+            if (!(err && err.code === 'ESTALE') || attempts >= maxAttempts) throw err;
+          }
+        }
+      },
       delete: async (path, opts = {}) => transport.requestHost('fs:delete', { path, opts }),
       rename: async (oldPath, newPath, opts = {}) => transport.requestHost('fs:rename', { oldPath, newPath, opts }),
       restore: async (path, opts = {}) => transport.requestHost('fs:restore', { path, opts }),

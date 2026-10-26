@@ -27,6 +27,15 @@
 **新しく内部への直接依存を足さないこと。** 必要な口が無いなら `VfsService` に足す。
 既存の 20 件は、触る用が生じたときに順次入口へ寄せる（一括の移動はしないと決めた。T-0038）。
 
+## 版の照合（T-0715）
+
+`writeFile(…, { ifVersion })` は錠の中でノードの版（`meta.version`。書くたびに 1 増える）と比べ、違えば
+`VfsError('ESTALE')` で断る（1 文字も書かない）。`readFileWithVersion` は**中身を読みに行く前**に版を取る
+（「古い中身に新しい版」を作らない）。`updateFile(path, fn)` はその輪（読む→fn→書く→ESTALE なら読み直す）。
+錠は各操作の 1 手しか守らないので、読む→直す→書く の 3 手はこれで守る（`VfsLockManager` は再入不可なので、
+外側で同じパスの錠を取ると `WriteFileOp` が自分を待って止まる —— 錠を伸ばすのではなく版で守る、が決め）。
+ゲストには `MetaOS.fs.update` / `read(..., { withVersion })` / `write(..., { ifVersion })`、`error.code === 'ESTALE'`。
+
 ## 試験の置き場
 
 ここに置くのは、**このディレクトリの実装を import する試験**だけ。
