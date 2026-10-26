@@ -100,6 +100,8 @@ export const ATTACHMENT_POLICY: AttachmentPolicy = {
     hints: {
       'application/pdf':
         'To read it whole, use <attach_file> (a PDF keeps its text layer). For a large one, spawn system/services/pdf_tool.html and use pdf_info → pdf_extract → attach_file (or pdf_text for plain text).',
+      'application/zip':
+        'To see or extract its contents, spawn system/services/zip_tool.html and use zip_list → zip_extract.',
       'audio/*': 'To listen to it, use <attach_file> (if the model accepts audio).',
       'video/*': 'To watch it, use <attach_file> (if the model accepts video).',
       default: 'Inspect it from a script, or use <attach_file> if the model accepts this type.',

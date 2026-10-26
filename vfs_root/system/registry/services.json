@@ -46,5 +46,13 @@
     "path": "system/services/pdf_tool.html",
     "description": "On demand (spawn when needed). pdf_info / pdf_extract (pages → smaller PDF) / pdf_pages (pages → PNG) / pdf_text (text extraction) using the host-shipped pdf.js and pdf-lib via MetaOS.vendor.",
     "autoStart": false
+  },
+  {
+    "id": "zip_tool",
+    "name": "Zip Tool",
+    "icon": "🗜️",
+    "path": "system/services/zip_tool.html",
+    "description": "On demand (spawn when needed). zip_list / zip_extract / zip_create using the browser's CompressionStream (deflate); no external library. Names: UTF-8 flag or cp932 fallback.",
+    "autoStart": false
   }
 ]

@@ -33,6 +33,8 @@ export function registerFSTools(registry: ToolRegistry): void {
     /\.(png|jpg|jpeg|gif|webp|ico|bmp|pdf|zip|tar|gz|7z|rar|mp3|wav|mp4|webm|ogg|wasm|bin|exe|dll|so|dylib|class|jar|docx|xlsx|pptx)$/i;
   const PDF_PAGES_HINT =
     'spawn system/services/pdf_tool.html and use pdf_info → pdf_extract → attach_file (pdf_pages only when the look matters, pdf_text for plain text)';
+  // zip もホストでは開かない（展開・作成はゲストの zip_tool。T-0712）
+  const ZIP_HINT = 'spawn system/services/zip_tool.html and use zip_list → zip_extract (zip_create to build one)';
 
   const LEGACY_READ =
     '[read_file is a legacy name. Use <read> for text (line ranges) or <attach_file> for the whole file as media.]\n';
@@ -77,7 +79,9 @@ export function registerFSTools(registry: ToolRegistry): void {
       const hint =
         mime === 'application/pdf'
           ? `To read selected pages, ${PDF_PAGES_HINT}. To put the WHOLE document in the context, use <attach_file>.`
-          : 'Use <attach_file path="..."> to put the whole file in the context as media.';
+          : mime === 'application/zip'
+            ? `To see or extract its contents, ${ZIP_HINT}.`
+            : 'Use <attach_file path="..."> to put the whole file in the context as media.';
       throw new ToolError(`${path} is not a text file (${why}). <read> returns text only. ${hint}`);
     };
 
@@ -337,6 +341,9 @@ export function registerFSTools(registry: ToolRegistry): void {
       // PDF のページ数はホストで数えない（pdf.js を持つのはゲストの pdf_tool。推測の数字を出さない）
       if (stat.kind === 'file' && /\.pdf$/i.test(stat.name || '')) {
         log += `PDF: page count and text layer → <pdf_info> (spawn system/services/pdf_tool.html); selected pages → <pdf_extract> then <attach_file>. <attach_file> on the original sends every page.\n`;
+      }
+      if (stat.kind === 'file' && /\.zip$/i.test(stat.name || '')) {
+        log += `Zip: contents → <zip_list>, extract → <zip_extract> (spawn system/services/zip_tool.html).\n`;
       }
       log += `Created: ${new Date(stat.createdAt).toISOString()}\n`;
       log += `Updated: ${new Date(stat.updatedAt).toISOString()}\n`;

@@ -34,3 +34,5 @@
 - `localBridgeRelease.test.ts` … スタブへ戻す操作（ホスト側の一致を確かめてから消す）
 - `localBridgeVanished.test.ts` … リモートから消えたときの扱い
 - `test_bridge_server.py` … long-poll と版（rev）の表現
+- `pdfTool.test.ts` / `pdfExtract.test.ts` … PDF の道具（`pdf_tool.html`・`pdf_text.js`）
+- `zipTool.test.ts` … zip の道具（`zip_tool.html`・`zip_core.js`。偽の VFS で往復する）
