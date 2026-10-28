@@ -29,6 +29,17 @@ python3 itera_bridge_server.py detach foo             # remove
 ```
 
 Roots are persisted in `~/.itera/roots.json`, so they come back on the next start.
+
+To run a **second server on the same machine** with its own roots and identity (for example, one
+server per Itera instance), point it at another config directory with the environment variable
+`ITERA_CONFIG_DIR` (the server reports it as `configDir` in `/api/status`):
+
+```bash
+ITERA_CONFIG_DIR=~/.itera-private python3 itera_bridge_server.py serve --port 8004
+```
+
+Do not fake `HOME` for this: `bash_exec` resolves `~` and the default working directory of
+`scope: host` from `HOME`, so the shell would land in the wrong place.
 For a machine behind ssh, forward with `ssh -L 8002:localhost:8002 <host>` and add
 `http://127.0.0.1:8002` in the settings app. **You do not have to type a connection name** (the server announces its own).
 
@@ -232,6 +243,7 @@ The large spread comes from that 0–5 seconds.
 
 ## Change log
 
+* v3.8.1 — `ITERA_CONFIG_DIR` picks the config directory (`roots.json` / `machine.json`), so two servers on one machine can keep separate roots and identities. `/api/status` carries `configDir`.
 * Daemon v3.13 / server v3.8.0 — **Renames and moves are done on the host side (`onMove`, T-0691)**.
   Renaming or moving a folder that contains stubs (files whose contents have not been fetched) used to make the OS fetch
   every one of them first (T-0689). Now the daemon moves the real files on the host through the server's `POST /api/{root}/move`

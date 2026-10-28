@@ -14,6 +14,8 @@ Itera OS の VFS へ `local/<接続名>/<ルート名>` としてマウントさ
 
 設計上の約束:
   * ルート一覧は ~/.itera/roots.json に永続化する。プロセスを落としても消えない。
+    置き場は環境変数 ITERA_CONFIG_DIR で差し替えられる（同じ機械で 2 つ目のサーバーを、
+    ルート一覧と同一性を分けて動かすため。HOME を偽ると bash_exec の ~ まで変わる）。
   * シェル実行の「都度確認」は OS 側（ブラウザ）の責務。ホストには UI が無いため、
     サーバーは --exec off という固い遮断だけを持つ。
   * 作業ディレクトリは永続化しない。毎回ルート起点で実行し、実効ディレクトリを返す。
@@ -36,12 +38,16 @@ import time
 import uuid
 from pathlib import Path
 
-VERSION = "3.8.0"
+VERSION = "3.8.1"
 # long-poll（変更があるまで応答を保留する）の上限と刻み。
 # 刻みは応答の遅れの下限になるので細かく、ただし空回りが目に見えない程度に。
 MAX_LONG_POLL_SEC = 60.0
 LONG_POLL_STEP_SEC = 0.1
-CONFIG_DIR = Path.home() / ".itera"
+CONFIG_DIR = (
+    Path(os.environ["ITERA_CONFIG_DIR"]).expanduser()
+    if os.environ.get("ITERA_CONFIG_DIR")
+    else Path.home() / ".itera"
+)
 ROOTS_FILE = CONFIG_DIR / "roots.json"
 MACHINE_FILE = CONFIG_DIR / "machine.json"
 DEFAULT_IGNORE = [
@@ -437,6 +443,7 @@ def build_app(bridge):
         # アンカー照合（別の機械に繋ぎ替えられていないか）に使う。
         out = {
             "version": VERSION,
+            "configDir": str(CONFIG_DIR),
             "execEnabled": bridge.exec_enabled,
             "roots": bridge.describe(),
             "ignorePatterns": bridge.state["ignorePatterns"],
