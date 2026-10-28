@@ -243,7 +243,7 @@ The large spread comes from that 0–5 seconds.
 
 ## Change log
 
-* v3.8.1 — `ITERA_CONFIG_DIR` picks the config directory (`roots.json` / `machine.json`), so two servers on one machine can keep separate roots and identities. `/api/status` carries `configDir`.
+* v3.8.1 — `ITERA_CONFIG_DIR` picks the config directory (`roots.json` / `machine.json`), so two servers on one machine can keep separate roots and identities. `/api/status` carries `configDir`. The CLI (`attach` / `detach` / `ls`) takes `--host` for a server that does not listen on `127.0.0.1`.
 * Daemon v3.13 / server v3.8.0 — **Renames and moves are done on the host side (`onMove`, T-0691)**.
   Renaming or moving a folder that contains stubs (files whose contents have not been fetched) used to make the OS fetch
   every one of them first (T-0689). Now the daemon moves the real files on the host through the server's `POST /api/{root}/move`

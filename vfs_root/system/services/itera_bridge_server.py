@@ -932,10 +932,10 @@ def scan_loop(bridge, quiet_sec=1.5, safety_sec=60.0):
 # CLI
 # --------------------------------------------------------------------------
 
-def cli_request(port, method, path, payload=None):
+def cli_request(port, method, path, payload=None, host="127.0.0.1"):
     import urllib.error
     import urllib.request
-    url = f"http://127.0.0.1:{port}{path}"
+    url = f"http://{host}:{port}{path}"
     data = json.dumps(payload).encode() if payload is not None else None
     req = urllib.request.Request(url, data=data, method=method)
     if data:
@@ -961,13 +961,16 @@ def main():
     p_attach.add_argument("dir", nargs="?", default=".")
     p_attach.add_argument("--name")
     p_attach.add_argument("--port", type=int, default=8001)
+    p_attach.add_argument("--host", default="127.0.0.1", help="where the server listens (serve --host)")
 
     p_detach = sub.add_parser("detach", help="detach a root")
     p_detach.add_argument("name")
     p_detach.add_argument("--port", type=int, default=8001)
+    p_detach.add_argument("--host", default="127.0.0.1", help="where the server listens (serve --host)")
 
     p_ls = sub.add_parser("ls", help="list the roots")
     p_ls.add_argument("--port", type=int, default=8001)
+    p_ls.add_argument("--host", default="127.0.0.1", help="where the server listens (serve --host)")
 
     args = parser.parse_args()
 
@@ -997,17 +1000,17 @@ def main():
 
     if args.cmd == "attach":
         path = str(Path(args.dir).expanduser().resolve())
-        res = cli_request(args.port, "POST", "/api/roots", {"path": path, "name": args.name})
+        res = cli_request(args.port, "POST", "/api/roots", {"path": path, "name": args.name}, host=args.host)
         print(f"[itera] Added: {res.get('name')} -> {path}")
         return
 
     if args.cmd == "detach":
-        cli_request(args.port, "DELETE", f"/api/roots/{args.name}")
+        cli_request(args.port, "DELETE", f"/api/roots/{args.name}", host=args.host)
         print(f"[itera] Detached: {args.name}")
         return
 
     if args.cmd == "ls":
-        res = cli_request(args.port, "GET", "/api/roots")
+        res = cli_request(args.port, "GET", "/api/roots", host=args.host)
         for r in res.get("roots", []):
             print(f"  {r['name']:<20} {r['files']:>7} files  {r['path']}")
         return
