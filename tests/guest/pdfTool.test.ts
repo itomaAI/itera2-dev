@@ -121,6 +121,15 @@ describe('置き場と配線', () => {
     expect(existsSync(resolve(ROOT, 'vfs_root/system/vendor/pdf-lib.esm.min.js'))).toBe(false);
     expect(read('scripts/copy_vendor.js')).toContain("put('pdflib', '@cantoo/pdf-lib'");
   });
+  it('裏タブでも進む: 描画は intent print（rAF の刻みに乗せない）、pdf-lib は UI に順番を譲らない', () => {
+    // 'display' は operator list を requestAnimationFrame の刻みで実行するので、タブが裏だと一歩も進まず
+    // 150 秒の RPC で時間切れになる（画素は同じ）。pdf-lib の既定は 100 オブジェクトごとに setTimeout(0) で
+    // 譲り、裏タブではそのタイマーが 1 秒刻みになる（35 MB の図面で 43 回）。どちらも prod の日誌で踏んだ（T-0713）
+    const daemon = read('vfs_root/system/services/pdf_tool.html');
+    expect(daemon).toMatch(/page\.render\(\{[^}]*intent: 'print'/);
+    expect(daemon).toMatch(/PDFDocument\.load\([^)]*parseSpeed: ParseSpeeds\.Fastest/s);
+    expect(daemon).toMatch(/\.save\(\{[^}]*objectsPerTick: Infinity/);
+  });
   it('4 つの道具と旧名を登録し、常駐しない', () => {
     const daemon = read('vfs_root/system/services/pdf_tool.html');
     for (const n of ['pdf_info', 'pdf_extract', 'pdf_pages', 'pdf_text', 'pdf_to_text'])

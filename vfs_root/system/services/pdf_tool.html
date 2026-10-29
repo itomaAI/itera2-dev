@@ -164,9 +164,16 @@
           if (!(await M.fs.exists(path))) throw new Error('Not found: ' + path);
           const data = await M.fs.read(path, { encoding: 'binary' });
           if (!data || !data.length) throw new Error('File is empty: ' + path);
-          const { PDFDocument } = await pdflib();
+          const { PDFDocument, ParseSpeeds } = await pdflib();
           // 暗号化された PDF は断る（pdf.js と同じ扱い。ignoreEncryption で無理に開くと壊れた写しができる）
-          const src = await PDFDocument.load(data, { ignoreEncryption: false, updateMetadata: false });
+          // parseSpeed: Fastest —— pdf-lib の既定は 100 オブジェクトごとに setTimeout(0) で UI に順番を譲る。
+          // このデーモンに UI は無く、タブが裏だとそのタイマーが 1 秒刻みになる（35 MB の図面で 43 回 → 43 秒。
+          // 大きな伏図では 150 秒を超える）。save の objectsPerTick も同じ理由で無限に。
+          const src = await PDFDocument.load(data, {
+            ignoreEncryption: false,
+            updateMetadata: false,
+            parseSpeed: ParseSpeeds.Fastest,
+          });
           const n = src.getPageCount();
           const pages = P.parsePages(p.pages, n);
           if (pages.length === n && !p.out)
@@ -185,7 +192,7 @@
           for (const pg of copied) dst.addPage(pg);
           const title = src.getTitle();
           if (title) dst.setTitle(title + ' (' + P.pagesLabel(pages) + ')');
-          const bytes = await dst.save({ useObjectStreams: true });
+          const bytes = await dst.save({ useObjectStreams: true, objectsPerTick: Infinity });
           await ensureDir(dirname(out));
           await M.fs.write(out, bytes, { overwrite: true });
           let msg =
@@ -240,7 +247,10 @@
               const ctx = canvas.getContext('2d');
               ctx.fillStyle = '#fff';
               ctx.fillRect(0, 0, canvas.width, canvas.height);
-              await page.render({ canvasContext: ctx, viewport: vp }).promise;
+              // intent: 'print' —— 画面に出す絵ではないので、描画の刻みを requestAnimationFrame に乗せない。
+              // 'display'（既定）は operator list を rAF の刻みで実行するため、タブが裏にあると一歩も進まず、
+              // RPC の 150 秒で時間切れになる（pdf_info / pdf_text は描かないので動く）。出力の画素は同じ。
+              await page.render({ canvasContext: ctx, viewport: vp, intent: 'print' }).promise;
               const blob = await new Promise((res, rej) =>
                 canvas.toBlob(
                   (b) => (b ? res(b) : rej(new Error('Could not encode the image'))),

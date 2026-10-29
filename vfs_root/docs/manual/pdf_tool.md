@@ -43,7 +43,7 @@ A page with 0 chars is image only (a scan) and cannot be read with `pdf_text` â†
 * `pdf_pages` renders at most 20 pages per call (split `pages` when you need more)
 * `pdf_extract` does not copy the document outline (bookmarks). Form fields and links come along per page
 * Anything written to `system/temp/` is cleared on session reset. To keep it, point `out` at the user area
-* Rendering (canvas) may lag while this OS's tab is in the background
+* Rendering and extraction do not depend on the tab being visible: `pdf_pages` renders with `intent: 'print'` (no `requestAnimationFrame` steps) and `pdf_extract` parses and saves without yielding to the UI (`parseSpeed: Fastest`, `objectsPerTick: Infinity`). Before this, both stalled while the tab was in the background and hit the 150 s RPC limit
 
 ## Tests
 
