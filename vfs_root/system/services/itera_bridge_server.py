@@ -14,6 +14,8 @@ Itera OS の VFS へ `local/<接続名>/<ルート名>` としてマウントさ
 
 設計上の約束:
   * ルート一覧は ~/.itera/roots.json に永続化する。プロセスを落としても消えない。
+    置き場は環境変数 ITERA_CONFIG_DIR で差し替えられる（同じ機械で 2 つ目のサーバーを、
+    ルート一覧と同一性を分けて動かすため。HOME を偽ると bash_exec の ~ まで変わる）。
   * シェル実行の「都度確認」は OS 側（ブラウザ）の責務。ホストには UI が無いため、
     サーバーは --exec off という固い遮断だけを持つ。
   * 作業ディレクトリは永続化しない。毎回ルート起点で実行し、実効ディレクトリを返す。
@@ -36,12 +38,16 @@ import time
 import uuid
 from pathlib import Path
 
-VERSION = "3.8.0"
+VERSION = "3.8.1"
 # long-poll（変更があるまで応答を保留する）の上限と刻み。
 # 刻みは応答の遅れの下限になるので細かく、ただし空回りが目に見えない程度に。
 MAX_LONG_POLL_SEC = 60.0
 LONG_POLL_STEP_SEC = 0.1
-CONFIG_DIR = Path.home() / ".itera"
+CONFIG_DIR = (
+    Path(os.environ["ITERA_CONFIG_DIR"]).expanduser()
+    if os.environ.get("ITERA_CONFIG_DIR")
+    else Path.home() / ".itera"
+)
 ROOTS_FILE = CONFIG_DIR / "roots.json"
 MACHINE_FILE = CONFIG_DIR / "machine.json"
 DEFAULT_IGNORE = [
@@ -437,6 +443,7 @@ def build_app(bridge):
         # アンカー照合（別の機械に繋ぎ替えられていないか）に使う。
         out = {
             "version": VERSION,
+            "configDir": str(CONFIG_DIR),
             "execEnabled": bridge.exec_enabled,
             "roots": bridge.describe(),
             "ignorePatterns": bridge.state["ignorePatterns"],
@@ -925,10 +932,10 @@ def scan_loop(bridge, quiet_sec=1.5, safety_sec=60.0):
 # CLI
 # --------------------------------------------------------------------------
 
-def cli_request(port, method, path, payload=None):
+def cli_request(port, method, path, payload=None, host="127.0.0.1"):
     import urllib.error
     import urllib.request
-    url = f"http://127.0.0.1:{port}{path}"
+    url = f"http://{host}:{port}{path}"
     data = json.dumps(payload).encode() if payload is not None else None
     req = urllib.request.Request(url, data=data, method=method)
     if data:
@@ -954,13 +961,16 @@ def main():
     p_attach.add_argument("dir", nargs="?", default=".")
     p_attach.add_argument("--name")
     p_attach.add_argument("--port", type=int, default=8001)
+    p_attach.add_argument("--host", default="127.0.0.1", help="where the server listens (serve --host)")
 
     p_detach = sub.add_parser("detach", help="detach a root")
     p_detach.add_argument("name")
     p_detach.add_argument("--port", type=int, default=8001)
+    p_detach.add_argument("--host", default="127.0.0.1", help="where the server listens (serve --host)")
 
     p_ls = sub.add_parser("ls", help="list the roots")
     p_ls.add_argument("--port", type=int, default=8001)
+    p_ls.add_argument("--host", default="127.0.0.1", help="where the server listens (serve --host)")
 
     args = parser.parse_args()
 
@@ -990,17 +1000,17 @@ def main():
 
     if args.cmd == "attach":
         path = str(Path(args.dir).expanduser().resolve())
-        res = cli_request(args.port, "POST", "/api/roots", {"path": path, "name": args.name})
+        res = cli_request(args.port, "POST", "/api/roots", {"path": path, "name": args.name}, host=args.host)
         print(f"[itera] Added: {res.get('name')} -> {path}")
         return
 
     if args.cmd == "detach":
-        cli_request(args.port, "DELETE", f"/api/roots/{args.name}")
+        cli_request(args.port, "DELETE", f"/api/roots/{args.name}", host=args.host)
         print(f"[itera] Detached: {args.name}")
         return
 
     if args.cmd == "ls":
-        res = cli_request(args.port, "GET", "/api/roots")
+        res = cli_request(args.port, "GET", "/api/roots", host=args.host)
         for r in res.get("roots", []):
             print(f"  {r['name']:<20} {r['files']:>7} files  {r['path']}")
         return
