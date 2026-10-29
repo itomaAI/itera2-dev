@@ -42,11 +42,13 @@ export abstract class BaseOperation<TArgs, TReturn> {
   }
 
   protected async calculateHash(content: string | Uint8Array | Blob): Promise<string> {
-    let data: ArrayBuffer;
+    let data: BufferSource;
     if (typeof content === 'string') {
-      data = new TextEncoder().encode(content).buffer as ArrayBuffer;
+      data = new TextEncoder().encode(content);
     } else if (content instanceof Uint8Array) {
-      data = content.buffer as ArrayBuffer;
+      // view をそのまま渡す。`.buffer` を取ると byteOffset / byteLength が落ち、view の外（例: zip 全体）まで
+      // hash に入る。ゲストが subarray を書くと中身は正しいのに hash だけが元の束の値になった（T-0716）
+      data = content as Uint8Array<ArrayBuffer>;
     } else if (content instanceof Blob) {
       data = await content.arrayBuffer();
     } else {

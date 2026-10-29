@@ -239,7 +239,9 @@
     const { start, end } = localDataRange(b, entry);
     const raw = b.subarray(start, end);
     let data;
-    if (entry.method === METHOD_STORE) data = raw;
+    // store は写しを返す（view を返すと、受け取った側が .buffer を見たときに zip 全体に化ける。
+    // 書いた直後に zip を手放せる、という意味でも写しがよい）
+    if (entry.method === METHOD_STORE) data = raw.slice();
     else if (entry.method === METHOD_DEFLATE) data = await inflateRaw(raw);
     else throw new Error('Unsupported compression method ' + entry.method + ': ' + entry.name);
     if (data.length !== entry.usize)

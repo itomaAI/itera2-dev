@@ -137,6 +137,16 @@ describe('zip_core: 書いて読む', () => {
     expect(same(await Z.extractEntry(zip, cd.entries[1]), text)).toBe(true);
     expect(same(await Z.extractEntry(zip, cd.entries[2]), new Uint8Array([1, 2, 3]))).toBe(true);
   });
+  it('extractEntry は store の項目でも zip 全体への view ではなく写しを返す（hash が zip 本体の値に化けない）', async () => {
+    const zip = Z.buildZip([{ name: 'small.txt', data: enc.encode('tiny'), method: 0 }]);
+    const { entries } = Z.readCentralDirectory(zip);
+    const data = await Z.extractEntry(zip, entries[0]);
+    expect(same(data, enc.encode('tiny'))).toBe(true);
+    expect(data.byteOffset).toBe(0);
+    expect(data.buffer.byteLength).toBe(data.byteLength);
+    expect(data.buffer).not.toBe(zip.buffer);
+  });
+
   it('壊れたデータは CRC で分かる', async () => {
     const data = enc.encode('abcdefgh');
     const zip = Z.buildZip([{ name: 'a.txt', data, method: 0 }]);
