@@ -372,10 +372,24 @@ function jsLiteral(value: unknown): string {
   return JSON.stringify(value).replace(/</g, '\\u003c').replace(/>/g, '\\u003e');
 }
 
+/**
+ * 配布物のライブラリを `<script>` にインラインで埋めるとき、`//# sourceMappingURL=…` の行を剥がす（T-0787）。
+ *
+ * この参照は「隣に .map がある」前提の相対 URL で、ゲストの文書（opaque な srcdoc）に埋めた瞬間に意味を失う。
+ * Firefox の開発者ツールはそれでも解決を試み、源に URL が無いので空の base で `new URL()` を呼んで
+ * 「ソースマップエラー: URL constructor:  is not a valid URL」をゲストの起動ごとに出す。
+ * 剥がすのはこのコメント行だけ。本体には触れない。
+ */
+export function stripSourceMapComment(source: string): string {
+  return source.replace(/^[ \t]*\/\/[#@][ \t]*sourceMappingURL=.*$/gm, '');
+}
+
+const inlinedHtmlToImage = stripSourceMapComment(htmlToImageSource);
+
 function screenshotHelperCode(pid: string): string {
   const pidLiteral = jsLiteral(pid);
   return `
-<script>${htmlToImageSource}</script>
+<script>${inlinedHtmlToImage}</script>
 <script>
 window.addEventListener('message', async (e) => {
     if (e.data.action === 'CAPTURE') {
