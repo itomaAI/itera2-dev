@@ -19,7 +19,7 @@ function mk() {
       type,
       state,
       iframe: null as any,
-      blobUrls: [],
+      boot: null as any,
       lastActiveTime: 0,
       currentUri: `metaos://run/${path}`,
     }) as any;

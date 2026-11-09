@@ -12,6 +12,7 @@ import type { DynamicToolRegistration, ProcessInfo } from './HostApiContract';
 import { resolvePrincipal } from './principal';
 import { GuestLocalStore } from '../core/sys/GuestLocalStore';
 import type { SpawnOptions } from '../shell/windowing/ProcessManager';
+import type { CompiledGuest } from '../shell/windowing/GuestCompiler';
 import { USER_PRINCIPAL } from '../core/vfs/types';
 import {
   attachmentPathsOf,
@@ -38,7 +39,9 @@ export interface IProcessManager {
   list(): ProcessInfo[];
   broadcast(eventName: string, payload: any): void;
   captureScreenshot(pid?: string): Promise<string>;
-  resolveUrl(path: string, pid: string): Promise<string>;
+  bootGuest(pid: string): Promise<CompiledGuest>;
+  markReady(pid: string): boolean;
+  readBlob(path: string, pid: string): Promise<{ blob: Blob; mime: string }>;
   getArgs(pid: string): Record<string, string> | null;
   reportError(pid: string, errorData: any): void;
   processes: Map<string, any>;
@@ -289,9 +292,21 @@ export class HostApiRouter {
       d.vfs.getSyncState(getPrincipal(sourcePid), path || ''),
     );
 
-    t.registerHandler('fs:resolve_url', async ({ path }, sourcePid) => {
+    // MetaOS.fs.resolveUrl の実体。URL ではなく Blob（handle）を返し、ゲストが自分の窓で object URL を作る（T-0770）
+    t.registerHandler('fs:read_blob', async ({ path }, sourcePid) => {
       if (!d.processManager) throw new Error('ProcessManager not connected.');
-      return d.processManager.resolveUrl(path, sourcePid);
+      return d.processManager.readBlob(path, sourcePid);
+    });
+
+    // 二段起動（T-0770 / T-0784）。ブートストラップが自分の本体を取りに来る／本体のブリッジが load を知らせる。
+    // どちらも対象は送信元のプロセスだけ（payload に path は無い）
+    t.registerHandler('sys:boot', async (_payload, sourcePid) => {
+      if (!d.processManager) throw new Error('ProcessManager not connected.');
+      return d.processManager.bootGuest(sourcePid);
+    });
+    t.registerHandler('sys:ready', async (_payload, sourcePid) => {
+      if (!d.processManager) throw new Error('ProcessManager not connected.');
+      return d.processManager.markReady(sourcePid);
     });
 
     // 同梱の vendor ライブラリ（pdf.js など）をゲストへ。ゲストはホストの配置を知らないので名前で引く（T-0685）
