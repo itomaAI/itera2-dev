@@ -45,7 +45,16 @@
           // ホストの配置はホストに訊く（window.top.location を覗かない。T-0685）
           const v = await M.vendor.resolve('pdfjs');
           const mod = await import(v.entry);
-          mod.GlobalWorkerOptions.workerSrc = v.worker;
+          // opaque なゲストは http の URL で Worker を起こせない（同一オリジン限定）。本文を取って blob から起こす（T-0760）
+          try {
+            const src = await (await fetch(v.worker)).text();
+            mod.GlobalWorkerOptions.workerSrc = URL.createObjectURL(
+              new Blob([src], { type: 'application/javascript' }),
+            );
+          } catch (e) {
+            console.warn('[pdf_tool] worker via blob failed; falling back to URL', e);
+            mod.GlobalWorkerOptions.workerSrc = v.worker;
+          }
           lib = { mod, url: v.url, version: v.version };
           return lib;
         }
