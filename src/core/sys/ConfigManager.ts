@@ -37,6 +37,12 @@ export interface OsConfig {
      * 最後に触った順でこの件数を超えた分を消す。未設定・不正は 10（sessionArchive.DEFAULT_SESSION_HISTORY_KEEP）
      */
     sessionHistoryKeep?: number;
+    /**
+     * 起動時、クラウドのアダプタが 1 つも繋がっていなければ同期の画面（SyncModal）を開く（T-0778）。
+     * true のときだけ。キーが無ければ出さない —— itera2-dev は置かず、itera2 は配布既定で true。
+     * 同期を要らない人は画面のチェックで切る（user 層に false が入る）
+     */
+    promptCloudSignIn?: boolean;
   };
   appearance: {
     theme: string;
@@ -88,6 +94,7 @@ const DEFAULT_CONFIG: OsConfig = {
     autoUpdateSystemFiles: true,
     maxContinuousTools: DEFAULT_MAX_CONTINUOUS_TOOLS,
     hiddenEventTypes: [],
+    promptCloudSignIn: false,
   },
   appearance: {
     theme: 'system/themes/light.json',

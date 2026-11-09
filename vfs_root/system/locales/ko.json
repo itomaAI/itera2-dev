@@ -367,6 +367,7 @@
     "sync.noAdapters": "설치된 동기화 어댑터가 없습니다.",
     "sync.active": "클라우드 동기화 사용 중",
     "sync.online": "온라인",
+    "sync.promptAtStartup": "로그인하지 않은 경우 시작 시 이 창을 열기",
     "audio.stopAndSave": "중지 후 저장",
     "apiKeys.loading": "제공자를 불러오는 중…",
     "apiKeys.saved": "API 키를 저장했습니다.",

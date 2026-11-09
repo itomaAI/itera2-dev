@@ -100,6 +100,22 @@ export async function init(ctx) { /* ... */ }
 より弱い権限で十分なアダプタは、ゲストアプリ（`apps/*.html`）として
 実装し、アダプタからは spawn するだけにするほうが安全。
 
+## 起動時の促し（`preferences.promptCloudSignIn`。T-0778）
+
+未ログインで起きた利用者が、同期が止まっていることに気づかないままローカルだけで作業する
+—— 認証の仕組みを作り変えてセッションが途切れたときに起きうる —— のを防ぐため、
+起動の最後に **アダプタが 1 つも `connected` でなければ SyncModal を開く**（`src/shell/services/CloudSignInPrompt.ts`）。
+
+- `preferences.promptCloudSignIn` が `true` のときだけ。**キーが無ければ出さない。**
+  itera2-dev の配布既定は置かない（＝出ない）。クラウドを持つ配布物（itera2）は `vfs_root/system/config/preferences.json` に `true` を置く。
+  利用者は SyncModal のチェック「起動時にこの画面を開く」で切れる（user 層に `false` が書かれる）。
+- 🔴 **判定は「未ログインが確定した」あと。** 認証の復元は非同期なので、起動直後は「まだ分からない」。
+  **アダプタは `init()` の中で先に `setStatus({ state: 'connecting' })` を報告し**、復元が終わってから
+  `connected` / `disconnected` を報告すること。ホストは全アダプタが `connecting` を抜けるのを待つ（上限 5 秒）。
+  init で何も報告しないアダプタは `disconnected` のままと見なされるので、ログイン済みの人にも画面が一瞬出てしまう。
+- アダプタが 1 つも無い配布物では開かない（開いても何もできない）。
+- 開いたときは `system` ログに `cloud_sign_in_prompt`（そのときの各アダプタの状態）を残す。
+
 ## 新しいアダプタを足す
 
 1. `vfs_root/system/adapters/<name>.js` を作り `init(ctx)` をエクスポート

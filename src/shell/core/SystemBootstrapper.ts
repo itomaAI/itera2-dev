@@ -54,6 +54,7 @@ import { HostGuestToolInvoker } from '../services/HostGuestToolInvoker';
 import { ProviderManager } from '../../core/vfs/ProviderManager';
 import { HistoryEventRecorder } from '../services/HistoryEventRecorder';
 import { SyncAdapterHost } from '../services/SyncAdapterHost';
+import { promptCloudSignInAtBoot } from '../services/CloudSignInPrompt';
 import { StorageLossGuard } from '../../core/sys/StorageLossGuard';
 import { instanceGuard } from '../../core/sys/InstanceGuard';
 import { LocalReset } from '../../core/sys/LocalReset';
@@ -410,6 +411,14 @@ export class SystemBootstrapper {
     // ダッシュボードの起動
     const homePath = configManager.homePath();
     await processManager.spawn({ path: homePath, show: true });
+
+    // 未ログインで起きたらクラウドの画面を最初から出しておく（preferences.promptCloudSignIn。T-0778）。
+    // アダプタの復元（connecting）が終わるのを待ってから判定するので await しない —— ホームを止めない
+    void promptCloudSignInAtBoot(syncAdapterHost, {
+      readPref: () => configManager.get('preferences')?.promptCloudSignIn,
+      open: () => desktop.modals.sync.open(),
+      onPrompt: (states) => logger.log('system', { action: 'cloud_sign_in_prompt', adapters: states }),
+    });
 
     // 配布物の形を決めるファイルが無い／壊れている（T-0614）。起動は止めないが、黙って他所の形を仮定もしない
     if (initializer.distributionProblems.length > 0) {

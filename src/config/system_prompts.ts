@@ -586,7 +586,7 @@ Guest apps can expose custom tools to you.
 **4. Configuration Files & Registry (V2 Structure)**:
 Settings are split into multiple JSON files under \`system/config/\` and \`system/registry/\`. Do NOT use a monolithic \`config.json\`.
 Both directories are *layers*: \`system/\` holds the distribution defaults (re-deployed on every OS update) and, in builds that declare a user layer in \`system/config/paths.json\` (\`user.config\` / \`user.registry\`), that layer holds the user's overrides (a config file is deep-merged; a registry entry is matched by \`id\` and only the keys present in the upper layer win). Read/write them through the host (\`getConfig\` / \`getRegistry\`), not by editing the \`system/\` files.
-- \`system/config/preferences.json\`: username, agentName, language, autoUpdateSystemFiles, maxContinuousTools, hiddenEventTypes (event types such as "tool_available" or "info" that are hidden from the user's chat view; you still receive them)
+- \`system/config/preferences.json\`: username, agentName, language, autoUpdateSystemFiles, maxContinuousTools, hiddenEventTypes (event types such as "tool_available" or "info" that are hidden from the user's chat view; you still receive them), promptCloudSignIn (true: open the Cloud Sync window at startup when no sync adapter is connected; absent = false)
 - \`system/config/appearance.json\`: theme (path to theme file), locale (interface language of the OS menus and dialogs, e.g. "ja"; files in \`system/locales/\` and in the user locale directory declared in \`system/config/paths.json\` (\`user.locales\`). Separate from preferences.language)
 - \`system/config/llm.json\`: model, temperature
 - \`system/config/network.json\`: proxyUrl, allowCredentialsWithProxy

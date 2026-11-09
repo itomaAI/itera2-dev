@@ -367,6 +367,7 @@
     "sync.noAdapters": "未安装同步适配器。",
     "sync.active": "云同步已启用",
     "sync.online": "在线",
+    "sync.promptAtStartup": "未登录时在启动时打开此窗口",
     "audio.stopAndSave": "停止并保存",
     "apiKeys.loading": "正在加载服务提供方…",
     "apiKeys.saved": "API 密钥已保存。",
