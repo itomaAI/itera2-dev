@@ -10,6 +10,7 @@
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { parseVendorExtra, applyVendorExtra } from './vendor_extra.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -98,6 +99,24 @@ function copyVendorAssets() {
     dirs: ['cmaps/', 'standard_fonts/'],
   });
   put('pdflib', '@cantoo/pdf-lib', { base: 'pdflib/', entry: 'pdf-lib.esm.min.js' });
+
+  // 6. 配布物が足す資源（vendor.extra.json。T-0773）。itera2-demo のデモ用モデルなど、vfs_root に置けない大きさのもの。
+  //    ゲストは MetaOS.vendor.resolve(name) で引けるので、親の origin を覗いて場所を組み立てなくてよい。
+  //    形が違う・src が無い・同梱の名前と重なる、はここで止める（黙って続けると「在る」と嘘の目録になる）。
+  const extraFile = path.join(ROOT_DIR, 'vendor.extra.json');
+  if (fs.existsSync(extraFile)) {
+    const extra = parseVendorExtra(JSON.parse(fs.readFileSync(extraFile, 'utf8')));
+    const added = applyVendorExtra(manifest, extra, {
+      rootDir: ROOT_DIR,
+      vendorDir: PUBLIC_VENDOR_DIR,
+      join: path.join,
+      exists: fs.existsSync,
+      isDir: (p) => fs.statSync(p).isDirectory(),
+      copyDir: copyDirRecursive,
+    });
+    if (added.length) console.log(`[Copy Vendor] vendor.extra.json: added ${added.join(', ')}`);
+  }
+
   fs.writeFileSync(path.join(PUBLIC_VENDOR_DIR, 'manifest.json'), JSON.stringify(manifest, null, 2) + '\n');
 
   console.log(`[Copy Vendor] ✅ Vendor assets copied successfully (${Object.keys(manifest).join(', ')}).`);

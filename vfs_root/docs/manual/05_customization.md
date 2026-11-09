@@ -212,6 +212,38 @@ To change one, make your own copy and point the registry at it:
 Your copy no longer receives updates. The latest official version is always in `system/upstream/system/apps/`,
 so you (or the AI) can compare and merge by hand. To go back, point `path` at `system/apps/...` again.
 
+## 2b. Shipping large assets with a distribution (`vendor.extra.json`)
+
+Anything placed under `vfs_root/` becomes part of every user's VFS (it is folded into `default_files.ts`), so a large asset an app needs — a demo model, a dataset — must not go there. It belongs with the host build, next to the bundled libraries under `vendor/`, and the app must find it **by name** through `MetaOS.vendor.resolve(name)` — never by reconstructing the host URL from `document.referrer` or `location.ancestorOrigins` (a guest does not know, and must not depend on, where the host is served from; that dependency also breaks once guests run in their own origin).
+
+A distribution adds such assets by committing `vendor.extra.json` at the repository root:
+
+```json
+{
+  "hiroi-gp-model": {
+    "version": "1",
+    "src": "assets/hiroi",
+    "entry": "gp_features_v1.onnx"
+  }
+}
+```
+
+| Key | Meaning |
+| :-- | :-- |
+| `version` | Any string; returned to the app as `version` |
+| `src` | Directory inside the repository (relative, no `..`). Copied to `public/vendor/<name>/` by `scripts/copy_vendor.js` (which runs before `dev` and `build`) |
+| `entry`, `worker` | Optional file names inside `src`; returned as absolute URLs. Hand `worker` to a Worker only via fetch → Blob (see `MetaOS.vendor`) |
+| `dirs` | Optional sub-directories inside `src`; returned as absolute URLs ending in `/` |
+
+The script stops — it does not write a catalog that lies — when the file is malformed, when `src` (or a listed `entry` / `worker` / `dirs`) does not exist, or when a name collides with a bundled library (`mathjax`, `monaco`, `pdfjs`, `pdflib`). The base repository (`itera2-dev`) ships no `vendor.extra.json`; each distribution owns its own.
+
+In the app:
+
+```javascript
+const v = await MetaOS.vendor.resolve('hiroi-gp-model');   // { url, entry, version, ... }
+await MetaOS.net.download(v.entry, 'user/appdata/hiroi/models/gp_features_v1.onnx');
+```
+
 ## 3. Creating Custom Themes (`system/themes/`)
 
 Themes are JSON files. To create a new theme, create a new JSON file (e.g., `system/themes/hacker_green.json`) and define the color palette using Hex codes.
