@@ -89,6 +89,7 @@ The **Guest** environment (where apps run) is isolated from the **Host** (where 
 *   **Vendor libraries (`MetaOS.vendor`)**: Large third-party libraries (pdf.js, MathJax, Monaco) ship with the host under its `vendor/` directory, not in the VFS, and are fetched only when used. A guest never guesses the host URL (no `window.top.location`); it asks:
     *   `.resolve(name)`: Returns `{ name, version, url, entry, worker, dirs }` with absolute URLs (`url` is the library directory; `entry` the main module; `worker` the Web Worker if any). Throws when the name is not in this build, listing what is available.
     *   `.list()`: Names available in this build. The catalog is `vendor/manifest.json`, written at build time by `scripts/copy_vendor.js`.
+    *   The catalog is not only for libraries: a **distribution** (a build of Itera for a demo or a product) can ship its own large assets (a model, a dataset) the same way by listing them in `vendor.extra.json` at the repository root; `copy_vendor.js` copies them under `vendor/<name>/` and adds them to the catalog (see [05_customization.md](05_customization.md)). An app then asks `MetaOS.vendor.resolve('<name>')` instead of guessing the host URL or reading `document.referrer` / `location.ancestorOrigins`.
 *   **Dynamic Tools (`MetaOS.tools`)**:
     *   `.register(toolDef)`: Allows a Guest app to expose a custom JavaScript function as a new tool (LPML tag) for the AI to use.
 
