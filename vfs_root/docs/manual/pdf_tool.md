@@ -11,7 +11,7 @@ Format-specific processing (splitting, converting) belongs in the guest as VFS �
 
 pdf.js ships with the host (`public/vendor/pdfjs/`, 4 MB). It is not placed in the VFS (it would be distributed to every user).
 The daemon asks `MetaOS.vendor.resolve('pdfjs')` for its location before loading it (it never builds the host URL itself).
-The worker is started from a Blob of the fetched script, not from the host URL: a Worker URL must be same-origin with the document, and a guest must not rely on sharing the host's origin (T-0772).
+The daemon starts the worker itself — `new Worker(dataUrl, { type: 'module' })` from a `data:` URL of the fetched script — and hands it to pdf.js as `GlobalWorkerOptions.workerPort` (T-0772 / T-0785). Not the host URL (a Worker must be same-origin with its document, and a guest runs in an opaque origin), not a `blob:` URL (Chromium refuses a *module* worker from `blob:` in an opaque origin; it only fires `error`), and not via `workerSrc` (pdf.js sees a non-same-origin URL and wraps it in a `blob:` module worker, which hits the same refusal and falls back to its main-thread "fake worker" — that would stall the whole OS while a large PDF is parsed). The daemon first checks with a tiny `data:` module worker whether this document can start one; where it cannot, it leaves pdf.js to the fake worker (slow but working).
 pdf.js only reads and renders — it **cannot write** a PDF — so extraction (`pdf_extract`) uses pdf-lib
 (the maintained fork `@cantoo/pdf-lib`, `public/vendor/pdflib/`, 614 KB, `MetaOS.vendor.resolve('pdflib')`) and `copyPages`.
 Neither is downloaded until used. Nothing is sent to an external service. Encrypted PDFs are not handled.

@@ -42,6 +42,26 @@ The Virtual File System is organized into specific domains. Some areas are stric
 
 ---
 
+## The Guest Origin
+
+A guest (an app or a daemon) runs in a sandboxed iframe **without** `allow-same-origin`. Its document therefore has an **opaque origin**: it is not the host's origin, and it is not any other origin either. Everything a guest gets from the host comes through `window.MetaOS` (postMessage); nothing comes through the browser's same-origin plumbing.
+
+What that means for an app, in one table:
+
+| Observable | Value in a guest | Use instead |
+| :-- | :-- | :-- |
+| `self.origin` | `"null"` | — |
+| `location.href` | `about:srcdoc` (the body is written into the bootstrap document, see below) | Do not derive paths from the URL. The app's VFS path is not visible; arguments come in `__ITERA_ARGS__` |
+| `localStorage` / `sessionStorage` / `indexedDB` | throw `SecurityError` | `App.Local` / `MetaOS.storage.local` (device-local), `MetaOS.system.getConfig` (synced settings), the VFS (documents) |
+| `parent.document`, `window.top.location`, `document.referrer`, `location.ancestorOrigins` | not readable / empty | `MetaOS.vendor.resolve(name)` for host-shipped assets; `MetaOS.host.*` for host UI |
+| `new Worker('https://…')` | refused (a Worker must be same-origin with its document) | fetch the script and start the Worker from a URL you own: a `blob:` URL for a classic worker, a `data:` URL for a **module** worker (Chromium refuses module workers from `blob:` in an opaque origin). Hand the Worker object to the library (pdf.js: `workerPort`), not the URL (`pdf_tool.html` does this) |
+| `fetch(url)` to an external service | sent with `Origin: null` | `MetaOS.net.fetch` (host origin, proxy, credentials) when the service cares about `Origin` |
+| `MetaOS.fs.resolveUrl(path)` | returns `blob:null/…`, created in the app's own window | — (contract unchanged: path → URL string, valid in this document only) |
+| `navigator.clipboard.writeText` on a user gesture | allowed (`clipboard-write` is delegated to the iframe); `readText` is not | paste arrives as a user action (`paste` event) |
+| `target="_blank"` links | open outside the sandbox (`allow-popups-to-escape-sandbox`) | — |
+
+How a guest document comes to exist: the host puts a small bootstrap in the iframe's `srcdoc`; the bootstrap asks the host for the compiled body (`sys:boot`), receives the entry HTML with its static references replaced by markers plus the referenced files as `Blob` handles, creates `object URL`s **in its own window**, substitutes the markers and writes the body into the same document. The host never hands a URL to a guest, because a URL made by the host would not be readable here.
+
 ## The MetaOS Bridge Protocol
 
 The **Guest** environment (where apps run) is isolated from the **Host** (where the AI and File System live). To interact with the system, apps use the `window.MetaOS` asynchronous API.

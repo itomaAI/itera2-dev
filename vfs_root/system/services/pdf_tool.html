@@ -39,20 +39,56 @@
           M.ai.log('[PdfTool Daemon] ' + msg, 'info', { silent: true });
         };
 
+        /** この文書が data: URL から module worker を起こせるか（小さな worker を 1 つ起こして答えを待つ。失敗は error イベントでしか分からない） */
+        function canStartModuleWorkerFromDataUrl() {
+          return new Promise((resolve) => {
+            let w;
+            const done = (ok) => {
+              clearTimeout(timer);
+              if (w) w.terminate();
+              resolve(ok);
+            };
+            const timer = setTimeout(() => done(false), 3000);
+            try {
+              w = new Worker('data:application/javascript,postMessage(1)', { type: 'module' });
+              w.onmessage = () => done(true);
+              w.onerror = () => done(false);
+            } catch (e) {
+              done(false);
+            }
+          });
+        }
+
         let lib = null;
         async function pdfjs() {
           if (lib) return lib;
           // ホストの配置はホストに訊く（window.top.location を覗かない。T-0685）
           const v = await M.vendor.resolve('pdfjs');
           const mod = await import(v.entry);
-          // opaque なゲストは http の URL で Worker を起こせない（同一オリジン限定）。本文を取って blob から起こす（T-0760）
+          // ゲストは opaque origin なので http の URL で Worker を起こせない（Worker は文書と同一オリジン限定）。
+          // 本文を取って data: URL にし、Worker を**自分で**起こして workerPort で渡す（T-0785）。
+          // workerSrc に渡すと pdf.js は「同一オリジンでない」と見て blob: の包み（CDN wrapper）を作るが、Chromium は
+          // opaque origin の文書が blob: から module worker を起こすのを断る（error だけ）→ 主スレッドの fake worker に落ち、
+          // 大きな PDF の解析で OS 全体が止まる。data: の module worker は Chromium・Firefox とも動く（2026-11-09 実測）。
+          // 起こせない環境では pdf.js に任せる（fake worker。遅いが動く）。
           try {
-            const src = await (await fetch(v.worker)).text();
-            mod.GlobalWorkerOptions.workerSrc = URL.createObjectURL(
-              new Blob([src], { type: 'application/javascript' }),
-            );
+            const blob = await (await fetch(v.worker)).blob();
+            const dataUrl = await new Promise((resolve, reject) => {
+              const reader = new FileReader();
+              reader.onload = () => resolve(String(reader.result));
+              reader.onerror = () => reject(reader.error);
+              reader.readAsDataURL(blob.slice(0, blob.size, 'application/javascript'));
+            });
+            if (await canStartModuleWorkerFromDataUrl()) {
+              mod.GlobalWorkerOptions.workerPort = new Worker(dataUrl, { type: 'module' });
+            } else {
+              console.warn(
+                '[pdf_tool] this document cannot start a module worker from a data: URL; pdf.js will run on the main thread',
+              );
+              mod.GlobalWorkerOptions.workerSrc = dataUrl;
+            }
           } catch (e) {
-            console.warn('[pdf_tool] worker via blob failed; falling back to URL', e);
+            console.warn('[pdf_tool] worker via data: URL failed; falling back to URL', e);
             mod.GlobalWorkerOptions.workerSrc = v.worker;
           }
           lib = { mod, url: v.url, version: v.version };
