@@ -337,7 +337,7 @@
     "systemModal.restore.failed": "Wiederherstellung fehlgeschlagen: {reason}",
     "systemModal.fsck.progress": "VFS-Konsistenz wird geprüft …",
     "systemModal.fsck.clean": "Das Dateisystem ist in Ordnung. Keine Fehler gefunden.",
-    "systemModal.fsck.repaired": "{total} Probleme repariert:\n- Zirkuläre Verweise: {circular}\n- Gerettete verwaiste Elemente: {orphans}\n- Behobene fehlende Inhalte: {missing}\n- Gerettete lose Inhalte: {dangling}\n\nWenn Dateien gerettet wurden, sieh im Ordner '.lost+found' im Stammverzeichnis nach.",
+    "systemModal.fsck.repaired": "{total} Probleme repariert:\n- Zirkuläre Verweise: {circular}\n- Gerettete verwaiste Elemente: {orphans}\n- Behobene fehlende Inhalte: {missing}\n- Gerettete lose Inhalte: {dangling}\n- Entfernte veraltete Inhalte: {stale}\n\nWenn Dateien gerettet wurden, sieh im Ordner '.lost+found' im Stammverzeichnis nach.",
     "systemModal.fsck.failed": "Reparatur fehlgeschlagen: {reason}",
     "systemModal.index.exported": "Index-Sicherung exportiert",
     "systemModal.index.exportFailed": "Index-Sicherung fehlgeschlagen: {reason}",

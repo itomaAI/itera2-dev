@@ -315,7 +315,7 @@
     "systemModal.restore.failed": "恢复失败：{reason}",
     "systemModal.fsck.progress": "正在检查 VFS 一致性…",
     "systemModal.fsck.clean": "文件系统正常，未发现错误。",
-    "systemModal.fsck.repaired": "已修复 {total} 个问题：\n- 循环引用：{circular}\n- 救回的孤立项目：{orphans}\n- 修复的缺失内容：{missing}\n- 救回的悬空内容：{dangling}\n\n如果有文件被救回，请查看根目录下的 '.lost+found' 文件夹。",
+    "systemModal.fsck.repaired": "已修复 {total} 个问题：\n- 循环引用：{circular}\n- 救回的孤立项目：{orphans}\n- 修复的缺失内容：{missing}\n- 救回的悬空内容：{dangling}\n- 已删除的过期内容: {stale}\n\n如果有文件被救回，请查看根目录下的 '.lost+found' 文件夹。",
     "systemModal.fsck.failed": "修复失败：{reason}",
     "systemModal.index.exported": "索引备份已导出",
     "systemModal.index.exportFailed": "索引备份失败：{reason}",

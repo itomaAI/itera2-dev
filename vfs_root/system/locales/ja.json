@@ -315,7 +315,7 @@
     "systemModal.restore.failed": "復元に失敗しました: {reason}",
     "systemModal.fsck.progress": "VFS の整合性を検査中…",
     "systemModal.fsck.clean": "ファイルシステムに問題はありません。",
-    "systemModal.fsck.repaired": "{total} 件の問題を修復しました:\n- 循環参照: {circular}\n- 救出した孤立項目: {orphans}\n- 直した中身の欠け: {missing}\n- 救出した宙に浮いた中身: {dangling}\n\nファイルを救出した場合は、ルートの '.lost+found' フォルダーを確認してください。",
+    "systemModal.fsck.repaired": "{total} 件の問題を修復しました:\n- 循環参照: {circular}\n- 救出した孤立項目: {orphans}\n- 直した中身の欠け: {missing}\n- 救出した宙に浮いた中身: {dangling}\n- 削除した古い実体: {stale}\n\nファイルを救出した場合は、ルートの '.lost+found' フォルダーを確認してください。",
     "systemModal.fsck.failed": "修復に失敗しました: {reason}",
     "systemModal.index.exported": "索引のバックアップを書き出しました",
     "systemModal.index.exportFailed": "索引のバックアップに失敗しました: {reason}",

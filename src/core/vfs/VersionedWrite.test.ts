@@ -81,6 +81,10 @@ function makeCtx() {
       return { backend: 'memory' as const, key };
     },
     readText: async (ref: { key: string }) => contents.get(ref.key) ?? '',
+    // 書き直しで参照されなくなった鍵（T-0791）。ここでは消すだけ
+    delete: async (ref: { key: string }) => {
+      contents.delete(ref.key);
+    },
     readBlob: async (ref: { key: string }) => new Blob([contents.get(ref.key) ?? '']),
   };
   const ctx: VfsContext = {

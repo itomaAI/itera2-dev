@@ -73,6 +73,10 @@ function makeCtx(opts: { remote: string | null }) {
       return { backend: 'memory' as const, key };
     },
     readText: async (ref: { backend: string; key: string }) => contents.get(ref.key) ?? '',
+    // 書き直しで参照されなくなった鍵（T-0791）。ここでは消すだけ
+    delete: async (ref: { key: string }) => {
+      contents.delete(ref.key);
+    },
   };
   const fetched: string[] = [];
   // 実物の readBlob と同じ結果だけを写す: プロバイダが中身を置き、stub の印が外れる。取れなければ投げる

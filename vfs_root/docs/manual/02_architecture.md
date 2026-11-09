@@ -62,6 +62,16 @@ What that means for an app, in one table:
 
 How a guest document comes to exist: the host puts a small bootstrap in the iframe's `srcdoc`; the bootstrap asks the host for the compiled body (`sys:boot`), receives the entry HTML with its static references replaced by markers plus the referenced files as `Blob` handles, creates `object URL`s **in its own window**, substitutes the markers and writes the body into the same document. The host never hands a URL to a guest, because a URL made by the host would not be readable here.
 
+### Contents are immutable; names move; a handed-out handle lives as long as its process
+
+The `Blob` handles above are files in the host's OPFS. An OPFS `File` obtained with `getFile()` becomes unreadable the moment the entry it came from is overwritten, deleted or replaced (Chromium `NotReadableError`, Firefox `AbortError`; a `fetch` of an object URL made from it fails with `TypeError`). Wrapping it in a new `Blob` does not help; only bytes already expanded with `arrayBuffer()` survive. So the VFS never overwrites an entry:
+
+- Every write goes to a **new key**, `<nodeId>@<version>` (the version the VFS already increments on each write). The node's `contentRef` is switched to the new key after the content is on disk.
+- The old key is deleted only if no process holds a handle to it. The host records the holder whenever it hands a `Blob` to a guest — the assets of `sys:boot` and the answer to `MetaOS.fs.resolveUrl` (`fs:read_blob`) — as the guest's pid. When that process is killed, its holds are released and keys that no node references any more are removed.
+- Keys left behind by a crash (a reload before the kill) are removed by `fsck` at the next start: a key whose node has moved on to a newer version is stale and is deleted, not rescued into `.lost+found`.
+
+For an app this means: an image, font or model that a document references lazily keeps working even if another app (or the AI) overwrites that file while the document is open. The document sees the version it was started with; a fresh `spawn` sees the new one. `copy_file` and `rename` are unaffected (a copy is a new node, a rename does not touch the content).
+
 ## The MetaOS Bridge Protocol
 
 The **Guest** environment (where apps run) is isolated from the **Host** (where the AI and File System live). To interact with the system, apps use the `window.MetaOS` asynchronous API.

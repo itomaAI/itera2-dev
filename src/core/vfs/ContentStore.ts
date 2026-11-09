@@ -1,9 +1,41 @@
 /**
  * src/core/vfs/ContentStore.ts
  * Itera OS VFS v2: Content Storage Manager (OPFS Wrapper)
+ *
+ * 中身は不変・名前が動く（T-0791）。
+ * 1 つの鍵（OPFS のファイル名）には 1 度しか書かない。ノードを書き直すときは新しい鍵
+ * （{@link contentKey}: `<nodeId>@<version>`）へ書き、ノードの `contentRef` を差し替えたあとで古い鍵を捨てる。
+ * 同じ名前に上書きしないのは、OPFS の `getFile()` で得た File（ゲストへ渡した handle）が
+ * その名前への上書き・削除・差し替えのどれでも読めなくなるから（Chromium NotReadableError／Firefox AbortError。
+ * 実測 2026-11-10）。生き残るのは「別の鍵に書いて古い実体を残す」だけ。
+ *
+ * 渡した handle の寿命は保持者（プロセス）の寿命で数える: {@link ContentStore.readBlob} に `holder` を付けると
+ * その鍵は保持され、{@link ContentStore.delete} は保持中の鍵を消さずに孤児として覚える。
+ * {@link ContentStore.release} で保持者が居なくなった孤児を物理的に消す。
+ * クラッシュ等で漏れた孤児は起動時の fsck（VfsFsck）が片付ける。
  */
 
 import type { ContentRef } from './types';
+
+/** 鍵の中で nodeId と版を分ける印。nodeId（`generateId`）には含まれない */
+const KEY_VERSION_SEPARATOR = '@';
+
+/** ノードの中身の鍵。版ごとに別の鍵なので、同じ名前への上書きは起きない */
+export function contentKey(nodeId: string, version: number): string {
+  return `${nodeId}${KEY_VERSION_SEPARATOR}${version}`;
+}
+
+/**
+ * 鍵を nodeId と版に分ける。版の無い鍵（T-0791 より前の形。鍵 ＝ nodeId）は `version: null`。
+ * fsck が「この鍵はどのノードの、何版か」を知るための口。
+ */
+export function parseContentKey(key: string): { nodeId: string; version: number | null } {
+  const at = key.lastIndexOf(KEY_VERSION_SEPARATOR);
+  if (at < 0) return { nodeId: key, version: null };
+  const version = Number(key.slice(at + 1));
+  if (!Number.isInteger(version)) return { nodeId: key, version: null };
+  return { nodeId: key.slice(0, at), version };
+}
 
 /**
  * 一過性とみなして再試行する OPFS の例外（T-0380）。
@@ -17,6 +49,9 @@ import type { ContentRef } from './types';
  *
  * どちらも次の瞬間には解けている相手なので、ハンドルを取り直して数回だけやり直す。
  * それ以外（QuotaExceededError・TypeError 等）はやり直しても変わらないので即座に投げる。
+ *
+ * T-0791 で同じ鍵への上書きは無くなったが、この再試行は残す。別のタブは同じノードの同じ版を
+ * 見ているので同じ鍵へ同時に書きうるし、サイトデータの消去でルートが消える件は鍵の形と無関係である。
  */
 export function isTransientOpfsError(e: unknown): boolean {
   const name = (e as { name?: unknown } | null | undefined)?.name;
@@ -31,6 +66,15 @@ export interface ContentStoreOptions {
   retryDelaysMs?: readonly number[];
 }
 
+export interface ReadBlobOptions {
+  /**
+   * 返した Blob（OPFS の File handle）を持ち続ける者。プロセスの pid。
+   * 付けると、その鍵はこの保持者が {@link ContentStore.release} されるまで物理的に消されない。
+   * 読んですぐ展開する（`arrayBuffer()`／`text()`）だけなら付けない。
+   */
+  holder?: string;
+}
+
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
 export class ContentStore {
@@ -38,6 +82,11 @@ export class ContentStore {
   private rootHandlePromise: Promise<FileSystemDirectoryHandle> | null = null;
   private memoryStore: Map<string, Blob> = new Map();
   private readonly retryDelaysMs: readonly number[];
+
+  /** 鍵 → その handle を持っている保持者。{@link readBlob} の `holder` で増え、{@link release} で減る */
+  private readonly holders = new Map<string, Set<string>>();
+  /** どのノードからも参照されなくなったが、保持者が居るので消していない鍵（`delete` が後回しにしたもの） */
+  private readonly orphans = new Map<string, ContentRef>();
 
   constructor(options: ContentStoreOptions = {}) {
     this.retryDelaysMs = options.retryDelaysMs ?? OPFS_WRITE_RETRY_DELAYS_MS;
@@ -51,6 +100,10 @@ export class ContentStore {
     }
   }
 
+  /**
+   * 鍵に書く。鍵は呼ぶ側が {@link contentKey} で作る（ノードの id と版）。
+   * 1 つの鍵には 1 度しか書かない前提 —— 既に在る鍵へ書くと、その handle を持つゲストの資産が読めなくなる。
+   */
   async write(key: string, content: string | Uint8Array | Blob): Promise<ContentRef> {
     const backend = this.useOpfs ? 'opfs' : 'memory';
 
@@ -130,7 +183,13 @@ export class ContentStore {
     return new Uint8Array(arrayBuffer);
   }
 
-  async readBlob(ref: ContentRef): Promise<Blob> {
+  /**
+   * 実体を Blob（OPFS では File handle）のまま返す。中身は読まない。
+   * `opts.holder` を付けると、返す前にその鍵を保持者に結び付ける（返したあとに付けると、その間に delete が通りうる）。
+   */
+  async readBlob(ref: ContentRef, opts: ReadBlobOptions = {}): Promise<Blob> {
+    if (opts.holder !== undefined) this.retain(ref.key, opts.holder);
+
     if (ref.backend === 'memory') {
       const blob = this.memoryStore.get(ref.key);
       if (!blob) throw new Error(`Content not found in memory: ${ref.key}`);
@@ -147,7 +206,68 @@ export class ContentStore {
     }
   }
 
+  /** 鍵を保持者に結び付ける。保持者が居る鍵は {@link delete} されても物理的には消えない */
+  retain(key: string, holder: string): void {
+    let set = this.holders.get(key);
+    if (!set) {
+      set = new Set();
+      this.holders.set(key, set);
+    }
+    set.add(holder);
+  }
+
+  /** 保持者が持っている鍵（試験・診断用） */
+  heldKeys(holder: string): string[] {
+    const keys: string[] = [];
+    for (const [key, set] of this.holders) if (set.has(holder)) keys.push(key);
+    return keys;
+  }
+
+  /** ノードから参照されなくなったのに、保持者が居るので残している鍵（試験・診断用） */
+  orphanKeys(): string[] {
+    return Array.from(this.orphans.keys());
+  }
+
+  /**
+   * 保持者の寿命が尽きた（プロセスの kill）。その保持者を全部の鍵から外し、
+   * 保持者が居なくなった孤児を物理的に消す。消せなかった鍵は孤児のまま残し、次の fsck に任せる。
+   */
+  async release(holder: string): Promise<void> {
+    const freed: ContentRef[] = [];
+    for (const [key, set] of this.holders) {
+      if (!set.delete(holder)) continue;
+      if (set.size > 0) continue;
+      this.holders.delete(key);
+      const orphan = this.orphans.get(key);
+      if (orphan) freed.push(orphan);
+    }
+    for (const ref of freed) {
+      this.orphans.delete(ref.key);
+      try {
+        await this.remove(ref);
+      } catch (e) {
+        // 消せなくても次の fsck が拾う。保持者が居ないことは変わらないので孤児には戻さない
+        console.warn(`[ContentStore] Failed to remove released content: ${ref.key}`, e);
+      }
+    }
+  }
+
+  /**
+   * この鍵はどのノードからも参照されなくなった。
+   * 誰も handle を持っていなければ即消す。持っていれば孤児として覚え、最後の保持者の {@link release} で消す。
+   */
   async delete(ref: ContentRef): Promise<void> {
+    const set = this.holders.get(ref.key);
+    if (set && set.size > 0) {
+      this.orphans.set(ref.key, ref);
+      return;
+    }
+    this.orphans.delete(ref.key);
+    await this.remove(ref);
+  }
+
+  /** 物理的に消す。保持者を見ない */
+  private async remove(ref: ContentRef): Promise<void> {
     if (ref.backend === 'memory') {
       this.memoryStore.delete(ref.key);
       return;
@@ -180,7 +300,7 @@ export class ContentStore {
   }
 
   /**
-   * OPFS (または Memory) に存在するすべてのファイルキー(UUID)を取得する
+   * OPFS (または Memory) に存在するすべてのファイルキーを取得する
    * fsck時の実体突合用
    */
   async getAllKeys(): Promise<string[]> {
@@ -208,6 +328,8 @@ export class ContentStore {
    * Factory Reset などの完全初期化用
    */
   async clearAll(): Promise<void> {
+    this.holders.clear();
+    this.orphans.clear();
     if (!this.useOpfs) {
       this.memoryStore.clear();
       return;

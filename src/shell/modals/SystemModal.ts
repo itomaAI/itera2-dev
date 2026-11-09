@@ -295,6 +295,7 @@ export class SystemModal {
           orphans: report.orphansRescued,
           missing: report.missingContentsFixed,
           dangling: report.danglingContentsRescued,
+          stale: report.staleContentsRemoved,
         });
         if (window.AppUI) window.AppUI.notify(msg, 'warning');
       } else {

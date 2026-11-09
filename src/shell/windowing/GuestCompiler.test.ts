@@ -105,6 +105,23 @@ describe('GuestCompiler: 資源の束（T-0770）', () => {
     expect(lib.kind === 'blob' && lib.blob.type).toBe('application/javascript');
   });
 
+  it('実体（blob）は holder = pid 付きで読む —— 渡した handle の寿命をプロセスに結ぶ（T-0791）', async () => {
+    const holders: Array<[string, unknown]> = [];
+    const spied = {
+      ...vfs,
+      readBlob: async (p: unknown, path: string, opts?: { holder?: string }) => {
+        holders.push([path, opts?.holder]);
+        return vfs.readBlob(p as any, path, opts);
+      },
+    } as unknown as VfsService;
+    await new GuestCompiler().compile(spied, 'apps/a.html', 'pid_x');
+    expect(holders).toEqual([
+      ['apps/lib.js', 'pid_x'],
+      ['apps/bg.png', 'pid_x'],
+      ['img/logo.png', 'pid_x'],
+    ]);
+  });
+
   it('MIME は stat のものを優先し、無ければ拡張子から。Blob にその型が付く', async () => {
     const { assets } = await new GuestCompiler().compile(vfs, 'apps/a.html', 'test');
     const logo = assets.find((a) => a.path === 'img/logo.png')!;
