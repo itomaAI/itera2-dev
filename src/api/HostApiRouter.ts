@@ -10,6 +10,7 @@ import type { VendorCatalog } from '../core/sys/VendorCatalog';
 import type { Role, Turn, TurnContent, TurnMeta } from '../core/state/HistoryManager';
 import type { DynamicToolRegistration, ProcessInfo } from './HostApiContract';
 import { resolvePrincipal } from './principal';
+import { GuestLocalStore } from '../core/sys/GuestLocalStore';
 import type { SpawnOptions } from '../shell/windowing/ProcessManager';
 import { USER_PRINCIPAL } from '../core/vfs/types';
 import {
@@ -107,6 +108,8 @@ export interface RouterDeps {
   sessionManager?: ISessionManager;
   /** 同梱の vendor ライブラリの目録（MetaOS.vendor。T-0685） */
   vendorCatalog?: VendorCatalog;
+  /** 端末ローカルの小さな状態（MetaOS.storage.local。T-0771）。省くとホストの localStorage で作る */
+  guestLocalStore?: GuestLocalStore;
 }
 
 export class HostApiRouter {
@@ -543,6 +546,22 @@ export class HostApiRouter {
       await d.configManager.update(key, updates);
       return JSON.parse(JSON.stringify(d.configManager.get(key)));
     });
+    // 端末ローカルの小さな状態の口（T-0771）。ホストは「利用者の設定（層・同期される）」と
+    // 「端末ごとの見え方（localStorage・同期されない）」を分けて持っている。ゲストには前者の口しか無く、
+    // アプリが後者を localStorage で直接持っていた（同一オリジンに頼る書き方。別オリジンでは SecurityError）。
+    // 置き場は pid ごとに 1 件の JSON。pid は送信元のもの（引数で受けると他のアプリの袋が見える）。
+    const localStore = d.guestLocalStore ?? new GuestLocalStore();
+    t.registerHandler('storage:local_get', async ({ key }, sourcePid) => localStore.get(sourcePid, key));
+    t.registerHandler('storage:local_set', async ({ key, value }, sourcePid) => {
+      localStore.set(sourcePid, key, value);
+      return true;
+    });
+    t.registerHandler('storage:local_remove', async ({ key }, sourcePid) => {
+      localStore.remove(sourcePid, key);
+      return true;
+    });
+    t.registerHandler('storage:local_keys', async (_, sourcePid) => localStore.keys(sourcePid));
+
     // 起動中のアプリがテーマを取り直す口（T-0539）。theme_changed を受けたブリッジが呼ぶ。
     // 起動時の焼き込み（GuestCompiler）と同じ関数で作る。
     t.registerHandler('sys:get_theme_css', async () => buildGuestThemeCss());
