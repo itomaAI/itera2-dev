@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect } from 'vitest';
-import { GuestCompiler, withFragment, typedBlob } from './GuestCompiler';
+import { GuestCompiler, withFragment, typedBlob, stripSourceMapComment } from './GuestCompiler';
 import type { GuestAsset } from './GuestCompiler';
 import type { VfsService } from '../../core/vfs/VfsService';
 
@@ -201,5 +201,24 @@ describe('GuestCompiler: 並行する compile は混ざらない', () => {
     for (const x of b.assets) expect(a.html).not.toContain(x.id);
     expect(a.html).toContain('__ITERA_PID__ = "pa"');
     expect(b.html).toContain('__ITERA_PID__ = "pb"');
+  });
+});
+
+describe('インラインで埋めるライブラリの sourceMappingURL（T-0787）', () => {
+  it('末尾の //# sourceMappingURL の行だけを剥がす。本体と、文字列の中の同じ語は触らない', () => {
+    const src = "var a = 1;\nvar s = '//# sourceMappingURL=in-a-string.map';\n//# sourceMappingURL=lib.js.map\n";
+    const out = stripSourceMapComment(src);
+    expect(out).toContain('var a = 1;');
+    expect(out).toContain("'//# sourceMappingURL=in-a-string.map'");
+    expect(out).not.toMatch(/^\/\/# sourceMappingURL=/m);
+    expect(stripSourceMapComment('//@ sourceMappingURL=old.map')).toBe('');
+    expect(stripSourceMapComment('  //# sourceMappingURL=x.map\r\n')).toBe('\r\n');
+  });
+
+  it('起動する文書に sourceMappingURL のコメントが残らない（html-to-image を埋めている）', async () => {
+    const vfs = vfsOf({ 'apps/a.html': '<html><body>hi</body></html>' });
+    const { html } = await new GuestCompiler().compile(vfs, 'apps/a.html', 'test');
+    expect(html).toContain('htmlToImage');
+    expect(html).not.toMatch(/^\s*\/\/[#@]\s*sourceMappingURL=/m);
   });
 });
