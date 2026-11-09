@@ -148,7 +148,7 @@ App.Local.set('openFolders', openFolders).catch((e) => console.warn(e));
 // App.Local.remove('openFolders'); App.Local.keys();
 ```
 
-🔴 Do **not** use `localStorage`, `sessionStorage` or `indexedDB` directly from an app. It happens to work today because the guest iframe shares the host's origin; the moment guests run in their own origin those calls throw `SecurityError` and the app fails at start-up. `App.Local` is the supported route and the only one that survives that change.
+🔴 Do **not** use `localStorage`, `sessionStorage` or `indexedDB` from an app: a guest runs in an opaque origin and those calls throw `SecurityError` (see "The Guest Origin" in [02_architecture.md](02_architecture.md) for the full list of what a guest can and cannot see). `App.Local` is the supported route.
 
 ## 4. Exposing Dynamic Tools to the AI
 

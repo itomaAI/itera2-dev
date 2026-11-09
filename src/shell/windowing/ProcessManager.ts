@@ -10,6 +10,7 @@ import { USER_PRINCIPAL } from '../../core/vfs/types';
 import { GuestCompiler, typedBlob } from './GuestCompiler';
 import type { CompiledGuest } from './GuestCompiler';
 import { GuestBoot, bootstrapHtml } from './guestBoot';
+import { GUEST_SANDBOX, guestAllow } from './guestSandbox';
 import { resolveRelativePath } from '../../utils/path';
 import { t } from '../../i18n/i18n';
 import { declaredRoute } from './declaredRoute';
@@ -252,8 +253,9 @@ export class ProcessManager {
       const iframe = document.createElement('iframe');
       iframe.id = `proc-${pid}`;
       iframe.name = pid;
-      // allow-downloads: ゲストアプリから a[download] で保存できるようにする（T-0345。スキルアプリの履歴から成果物を落とす）
-      iframe.sandbox = 'allow-scripts allow-forms allow-modals allow-popups allow-same-origin allow-downloads';
+      // ゲストはホストと同一オリジンではない（旗の意味は guestSandbox.ts）
+      iframe.sandbox = GUEST_SANDBOX;
+      iframe.allow = guestAllow();
 
       if (type === 'app') {
         iframe.className = 'absolute inset-0 w-full h-full border-none bg-app transition-opacity duration-300';
