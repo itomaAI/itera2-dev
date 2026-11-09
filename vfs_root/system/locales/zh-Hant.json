@@ -367,6 +367,7 @@
     "sync.noAdapters": "尚未安裝同步配接器。",
     "sync.active": "雲端同步已啟用",
     "sync.online": "線上",
+    "sync.promptAtStartup": "未登入時在啟動時開啟此視窗",
     "audio.stopAndSave": "停止並儲存",
     "apiKeys.loading": "正在載入服務提供者…",
     "apiKeys.saved": "已儲存 API 金鑰。",

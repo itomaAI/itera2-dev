@@ -103,7 +103,11 @@ export class DesktopEnvironment {
     this._propertiesModal = new PropertiesModal(vfs);
     this._filePickerModal = new FilePickerModal(vfs, () => this.getActivePrincipal());
     this.commandPalette = new CommandPaletteModal(vfs, appRegistry, uriRouter, () => this.getActivePrincipal());
-    this._syncModal = new SyncModal(adapterHost);
+    // 「起動時にこの画面を開く」は preferences.promptCloudSignIn（T-0778）。モーダルは設定の持ち主を知らない
+    this._syncModal = new SyncModal(adapterHost, {
+      get: () => configManager.get('preferences')?.promptCloudSignIn === true,
+      set: (value) => configManager.update('preferences', { promptCloudSignIn: value }),
+    });
     // 会話のセッション一覧（T-0613）。一覧は IndexedDB の索引だけで描き、VFS は保存／読み込みで選んだ 1 ファイルにしか触らない
     this._sessionHistoryModal = new SessionHistoryModal(sessionManager, this._filePickerModal, {
       getActivePrincipal: () => this.getActivePrincipal(),

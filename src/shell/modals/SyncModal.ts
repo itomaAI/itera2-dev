@@ -17,8 +17,19 @@ import type { SyncAdapterHost, SyncAdapterManifest, SyncAdapterStatus } from '..
 import { LABEL_KICKER } from '../styles/typography';
 import { t, escapeHtml } from '../../i18n/i18n';
 
+/**
+ * 「起動時にこの画面を開く」（preferences.promptCloudSignIn。T-0778）の読み書き。
+ * モーダルは設定の持ち主を知らず、この 2 つの口だけを受け取る
+ */
+export interface StartupPromptPreference {
+  get(): boolean;
+  set(value: boolean): Promise<void>;
+}
+
 export class SyncModal {
   private adapterHost: SyncAdapterHost;
+  private startupPrompt: StartupPromptPreference | null;
+  private startupPromptCheckbox: HTMLInputElement | null = null;
   private overlay: HTMLElement | null = null;
   private providersContainer: HTMLElement | null = null;
   private statusLabel: HTMLElement | null = null;
@@ -35,8 +46,9 @@ export class SyncModal {
    */
   private lastSummary: SyncAdapterStatus | null = null;
 
-  constructor(adapterHost: SyncAdapterHost) {
+  constructor(adapterHost: SyncAdapterHost, startupPrompt: StartupPromptPreference | null = null) {
     this.adapterHost = adapterHost;
+    this.startupPrompt = startupPrompt;
 
     // アダプタは起動時（モーダルを開く前）に読み込まれるため、
     // スロットは DOM 生成前に要求される。生成済みかどうかに関わらず
@@ -138,6 +150,7 @@ export class SyncModal {
     body.appendChild(statusBox);
     body.appendChild(this.emptyNotice);
     body.appendChild(this.providersContainer);
+    if (this.startupPrompt) body.appendChild(this._createStartupPromptRow(this.startupPrompt));
 
     box.appendChild(header);
     box.appendChild(body);
@@ -145,6 +158,33 @@ export class SyncModal {
 
     this._updateEmptyNotice();
     this._renderStatus(this.lastSummary);
+  }
+
+  /**
+   * 起動時にこの画面を開くかのチェック（T-0778）。
+   * 値は preferences.promptCloudSignIn。変えた瞬間に書く（保存ボタンは置かない —— 1 つの真偽値なので）
+   */
+  private _createStartupPromptRow(pref: StartupPromptPreference): HTMLElement {
+    const row = document.createElement('label');
+    row.className = 'flex items-center gap-2 text-xs text-text-muted cursor-pointer select-none px-1';
+    const box = document.createElement('input');
+    box.type = 'checkbox';
+    box.className = 'w-4 h-4 rounded border-border-main text-primary focus:ring-primary cursor-pointer';
+    box.checked = pref.get();
+    box.addEventListener('change', () => {
+      const next = box.checked;
+      pref.set(next).catch((e) => {
+        console.error('[SyncModal] Failed to save promptCloudSignIn:', e);
+        box.checked = !next; // 書けなかったら見た目も戻す（書けたふりをしない）
+      });
+    });
+    const text = document.createElement('span');
+    text.dataset.i18n = 'sync.promptAtStartup';
+    text.textContent = t('sync.promptAtStartup');
+    row.appendChild(box);
+    row.appendChild(text);
+    this.startupPromptCheckbox = box;
+    return row;
   }
 
   private _updateEmptyNotice(): void {
@@ -176,6 +216,8 @@ export class SyncModal {
       document.body.appendChild(this.overlay);
     }
     this._updateEmptyNotice();
+    // 設定は他所（設定アプリ・別端末からの同期）でも変わるので、開くたびに読み直す
+    if (this.startupPromptCheckbox && this.startupPrompt) this.startupPromptCheckbox.checked = this.startupPrompt.get();
   }
 
   close(): void {

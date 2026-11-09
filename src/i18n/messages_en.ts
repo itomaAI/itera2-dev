@@ -409,6 +409,7 @@ export const EN = {
   'sync.noAdapters': 'No sync adapters installed.',
   'sync.active': 'Cloud Sync Active',
   'sync.online': 'Online',
+  'sync.promptAtStartup': 'Open this window at startup when not signed in',
 
   // ---- media, recorder, editor, misc
   'audio.stopAndSave': 'Stop & Save',

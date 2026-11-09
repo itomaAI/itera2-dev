@@ -367,6 +367,7 @@
     "sync.noAdapters": "同期アダプタがインストールされていません。",
     "sync.active": "クラウド同期中",
     "sync.online": "オンライン",
+    "sync.promptAtStartup": "サインインしていないとき、起動時にこの画面を開く",
     "audio.stopAndSave": "停止して保存",
     "apiKeys.loading": "プロバイダを読み込み中…",
     "apiKeys.saved": "API キーを保存しました。",

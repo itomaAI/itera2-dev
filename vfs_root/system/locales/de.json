@@ -389,6 +389,7 @@
     "sync.noAdapters": "Keine Synchronisierungsadapter installiert.",
     "sync.active": "Cloud-Synchronisierung aktiv",
     "sync.online": "Online",
+    "sync.promptAtStartup": "Dieses Fenster beim Start öffnen, wenn nicht angemeldet",
     "audio.stopAndSave": "Stoppen und speichern",
     "apiKeys.loading": "Anbieter werden geladen …",
     "apiKeys.saved": "API-Schlüssel gespeichert.",
