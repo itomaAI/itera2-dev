@@ -128,6 +128,28 @@ The OS does not know your app. It only announces that its own state changed; whe
 
 These events go to every running app and daemon. Apps that ignore them keep working as before (the new values apply when they are reopened).
 
+### Device-local state (`App.Local` / `MetaOS.storage.local`)
+
+An app's state has three homes. Pick by *who should see it*:
+
+| State | Home | Example |
+| :-- | :-- | :-- |
+| The data itself | VFS (`MetaOS.fs`, `App.Storage`) | notes, tasks, a project file |
+| Settings that should be the same on every device | `App.Config` (`system.getConfig / updateConfig`; layered, synced where the build syncs the user layer) | locale, preferred model |
+| Small per-device UI state | **`App.Local`** (`MetaOS.storage.local`) | which folders are open, whether the outline pane is shown |
+
+`App.Local` is kept by the host in its own `localStorage`, one JSON record per process id. It never leaves the device, other apps cannot read it, values must be JSON-serializable and small (a few KB), and a failed write throws instead of being swallowed.
+
+```javascript
+let openFolders = (await App.Local.get('openFolders', [])) || [];   // read once at start-up
+// ...
+openFolders.push(path);
+App.Local.set('openFolders', openFolders).catch((e) => console.warn(e));
+// App.Local.remove('openFolders'); App.Local.keys();
+```
+
+🔴 Do **not** use `localStorage`, `sessionStorage` or `indexedDB` directly from an app. It happens to work today because the guest iframe shares the host's origin; the moment guests run in their own origin those calls throw `SecurityError` and the app fails at start-up. `App.Local` is the supported route and the only one that survives that change.
+
 ## 4. Exposing Dynamic Tools to the AI
 
 Guest apps can expose custom JS functions to the AI using `MetaOS.tools.register()`.

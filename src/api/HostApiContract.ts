@@ -79,6 +79,26 @@ export interface HostApiContract {
     request: { name: string; id: string; updates: Record<string, unknown> };
     response: any;
   };
+  /**
+   * 端末ローカルの小さな状態（MetaOS.storage.local。T-0771）。ホストの localStorage に pid ごとに 1 件の JSON。
+   * 設定の層（同期される）とは別の口。pid は送信元から取るので引数に無い
+   */
+  'storage:local_get': {
+    request: { key: string };
+    response: unknown;
+  };
+  'storage:local_set': {
+    request: { key: string; value: unknown };
+    response: boolean;
+  };
+  'storage:local_remove': {
+    request: { key: string };
+    response: boolean;
+  };
+  'storage:local_keys': {
+    request: Record<string, never>;
+    response: string[];
+  };
   'fs:get_usage': {
     request: Record<string, never>;
     response: VfsUsage;

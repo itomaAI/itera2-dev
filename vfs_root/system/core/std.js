@@ -76,6 +76,29 @@
   };
 
   // ==========================================
+  // Device-local state (MetaOS.storage.local)
+  // ==========================================
+  // 端末ごとの小さな状態（開いているフォルダ・目次の表示など）。ホストの localStorage に置かれ、
+  // 他の端末へは運ばれない（T-0771）。利用者の設定（他の端末でも同じであるべきもの）は App.Config、
+  // 文書そのもの（アプリのデータ）は App.Storage / VFS。
+  // ゲストが自分で localStorage を触らない —— ホストと同一オリジンであることに頼る書き方で、別オリジンでは落ちる。
+  const Local = {
+    async get(key, defaultValue = null) {
+      const v = await global.MetaOS.storage.local.get(key);
+      return v === null || v === undefined ? defaultValue : v;
+    },
+    async set(key, value) {
+      return await global.MetaOS.storage.local.set(key, value);
+    },
+    async remove(key) {
+      return await global.MetaOS.storage.local.remove(key);
+    },
+    async keys() {
+      return await global.MetaOS.storage.local.keys();
+    },
+  };
+
+  // ==========================================
   // System Configuration Access
   // ==========================================
   // 設定は層になっている（配信の既定 system/config → 利用者の上書き user/config。層の数は配布物ごと）。
@@ -201,5 +224,5 @@
     },
   };
 
-  global.App = { FS, Context, Storage, Config, Registry, AI };
+  global.App = { FS, Context, Storage, Local, Config, Registry, AI };
 })(window);

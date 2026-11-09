@@ -300,7 +300,20 @@
         }
       }
 
+      // 端末ごとの見え方（開いているフォルダ・目次の表示）はホストの口（App.Local）に置く（T-0771）。
+      // 以前は localStorage を直接触っていた —— ホストと同一オリジンであることに頼る書き方で、別オリジンでは落ちる。
+      let openFolders = [];
+      const OPEN_FOLDERS_KEY = 'openFolders';
+      const OUTLINE_KEY = 'outline';
+
       async function init() {
+        try {
+          openFolders = (await App.Local.get(OPEN_FOLDERS_KEY, [])) || [];
+          const outlinePref = await App.Local.get(OUTLINE_KEY, null);
+          if (typeof outlinePref === 'boolean') outlineOn = outlinePref;
+        } catch (e) {
+          console.warn('[Notes] device-local state unavailable; starting from defaults', e);
+        }
         await loadList();
 
         // V2: OSから渡された引数を受け取る
@@ -373,18 +386,18 @@
             const folderPath = parentPath ? `${parentPath}/${key}` : key;
             const details = document.createElement('details');
 
-            const openFolders = JSON.parse(localStorage.getItem('metaos_tree_open_folders') || '[]');
             details.open = openFolders.includes(folderPath);
 
-            details.addEventListener('toggle', (e) => {
-              const currentOpen = JSON.parse(localStorage.getItem('metaos_tree_open_folders') || '[]');
+            details.addEventListener('toggle', () => {
               if (details.open) {
-                if (!currentOpen.includes(folderPath)) currentOpen.push(folderPath);
+                if (!openFolders.includes(folderPath)) openFolders.push(folderPath);
               } else {
-                const idx = currentOpen.indexOf(folderPath);
-                if (idx > -1) currentOpen.splice(idx, 1);
+                const idx = openFolders.indexOf(folderPath);
+                if (idx > -1) openFolders.splice(idx, 1);
               }
-              localStorage.setItem('metaos_tree_open_folders', JSON.stringify(currentOpen));
+              App.Local.set(OPEN_FOLDERS_KEY, openFolders).catch((e) =>
+                console.warn('[Notes] could not remember open folders', e),
+              );
             });
 
             const summary = document.createElement('summary');
@@ -563,12 +576,10 @@
        *   その hidden は xl:block と対になった**画面幅の門番**だった。外すと門番ごと消えるので、
        *   狭い画面でも柱が出て本文が痩せていた（2026-08-24 / T-0191。山内さんの指摘）。
        *   いまは「見出しが 3 つ以上あるか」と「利用者が出すと決めたか」の 2 つだけで決める。
-       * ★ 既定は広い画面のときだけ出す。一度でも押したら、その選択を覚える。
+       * ★ 既定は広い画面のときだけ出す。一度でも押したら、その選択を覚える（App.Local の outline。init() で読む）。
        */
       let outlineHasItems = false;
-      const outlineStored = () => localStorage.getItem('metaos_notes_outline');
-      let outlineOn =
-        outlineStored() === null ? window.matchMedia('(min-width: 1280px)').matches : outlineStored() === '1';
+      let outlineOn = window.matchMedia('(min-width: 1280px)').matches;
 
       function applyOutline() {
         const el = document.getElementById('outline');
@@ -586,7 +597,7 @@
 
       window.toggleOutline = () => {
         outlineOn = !outlineOn;
-        localStorage.setItem('metaos_notes_outline', outlineOn ? '1' : '0');
+        App.Local.set(OUTLINE_KEY, outlineOn).catch((e) => console.warn('[Notes] could not remember outline', e));
         applyOutline();
       };
 

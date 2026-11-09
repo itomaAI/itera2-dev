@@ -368,6 +368,17 @@
       getRegistry: async (name) => transport.requestHost('sys:get_registry', { name }),
       updateRegistry: async (name, id, updates) => transport.requestHost('sys:update_registry', { name, id, updates }),
     },
+    // 端末ローカルの小さな状態（開いているフォルダ・表示の切り替えなど。T-0771）。
+    // ホストの localStorage に pid ごとの JSON で置かれ、他の端末へは運ばれない（利用者の設定は system.getConfig の側）。
+    // ゲストが自分で localStorage を触らない —— それはホストと同一オリジンであることに頼る書き方で、別オリジンでは落ちる。
+    storage: {
+      local: {
+        get: async (key) => transport.requestHost('storage:local_get', { key }),
+        set: async (key, value) => transport.requestHost('storage:local_set', { key, value }),
+        remove: async (key) => transport.requestHost('storage:local_remove', { key }),
+        keys: async () => transport.requestHost('storage:local_keys', {}),
+      },
+    },
     host: {
       goHome: async () => transport.requestHost('host:go_home', {}),
       showOpenDialog: async (options = {}) => transport.requestHost('host:show_open_dialog', { options }),
