@@ -11,6 +11,7 @@ Format-specific processing (splitting, converting) belongs in the guest as VFS �
 
 pdf.js ships with the host (`public/vendor/pdfjs/`, 4 MB). It is not placed in the VFS (it would be distributed to every user).
 The daemon asks `MetaOS.vendor.resolve('pdfjs')` for its location before loading it (it never builds the host URL itself).
+The worker is started from a Blob of the fetched script, not from the host URL: a Worker URL must be same-origin with the document, and a guest must not rely on sharing the host's origin (T-0772).
 pdf.js only reads and renders — it **cannot write** a PDF — so extraction (`pdf_extract`) uses pdf-lib
 (the maintained fork `@cantoo/pdf-lib`, `public/vendor/pdflib/`, 614 KB, `MetaOS.vendor.resolve('pdflib')`) and `copyPages`.
 Neither is downloaded until used. Nothing is sent to an external service. Encrypted PDFs are not handled.
