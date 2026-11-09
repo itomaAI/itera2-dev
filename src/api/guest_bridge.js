@@ -273,7 +273,12 @@
       getSyncState: async (path) => transport.requestHost('fs:get_sync_state', { path }),
       getUsage: async () => transport.requestHost('fs:get_usage', {}),
       listMounts: async () => transport.requestHost('fs:list_mounts', {}),
-      resolveUrl: async (path) => transport.requestHost('fs:resolve_url', { path }),
+      // 実体は Blob（OPFS の File の handle）で受け取り、この窓で object URL を作る（T-0770）。
+      // ホストが作った URL はこの文書から読めるとは限らない（opaque origin）。URL の寿命はこの文書と同じ
+      resolveUrl: async (path) => {
+        const { blob } = await transport.requestHost('fs:read_blob', { path });
+        return URL.createObjectURL(blob);
+      },
       getAcl: async (path) => transport.requestHost('fs:get_acl', { path }),
       setAcl: async (path, acl, opts = {}) => transport.requestHost('fs:set_acl', { path, acl, opts }),
       registerSyncProvider: async (path, handlers) => {
@@ -485,6 +490,16 @@
       if (categories.includes('appearance')) void syncLang();
     });
   }
+
+  // 本体の文書が load したことをホストへ（T-0784）。ProcessManager.spawn はこれを待って返る
+  // （二段起動では iframe の load はブートストラップの文書の分で、本体の読み込み終わりを示さない）
+  const reportReady = () => {
+    transport.requestHost('sys:ready', {}).catch(() => {
+      /* 起動の途中で kill されたなど。ゲストにできることは無い */
+    });
+  };
+  if (document.readyState === 'complete') reportReady();
+  else window.addEventListener('load', reportReady, { once: true });
 
   console.log('[Itera] MetaOS Bridge v2 Initialized (PID: ' + MY_PID + ')');
 })(window);

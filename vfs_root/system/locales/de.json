@@ -400,7 +400,6 @@
     "editor.binaryNotSupported": "Binärdateien können nicht bearbeitet werden.",
     "editor.saved": "Gespeichert!",
     "editor.saveFailed": "Fehlgeschlagen",
-    "process.notFound": "{path} nicht gefunden.",
     "process.launchFailed": "{path} konnte nicht gestartet werden",
     "guest.fileNotFound": "Datei nicht gefunden",
     "guest.notAFile": "Keine Datei (Ordner)",

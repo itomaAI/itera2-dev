@@ -7,9 +7,11 @@ import type { VfsService } from '../../core/vfs/VfsService';
 import type { AppRegistry } from '../../core/sys/AppRegistry';
 import type { ConfigManager } from '../../core/sys/ConfigManager';
 import { USER_PRINCIPAL } from '../../core/vfs/types';
-import { GuestCompiler } from './GuestCompiler';
+import { GuestCompiler, typedBlob } from './GuestCompiler';
+import type { CompiledGuest } from './GuestCompiler';
+import { GuestBoot, bootstrapHtml } from './guestBoot';
 import { resolveRelativePath } from '../../utils/path';
-import { t, escapeHtml } from '../../i18n/i18n';
+import { t } from '../../i18n/i18n';
 import { declaredRoute } from './declaredRoute';
 
 export interface Process {
@@ -18,7 +20,8 @@ export interface Process {
   type: 'app' | 'daemon';
   state: 'foreground' | 'background' | 'running';
   iframe: HTMLIFrameElement;
-  blobUrls: string[];
+  /** 二段起動の記録（compile の結果と、本体の load の待ち合わせ） */
+  boot: GuestBoot;
   lastActiveTime: number;
   args?: Record<string, string>;
   currentUri: string;
@@ -243,7 +246,8 @@ export class ProcessManager {
     }
 
     try {
-      const { entryUrl, blobUrls } = await this.compiler.compile(this.vfs, path, pid, args);
+      // 本体の compile は iframe の生成と並行に始める。ゲストのブートストラップが sys:boot で結果を取りに来る（T-0770）
+      const boot = new GuestBoot(this.compiler.compile(this.vfs, path, pid, args));
 
       const iframe = document.createElement('iframe');
       iframe.id = `proc-${pid}`;
@@ -267,7 +271,7 @@ export class ProcessManager {
         type,
         state: type === 'app' ? 'background' : 'running',
         iframe,
-        blobUrls,
+        boot,
         lastActiveTime: Date.now(),
         args,
         currentUri: uri,
@@ -286,16 +290,14 @@ export class ProcessManager {
         this.events['process_spawned'].forEach((cb) => cb(this.processes.get(pid)));
       }
 
-      // 非同期でのIframeロードを実行
-      if (entryUrl) {
-        await this._loadIframe(iframe, entryUrl);
-      } else if (type === 'app') {
-        // srcdoc は独立した文書なので、ホストの :root に定義した CSS 変数は
-        // 継承されない。解決済みの値を埋め込む必要がある。
-        const uiFont = getComputedStyle(document.documentElement).getPropertyValue('--font-sans').trim() || 'system-ui';
-        iframe.srcdoc = `<div style="color:#888; padding:20px; font-family:${uiFont}, system-ui, sans-serif;">${escapeHtml(t('process.notFound', { path }))}</div>`;
-      }
+      // 1 段目（ブートストラップ）を置き、本体の文書が load する（sys:ready）まで待つ。
+      // compile の失敗はゲストの画面にも出る（sys:boot の応答）が、ホストでも知らせる
+      iframe.srcdoc = bootstrapHtml(pid);
+      await this._awaitReady(pid, boot);
+      await boot.body;
 
+      // 待っている間に kill／起動し直しで別の起動に置き換わっていたら、この起動のことは何も言わない
+      if (this.processes.get(pid)?.boot !== boot) return;
       console.log(`[ProcessManager] Spawned [${pid}] (Type:${type}, Show:${show}) -> ${path}`);
     } catch (e) {
       console.error(`[ProcessManager] Spawn error (${pid}):`, e);
@@ -353,9 +355,8 @@ export class ProcessManager {
 
     const proc = this.processes.get(pid)!;
 
-    if (proc.blobUrls) {
-      proc.blobUrls.forEach((url) => URL.revokeObjectURL(url));
-    }
+    // 起動の途中なら、待っている spawn を解く。資源の object URL はゲストの文書と一緒に消える（ホストに台帳は無い）
+    proc.boot.abandon();
 
     if (proc.iframe) {
       proc.iframe.remove();
@@ -481,23 +482,38 @@ export class ProcessManager {
     });
   }
 
-  private async _loadIframe(iframe: HTMLIFrameElement, url: string): Promise<void> {
-    return new Promise((resolve) => {
-      let timeoutId: ReturnType<typeof setTimeout>;
-      const handler = () => {
-        clearTimeout(timeoutId);
-        iframe.removeEventListener('load', handler);
-        resolve();
-      };
-      iframe.addEventListener('load', handler);
-      iframe.src = url;
-
+  /**
+   * 本体の文書の load（`sys:ready`）を待つ。起動の失敗・kill でも解ける。
+   * 時間切れは警告だけ（以前の入口の load の待ちと同じ 10 秒。重い本体や外部資源で遅れることがある）
+   */
+  private async _awaitReady(pid: string, boot: GuestBoot, timeoutMs: number = 10000): Promise<void> {
+    let timeoutId: ReturnType<typeof setTimeout> | undefined;
+    const timeout = new Promise<void>((resolve) => {
       timeoutId = setTimeout(() => {
-        console.warn(`[ProcessManager] Iframe load timeout for URL: ${url}`);
-        iframe.removeEventListener('load', handler);
+        console.warn(`[ProcessManager] Guest did not report ready within ${timeoutMs}ms: ${pid}`);
         resolve();
-      }, 10000);
+      }, timeoutMs);
     });
+    try {
+      await Promise.race([boot.ready, timeout]);
+    } finally {
+      clearTimeout(timeoutId);
+    }
+  }
+
+  /** ゲストの `sys:boot`（ブートストラップ）。そのプロセスの本体（compile の結果）を返す */
+  async bootGuest(pid: string): Promise<CompiledGuest> {
+    const proc = this.processes.get(pid);
+    if (!proc) throw new Error(`Process [${pid}] not found.`);
+    return proc.boot.body;
+  }
+
+  /** ゲストの `sys:ready`（本体の文書の load）。spawn の待ち合わせを解く */
+  markReady(pid: string): boolean {
+    const proc = this.processes.get(pid);
+    if (!proc) return false;
+    proc.boot.markReady();
+    return true;
   }
 
   /**
@@ -547,7 +563,12 @@ export class ProcessManager {
     }
   }
 
-  async resolveUrl(requestPath: string, pid: string): Promise<string> {
+  /**
+   * ゲストの `fs:read_blob`（`MetaOS.fs.resolveUrl` の実体）。VFS の実体を読まずに Blob（OPFS の File の handle）で返す。
+   * object URL はゲストが自分の窓で作る —— ホストが作った URL はゲストから読めない（opaque origin）し、寿命の管理も要らなくなる。
+   * 相対パスはそのプロセスの入口からの相対（`./x.png` `../x.png` `/x.png`）。
+   */
+  async readBlob(requestPath: string, pid: string): Promise<{ blob: Blob; mime: string }> {
     const proc = this.processes.get(pid);
     if (!proc) throw new Error(`Process [${pid}] not found.`);
 
@@ -564,14 +585,8 @@ export class ProcessManager {
       throw new Error(`File not found: ${absPath}`);
     }
 
-    const blob = await this.vfs.readBlob(USER_PRINCIPAL, absPath);
-    const mimeType = this.compiler.getMimeType(absPath);
-    const typedBlob = new Blob([blob], { type: mimeType });
-    const url = URL.createObjectURL(typedBlob);
-
-    if (!proc.blobUrls) proc.blobUrls = [];
-    proc.blobUrls.push(url);
-
-    return url;
+    const mime = this.compiler.getMimeType(absPath);
+    const blob = typedBlob(await this.vfs.readBlob(USER_PRINCIPAL, absPath), mime);
+    return { blob, mime };
   }
 }

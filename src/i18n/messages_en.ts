@@ -422,7 +422,6 @@ export const EN = {
   'editor.binaryNotSupported': 'Binary file editing is not supported.',
   'editor.saved': 'Saved!',
   'editor.saveFailed': 'Failed',
-  'process.notFound': 'No {path} found.',
   'process.launchFailed': 'Failed to launch {path}',
   'guest.fileNotFound': 'File not found',
   'guest.notAFile': 'Not a file (directory)',

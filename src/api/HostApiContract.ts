@@ -5,6 +5,8 @@
  * unambiguous. Runtime routing and wire data remain unchanged.
  */
 
+import type { CompiledGuest } from '../shell/windowing/GuestCompiler';
+
 export interface ProcessInfo {
   pid: string;
   path: string;
@@ -34,6 +36,21 @@ export interface DynamicToolRegistration {
 }
 
 export interface HostApiContract {
+  /** 二段起動の 1 段目から。送信元のプロセスの本体（compile の結果）。資源の blob は structured clone で渡る（T-0770） */
+  'sys:boot': {
+    request: Record<string, never>;
+    response: CompiledGuest;
+  };
+  /** 本体の文書が load した（ブリッジから）。spawn の待ち合わせを解く（T-0784） */
+  'sys:ready': {
+    request: Record<string, never>;
+    response: boolean;
+  };
+  /** MetaOS.fs.resolveUrl の実体。Blob（OPFS の File の handle）と MIME。object URL はゲストが作る */
+  'fs:read_blob': {
+    request: { path: string };
+    response: { blob: Blob; mime: string };
+  };
   'sys:spawn': {
     request: { path: string; opts?: GuestSpawnOptions };
     response: boolean;
