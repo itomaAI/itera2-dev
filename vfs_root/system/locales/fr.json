@@ -337,7 +337,7 @@
     "systemModal.restore.failed": "Échec de la restauration : {reason}",
     "systemModal.fsck.progress": "Vérification de la cohérence du VFS…",
     "systemModal.fsck.clean": "Le système de fichiers est sain. Aucune erreur trouvée.",
-    "systemModal.fsck.repaired": "{total} problèmes réparés :\n- Références circulaires : {circular}\n- Orphelins récupérés : {orphans}\n- Contenus manquants corrigés : {missing}\n- Contenus isolés récupérés : {dangling}\n\nSi des fichiers ont été récupérés, consultez le dossier '.lost+found' à la racine.",
+    "systemModal.fsck.repaired": "{total} problèmes réparés :\n- Références circulaires : {circular}\n- Orphelins récupérés : {orphans}\n- Contenus manquants corrigés : {missing}\n- Contenus isolés récupérés : {dangling}\n- Contenus obsolètes supprimés : {stale}\n\nSi des fichiers ont été récupérés, consultez le dossier '.lost+found' à la racine.",
     "systemModal.fsck.failed": "Échec de la réparation : {reason}",
     "systemModal.index.exported": "Sauvegarde de l’index exportée",
     "systemModal.index.exportFailed": "Échec de la sauvegarde de l’index : {reason}",

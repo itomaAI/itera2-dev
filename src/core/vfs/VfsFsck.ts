@@ -4,7 +4,7 @@
  */
 
 import type { NodeStore } from './NodeStore';
-import type { ContentStore } from './ContentStore';
+import { contentKey, parseContentKey, type ContentStore } from './ContentStore';
 import type { VfsNode } from './types';
 import { generateId } from '../../utils/id';
 
@@ -13,6 +13,8 @@ export interface FsckReport {
   orphansRescued: number;
   missingContentsFixed: number;
   danglingContentsRescued: number;
+  /** ノードが別の版へ進んだあとに残っていた古い鍵（T-0791 の孤児）。救出ではなく削除 */
+  staleContentsRemoved: number;
   totalErrorsFixed: number;
 }
 
@@ -38,6 +40,7 @@ export class VfsFsck {
       orphansRescued: 0,
       missingContentsFixed: 0,
       danglingContentsRescued: 0,
+      staleContentsRemoved: 0,
       totalErrorsFixed: 0,
     };
 
@@ -140,7 +143,7 @@ export class VfsFsck {
         // A. インデックスはあるが実体がない場合（Missing Content）
         if (!contentKeySet.has(node.contentRef.key)) {
           // エラークラッシュを防ぐため、空ファイルとして実体を再生成してリンクし直す
-          const newRef = await this.contentStore.write(node.id, '');
+          const newRef = await this.contentStore.write(contentKey(node.id, node.meta.version), '');
           node.contentRef = newRef;
           node.meta.size = 0;
           await this.nodeStore.putNode(node);
@@ -152,7 +155,23 @@ export class VfsFsck {
     // 4. 実体はあるがインデックスがない場合（Dangling Content）
     for (const key of contentKeySet) {
       if (!referencedKeys.has(key)) {
-        // .lost+found 内に recovered_file としてメタデータを新造し、実体を復活させる
+        // 鍵は id@版（T-0791）。そのノードが在って別の鍵を指しているなら、これは書き直しで残った古い版
+        // （保持者の kill の前に落ちた・release に失敗した）。中身は捨ててよい —— 救出すると
+        // 書き直すたびに .lost+found に写しが積もる。版が現在より新しい鍵だけは「書き込みの途中」
+        // （書いてから commit するまでの間に fsck が走った）なので触らない。
+        const { nodeId, version } = parseContentKey(key);
+        const owner = nodesMap.get(nodeId);
+        if (owner) {
+          const stale = version === null || version < owner.meta.version;
+          if (stale) {
+            await this.contentStore.delete({ backend: activeBackend, key });
+            report.staleContentsRemoved++;
+          }
+          continue;
+        }
+
+        // ノードそのものが無い: どこから来たか分からない実体。.lost+found 内に recovered_file として
+        // メタデータを新造し、実体を復活させる
         const lfId = await getLostAndFoundId();
         const newFileId = this._generateId();
 
@@ -190,7 +209,8 @@ export class VfsFsck {
       report.circularReferencesFixed +
       report.orphansRescued +
       report.missingContentsFixed +
-      report.danglingContentsRescued;
+      report.danglingContentsRescued +
+      report.staleContentsRemoved;
 
     if (report.totalErrorsFixed > 0) {
       // 修復が行われた場合、インデックスと実データの不整合を防ぐため再構築する

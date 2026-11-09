@@ -366,6 +366,10 @@ export class ProcessManager {
 
     this.processes.delete(pid);
 
+    // このプロセスに渡した VFS の実体（compile の資産・fs:read_blob）の handle を手放す（T-0791）。
+    // 書き直されて孤児になっていた鍵は、保持者が居なくなればここで消える。失敗は起動時の fsck が拾う
+    void this.vfs.releaseContent(pid).catch((e) => console.warn(`[ProcessManager] releaseContent(${pid})`, e));
+
     if (this.events['process_killed']) {
       this.events['process_killed'].forEach((cb) => cb(pid, proc));
     }
@@ -588,7 +592,8 @@ export class ProcessManager {
     }
 
     const mime = this.compiler.getMimeType(absPath);
-    const blob = typedBlob(await this.vfs.readBlob(USER_PRINCIPAL, absPath), mime);
+    // handle はそのプロセスが持ち続ける（object URL を作る）。保持者として名乗る（T-0791）
+    const blob = typedBlob(await this.vfs.readBlob(USER_PRINCIPAL, absPath, { holder: pid }), mime);
     return { blob, mime };
   }
 }

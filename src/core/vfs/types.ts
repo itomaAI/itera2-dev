@@ -217,6 +217,12 @@ export interface ListOptions {
 export interface ReadOptions {
   bypassFetch?: boolean;
   encoding?: 'binary' | 'base64' | 'dataurl' | 'utf8';
+  /**
+   * `readBlob` で返す Blob（OPFS の File handle）を持ち続ける者（プロセスの pid）。T-0791。
+   * 付けると、そのファイルが書き直されても古い実体は `releaseContent(holder)` まで消されない。
+   * 読んですぐ展開する（`text()`／`arrayBuffer()`）だけなら付けない。
+   */
+  holder?: string;
 }
 
 export interface WriteOptions {

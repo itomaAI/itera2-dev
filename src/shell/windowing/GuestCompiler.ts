@@ -276,8 +276,10 @@ export class GuestCompiler {
       const css = await ctx.vfs.readFile(USER_PRINCIPAL, absPath);
       return ctx.addText(absPath, 'text/css', await this._resolveCssRefs(ctx, css, dirOf(absPath)));
     }
-    // それ以外は実体を読まない。VFS が返す Blob（OPFS の File）をそのまま渡す
-    return ctx.addBlob(absPath, mime, await ctx.vfs.readBlob(USER_PRINCIPAL, absPath));
+    // それ以外は実体を読まない。VFS が返す Blob（OPFS の File）をそのまま渡す。
+    // handle はこのプロセスが持ち続けるので保持者として名乗る —— そのファイルが書き直されても、
+    // プロセスが kill されるまで古い実体は残る（T-0791）
+    return ctx.addBlob(absPath, mime, await ctx.vfs.readBlob(USER_PRINCIPAL, absPath, { holder: ctx.pid }));
   }
 
   /** HTML を読み、静的参照（属性・style）を目印に置き換えた文書を返す。ブリッジ等の注入は入口だけ（呼び手が行う） */

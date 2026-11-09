@@ -348,7 +348,7 @@ export const EN = {
   'systemModal.fsck.progress': 'Checking VFS Consistency...',
   'systemModal.fsck.clean': 'File system is clean. No errors found.',
   'systemModal.fsck.repaired':
-    "Repaired {total} issues:\n- Circular References: {circular}\n- Orphans Rescued: {orphans}\n- Missing Contents Fixed: {missing}\n- Dangling Contents Rescued: {dangling}\n\nCheck '.lost+found' folder in root if files were rescued.",
+    "Repaired {total} issues:\n- Circular References: {circular}\n- Orphans Rescued: {orphans}\n- Missing Contents Fixed: {missing}\n- Dangling Contents Rescued: {dangling}\n- Stale Contents Removed: {stale}\n\nCheck '.lost+found' folder in root if files were rescued.",
   'systemModal.fsck.failed': 'Repair failed: {reason}',
   'systemModal.index.exported': 'Index Backup Exported',
   'systemModal.index.exportFailed': 'Index backup failed: {reason}',

@@ -452,7 +452,15 @@ export class VfsService {
     // 実体化のあとの版（実体化は writeFile なので版が上がる）。中身を読む前に取る
     const version = node.meta.version;
     if (!node.contentRef) return { blob: new Blob([]), version };
-    return { blob: await this.contentStore.readBlob(node.contentRef), version };
+    return { blob: await this.contentStore.readBlob(node.contentRef, { holder: opts.holder }), version };
+  }
+
+  /**
+   * 保持者（プロセス）の寿命が尽きた。`readBlob(…, { holder })` で渡した handle の鍵を全部手放す。
+   * 書き直されて孤児になっていた鍵は、ここで保持者が居なくなれば消える（T-0791）。
+   */
+  async releaseContent(holder: string): Promise<void> {
+    await this.contentStore.release(holder);
   }
 
   /**

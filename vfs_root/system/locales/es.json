@@ -337,7 +337,7 @@
     "systemModal.restore.failed": "La restauración falló: {reason}",
     "systemModal.fsck.progress": "Comprobando la coherencia del VFS...",
     "systemModal.fsck.clean": "El sistema de archivos está limpio. No se encontraron errores.",
-    "systemModal.fsck.repaired": "Se repararon {total} problemas:\n- Referencias circulares: {circular}\n- Huérfanos rescatados: {orphans}\n- Contenidos faltantes corregidos: {missing}\n- Contenidos sueltos rescatados: {dangling}\n\nSi se rescataron archivos, revisa la carpeta '.lost+found' en la raíz.",
+    "systemModal.fsck.repaired": "Se repararon {total} problemas:\n- Referencias circulares: {circular}\n- Huérfanos rescatados: {orphans}\n- Contenidos faltantes corregidos: {missing}\n- Contenidos sueltos rescatados: {dangling}\n- Contenidos obsoletos eliminados: {stale}\n\nSi se rescataron archivos, revisa la carpeta '.lost+found' en la raíz.",
     "systemModal.fsck.failed": "La reparación falló: {reason}",
     "systemModal.index.exported": "Copia del índice exportada",
     "systemModal.index.exportFailed": "La copia del índice falló: {reason}",

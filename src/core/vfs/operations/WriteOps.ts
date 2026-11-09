@@ -4,8 +4,9 @@
  */
 
 import { BaseOperation } from './BaseOperation';
-import type { Principal, VfsNode, VfsNodeMeta, WriteOptions, MkdirOptions, StubOptions } from '../types';
+import type { ContentRef, Principal, VfsNode, VfsNodeMeta, WriteOptions, MkdirOptions, StubOptions } from '../types';
 import { VfsError } from '../VfsError';
+import { contentKey } from '../ContentStore';
 
 export class MkdirOp extends BaseOperation<{ path: string; opts: MkdirOptions }, string> {
   async execute(principal: Principal, args: { path: string; opts: MkdirOptions }): Promise<string> {
@@ -145,7 +146,11 @@ export class WriteFileOp extends BaseOperation<
 
         this.checkQuota(sizeDelta, !!opts.system);
 
-        const contentRef = await this.ctx.contentStore.write(node.id, content);
+        // 中身は常に新しい鍵（id@版）へ書き、ノードを差し替えた**あと**で古い鍵を捨てる（T-0791）。
+        // 同じ鍵に上書きすると、その handle を持つゲストの資産が読めなくなる。古い鍵は誰かが持っていれば
+        // ContentStore が孤児として残し、その保持者の kill で消す。
+        const previousRef = node.contentRef;
+        const contentRef = await this.ctx.contentStore.write(contentKey(node.id, node.meta.version), content);
 
         node.contentRef = contentRef;
         node.meta.size = newSize;
@@ -154,6 +159,8 @@ export class WriteFileOp extends BaseOperation<
         const tx = this.createTransaction(principal);
         tx.put(node);
         await tx.commit();
+
+        if (previousRef && previousRef.key !== contentRef.key) await this.ctx.contentStore.delete(previousRef);
 
         return eventType === 'create' ? `Created ${normPath}` : `Overwrote ${normPath}`;
       });
@@ -236,13 +243,16 @@ export class AppendFileOp extends BaseOperation<{ path: string; content: string;
 
         this.checkQuota(sizeDelta, !!opts.system);
 
-        node.contentRef = await this.ctx.contentStore.write(node.id, newContent);
+        const previousRef = node.contentRef;
+        node.contentRef = await this.ctx.contentStore.write(contentKey(node.id, node.meta.version), newContent);
         node.meta.size = newSize;
         node.meta.hash = await this.calculateHash(newContent);
 
         const tx = this.createTransaction(principal);
         tx.put(node);
         await tx.commit();
+
+        if (previousRef && previousRef.key !== node.contentRef.key) await this.ctx.contentStore.delete(previousRef);
 
         return `Appended to ${normPath}`;
       });
@@ -283,6 +293,7 @@ export class CreateStubOp extends BaseOperation<
         const existingId = this.ctx.pathResolver.getIdByPath(normPath);
         let node: VfsNode;
         const now = Date.now();
+        let previousRef: ContentRef | undefined;
 
         if (existingId !== undefined && existingId !== null) {
           this.ctx.auth.checkNodePermission(principal, existingId, 'write');
@@ -290,9 +301,7 @@ export class CreateStubOp extends BaseOperation<
           if (existingNode.kind === 'directory')
             throw new VfsError('EISDIR', `Cannot create stub: Directory exists at ${normPath}`);
 
-          if (existingNode.contentRef) {
-            await this.ctx.contentStore.delete(existingNode.contentRef);
-          }
+          previousRef = existingNode.contentRef;
           node = { ...existingNode };
           // 渡された meta が素直に勝つ。ここで updatedAt を now で塗ると、
           // 提供者が渡したホスト側の更新日時が潰れる（T-0351 / 実測: local_release で日付が今日になっていた）。
@@ -331,6 +340,9 @@ export class CreateStubOp extends BaseOperation<
         const tx = this.createTransaction(principal);
         tx.put(node);
         await tx.commit();
+
+        // 実体はノードを stub にした**あと**で捨てる。handle を持つプロセスが居れば ContentStore が後回しにする（T-0791）
+        if (previousRef) await this.ctx.contentStore.delete(previousRef);
 
         return `Stub created at ${normPath}`;
       });

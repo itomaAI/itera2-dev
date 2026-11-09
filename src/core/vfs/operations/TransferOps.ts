@@ -6,6 +6,7 @@
 import { BaseOperation } from './BaseOperation';
 import type { Principal, VfsNode, DeleteOptions, RenameOptions, CopyOptions, RestoreOptions } from '../types';
 import { VfsError } from '../VfsError';
+import { contentKey } from '../ContentStore';
 
 export class DeleteFileOp extends BaseOperation<{ path: string; opts: DeleteOptions }, string> {
   async execute(principal: Principal, args: { path: string; opts: DeleteOptions }): Promise<string> {
@@ -306,7 +307,7 @@ export class CopyOp extends BaseOperation<{ srcPath: string; destPath: string; o
             },
             acl: this.ctx.auth.getDefaultAcl(principal, destParentId),
           };
-          newNode.contentRef = await this.ctx.contentStore.write(newNode.id, blob);
+          newNode.contentRef = await this.ctx.contentStore.write(contentKey(newNode.id, newNode.meta.version), blob);
           tx.put(newNode);
           await tx.commit();
           return `Copied file: ${normSrc} -> ${normDest}`;
@@ -351,7 +352,7 @@ export class CopyOp extends BaseOperation<{ srcPath: string; destPath: string; o
               if (child.kind === 'file') {
                 if (child.contentRef) {
                   const blob = await this.ctx.contentStore.readBlob(child.contentRef);
-                  newNode.contentRef = await this.ctx.contentStore.write(newId, blob);
+                  newNode.contentRef = await this.ctx.contentStore.write(contentKey(newId, newNode.meta.version), blob);
                 }
                 tx.put(newNode);
                 count++;

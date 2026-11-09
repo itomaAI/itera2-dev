@@ -315,7 +315,7 @@
     "systemModal.restore.failed": "복원 실패: {reason}",
     "systemModal.fsck.progress": "VFS 일관성 검사 중…",
     "systemModal.fsck.clean": "파일 시스템에 문제가 없습니다.",
-    "systemModal.fsck.repaired": "문제 {total}건을 복구했습니다:\n- 순환 참조: {circular}\n- 구출한 고아 항목: {orphans}\n- 고친 누락 내용: {missing}\n- 구출한 떠 있는 내용: {dangling}\n\n파일을 구출했다면 루트의 '.lost+found' 폴더를 확인하세요.",
+    "systemModal.fsck.repaired": "문제 {total}건을 복구했습니다:\n- 순환 참조: {circular}\n- 구출한 고아 항목: {orphans}\n- 고친 누락 내용: {missing}\n- 구출한 떠 있는 내용: {dangling}\n- 삭제한 오래된 내용: {stale}\n\n파일을 구출했다면 루트의 '.lost+found' 폴더를 확인하세요.",
     "systemModal.fsck.failed": "복구 실패: {reason}",
     "systemModal.index.exported": "색인 백업을 내보냈습니다",
     "systemModal.index.exportFailed": "색인 백업 실패: {reason}",
