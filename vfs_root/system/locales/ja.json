@@ -378,7 +378,6 @@
     "editor.binaryNotSupported": "バイナリファイルは編集できません。",
     "editor.saved": "保存しました",
     "editor.saveFailed": "失敗しました",
-    "process.notFound": "{path} が見つかりません。",
     "process.launchFailed": "{path} を起動できませんでした",
     "guest.fileNotFound": "ファイルが見つかりません",
     "guest.notAFile": "ファイルではありません（フォルダー）",

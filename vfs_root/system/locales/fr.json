@@ -400,7 +400,6 @@
     "editor.binaryNotSupported": "La modification des fichiers binaires n’est pas prise en charge.",
     "editor.saved": "Enregistré !",
     "editor.saveFailed": "Échec",
-    "process.notFound": "{path} introuvable.",
     "process.launchFailed": "Impossible de lancer {path}",
     "guest.fileNotFound": "Fichier introuvable",
     "guest.notAFile": "Ce n’est pas un fichier (dossier)",

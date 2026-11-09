@@ -378,7 +378,6 @@
     "editor.binaryNotSupported": "不支持编辑二进制文件。",
     "editor.saved": "已保存！",
     "editor.saveFailed": "失败",
-    "process.notFound": "找不到 {path}。",
     "process.launchFailed": "无法启动 {path}",
     "guest.fileNotFound": "找不到文件",
     "guest.notAFile": "不是文件（文件夹）",

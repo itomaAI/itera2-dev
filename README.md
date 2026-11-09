@@ -72,7 +72,15 @@ MetaOS.device
 MetaOS.tools
 ```
 
-Guest Bridgeは`src/api/guest_bridge.js`に通常のJavaScriptソースとして定義され、実行時にBlob URLとしてGuestへ注入されます。
+Guest Bridgeは`src/api/guest_bridge.js`に通常のJavaScriptソースとして定義され、Guestの入口HTMLにインラインの`<script>`として注入されます。
+
+### Guest の起動（二段起動）
+
+Guest の文書はホストの URL で配信されない。`ProcessManager` は iframe の `srcdoc` に小さなブートストラップ（`src/shell/windowing/guest_bootstrap.js`）を置き、ブートストラップがホストに `sys:boot` で自分の本体を頼む。ホストは `GuestCompiler` で入口 HTML の静的参照（`<script src>` `<link href>` `<img src>` CSS の `url()` …）を VFS の中で再帰的に解決し、`{ html, assets }`（参照は目印、資源は VFS の Blob＝OPFS の File handle）を返す。Guest は自分の窓で `URL.createObjectURL` を作って目印を置き換え、`document.write` で同じ文書に本体を書く。本体のブリッジが `load` で `sys:ready` を送り、`spawn()` はそれを待って返る。
+
+- 資源の実体はホストが読まず、structured clone で handle だけが渡る（バイト列は複製されない）。object URL の寿命は Guest の文書と同じで、ホストに台帳も revoke も無い。
+- `MetaOS.fs.resolveUrl(path)` も同じ経路（`fs:read_blob` → Guest で object URL）。
+- 動的な参照（JS からの相対パス）は解決されない。`MetaOS.fs.resolveUrl` を使う。
 
 ### Dynamic Tools
 

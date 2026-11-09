@@ -296,6 +296,8 @@ export class ProcessManager {
       await this._awaitReady(pid, boot);
       await boot.body;
 
+      // 待っている間に kill／起動し直しで別の起動に置き換わっていたら、この起動のことは何も言わない
+      if (this.processes.get(pid)?.boot !== boot) return;
       console.log(`[ProcessManager] Spawned [${pid}] (Type:${type}, Show:${show}) -> ${path}`);
     } catch (e) {
       console.error(`[ProcessManager] Spawn error (${pid}):`, e);

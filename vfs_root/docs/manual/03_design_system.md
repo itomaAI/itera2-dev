@@ -27,7 +27,7 @@ The split is by **contract**, not by kind:
 | `system/lib/` | `md.js`, ... | First-party shared libraries that an app opts into. Add new shared pieces here. |
 | `system/vendor/` | `tw.js` | Third-party code, vendored as-is. Never edit; replace whole files. |
 
-Always load with absolute paths (`/system/...`). Relative paths break once the app is served from a Blob URL.
+Always load with absolute paths (`/system/...`). An app's document is not served from its VFS path (it is written into a sandboxed iframe), so relative paths are rewritten only where the compiler sees them: static HTML attributes and CSS `url()`. From JavaScript use `MetaOS.fs.resolveUrl`.
 
 ## Semantic Tokens Reference
 
