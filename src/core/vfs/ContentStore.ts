@@ -9,10 +9,11 @@
  * その名前への上書き・削除・差し替えのどれでも読めなくなるから（Chromium NotReadableError／Firefox AbortError。
  * 実測 2026-11-10）。生き残るのは「別の鍵に書いて古い実体を残す」だけ。
  *
- * 渡した handle の寿命は保持者（プロセス）の寿命で数える: {@link ContentStore.readBlob} に `holder` を付けると
- * その鍵は保持され、{@link ContentStore.delete} は保持中の鍵を消さずに孤児として覚える。
- * {@link ContentStore.release} で保持者が居なくなった孤児を物理的に消す。
- * クラッシュ等で漏れた孤児は起動時の fsck（VfsFsck）が片付ける。
+ * 渡した handle は 1 つずつ数える: {@link ContentStore.readBlob} に `holder` を付けるたび、その保持者の
+ * その鍵の数が 1 増え、{@link ContentStore.delete} は保持中の鍵を消さずに孤児として覚える。
+ * 保持が減るのは 2 通り —— 保持者が handle を 1 つ手放した（{@link ContentStore.releaseOne}。ゲストが object URL を
+ * revoke した。T-0798）か、保持者の寿命が尽きた（{@link ContentStore.release}。プロセスの kill）。
+ * 保持者が居なくなった孤児は、そこで物理的に消す。クラッシュ等で漏れた孤児は起動時の fsck（VfsFsck）が片付ける。
  *
  * ホスト自身の読みも同じ規則に乗る（T-0795）: 展開する読み（{@link ContentStore.withBlob}・`readText`・`readBinary`）は
  * 読み終わるまで一時の保持者として鍵を持つ。書き手が途中で古い鍵を delete しても、読みは古い版を最後まで読める。
@@ -72,7 +73,8 @@ export interface ContentStoreOptions {
 export interface ReadBlobOptions {
   /**
    * 返した Blob（OPFS の File handle）を持ち続ける者。プロセスの pid。
-   * 付けると、その鍵はこの保持者が {@link ContentStore.release} されるまで物理的に消されない。
+   * 付けると、その鍵はこの保持者が手放す（{@link ContentStore.releaseOne}／{@link ContentStore.release}）まで
+   * 物理的に消されない。呼ぶたびに 1 つ数える。
    * 読んですぐ展開する（`arrayBuffer()`／`text()`）だけなら付けない。
    */
   holder?: string;
@@ -89,8 +91,11 @@ export class ContentStore {
   private memoryStore: Map<string, Blob> = new Map();
   private readonly retryDelaysMs: readonly number[];
 
-  /** 鍵 → その handle を持っている保持者。{@link readBlob} の `holder` で増え、{@link release} で減る */
-  private readonly holders = new Map<string, Set<Holder>>();
+  /**
+   * 鍵 → 保持者ごとの、渡した handle の数。{@link readBlob} の `holder` で 1 増え、
+   * {@link releaseOne} で 1 減り、{@link release} でその保持者のぶんが全部消える
+   */
+  private readonly holders = new Map<string, Map<Holder, number>>();
   /** どのノードからも参照されなくなったが、保持者が居るので消していない鍵（`delete` が後回しにしたもの） */
   private readonly orphans = new Map<string, ContentRef>();
 
@@ -194,16 +199,16 @@ export class ContentStore {
   /**
    * 実体を Blob（OPFS では File handle）のまま返す。中身は読まない。
    * `opts.holder` を付けると、返す前にその鍵を保持者に結び付ける（返したあとに付けると、その間に delete が通りうる）。
-   * 渡せなかった（読めなかった）ときは、この呼び出しで付けた保持を外す —— 保持の記録は「渡した handle」と 1 対 1。
+   * 渡せなかった（読めなかった）ときは、この呼び出しで数えた 1 つを戻す —— 保持の数は「渡した handle」の数と同じ。
    */
   async readBlob(ref: ContentRef, opts: ReadBlobOptions = {}): Promise<Blob> {
     const holder = opts.holder;
-    const retained = holder !== undefined && this.retain(ref.key, holder);
+    if (holder !== undefined) this.retain(ref.key, holder);
     try {
       return await this.open(ref);
     } catch (e) {
-      // 前からの保持（この保持者に既に渡した handle のもの）は外さない
-      if (retained) await this.unretain(ref.key, holder!);
+      // 戻すのはこの呼び出しのぶんだけ。前に渡した handle のぶんは残る
+      if (holder !== undefined) await this.unretain(ref.key, holder);
       throw e;
     }
   }
@@ -226,29 +231,27 @@ export class ContentStore {
     }
   }
 
-  /**
-   * 鍵を保持者に結び付ける。保持者が居る鍵は {@link delete} されても物理的には消えない。
-   * この呼び出しで新しく結び付いたなら true（既にその保持者が持っていたなら false）。
-   */
-  retain(key: string, holder: Holder): boolean {
-    let set = this.holders.get(key);
-    if (!set) {
-      set = new Set();
-      this.holders.set(key, set);
+  /** 保持者がこの鍵の handle を 1 つ持った。保持者が居る鍵は {@link delete} されても物理的には消えない */
+  retain(key: string, holder: Holder): void {
+    let counts = this.holders.get(key);
+    if (!counts) {
+      counts = new Map();
+      this.holders.set(key, counts);
     }
-    if (set.has(holder)) return false;
-    set.add(holder);
-    return true;
+    counts.set(holder, (counts.get(holder) ?? 0) + 1);
   }
 
   /**
-   * 鍵から保持者を 1 人外す（同期）。その鍵に保持者が居なくなり、孤児として残してあったなら、
-   * 物理的に消すべきものとして返す（孤児の台帳からは外してある）。
+   * 保持者のこの鍵の数を 1 減らす（`all` なら全部。同期）。その鍵に保持者が居なくなり、孤児として残してあったなら、
+   * 物理的に消すべきものとして返す（孤児の台帳からは外してある）。持っていなければ何もしない。
    */
-  private drop(key: string, holder: Holder): ContentRef | null {
-    const set = this.holders.get(key);
-    if (!set || !set.delete(holder)) return null;
-    if (set.size > 0) return null;
+  private drop(key: string, holder: Holder, all = false): ContentRef | null {
+    const counts = this.holders.get(key);
+    const held = counts?.get(holder);
+    if (!counts || !held) return null;
+    if (all || held <= 1) counts.delete(holder);
+    else counts.set(holder, held - 1);
+    if (counts.size > 0) return null;
     this.holders.delete(key);
     const orphan = this.orphans.get(key);
     if (!orphan) return null;
@@ -267,16 +270,25 @@ export class ContentStore {
     }
   }
 
-  /** 1 つの鍵から保持者を 1 人外し、孤児になっていれば消す */
+  /** 保持者のこの鍵の数を 1 減らし、保持者の居ない孤児になっていれば消す */
   private async unretain(key: string, holder: Holder): Promise<void> {
     const freed = this.drop(key, holder);
     if (freed) await this.removeFreed([freed]);
   }
 
+  /**
+   * 保持者が handle を 1 つ手放した（ゲストがその object URL を revoke した。T-0798）。
+   * その保持者のその鍵の数を 1 減らす。同じ鍵の handle を他にも持っていれば（起動時の資産など）、鍵は保持されたまま。
+   * 持っていない鍵を言われても何もしない（他の保持者のぶんには触れない）。
+   */
+  async releaseOne(holder: string, key: string): Promise<void> {
+    await this.unretain(key, holder);
+  }
+
   /** 保持者が持っている鍵（試験・診断用） */
   heldKeys(holder: string): string[] {
     const keys: string[] = [];
-    for (const [key, set] of this.holders) if (set.has(holder)) keys.push(key);
+    for (const [key, counts] of this.holders) if (counts.has(holder)) keys.push(key);
     return keys;
   }
 
@@ -292,7 +304,7 @@ export class ContentStore {
   async release(holder: string): Promise<void> {
     const freed: ContentRef[] = [];
     for (const key of Array.from(this.holders.keys())) {
-      const orphan = this.drop(key, holder);
+      const orphan = this.drop(key, holder, true);
       if (orphan) freed.push(orphan);
     }
     await this.removeFreed(freed);

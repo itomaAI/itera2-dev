@@ -41,7 +41,8 @@ export interface IProcessManager {
   captureScreenshot(pid?: string): Promise<string>;
   bootGuest(pid: string): Promise<CompiledGuest>;
   markReady(pid: string): boolean;
-  readBlob(path: string, pid: string): Promise<{ blob: Blob; mime: string }>;
+  readBlob(path: string, pid: string): Promise<{ blob: Blob; mime: string; hold: string | null }>;
+  releaseBlob(hold: string, pid: string): Promise<void>;
   getArgs(pid: string): Record<string, string> | null;
   reportError(pid: string, errorData: any): void;
   processes: Map<string, any>;
@@ -294,6 +295,15 @@ export class HostApiRouter {
     t.registerHandler('fs:read_blob', async ({ path }, sourcePid) => {
       if (!d.processManager) throw new Error('ProcessManager not connected.');
       return d.processManager.readBlob(path, sourcePid);
+    });
+
+    // resolveUrl の URL が revoke された。その 1 回ぶんの保持を手放す（T-0798）。対象は送信元のプロセスに渡したぶんだけ
+    t.registerHandler('fs:release_blob', async ({ hold }, sourcePid) => {
+      if (!d.processManager) throw new Error('ProcessManager not connected.');
+      if (typeof hold !== 'string' || !hold)
+        throw new Error('fs:release_blob needs the hold returned by fs:read_blob.');
+      await d.processManager.releaseBlob(hold, sourcePid);
+      return { success: true };
     });
 
     // 二段起動（T-0770 / T-0784）。ブートストラップが自分の本体を取りに来る／本体のブリッジが load を知らせる。

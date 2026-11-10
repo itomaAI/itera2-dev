@@ -508,8 +508,13 @@ Note: It is meant for saving HTML and parsing it with DOMParser (collecting imag
               let dim = '';
               try {
                 const localUrl = await window.MetaOS.fs.resolveUrl(target);
-                const size = await probeImage(localUrl);
-                if (size) dim = `${size.w}×${size.h}, `;
+                try {
+                  const size = await probeImage(localUrl);
+                  if (size) dim = `${size.w}×${size.h}, `;
+                } finally {
+                  // 測り終えたら手放す。デーモンは終わらないので、持ったままだと保存したファイル全部の実体を抱え続ける
+                  URL.revokeObjectURL(localUrl);
+                }
               } catch (e) {
                 /* 寸法は付かなくてよい */
               }

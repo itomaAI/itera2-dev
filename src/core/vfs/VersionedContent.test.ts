@@ -6,6 +6,7 @@
  *   ContentStore.readBlob({ holder })  … handle を渡した相手を保持者として覚える
  *   ContentStore.delete                … 保持者が居れば消さずに孤児へ。release(holder) で参照 0 になった孤児を消す
  *   WriteOps（write / append / stub）  … 新しい鍵へ書き、ノードを差し替えた後で古い鍵を delete
+ *   ContentStore.releaseOne / VfsService.readBlobHeld … 保持は渡した回数で数え、券で 1 つずつ手放せる（T-0798）
  *   ContentStore.withBlob / VfsService.withBlob … 展開する読みは読み終わるまで鍵を保持する（T-0795）
  *   ContentStore.readBlob が失敗        … その呼び出しで付けた保持は残さない（T-0795）
  *   VfsFsck                            … 書き直しで残った古い鍵は削除（救出しない）。版が新しい鍵は触らない。
@@ -326,6 +327,144 @@ describe('渡せなかった handle の保持は残さない（T-0795）', () =>
     await expect(store.readBlob(ref, { holder: 'app_b' })).rejects.toThrow('Content not found');
     expect(store.heldKeys('app_b')).toEqual([]);
     expect(store.orphanKeys()).toEqual([]);
+  });
+});
+
+describe('渡した handle は 1 つずつ数え、1 つずつ手放せる（T-0798）', () => {
+  it('同じ保持者に 2 回渡した鍵は、1 つ手放しても残り、2 つ目で消える', async () => {
+    const opfs = installOpfs();
+    const store = new ContentStore({ retryDelaysMs: [] });
+    const ref = await store.write('n@1', 'a');
+    await store.readBlob(ref, { holder: 'app_a' });
+    await store.readBlob(ref, { holder: 'app_a' });
+    await store.delete(ref);
+    expect(store.orphanKeys()).toEqual(['n@1']);
+
+    await store.releaseOne('app_a', 'n@1');
+    expect(opfs.removed).toEqual([]);
+    expect(store.heldKeys('app_a')).toEqual(['n@1']);
+
+    await store.releaseOne('app_a', 'n@1');
+    expect(opfs.removed).toEqual(['n@1']);
+    expect(store.heldKeys('app_a')).toEqual([]);
+    expect(store.orphanKeys()).toEqual([]);
+  });
+
+  it('releaseOne は、まだノードが参照している鍵を消さない（保持が減るだけ）', async () => {
+    const opfs = installOpfs();
+    const store = new ContentStore({ retryDelaysMs: [] });
+    const ref = await store.write('n@1', 'a');
+    await store.readBlob(ref, { holder: 'app_a' });
+    await store.releaseOne('app_a', 'n@1');
+    expect(opfs.removed).toEqual([]);
+    expect(store.heldKeys('app_a')).toEqual([]);
+    // 保持者が居なくなったので、このあとの delete は即消える
+    await store.delete(ref);
+    expect(opfs.removed).toEqual(['n@1']);
+  });
+
+  it('手放せるのは自分のぶんだけ。持っていない鍵・他の保持者のぶんには触れない', async () => {
+    const opfs = installOpfs();
+    const store = new ContentStore({ retryDelaysMs: [] });
+    const ref = await store.write('n@1', 'a');
+    await store.readBlob(ref, { holder: 'app_a' });
+    await store.delete(ref);
+
+    await store.releaseOne('app_b', 'n@1'); // 持っていない保持者
+    await store.releaseOne('app_a', 'other@1'); // 持っていない鍵
+    await store.releaseOne('app_a', 'n@1');
+    await store.releaseOne('app_a', 'n@1'); // 手放しすぎても、他へ食い込まない
+    expect(opfs.removed).toEqual(['n@1']);
+
+    const ref2 = await store.write('m@1', 'b');
+    await store.readBlob(ref2, { holder: 'app_a' });
+    await store.readBlob(ref2, { holder: 'app_b' });
+    await store.delete(ref2);
+    await store.releaseOne('app_a', 'm@1');
+    await store.releaseOne('app_a', 'm@1');
+    expect(opfs.files.has('m@1')).toBe(true); // app_b がまだ持っている
+    await store.release('app_b');
+    expect(opfs.removed).toEqual(['n@1', 'm@1']);
+  });
+
+  it('release(holder) は、何回渡していても全部手放す（プロセスの終わり）', async () => {
+    const opfs = installOpfs();
+    const store = new ContentStore({ retryDelaysMs: [] });
+    const ref = await store.write('n@1', 'a');
+    for (let i = 0; i < 3; i++) await store.readBlob(ref, { holder: 'app_a' });
+    await store.delete(ref);
+    await store.release('app_a');
+    expect(opfs.removed).toEqual(['n@1']);
+    expect(store.heldKeys('app_a')).toEqual([]);
+  });
+
+  it('失敗した readBlob が戻すのは自分の 1 つだけ（前に渡した 2 つは残る）', async () => {
+    const opfs = installOpfs();
+    const store = new ContentStore({ retryDelaysMs: [] });
+    const ref = await store.write('n@1', 'a');
+    await store.readBlob(ref, { holder: 'app_a' });
+    await store.readBlob(ref, { holder: 'app_a' });
+    const blob = opfs.files.get('n@1')!;
+    opfs.files.delete('n@1'); // 実体が外から失われた
+    await expect(store.readBlob(ref, { holder: 'app_a' })).rejects.toThrow('Content not found');
+    opfs.files.set('n@1', blob);
+    await store.delete(ref);
+    await store.releaseOne('app_a', 'n@1');
+    expect(opfs.removed).toEqual([]); // まだ 1 つ残っている
+    await store.releaseOne('app_a', 'n@1');
+    expect(opfs.removed).toEqual(['n@1']);
+  });
+
+  it('VfsService.readBlobHeld の券を返すと、kill を待たずに古い版が消える', async () => {
+    const opfs = installOpfs();
+    const { vfs, nodeAt } = makeVfs();
+    await vfs.writeFile(USER_PRINCIPAL, 'img.png', 'PNG1');
+    const id = nodeAt('img.png')!.id;
+    const first = await vfs.readBlobHeld(USER_PRINCIPAL, 'img.png', 'daemon');
+    expect(first.hold).toBe(`${id}@1`);
+
+    await vfs.writeFile(USER_PRINCIPAL, 'img.png', 'PNG2', { overwrite: true });
+    expect(await first.blob.text()).toBe('PNG1');
+    expect(opfs.removed).toEqual([]);
+
+    // ゲストが URL を revoke した
+    await vfs.releaseContent('daemon', first.hold!);
+    expect(opfs.removed).toEqual([`${id}@1`]);
+
+    // 新しい版を読み直して手放しても、ノードが参照している実体は消えない
+    const second = await vfs.readBlobHeld(USER_PRINCIPAL, 'img.png', 'daemon');
+    expect(second.hold).toBe(`${id}@2`);
+    await vfs.releaseContent('daemon', second.hold!);
+    expect(opfs.files.has(`${id}@2`)).toBe(true);
+    expect(await vfs.readFile(USER_PRINCIPAL, 'img.png')).toBe('PNG2');
+  });
+
+  it('起動時の資産と resolveUrl が同じ鍵を持つとき、URL を revoke しても資産のぶんは残る', async () => {
+    const opfs = installOpfs();
+    const { vfs, nodeAt } = makeVfs();
+    await vfs.writeFile(USER_PRINCIPAL, 'logo.png', 'L1');
+    const id = nodeAt('logo.png')!.id;
+    const asset = await vfs.readBlob(USER_PRINCIPAL, 'logo.png', { holder: 'app_a' }); // compile の資産
+    const viaUrl = await vfs.readBlobHeld(USER_PRINCIPAL, 'logo.png', 'app_a'); // resolveUrl
+
+    await vfs.writeFile(USER_PRINCIPAL, 'logo.png', 'L2', { overwrite: true });
+    await vfs.releaseContent('app_a', viaUrl.hold!);
+    expect(opfs.removed).toEqual([]);
+    expect(await asset.text()).toBe('L1');
+
+    await vfs.releaseContent('app_a'); // kill
+    expect(opfs.removed).toEqual([`${id}@1`]);
+  });
+
+  it('中身の無いファイルは保持するものが無い（hold は null）', async () => {
+    installOpfs();
+    const { vfs, nodeStore } = makeVfs();
+    await vfs.writeFile(USER_PRINCIPAL, 'e.txt', 'x');
+    const nid = (vfs as any).pathResolver.getIdByPath('e.txt');
+    await nodeStore.putNode({ ...nodeStore.getNode(nid)!, contentRef: undefined });
+    const r = await vfs.readBlobHeld(USER_PRINCIPAL, 'e.txt', 'app_a');
+    expect(r.hold).toBeNull();
+    expect(r.blob.size).toBe(0);
   });
 });
 

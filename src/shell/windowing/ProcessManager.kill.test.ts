@@ -9,8 +9,8 @@ import { ProcessManager } from './ProcessManager';
 function mk() {
   const released: string[] = [];
   const vfs = {
-    releaseContent: async (holder: string) => {
-      released.push(holder);
+    releaseContent: async (holder: string, hold?: string) => {
+      released.push(hold === undefined ? holder : `${holder}:${hold}`);
     },
   };
   const pm = new ProcessManager(vfs as any, {} as any, {} as any);
@@ -43,6 +43,21 @@ describe('ProcessManager.kill → vfs.releaseContent (T-0791)', () => {
     const { pm, released } = mk();
     expect(pm.kill('nope')).toBe(false);
     await Promise.resolve();
+    expect(released).toEqual([]);
+  });
+});
+
+describe('ProcessManager.releaseBlob → vfs.releaseContent(pid, hold) (T-0798)', () => {
+  it('そのプロセスに渡した 1 つだけを手放す', async () => {
+    const { pm, released } = mk();
+    await pm.releaseBlob('n@1', 'a');
+    expect(released).toEqual(['a:n@1']);
+    expect(pm.processes.has('a')).toBe(true);
+  });
+
+  it('居ないプロセスからの要求は何もしない（kill が全部手放している）', async () => {
+    const { pm, released } = mk();
+    await pm.releaseBlob('n@1', 'nope');
     expect(released).toEqual([]);
   });
 });
