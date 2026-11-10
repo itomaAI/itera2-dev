@@ -26,7 +26,6 @@
       (async () => {
         const M = window.MetaOS;
         const Z = window.ZipCore;
-        const NAMES = ['zip_list', 'zip_extract', 'zip_create'];
         const DEFAULT_LIST_LIMIT = 200;
         const log = (msg) => {
           console.log('[ZipTool] ' + msg);
@@ -468,9 +467,6 @@
 
         M.ai.log(defs, 'tool_available');
         log('Started (zip_list / zip_extract / zip_create).');
-        window.addEventListener('unload', () => {
-          for (const n of NAMES) M.tools.unregister(n);
-        });
       })();
     </script>
   </body>

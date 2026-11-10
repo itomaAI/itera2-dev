@@ -30,7 +30,6 @@
       (async () => {
         const M = window.MetaOS;
         const P = window.PdfText;
-        const NAMES = ['pdf_info', 'pdf_extract', 'pdf_pages', 'pdf_text', 'pdf_to_text'];
         const MAX_PAGES_PER_CALL = 20;
         const DEFAULT_SIZE = 1568; // 長辺 px。Anthropic がこれより大きい画像を縮めるので、これ以上は無駄になる
         const MAX_SIZE = 4096;
@@ -467,9 +466,6 @@
 
         M.ai.log(defs, 'tool_available');
         log('Started (pdf_info / pdf_extract / pdf_pages / pdf_text).');
-        window.addEventListener('unload', () => {
-          for (const n of NAMES) M.tools.unregister(n);
-        });
       })();
     </script>
   </body>

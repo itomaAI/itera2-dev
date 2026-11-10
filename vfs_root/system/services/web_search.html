@@ -524,12 +524,6 @@ Note: It is meant for saving HTML and parsing it with DOMParser (collecting imag
         const allDefs = `${defSearch}\n${defRead}\n${defDownload}`;
         window.MetaOS.ai.log(allDefs, 'tool_available');
         sendLog('Dynamic tools registered: web_search, read_webpage, download_file.');
-
-        window.addEventListener('unload', () => {
-          window.MetaOS.tools.unregister('web_search');
-          window.MetaOS.tools.unregister('read_webpage');
-          window.MetaOS.tools.unregister('download_file');
-        });
       })();
     </script>
   </body>
