@@ -182,13 +182,11 @@ export class HostApiRouter {
         return await d.vfs.readFileWithVersion(principal, path, opts);
       }
       if (opts && opts.encoding) {
+        // 展開が終わるまで実体を保持する（途中で書き直されても、読んでいる版を読み切る。T-0795）
         if (opts.encoding === 'binary') {
-          const blob = await d.vfs.readBlob(principal, path, opts);
-          const buffer = await blob.arrayBuffer();
-          return new Uint8Array(buffer);
+          return await d.vfs.withBlob(principal, path, async (blob) => new Uint8Array(await blob.arrayBuffer()), opts);
         } else if (opts.encoding === 'base64' || opts.encoding === 'dataurl') {
-          const blob = await d.vfs.readBlob(principal, path, opts);
-          const dataUrl = await blobToDataUrl(blob);
+          const dataUrl = await d.vfs.withBlob(principal, path, blobToDataUrl, opts);
           if (opts.encoding === 'dataurl') return dataUrl;
           return dataUrl.split(',')[1] || '';
         }
@@ -394,7 +392,7 @@ export class HostApiRouter {
         if (stat.kind !== 'file') return null;
         return {
           size: stat.size,
-          bytes: async () => new Uint8Array(await (await d.vfs.readBlob(principal, path)).arrayBuffer()),
+          bytes: () => d.vfs.withBlob(principal, path, async (blob) => new Uint8Array(await blob.arrayBuffer())),
         };
       });
       const plan = buildAppendPlan({ role, content, opts }, sourcePid, resolved);

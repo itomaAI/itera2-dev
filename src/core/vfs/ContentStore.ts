@@ -13,6 +13,9 @@
  * その鍵は保持され、{@link ContentStore.delete} は保持中の鍵を消さずに孤児として覚える。
  * {@link ContentStore.release} で保持者が居なくなった孤児を物理的に消す。
  * クラッシュ等で漏れた孤児は起動時の fsck（VfsFsck）が片付ける。
+ *
+ * ホスト自身の読みも同じ規則に乗る（T-0795）: 展開する読み（{@link ContentStore.withBlob}・`readText`・`readBinary`）は
+ * 読み終わるまで一時の保持者として鍵を持つ。書き手が途中で古い鍵を delete しても、読みは古い版を最後まで読める。
  */
 
 import type { ContentRef } from './types';
@@ -75,6 +78,9 @@ export interface ReadBlobOptions {
   holder?: string;
 }
 
+/** 鍵を保持する者。プロセスの pid（文字列）か、1 回の読み（{@link ContentStore.withBlob} が作る symbol） */
+type Holder = string | symbol;
+
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
 export class ContentStore {
@@ -84,7 +90,7 @@ export class ContentStore {
   private readonly retryDelaysMs: readonly number[];
 
   /** 鍵 → その handle を持っている保持者。{@link readBlob} の `holder` で増え、{@link release} で減る */
-  private readonly holders = new Map<string, Set<string>>();
+  private readonly holders = new Map<string, Set<Holder>>();
   /** どのノードからも参照されなくなったが、保持者が居るので消していない鍵（`delete` が後回しにしたもの） */
   private readonly orphans = new Map<string, ContentRef>();
 
@@ -160,36 +166,50 @@ export class ContentStore {
   }
 
   async readText(ref: ContentRef): Promise<string> {
-    if (ref.backend === 'memory') {
-      const blob = this.memoryStore.get(ref.key);
-      if (!blob) throw new Error(`Content not found in memory: ${ref.key}`);
-      return await blob.text();
-    }
-
-    try {
-      const root = await this.rootHandlePromise!;
-      const fileHandle = await root.getFileHandle(ref.key);
-      const file = await fileHandle.getFile();
-      return await file.text();
-    } catch (e: any) {
-      if (e.name === 'NotFoundError') throw new Error(`Content not found in OPFS: ${ref.key}`);
-      throw new Error(`OPFS Read Error: ${e.message || String(e)}`);
-    }
+    return this.withBlob(ref, (blob) => blob.text());
   }
 
   async readBinary(ref: ContentRef): Promise<Uint8Array> {
-    const blob = await this.readBlob(ref);
-    const arrayBuffer = await blob.arrayBuffer();
-    return new Uint8Array(arrayBuffer);
+    return this.withBlob(ref, async (blob) => new Uint8Array(await blob.arrayBuffer()));
+  }
+
+  /**
+   * 中身を読んで使う（展開する）間、鍵を保持する。`use` が終わるまで（成功でも失敗でも）、
+   * この鍵は {@link delete} されても物理的には消えない。終わったら手放し、孤児になっていればそこで消す。
+   *
+   * 呼び出しから保持までに await は無い。呼ぶ側がノードから `contentRef` を取ったのと同じ同期区間で呼べば、
+   * 書き手の「新しい鍵へ書く → ノードを差し替える → 古い鍵を delete」がどこに割り込んでも、読みは古い版を読み切る。
+   * Blob を `use` の外へ持ち出さないこと（持ち続けるなら {@link readBlob} に `holder` を付ける）。
+   */
+  async withBlob<T>(ref: ContentRef, use: (blob: Blob) => Promise<T>): Promise<T> {
+    const reader = Symbol('reader');
+    this.retain(ref.key, reader);
+    try {
+      return await use(await this.open(ref));
+    } finally {
+      await this.unretain(ref.key, reader);
+    }
   }
 
   /**
    * 実体を Blob（OPFS では File handle）のまま返す。中身は読まない。
    * `opts.holder` を付けると、返す前にその鍵を保持者に結び付ける（返したあとに付けると、その間に delete が通りうる）。
+   * 渡せなかった（読めなかった）ときは、この呼び出しで付けた保持を外す —— 保持の記録は「渡した handle」と 1 対 1。
    */
   async readBlob(ref: ContentRef, opts: ReadBlobOptions = {}): Promise<Blob> {
-    if (opts.holder !== undefined) this.retain(ref.key, opts.holder);
+    const holder = opts.holder;
+    const retained = holder !== undefined && this.retain(ref.key, holder);
+    try {
+      return await this.open(ref);
+    } catch (e) {
+      // 前からの保持（この保持者に既に渡した handle のもの）は外さない
+      if (retained) await this.unretain(ref.key, holder!);
+      throw e;
+    }
+  }
 
+  /** 鍵の実体を開く。保持は見ない */
+  private async open(ref: ContentRef): Promise<Blob> {
     if (ref.backend === 'memory') {
       const blob = this.memoryStore.get(ref.key);
       if (!blob) throw new Error(`Content not found in memory: ${ref.key}`);
@@ -206,14 +226,51 @@ export class ContentStore {
     }
   }
 
-  /** 鍵を保持者に結び付ける。保持者が居る鍵は {@link delete} されても物理的には消えない */
-  retain(key: string, holder: string): void {
+  /**
+   * 鍵を保持者に結び付ける。保持者が居る鍵は {@link delete} されても物理的には消えない。
+   * この呼び出しで新しく結び付いたなら true（既にその保持者が持っていたなら false）。
+   */
+  retain(key: string, holder: Holder): boolean {
     let set = this.holders.get(key);
     if (!set) {
       set = new Set();
       this.holders.set(key, set);
     }
+    if (set.has(holder)) return false;
     set.add(holder);
+    return true;
+  }
+
+  /**
+   * 鍵から保持者を 1 人外す（同期）。その鍵に保持者が居なくなり、孤児として残してあったなら、
+   * 物理的に消すべきものとして返す（孤児の台帳からは外してある）。
+   */
+  private drop(key: string, holder: Holder): ContentRef | null {
+    const set = this.holders.get(key);
+    if (!set || !set.delete(holder)) return null;
+    if (set.size > 0) return null;
+    this.holders.delete(key);
+    const orphan = this.orphans.get(key);
+    if (!orphan) return null;
+    this.orphans.delete(key);
+    return orphan;
+  }
+
+  /** 保持者の居なくなった孤児を物理的に消す。消せなくても次の fsck が拾うので、孤児には戻さない */
+  private async removeFreed(refs: ContentRef[]): Promise<void> {
+    for (const ref of refs) {
+      try {
+        await this.remove(ref);
+      } catch (e) {
+        console.warn(`[ContentStore] Failed to remove released content: ${ref.key}`, e);
+      }
+    }
+  }
+
+  /** 1 つの鍵から保持者を 1 人外し、孤児になっていれば消す */
+  private async unretain(key: string, holder: Holder): Promise<void> {
+    const freed = this.drop(key, holder);
+    if (freed) await this.removeFreed([freed]);
   }
 
   /** 保持者が持っている鍵（試験・診断用） */
@@ -234,22 +291,11 @@ export class ContentStore {
    */
   async release(holder: string): Promise<void> {
     const freed: ContentRef[] = [];
-    for (const [key, set] of this.holders) {
-      if (!set.delete(holder)) continue;
-      if (set.size > 0) continue;
-      this.holders.delete(key);
-      const orphan = this.orphans.get(key);
+    for (const key of Array.from(this.holders.keys())) {
+      const orphan = this.drop(key, holder);
       if (orphan) freed.push(orphan);
     }
-    for (const ref of freed) {
-      this.orphans.delete(ref.key);
-      try {
-        await this.remove(ref);
-      } catch (e) {
-        // 消せなくても次の fsck が拾う。保持者が居ないことは変わらないので孤児には戻さない
-        console.warn(`[ContentStore] Failed to remove released content: ${ref.key}`, e);
-      }
-    }
+    await this.removeFreed(freed);
   }
 
   /**

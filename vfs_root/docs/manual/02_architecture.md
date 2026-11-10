@@ -68,6 +68,7 @@ The `Blob` handles above are files in the host's OPFS. An OPFS `File` obtained w
 
 - Every write goes to a **new key**, `<nodeId>@<version>` (the version the VFS already increments on each write). The node's `contentRef` is switched to the new key after the content is on disk.
 - The old key is deleted only if no process holds a handle to it. The host records the holder whenever it hands a `Blob` to a guest — the assets of `sys:boot` and the answer to `MetaOS.fs.resolveUrl` (`fs:read_blob`) — as the guest's pid. When that process is killed, its holds are released and keys that no node references any more are removed.
+- The host's own reads follow the same rule. A read that expands the content (`MetaOS.fs.read` in any encoding, the AI's `read`) holds the key for as long as it is reading and lets go when it is done, so a write that lands in the middle cannot pull the old version away from it: the read returns the version it started with.
 - Keys left behind by a crash (a reload before the kill) are removed by `fsck` at the next start: a key whose node has moved on to a newer version is stale and is deleted, not rescued into `.lost+found`.
 
 For an app this means: an image, font or model that a document references lazily keeps working even if another app (or the AI) overwrites that file while the document is open. The document sees the version it was started with; a fresh `spawn` sees the new one. `copy_file` and `rename` are unaffected (a copy is a new node, a rename does not touch the content).
