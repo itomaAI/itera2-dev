@@ -22,6 +22,7 @@ import {
   type TreeNode,
   type Principal,
   type AccessControlList,
+  type ContentRef,
 } from './types';
 import type { NodeStore } from './NodeStore';
 import type { ContentStore } from './ContentStore';
@@ -405,8 +406,7 @@ export class VfsService {
   }
 
   async readFile(principal: Principal, path: string, opts: ReadOptions = {}): Promise<string> {
-    const blob = await this.readBlob(principal, path, opts);
-    return await blob.text();
+    return this.withBlob(principal, path, (blob) => blob.text(), opts);
   }
 
   /**
@@ -416,19 +416,47 @@ export class VfsService {
    * writeFile の ifVersion が ESTALE で断るだけなので害が無い）。
    */
   async readFileWithVersion(principal: Principal, path: string, opts: ReadOptions = {}): Promise<TextWithVersion> {
-    const { blob, version } = await this._readBlobAndVersion(principal, path, opts);
-    return { content: await blob.text(), version };
+    return this.withBlob(principal, path, async (blob, version) => ({ content: await blob.text(), version }), opts);
   }
 
+  /**
+   * 実体を Blob（OPFS の File handle）のまま返す。中身は読まない。
+   * 🔴 この handle は、ファイルが書き直されると読めなくなる。読んですぐ展開するなら {@link withBlob}、
+   * 持ち続けるなら `opts.holder` を付ける（T-0791 / T-0795）。
+   */
   async readBlob(principal: Principal, path: string, opts: ReadOptions = {}): Promise<Blob> {
-    return (await this._readBlobAndVersion(principal, path, opts)).blob;
+    return this._locateContent(principal, path, opts, async (ref) =>
+      ref ? this.contentStore.readBlob(ref, { holder: opts.holder }) : new Blob([]),
+    );
   }
 
-  private async _readBlobAndVersion(
+  /**
+   * 中身を読んで使う（展開する）。`use` が終わるまで、読んでいる版の実体は書き直されても消えない（T-0795）。
+   * `text()`／`arrayBuffer()` などで展開する読み手の口。Blob を `use` の外へ持ち出さない。
+   * `version` は読んでいる中身の版（中身を読みに行く前に取ってある）。`opts.holder` は見ない。
+   */
+  async withBlob<T>(
+    principal: Principal,
+    path: string,
+    use: (blob: Blob, version: number) => Promise<T>,
+    opts: ReadOptions = {},
+  ): Promise<T> {
+    return this._locateContent(principal, path, opts, (ref, version) =>
+      ref ? this.contentStore.withBlob(ref, (blob) => use(blob, version)) : use(new Blob([]), version),
+    );
+  }
+
+  /**
+   * 読む相手（ノードの `contentRef` とそのときの版）を決め、`open` に渡す。stub は先に実体化する。
+   * 🔴 `open` は、ノードを引いたのと**同じ同期区間**で呼ぶ（間に await を置かない）。`open` が最初にする保持
+   * （ContentStore の `readBlob({ holder })`／`withBlob`）が、書き手の delete より必ず先に入るようにするため。
+   */
+  private async _locateContent<T>(
     principal: Principal,
     path: string,
     opts: ReadOptions,
-  ): Promise<{ blob: Blob; version: number }> {
+    open: (ref: ContentRef | undefined, version: number) => Promise<T>,
+  ): Promise<T> {
     const normPath = this.pathResolver.normalizePath(path);
     const id = this.pathResolver.getIdByPath(normPath);
 
@@ -450,9 +478,7 @@ export class VfsService {
     }
 
     // 実体化のあとの版（実体化は writeFile なので版が上がる）。中身を読む前に取る
-    const version = node.meta.version;
-    if (!node.contentRef) return { blob: new Blob([]), version };
-    return { blob: await this.contentStore.readBlob(node.contentRef, { holder: opts.holder }), version };
+    return open(node.contentRef, node.meta.version);
   }
 
   /**

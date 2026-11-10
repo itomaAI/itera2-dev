@@ -6,6 +6,8 @@
  *   ContentStore.readBlob({ holder })  … handle を渡した相手を保持者として覚える
  *   ContentStore.delete                … 保持者が居れば消さずに孤児へ。release(holder) で参照 0 になった孤児を消す
  *   WriteOps（write / append / stub）  … 新しい鍵へ書き、ノードを差し替えた後で古い鍵を delete
+ *   ContentStore.withBlob / VfsService.withBlob … 展開する読みは読み終わるまで鍵を保持する（T-0795）
+ *   ContentStore.readBlob が失敗        … その呼び出しで付けた保持は残さない（T-0795）
  *   VfsFsck                            … 書き直しで残った古い鍵は削除（救出しない）。版が新しい鍵は触らない。
  *                                        ノードの無い鍵は従来どおり .lost+found へ
  *
@@ -186,6 +188,143 @@ describe('ContentStore の保持と後回しの削除（OPFS）', () => {
     await store.readBlob(ref);
     expect(store.heldKeys('')).toEqual([]);
     await store.delete(ref);
+    expect(store.orphanKeys()).toEqual([]);
+  });
+});
+
+/** 外から開ける門。読みを途中で止めておくために使う */
+function makeGate() {
+  let open!: () => void;
+  const opened = new Promise<void>((resolve) => (open = resolve));
+  return { open, opened };
+}
+
+describe('展開する読みは、読み終わるまで鍵を保持する（T-0795）', () => {
+  it('withBlob の途中で delete が通っても実体は残り、読み終わったところで消える', async () => {
+    const opfs = installOpfs();
+    const store = new ContentStore({ retryDelaysMs: [] });
+    const ref = await store.write('n@1', 'a');
+    const gate = makeGate();
+    const reading = store.withBlob(ref, async (blob) => {
+      await gate.opened;
+      return blob.text();
+    });
+
+    // 書き手が古い鍵を捨てる。読みの最中なので後回しになる
+    await store.delete(ref);
+    expect(opfs.removed).toEqual([]);
+    expect(store.orphanKeys()).toEqual(['n@1']);
+
+    gate.open();
+    expect(await reading).toBe('a');
+    expect(opfs.removed).toEqual(['n@1']);
+    expect(store.orphanKeys()).toEqual([]);
+  });
+
+  it('withBlob は、呼んだ時点で（await より前に）保持している', async () => {
+    const opfs = installOpfs();
+    const store = new ContentStore({ retryDelaysMs: [] });
+    const ref = await store.write('n@1', 'a');
+    const reading = store.withBlob(ref, (blob) => blob.text());
+    // 同じ同期区間で delete を呼んでも、読みが先に保持を済ませている
+    const deleting = store.delete(ref);
+    expect(await reading).toBe('a');
+    await deleting;
+    expect(opfs.removed).toEqual(['n@1']);
+  });
+
+  it('use が投げても保持は残らない。まだノードが参照している鍵は消さない', async () => {
+    const opfs = installOpfs();
+    const store = new ContentStore({ retryDelaysMs: [] });
+    const ref = await store.write('n@1', 'a');
+    await expect(
+      store.withBlob(ref, async () => {
+        throw new Error('boom');
+      }),
+    ).rejects.toThrow('boom');
+    expect(opfs.removed).toEqual([]);
+    // 保持が残っていれば、ここで孤児に回る
+    await store.delete(ref);
+    expect(store.orphanKeys()).toEqual([]);
+    expect(opfs.removed).toEqual(['n@1']);
+  });
+
+  it('readText / readBinary も同じ口を通り、読み終わったら保持を残さない', async () => {
+    const opfs = installOpfs();
+    const store = new ContentStore({ retryDelaysMs: [] });
+    const ref = await store.write('n@1', 'ab');
+    expect(await store.readText(ref)).toBe('ab');
+    expect(Array.from(await store.readBinary(ref))).toEqual([97, 98]);
+    await store.delete(ref);
+    expect(store.orphanKeys()).toEqual([]);
+    expect(opfs.removed).toEqual(['n@1']);
+  });
+
+  it('VfsService.withBlob: 読んでいる間にファイルが書き直されても、読んでいる版の実体は読み終わるまで消えない', async () => {
+    const opfs = installOpfs();
+    const { vfs, nodeAt } = makeVfs();
+    await vfs.writeFile(USER_PRINCIPAL, 'a.txt', 'one');
+    const id = nodeAt('a.txt')!.id;
+    const gate = makeGate();
+    const reading = vfs.withBlob(USER_PRINCIPAL, 'a.txt', async (blob, version) => {
+      await gate.opened;
+      return { text: await blob.text(), version };
+    });
+
+    await vfs.writeFile(USER_PRINCIPAL, 'a.txt', 'two', { overwrite: true });
+    expect(opfs.files.has(`${id}@1`)).toBe(true);
+    expect(opfs.removed).toEqual([]);
+
+    gate.open();
+    expect(await reading).toEqual({ text: 'one', version: 1 });
+    expect(opfs.removed).toEqual([`${id}@1`]);
+    expect(await vfs.readFile(USER_PRINCIPAL, 'a.txt')).toBe('two');
+    expect(await vfs.readFileWithVersion(USER_PRINCIPAL, 'a.txt')).toEqual({ content: 'two', version: 2 });
+  });
+
+  it('中身の無いファイル（contentRef なし）は空の Blob で use を呼ぶ', async () => {
+    installOpfs();
+    const { vfs, nodeStore } = makeVfs();
+    await vfs.writeFile(USER_PRINCIPAL, 'e.txt', 'x');
+    const id = (vfs as any).pathResolver.getIdByPath('e.txt');
+    const node = nodeStore.getNode(id)!;
+    await nodeStore.putNode({ ...node, contentRef: undefined });
+    expect(await vfs.withBlob(USER_PRINCIPAL, 'e.txt', async (blob) => blob.size)).toBe(0);
+    expect(await vfs.readFile(USER_PRINCIPAL, 'e.txt')).toBe('');
+  });
+});
+
+describe('渡せなかった handle の保持は残さない（T-0795）', () => {
+  it('holder 付きの readBlob が鍵の不在で失敗したら、その保持者の記録は残らない', async () => {
+    installOpfs();
+    const store = new ContentStore({ retryDelaysMs: [] });
+    await expect(store.readBlob({ backend: 'opfs', key: 'gone@1' }, { holder: 'app_a' })).rejects.toThrow(
+      'Content not found',
+    );
+    expect(store.heldKeys('app_a')).toEqual([]);
+  });
+
+  it('前からの保持（既に渡した handle のもの）は、後の失敗で外さない', async () => {
+    const opfs = installOpfs();
+    const store = new ContentStore({ retryDelaysMs: [] });
+    const ref = await store.write('n@1', 'a');
+    await store.readBlob(ref, { holder: 'app_a' });
+    // 実体が外から失われた（サイトデータの消去など）。2 度目の読みは失敗する
+    opfs.files.delete('n@1');
+    await expect(store.readBlob(ref, { holder: 'app_a' })).rejects.toThrow('Content not found');
+    expect(store.heldKeys('app_a')).toEqual(['n@1']);
+  });
+
+  it('失敗した readBlob だけが持っていた孤児は、その場で片付く', async () => {
+    const opfs = installOpfs();
+    const store = new ContentStore({ retryDelaysMs: [] });
+    const ref = await store.write('n@1', 'a');
+    await store.readBlob(ref, { holder: 'app_a' });
+    await store.delete(ref); // 孤児へ
+    await store.release('app_a'); // 物理的に消える
+    expect(opfs.removed).toEqual(['n@1']);
+    await expect(store.readBlob(ref, { holder: 'app_b' })).rejects.toThrow('Content not found');
+    expect(store.heldKeys('app_b')).toEqual([]);
     expect(store.orphanKeys()).toEqual([]);
   });
 });

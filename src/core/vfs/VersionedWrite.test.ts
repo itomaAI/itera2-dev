@@ -173,9 +173,9 @@ describe('readFileWithVersion', () => {
     svc.auth = ctx.auth;
     // 読みに行っている間に書かれる: 中身は古いまま（c0）、版は 3 のまま返る
     svc.contentStore = {
-      readBlob: async (ref: { key: string }) => {
+      withBlob: async (ref: { key: string }, use: (blob: Blob) => Promise<unknown>) => {
         ctx.nodeStore.getNode('f1')!.meta.version = 99; // 読んでいる最中に誰かが書いた
-        return new Blob([ref.key === 'c0' ? 'one' : '?']);
+        return use(new Blob([ref.key === 'c0' ? 'one' : '?']));
       },
     };
     const r = await (svc as VfsService).readFileWithVersion(USER_PRINCIPAL, 'a.md');
