@@ -1333,15 +1333,6 @@ Attributes:
           M.system.broadcast(CH + '.ready', { rev });
         } catch (e) {}
         console.log(`[loom] 起動した。写しから ${restored} 枚・札 ${cards.size} 枚・${bootMs}ms`);
-
-        window.addEventListener('unload', () => {
-          if (!WITH_TOOLS) return; // 試験の実体が本物の道具を外さないように
-          for (const t of TOOLS) {
-            try {
-              M.tools.unregister(t.name);
-            } catch (e) {}
-          }
-        });
       })();
     </script>
   </body>
