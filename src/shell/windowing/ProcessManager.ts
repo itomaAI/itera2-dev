@@ -573,8 +573,9 @@ export class ProcessManager {
    * ゲストの `fs:read_blob`（`MetaOS.fs.resolveUrl` の実体）。VFS の実体を読まずに Blob（OPFS の File の handle）で返す。
    * object URL はゲストが自分の窓で作る —— ホストが作った URL はゲストから読めない（opaque origin）し、寿命の管理も要らなくなる。
    * 相対パスはそのプロセスの入口からの相対（`./x.png` `../x.png` `/x.png`）。
+   * `hold` は、この 1 回ぶんの保持を手放すための券（ゲストが URL を revoke したら {@link releaseBlob} に返す。T-0798）。
    */
-  async readBlob(requestPath: string, pid: string): Promise<{ blob: Blob; mime: string }> {
+  async readBlob(requestPath: string, pid: string): Promise<{ blob: Blob; mime: string; hold: string | null }> {
     const proc = this.processes.get(pid);
     if (!proc) throw new Error(`Process [${pid}] not found.`);
 
@@ -593,7 +594,16 @@ export class ProcessManager {
 
     const mime = this.compiler.getMimeType(absPath);
     // handle はそのプロセスが持ち続ける（object URL を作る）。保持者として名乗る（T-0791）
-    const blob = typedBlob(await this.vfs.readBlob(USER_PRINCIPAL, absPath, { holder: pid }), mime);
-    return { blob, mime };
+    const { blob, hold } = await this.vfs.readBlobHeld(USER_PRINCIPAL, absPath, pid);
+    return { blob: typedBlob(blob, mime), mime, hold };
+  }
+
+  /**
+   * ゲストの `fs:release_blob`。`readBlob` で渡した handle を 1 つ手放す（ゲストがその object URL を revoke した。T-0798）。
+   * 手放せるのは自分に渡されたぶんだけ（保持者 ＝ pid）。居ないプロセスからの要求は何もしない（kill が全部手放している）。
+   */
+  async releaseBlob(hold: string, pid: string): Promise<void> {
+    if (!this.processes.has(pid)) return;
+    await this.vfs.releaseContent(pid, hold);
   }
 }

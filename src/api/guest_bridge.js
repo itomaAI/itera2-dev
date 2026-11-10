@@ -145,6 +145,20 @@
 
   const MY_PID = window.__ITERA_PID__ || window.name || 'unknown';
   const transport = new GuestTransport(MY_PID);
+
+  // resolveUrl が作った object URL → その実体の保持を手放すための券（T-0798）。
+  // ホストは、渡した handle の実体を「URL が revoke されるか、このプロセスが終わるまで」消さずに持つ。
+  // revoke はこの文書の中の出来事でホストからは見えないので、ここで包んで知らせる。他の URL には何もしない。
+  const urlHolds = new Map();
+  const revokeObjectURL = URL.revokeObjectURL.bind(URL);
+  URL.revokeObjectURL = function (url) {
+    revokeObjectURL(url);
+    const hold = urlHolds.get(url);
+    if (hold === undefined) return;
+    urlHolds.delete(url);
+    // 届かなくても困らない（プロセスが終わるときに全部手放される）
+    transport.requestHost('fs:release_blob', { hold }).catch(() => {});
+  };
   const localToolHandlers = new Map();
   const mountHandlers = new Map();
   // マウントごとの onMove（T-0689）。持つマウントだけ入る。提示（capabilities.move）はこの有無から導く
@@ -274,10 +288,13 @@
       getUsage: async () => transport.requestHost('fs:get_usage', {}),
       listMounts: async () => transport.requestHost('fs:list_mounts', {}),
       // 実体は Blob（OPFS の File の handle）で受け取り、この窓で object URL を作る（T-0770）。
-      // ホストが作った URL はこの文書から読めるとは限らない（opaque origin）。URL の寿命はこの文書と同じ
+      // ホストが作った URL はこの文書から読めるとは限らない（opaque origin）。
+      // URL の寿命は、URL.revokeObjectURL(url) されるか、この文書が終わるまで（上の urlHolds）
       resolveUrl: async (path) => {
-        const { blob } = await transport.requestHost('fs:read_blob', { path });
-        return URL.createObjectURL(blob);
+        const { blob, hold } = await transport.requestHost('fs:read_blob', { path });
+        const url = URL.createObjectURL(blob);
+        if (hold) urlHolds.set(url, hold);
+        return url;
       },
       getAcl: async (path) => transport.requestHost('fs:get_acl', { path }),
       setAcl: async (path, acl, opts = {}) => transport.requestHost('fs:set_acl', { path, acl, opts }),

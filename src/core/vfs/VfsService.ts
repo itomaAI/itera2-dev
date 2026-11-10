@@ -482,11 +482,32 @@ export class VfsService {
   }
 
   /**
-   * 保持者（プロセス）の寿命が尽きた。`readBlob(…, { holder })` で渡した handle の鍵を全部手放す。
-   * 書き直されて孤児になっていた鍵は、ここで保持者が居なくなれば消える（T-0791）。
+   * ゲストへ渡す読み。Blob（handle）と一緒に、この 1 回ぶんの保持を手放すための券 `hold` を返す（T-0798）。
+   * 券は `releaseContent(holder, hold)` に返す。受け取る側は中身を解釈しない。
+   * 中身の無いファイルは保持するものが無いので `hold: null`。
    */
-  async releaseContent(holder: string): Promise<void> {
-    await this.contentStore.release(holder);
+  async readBlobHeld(
+    principal: Principal,
+    path: string,
+    holder: string,
+    opts: ReadOptions = {},
+  ): Promise<{ blob: Blob; hold: string | null }> {
+    return this._locateContent(principal, path, opts, async (ref) =>
+      ref
+        ? { blob: await this.contentStore.readBlob(ref, { holder }), hold: ref.key }
+        : { blob: new Blob([]), hold: null },
+    );
+  }
+
+  /**
+   * 渡した handle を手放す。
+   * - `hold` なし: 保持者（プロセス）の寿命が尽きた。その保持者に渡した handle を全部手放す（T-0791）。
+   * - `hold` あり: 保持者が handle を 1 つ手放した（`readBlobHeld` の券。ゲストが object URL を revoke した。T-0798）。
+   * 書き直されて孤児になっていた鍵は、保持者が居なくなったところで消える。
+   */
+  async releaseContent(holder: string, hold?: string): Promise<void> {
+    if (hold === undefined) await this.contentStore.release(holder);
+    else await this.contentStore.releaseOne(holder, hold);
   }
 
   /**

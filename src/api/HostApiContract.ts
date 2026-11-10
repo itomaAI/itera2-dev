@@ -46,10 +46,18 @@ export interface HostApiContract {
     request: Record<string, never>;
     response: boolean;
   };
-  /** MetaOS.fs.resolveUrl の実体。Blob（OPFS の File の handle）と MIME。object URL はゲストが作る */
+  /**
+   * MetaOS.fs.resolveUrl の実体。Blob（OPFS の File の handle）と MIME。object URL はゲストが作る。
+   * `hold` はこの 1 回ぶんの保持の券（中身の無いファイルは null）。URL を revoke したら `fs:release_blob` に返す
+   */
   'fs:read_blob': {
     request: { path: string };
-    response: { blob: Blob; mime: string };
+    response: { blob: Blob; mime: string; hold: string | null };
+  };
+  /** resolveUrl の URL が revoke された。`fs:read_blob` の券を返し、その 1 回ぶんの保持を手放す（T-0798） */
+  'fs:release_blob': {
+    request: { hold: string };
+    response: { success: true };
   };
   'sys:spawn': {
     request: { path: string; opts?: GuestSpawnOptions };
