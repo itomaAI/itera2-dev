@@ -200,7 +200,10 @@
       transport.requestHost('llm:start', { id, request, tag: o.tag }).catch((err) => {
         if (!llmCalls.has(id)) return;
         call.settle();
-        reject(err);
+        // 開始の段で断られた（要求の形が受けられない・ホストに届かない）。走り出したあとの失敗と同じく種類（code）を持たせる
+        const failure = err instanceof Error ? err : new Error(String((err && err.message) || err));
+        if (!failure.code) failure.code = 'failed';
+        reject(failure);
       });
     });
   transport.on('llm:chunk', (p) => {
@@ -417,6 +420,7 @@
     //     config   … llm.json と同じ形で必須（{ model: 'provider/model', … }）。OS の設定を使うなら system.getConfig('llm') を渡す
     //     messages … [{ role: 'user' | 'model', content: 文字列 | [{text} | {media:{path}}] }]（添付は呼んだアプリの権限で読む）
     //     送れない添付があれば失敗する（err.code === 'media'）。止めたら AbortError（err.code === 'aborted'）
+    //     それ以外の失敗は err.code === 'failed'（上流のエラー・要求の形が受けられない、など。理由は err.message）
     //   models() … 選べるモデル [{ id: 'provider/model', name, contextTokens, pricing, capabilities, defaultConfig, available }]
     llm: {
       generate: (request, opts = {}) => llmGenerate(request, opts),
