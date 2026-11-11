@@ -1,0 +1,2102 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`各社へ送る本文の金型 > anthropic: ひととおりの形を持つ履歴 1`] = `
+"{
+  "payload": {
+    "system": "SYS agent=Itera user=山内 lang=Japanese\\n\\n<system type=\\"time\\">\\nSession Started: <local>\\nTimestamp: 2026-01-02T03:04:06.000Z\\n</system>",
+    "messages": [
+      {
+        "role": "user",
+        "content": [
+          {
+            "type": "text",
+            "text": "[System: Internal initialization]"
+          }
+        ]
+      },
+      {
+        "role": "assistant",
+        "content": [
+          {
+            "type": "text",
+            "text": "モデルが先頭に居る履歴"
+          }
+        ]
+      },
+      {
+        "role": "user",
+        "content": [
+          {
+            "type": "text",
+            "text": "<user_input>\\nこんにちは\\n</user_input>"
+          },
+          {
+            "type": "text",
+            "text": "<event type=\\"info\\">\\n起動しました\\n</event>"
+          }
+        ]
+      },
+      {
+        "role": "assistant",
+        "content": [
+          {
+            "type": "text",
+            "text": "<report>はい</report>\\n<yield />"
+          }
+        ]
+      },
+      {
+        "role": "user",
+        "content": [
+          {
+            "type": "text",
+            "text": "<user_input>\\nこれを見てください\\n二行目\\n</user_input>"
+          },
+          {
+            "type": "text",
+            "text": "<user_attachment name=\\"a.txt\\">中身</user_attachment>"
+          },
+          {
+            "type": "image",
+            "source": {
+              "type": "base64",
+              "media_type": "image/png",
+              "data": "B64(bytes of system/temp/media/shot.png)"
+            }
+          },
+          {
+            "type": "text",
+            "text": "<user_input>\\nあとの文\\n</user_input>"
+          },
+          {
+            "type": "document",
+            "source": {
+              "type": "base64",
+              "media_type": "application/pdf",
+              "data": "B64(bytes of data/doc.pdf)"
+            },
+            "title": "doc.pdf"
+          },
+          {
+            "type": "document",
+            "source": {
+              "type": "text",
+              "media_type": "text/plain",
+              "data": "bytes of data/note.txt"
+            },
+            "title": "note.txt"
+          },
+          {
+            "type": "text",
+            "text": "\\n[System: Attached file 'data/a.zip' (application/zip) cannot be processed directly because its format is not directly supported by this model's vision/file API. To analyze its content, please write and execute a script to process it from the VFS.]\\n"
+          },
+          {
+            "type": "text",
+            "text": "\\n[System: Attached file 'data/big.png' (image/png) cannot be processed directly because it exceeds the file size limit (3.75MB). To analyze its content, please write and execute a script to process it from the VFS.]\\n"
+          },
+          {
+            "type": "text",
+            "text": "\\n[System: Attached file 'data/mid.pdf' (application/pdf) cannot be processed directly because it exceeds the file size limit (24MB). To analyze its content, please write and execute a script to process it from the VFS.]\\n"
+          },
+          {
+            "type": "text",
+            "text": "\\n[System: Attached file 'data/mid.png' (image/png) cannot be processed directly because it exceeds the file size limit (3.75MB). To analyze its content, please write and execute a script to process it from the VFS.]\\n"
+          },
+          {
+            "type": "text",
+            "text": "\\n[System: The file 'data/gone.png' was NOT sent. It could not be loaded from VFS.]\\n"
+          }
+        ]
+      },
+      {
+        "role": "assistant",
+        "content": [
+          {
+            "type": "text",
+            "text": "配列の model ターン"
+          }
+        ]
+      },
+      {
+        "role": "user",
+        "content": [
+          {
+            "type": "text",
+            "text": "<tool_output tool=\\"read\\" status=\\"success\\" param_path=\\"a.md\\">\\nLines 1-2\\nabc\\n</tool_output>"
+          },
+          {
+            "type": "text",
+            "text": "<tool_output tool=\\"take_screenshot\\" status=\\"success\\">\\ncaptured\\n</tool_output>"
+          },
+          {
+            "type": "image",
+            "source": {
+              "type": "base64",
+              "media_type": "image/png",
+              "data": "B64(bytes of system/temp/media/tool.png)"
+            }
+          },
+          {
+            "type": "text",
+            "text": "<tool_output tool=\\"search\\" status=\\"error\\" param_query='say \\"hi\\"'>\\nboom\\n</tool_output>"
+          },
+          {
+            "type": "text",
+            "text": "<tool_output tool=\\"attach_file\\" status=\\"success\\" param_path=\\"data/gone.png\\" />"
+          },
+          {
+            "type": "text",
+            "text": "\\n[System: The file 'data/gone.png' was NOT sent. It could not be loaded from VFS.]\\n"
+          },
+          {
+            "type": "text",
+            "text": "<event type=\\"app_event\\">\\n通知\\n</event>"
+          },
+          {
+            "type": "text",
+            "text": "<user_input>\\n続けて\\n</user_input>"
+          },
+          {
+            "type": "text",
+            "text": "<user_input>\\n同じ役割が続く\\n</user_input>"
+          }
+        ]
+      }
+    ]
+  },
+  "fetch": [],
+  "media": {
+    "1:system/temp/media/shot.png": null,
+    "2:data/doc.pdf": null,
+    "3:data/note.txt": null,
+    "4:data/a.zip": null,
+    "5:data/big.png": null,
+    "6:data/mid.pdf": null,
+    "7:data/mid.png": null,
+    "8:data/gone.png": null,
+    "9:system/temp/media/tool.png": null,
+    "10:data/gone.png": null
+  }
+}"
+`;
+
+exports[`各社へ送る本文の金型 > anthropic: 履歴が空（システムプロンプトだけ） 1`] = `
+"{
+  "payload": {
+    "system": "SYS agent=Itera user=山内 lang=Japanese\\n\\n<system type=\\"time\\">\\nSession Started: <local>\\nTimestamp: 2026-01-02T03:04:05.000Z\\n</system>",
+    "messages": []
+  },
+  "fetch": [],
+  "media": {}
+}"
+`;
+
+exports[`各社へ送る本文の金型 > anthropic: 控えのある添付は上げ直さない 1`] = `
+"{
+  "payload": {
+    "system": "SYS agent=Itera user=山内 lang=Japanese\\n\\n<system type=\\"time\\">\\nSession Started: <local>\\nTimestamp: 2026-01-02T03:04:06.000Z\\n</system>",
+    "messages": [
+      {
+        "role": "user",
+        "content": [
+          {
+            "type": "text",
+            "text": "<user_input>\\n控えのある添付\\n</user_input>"
+          },
+          {
+            "type": "image",
+            "source": {
+              "type": "base64",
+              "media_type": "image/png",
+              "data": "B64(bytes of data/cached.png)"
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "fetch": [],
+  "media": {
+    "1:data/cached.png": {
+      "gemini": {
+        "fileUri": "files/own-cached",
+        "expirationTime": "2099-01-01T00:00:00Z",
+        "name": "files/own-cached"
+      },
+      "relay": {
+        "gemini": {
+          "fileUri": "files/relay-cached",
+          "expirationTime": "2099-01-01T00:00:00Z",
+          "name": "x"
+        },
+        "anthropic": {
+          "fileId": "file_cached"
+        }
+      }
+    }
+  }
+}"
+`;
+
+exports[`各社へ送る本文の金型 > anthropic-relay: ひととおりの形を持つ履歴 1`] = `
+"{
+  "payload": {
+    "system": "SYS agent=Itera user=山内 lang=Japanese\\n\\n<system type=\\"time\\">\\nSession Started: <local>\\nTimestamp: 2026-01-02T03:04:06.000Z\\n</system>",
+    "messages": [
+      {
+        "role": "user",
+        "content": [
+          {
+            "type": "text",
+            "text": "[System: Internal initialization]"
+          }
+        ]
+      },
+      {
+        "role": "assistant",
+        "content": [
+          {
+            "type": "text",
+            "text": "モデルが先頭に居る履歴"
+          }
+        ]
+      },
+      {
+        "role": "user",
+        "content": [
+          {
+            "type": "text",
+            "text": "<user_input>\\nこんにちは\\n</user_input>"
+          },
+          {
+            "type": "text",
+            "text": "<event type=\\"info\\">\\n起動しました\\n</event>"
+          }
+        ]
+      },
+      {
+        "role": "assistant",
+        "content": [
+          {
+            "type": "text",
+            "text": "<report>はい</report>\\n<yield />"
+          }
+        ]
+      },
+      {
+        "role": "user",
+        "content": [
+          {
+            "type": "text",
+            "text": "<user_input>\\nこれを見てください\\n二行目\\n</user_input>"
+          },
+          {
+            "type": "text",
+            "text": "<user_attachment name=\\"a.txt\\">中身</user_attachment>"
+          },
+          {
+            "type": "image",
+            "source": {
+              "type": "file",
+              "file_id": "file_1"
+            }
+          },
+          {
+            "type": "text",
+            "text": "<user_input>\\nあとの文\\n</user_input>"
+          },
+          {
+            "type": "document",
+            "source": {
+              "type": "file",
+              "file_id": "file_2"
+            },
+            "title": "doc.pdf"
+          },
+          {
+            "type": "document",
+            "source": {
+              "type": "text",
+              "media_type": "text/plain",
+              "data": "bytes of data/note.txt"
+            },
+            "title": "note.txt"
+          },
+          {
+            "type": "text",
+            "text": "\\n[System: Attached file 'data/a.zip' (application/zip) cannot be processed directly because its format is not directly supported by this model's vision/file API. To analyze its content, please write and execute a script to process it from the VFS.]\\n"
+          },
+          {
+            "type": "text",
+            "text": "\\n[System: Attached file 'data/big.png' (image/png) cannot be processed directly because it exceeds the file size limit (3.75MB). To analyze its content, please write and execute a script to process it from the VFS.]\\n"
+          },
+          {
+            "type": "text",
+            "text": "\\n[System: Attached file 'data/mid.pdf' (application/pdf) cannot be processed directly because it exceeds the file size limit (24MB). To analyze its content, please write and execute a script to process it from the VFS.]\\n"
+          },
+          {
+            "type": "text",
+            "text": "\\n[System: Attached file 'data/mid.png' (image/png) cannot be processed directly because it exceeds the file size limit (3.75MB). To analyze its content, please write and execute a script to process it from the VFS.]\\n"
+          },
+          {
+            "type": "text",
+            "text": "\\n[System: The file 'data/gone.png' was NOT sent. It could not be loaded from VFS.]\\n"
+          }
+        ]
+      },
+      {
+        "role": "assistant",
+        "content": [
+          {
+            "type": "text",
+            "text": "配列の model ターン"
+          }
+        ]
+      },
+      {
+        "role": "user",
+        "content": [
+          {
+            "type": "text",
+            "text": "<tool_output tool=\\"read\\" status=\\"success\\" param_path=\\"a.md\\">\\nLines 1-2\\nabc\\n</tool_output>"
+          },
+          {
+            "type": "text",
+            "text": "<tool_output tool=\\"take_screenshot\\" status=\\"success\\">\\ncaptured\\n</tool_output>"
+          },
+          {
+            "type": "image",
+            "source": {
+              "type": "file",
+              "file_id": "file_3"
+            }
+          },
+          {
+            "type": "text",
+            "text": "<tool_output tool=\\"search\\" status=\\"error\\" param_query='say \\"hi\\"'>\\nboom\\n</tool_output>"
+          },
+          {
+            "type": "text",
+            "text": "<tool_output tool=\\"attach_file\\" status=\\"success\\" param_path=\\"data/gone.png\\" />"
+          },
+          {
+            "type": "text",
+            "text": "\\n[System: The file 'data/gone.png' was NOT sent. It could not be loaded from VFS.]\\n"
+          },
+          {
+            "type": "text",
+            "text": "<event type=\\"app_event\\">\\n通知\\n</event>"
+          },
+          {
+            "type": "text",
+            "text": "<user_input>\\n続けて\\n</user_input>"
+          },
+          {
+            "type": "text",
+            "text": "<user_input>\\n同じ役割が続く\\n</user_input>"
+          }
+        ]
+      }
+    ]
+  },
+  "fetch": [
+    "POST https://relay.example/llmProxy/anthropic/v1/files",
+    "POST https://relay.example/llmProxy/anthropic/v1/files",
+    "POST https://relay.example/llmProxy/anthropic/v1/files"
+  ],
+  "media": {
+    "1:system/temp/media/shot.png": {
+      "relay": {
+        "anthropic": {
+          "fileId": "file_1"
+        }
+      }
+    },
+    "2:data/doc.pdf": {
+      "relay": {
+        "anthropic": {
+          "fileId": "file_2"
+        }
+      }
+    },
+    "3:data/note.txt": null,
+    "4:data/a.zip": null,
+    "5:data/big.png": null,
+    "6:data/mid.pdf": null,
+    "7:data/mid.png": null,
+    "8:data/gone.png": null,
+    "9:system/temp/media/tool.png": {
+      "relay": {
+        "anthropic": {
+          "fileId": "file_3"
+        }
+      }
+    },
+    "10:data/gone.png": null
+  }
+}"
+`;
+
+exports[`各社へ送る本文の金型 > anthropic-relay: 上げるのに失敗したとき 1`] = `
+"{
+  "payload": {
+    "system": "SYS agent=Itera user=山内 lang=Japanese\\n\\n<system type=\\"time\\">\\nSession Started: <local>\\nTimestamp: 2026-01-02T03:04:06.000Z\\n</system>",
+    "messages": [
+      {
+        "role": "user",
+        "content": [
+          {
+            "type": "text",
+            "text": "[System: Internal initialization]"
+          }
+        ]
+      },
+      {
+        "role": "assistant",
+        "content": [
+          {
+            "type": "text",
+            "text": "モデルが先頭に居る履歴"
+          }
+        ]
+      },
+      {
+        "role": "user",
+        "content": [
+          {
+            "type": "text",
+            "text": "<user_input>\\nこんにちは\\n</user_input>"
+          },
+          {
+            "type": "text",
+            "text": "<event type=\\"info\\">\\n起動しました\\n</event>"
+          }
+        ]
+      },
+      {
+        "role": "assistant",
+        "content": [
+          {
+            "type": "text",
+            "text": "<report>はい</report>\\n<yield />"
+          }
+        ]
+      },
+      {
+        "role": "user",
+        "content": [
+          {
+            "type": "text",
+            "text": "<user_input>\\nこれを見てください\\n二行目\\n</user_input>"
+          },
+          {
+            "type": "text",
+            "text": "<user_attachment name=\\"a.txt\\">中身</user_attachment>"
+          },
+          {
+            "type": "image",
+            "source": {
+              "type": "base64",
+              "media_type": "image/png",
+              "data": "B64(bytes of system/temp/media/shot.png)"
+            }
+          },
+          {
+            "type": "text",
+            "text": "<user_input>\\nあとの文\\n</user_input>"
+          },
+          {
+            "type": "document",
+            "source": {
+              "type": "base64",
+              "media_type": "application/pdf",
+              "data": "B64(bytes of data/doc.pdf)"
+            },
+            "title": "doc.pdf"
+          },
+          {
+            "type": "document",
+            "source": {
+              "type": "text",
+              "media_type": "text/plain",
+              "data": "bytes of data/note.txt"
+            },
+            "title": "note.txt"
+          },
+          {
+            "type": "text",
+            "text": "\\n[System: Attached file 'data/a.zip' (application/zip) cannot be processed directly because its format is not directly supported by this model's vision/file API. To analyze its content, please write and execute a script to process it from the VFS.]\\n"
+          },
+          {
+            "type": "text",
+            "text": "\\n[System: Attached file 'data/big.png' (image/png) cannot be processed directly because it exceeds the file size limit (3.75MB). To analyze its content, please write and execute a script to process it from the VFS.]\\n"
+          },
+          {
+            "type": "text",
+            "text": "\\n[System: Attached file 'data/mid.pdf' (application/pdf) cannot be processed directly because it exceeds the file size limit (24MB). To analyze its content, please write and execute a script to process it from the VFS.]\\n"
+          },
+          {
+            "type": "text",
+            "text": "\\n[System: Attached file 'data/mid.png' (image/png) cannot be processed directly because it exceeds the file size limit (3.75MB). To analyze its content, please write and execute a script to process it from the VFS.]\\n"
+          },
+          {
+            "type": "text",
+            "text": "\\n[System: The file 'data/gone.png' was NOT sent. It could not be loaded from VFS.]\\n"
+          }
+        ]
+      },
+      {
+        "role": "assistant",
+        "content": [
+          {
+            "type": "text",
+            "text": "配列の model ターン"
+          }
+        ]
+      },
+      {
+        "role": "user",
+        "content": [
+          {
+            "type": "text",
+            "text": "<tool_output tool=\\"read\\" status=\\"success\\" param_path=\\"a.md\\">\\nLines 1-2\\nabc\\n</tool_output>"
+          },
+          {
+            "type": "text",
+            "text": "<tool_output tool=\\"take_screenshot\\" status=\\"success\\">\\ncaptured\\n</tool_output>"
+          },
+          {
+            "type": "image",
+            "source": {
+              "type": "base64",
+              "media_type": "image/png",
+              "data": "B64(bytes of system/temp/media/tool.png)"
+            }
+          },
+          {
+            "type": "text",
+            "text": "<tool_output tool=\\"search\\" status=\\"error\\" param_query='say \\"hi\\"'>\\nboom\\n</tool_output>"
+          },
+          {
+            "type": "text",
+            "text": "<tool_output tool=\\"attach_file\\" status=\\"success\\" param_path=\\"data/gone.png\\" />"
+          },
+          {
+            "type": "text",
+            "text": "\\n[System: The file 'data/gone.png' was NOT sent. It could not be loaded from VFS.]\\n"
+          },
+          {
+            "type": "text",
+            "text": "<event type=\\"app_event\\">\\n通知\\n</event>"
+          },
+          {
+            "type": "text",
+            "text": "<user_input>\\n続けて\\n</user_input>"
+          },
+          {
+            "type": "text",
+            "text": "<user_input>\\n同じ役割が続く\\n</user_input>"
+          }
+        ]
+      }
+    ]
+  },
+  "fetch": [
+    "POST https://relay.example/llmProxy/anthropic/v1/files",
+    "POST https://relay.example/llmProxy/anthropic/v1/files",
+    "POST https://relay.example/llmProxy/anthropic/v1/files"
+  ],
+  "media": {
+    "1:system/temp/media/shot.png": null,
+    "2:data/doc.pdf": null,
+    "3:data/note.txt": null,
+    "4:data/a.zip": null,
+    "5:data/big.png": null,
+    "6:data/mid.pdf": null,
+    "7:data/mid.png": null,
+    "8:data/gone.png": null,
+    "9:system/temp/media/tool.png": null,
+    "10:data/gone.png": null
+  }
+}"
+`;
+
+exports[`各社へ送る本文の金型 > anthropic-relay: 履歴が空（システムプロンプトだけ） 1`] = `
+"{
+  "payload": {
+    "system": "SYS agent=Itera user=山内 lang=Japanese\\n\\n<system type=\\"time\\">\\nSession Started: <local>\\nTimestamp: 2026-01-02T03:04:05.000Z\\n</system>",
+    "messages": []
+  },
+  "fetch": [],
+  "media": {}
+}"
+`;
+
+exports[`各社へ送る本文の金型 > anthropic-relay: 控えのある添付は上げ直さない 1`] = `
+"{
+  "payload": {
+    "system": "SYS agent=Itera user=山内 lang=Japanese\\n\\n<system type=\\"time\\">\\nSession Started: <local>\\nTimestamp: 2026-01-02T03:04:06.000Z\\n</system>",
+    "messages": [
+      {
+        "role": "user",
+        "content": [
+          {
+            "type": "text",
+            "text": "<user_input>\\n控えのある添付\\n</user_input>"
+          },
+          {
+            "type": "image",
+            "source": {
+              "type": "file",
+              "file_id": "file_cached"
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "fetch": [],
+  "media": {
+    "1:data/cached.png": {
+      "gemini": {
+        "fileUri": "files/own-cached",
+        "expirationTime": "2099-01-01T00:00:00Z",
+        "name": "files/own-cached"
+      },
+      "relay": {
+        "gemini": {
+          "fileUri": "files/relay-cached",
+          "expirationTime": "2099-01-01T00:00:00Z",
+          "name": "x"
+        },
+        "anthropic": {
+          "fileId": "file_cached"
+        }
+      }
+    }
+  }
+}"
+`;
+
+exports[`各社へ送る本文の金型 > gemini-key: ひととおりの形を持つ履歴 1`] = `
+"{
+  "payload": [
+    {
+      "role": "user",
+      "parts": [
+        {
+          "text": "SYS agent=Itera user=山内 lang=Japanese\\n\\n<system type=\\"time\\">\\nSession Started: <local>\\nTimestamp: 2026-01-02T03:04:06.000Z\\n</system>"
+        }
+      ]
+    },
+    {
+      "role": "model",
+      "parts": [
+        {
+          "text": "モデルが先頭に居る履歴"
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "parts": [
+        {
+          "text": "<user_input>\\nこんにちは\\n</user_input>"
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "parts": [
+        {
+          "text": "<event type=\\"info\\">\\n起動しました\\n</event>"
+        }
+      ]
+    },
+    {
+      "role": "model",
+      "parts": [
+        {
+          "text": "<report>はい</report>\\n<yield />"
+        }
+      ]
+    },
+    {
+      "role": "model",
+      "parts": [
+        {
+          "text": ""
+        }
+      ]
+    },
+    {
+      "role": "model",
+      "parts": [
+        {
+          "text": "   \\n"
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "parts": [
+        {
+          "text": "<user_input>\\nこれを見てください\\n二行目\\n</user_input>"
+        },
+        {
+          "text": "<user_attachment name=\\"a.txt\\">中身</user_attachment>"
+        },
+        {
+          "fileData": {
+            "fileUri": "files/direct-1",
+            "mimeType": "image/png"
+          }
+        },
+        {
+          "text": "<user_input>\\nあとの文\\n</user_input>"
+        },
+        {
+          "fileData": {
+            "fileUri": "files/direct-2",
+            "mimeType": "application/pdf"
+          }
+        },
+        {
+          "text": "\\n[System: Attached file 'data/note.txt' (text/plain) cannot be processed directly because its format is not directly supported by this model's vision/file API. To analyze its content, please write and execute a script to process it from the VFS.]\\n"
+        },
+        {
+          "text": "\\n[System: Attached file 'data/a.zip' (application/zip) cannot be processed directly because its format is not directly supported by this model's vision/file API. To analyze its content, please write and execute a script to process it from the VFS.]\\n"
+        },
+        {
+          "text": "\\n[System: Attached file 'data/big.png' (image/png) cannot be processed directly because it exceeds the file size limit (100MB). To analyze its content, please write and execute a script to process it from the VFS.]\\n"
+        },
+        {
+          "fileData": {
+            "fileUri": "files/direct-3",
+            "mimeType": "application/pdf"
+          }
+        },
+        {
+          "fileData": {
+            "fileUri": "files/direct-4",
+            "mimeType": "image/png"
+          }
+        },
+        {
+          "text": "\\n[System: The file 'data/gone.png' was NOT sent. It could not be loaded from VFS.]\\n"
+        }
+      ]
+    },
+    {
+      "role": "model",
+      "parts": [
+        {
+          "text": "配列の model ターン"
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "parts": [
+        {
+          "text": "<tool_output tool=\\"read\\" status=\\"success\\" param_path=\\"a.md\\">\\nLines 1-2\\nabc\\n</tool_output>"
+        },
+        {
+          "text": "<tool_output tool=\\"take_screenshot\\" status=\\"success\\">\\ncaptured\\n</tool_output>"
+        },
+        {
+          "fileData": {
+            "fileUri": "files/direct-5",
+            "mimeType": "image/png"
+          }
+        },
+        {
+          "text": "<tool_output tool=\\"search\\" status=\\"error\\" param_query='say \\"hi\\"'>\\nboom\\n</tool_output>"
+        },
+        {
+          "text": "<tool_output tool=\\"attach_file\\" status=\\"success\\" param_path=\\"data/gone.png\\" />"
+        },
+        {
+          "text": "\\n[System: The file 'data/gone.png' was NOT sent. It could not be loaded from VFS.]\\n"
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "parts": [
+        {
+          "text": "<event type=\\"app_event\\">\\n通知\\n</event>"
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "parts": [
+        {
+          "text": "<user_input>\\n続けて\\n</user_input>"
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "parts": [
+        {
+          "text": "<user_input>\\n同じ役割が続く\\n</user_input>"
+        }
+      ]
+    }
+  ],
+  "fetch": [
+    "POST https://generativelanguage.googleapis.com/upload/v1beta/files?key=…",
+    "POST https://upload.example/direct/1",
+    "POST https://generativelanguage.googleapis.com/upload/v1beta/files?key=…",
+    "POST https://upload.example/direct/2",
+    "POST https://generativelanguage.googleapis.com/upload/v1beta/files?key=…",
+    "POST https://upload.example/direct/3",
+    "POST https://generativelanguage.googleapis.com/upload/v1beta/files?key=…",
+    "POST https://upload.example/direct/4",
+    "POST https://generativelanguage.googleapis.com/upload/v1beta/files?key=…",
+    "POST https://upload.example/direct/5"
+  ],
+  "media": {
+    "1:system/temp/media/shot.png": {
+      "gemini": {
+        "fileUri": "files/direct-1",
+        "expirationTime": "2099-01-01T00:00:00Z",
+        "name": "files/direct-1"
+      }
+    },
+    "2:data/doc.pdf": {
+      "gemini": {
+        "fileUri": "files/direct-2",
+        "expirationTime": "2099-01-01T00:00:00Z",
+        "name": "files/direct-2"
+      }
+    },
+    "3:data/note.txt": null,
+    "4:data/a.zip": null,
+    "5:data/big.png": null,
+    "6:data/mid.pdf": {
+      "gemini": {
+        "fileUri": "files/direct-3",
+        "expirationTime": "2099-01-01T00:00:00Z",
+        "name": "files/direct-3"
+      }
+    },
+    "7:data/mid.png": {
+      "gemini": {
+        "fileUri": "files/direct-4",
+        "expirationTime": "2099-01-01T00:00:00Z",
+        "name": "files/direct-4"
+      }
+    },
+    "8:data/gone.png": null,
+    "9:system/temp/media/tool.png": {
+      "gemini": {
+        "fileUri": "files/direct-5",
+        "expirationTime": "2099-01-01T00:00:00Z",
+        "name": "files/direct-5"
+      }
+    },
+    "10:data/gone.png": null
+  }
+}"
+`;
+
+exports[`各社へ送る本文の金型 > gemini-key: 上げるのに失敗したとき 1`] = `
+"{
+  "payload": [
+    {
+      "role": "user",
+      "parts": [
+        {
+          "text": "SYS agent=Itera user=山内 lang=Japanese\\n\\n<system type=\\"time\\">\\nSession Started: <local>\\nTimestamp: 2026-01-02T03:04:06.000Z\\n</system>"
+        }
+      ]
+    },
+    {
+      "role": "model",
+      "parts": [
+        {
+          "text": "モデルが先頭に居る履歴"
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "parts": [
+        {
+          "text": "<user_input>\\nこんにちは\\n</user_input>"
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "parts": [
+        {
+          "text": "<event type=\\"info\\">\\n起動しました\\n</event>"
+        }
+      ]
+    },
+    {
+      "role": "model",
+      "parts": [
+        {
+          "text": "<report>はい</report>\\n<yield />"
+        }
+      ]
+    },
+    {
+      "role": "model",
+      "parts": [
+        {
+          "text": ""
+        }
+      ]
+    },
+    {
+      "role": "model",
+      "parts": [
+        {
+          "text": "   \\n"
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "parts": [
+        {
+          "text": "<user_input>\\nこれを見てください\\n二行目\\n</user_input>"
+        },
+        {
+          "text": "<user_attachment name=\\"a.txt\\">中身</user_attachment>"
+        },
+        {
+          "text": "\\n[System: The file 'system/temp/media/shot.png' was NOT sent. Uploading it to the provider failed.]\\n"
+        },
+        {
+          "text": "<user_input>\\nあとの文\\n</user_input>"
+        },
+        {
+          "text": "\\n[System: The file 'data/doc.pdf' was NOT sent. Uploading it to the provider failed.]\\n"
+        },
+        {
+          "text": "\\n[System: Attached file 'data/note.txt' (text/plain) cannot be processed directly because its format is not directly supported by this model's vision/file API. To analyze its content, please write and execute a script to process it from the VFS.]\\n"
+        },
+        {
+          "text": "\\n[System: Attached file 'data/a.zip' (application/zip) cannot be processed directly because its format is not directly supported by this model's vision/file API. To analyze its content, please write and execute a script to process it from the VFS.]\\n"
+        },
+        {
+          "text": "\\n[System: Attached file 'data/big.png' (image/png) cannot be processed directly because it exceeds the file size limit (100MB). To analyze its content, please write and execute a script to process it from the VFS.]\\n"
+        },
+        {
+          "text": "\\n[System: The file 'data/mid.pdf' was NOT sent. Uploading it to the provider failed.]\\n"
+        },
+        {
+          "text": "\\n[System: The file 'data/mid.png' was NOT sent. Uploading it to the provider failed.]\\n"
+        },
+        {
+          "text": "\\n[System: The file 'data/gone.png' was NOT sent. It could not be loaded from VFS.]\\n"
+        }
+      ]
+    },
+    {
+      "role": "model",
+      "parts": [
+        {
+          "text": "配列の model ターン"
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "parts": [
+        {
+          "text": "<tool_output tool=\\"read\\" status=\\"success\\" param_path=\\"a.md\\">\\nLines 1-2\\nabc\\n</tool_output>"
+        },
+        {
+          "text": "<tool_output tool=\\"take_screenshot\\" status=\\"success\\">\\ncaptured\\n</tool_output>"
+        },
+        {
+          "text": "\\n[System: The file 'system/temp/media/tool.png' was NOT sent. Uploading it to the provider failed.]\\n"
+        },
+        {
+          "text": "<tool_output tool=\\"search\\" status=\\"error\\" param_query='say \\"hi\\"'>\\nboom\\n</tool_output>"
+        },
+        {
+          "text": "<tool_output tool=\\"attach_file\\" status=\\"success\\" param_path=\\"data/gone.png\\" />"
+        },
+        {
+          "text": "\\n[System: The file 'data/gone.png' was NOT sent. It could not be loaded from VFS.]\\n"
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "parts": [
+        {
+          "text": "<event type=\\"app_event\\">\\n通知\\n</event>"
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "parts": [
+        {
+          "text": "<user_input>\\n続けて\\n</user_input>"
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "parts": [
+        {
+          "text": "<user_input>\\n同じ役割が続く\\n</user_input>"
+        }
+      ]
+    }
+  ],
+  "fetch": [
+    "POST https://generativelanguage.googleapis.com/upload/v1beta/files?key=…",
+    "POST https://generativelanguage.googleapis.com/upload/v1beta/files?key=…",
+    "POST https://generativelanguage.googleapis.com/upload/v1beta/files?key=…",
+    "POST https://generativelanguage.googleapis.com/upload/v1beta/files?key=…",
+    "POST https://generativelanguage.googleapis.com/upload/v1beta/files?key=…"
+  ],
+  "media": {
+    "1:system/temp/media/shot.png": null,
+    "2:data/doc.pdf": null,
+    "3:data/note.txt": null,
+    "4:data/a.zip": null,
+    "5:data/big.png": null,
+    "6:data/mid.pdf": null,
+    "7:data/mid.png": null,
+    "8:data/gone.png": null,
+    "9:system/temp/media/tool.png": null,
+    "10:data/gone.png": null
+  }
+}"
+`;
+
+exports[`各社へ送る本文の金型 > gemini-key: 履歴が空（システムプロンプトだけ） 1`] = `
+"{
+  "payload": [
+    {
+      "role": "user",
+      "parts": [
+        {
+          "text": "SYS agent=Itera user=山内 lang=Japanese\\n\\n<system type=\\"time\\">\\nSession Started: <local>\\nTimestamp: 2026-01-02T03:04:05.000Z\\n</system>"
+        }
+      ]
+    }
+  ],
+  "fetch": [],
+  "media": {}
+}"
+`;
+
+exports[`各社へ送る本文の金型 > gemini-key: 控えのある添付は上げ直さない 1`] = `
+"{
+  "payload": [
+    {
+      "role": "user",
+      "parts": [
+        {
+          "text": "SYS agent=Itera user=山内 lang=Japanese\\n\\n<system type=\\"time\\">\\nSession Started: <local>\\nTimestamp: 2026-01-02T03:04:06.000Z\\n</system>"
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "parts": [
+        {
+          "text": "<user_input>\\n控えのある添付\\n</user_input>"
+        },
+        {
+          "fileData": {
+            "fileUri": "files/own-cached",
+            "mimeType": "image/png"
+          }
+        }
+      ]
+    }
+  ],
+  "fetch": [],
+  "media": {
+    "1:data/cached.png": {
+      "gemini": {
+        "fileUri": "files/own-cached",
+        "expirationTime": "2099-01-01T00:00:00Z",
+        "name": "files/own-cached"
+      },
+      "relay": {
+        "gemini": {
+          "fileUri": "files/relay-cached",
+          "expirationTime": "2099-01-01T00:00:00Z",
+          "name": "x"
+        },
+        "anthropic": {
+          "fileId": "file_cached"
+        }
+      }
+    }
+  }
+}"
+`;
+
+exports[`各社へ送る本文の金型 > gemini-nokey: ひととおりの形を持つ履歴 1`] = `
+"{
+  "payload": [
+    {
+      "role": "user",
+      "parts": [
+        {
+          "text": "SYS agent=Itera user=山内 lang=Japanese\\n\\n<system type=\\"time\\">\\nSession Started: <local>\\nTimestamp: 2026-01-02T03:04:06.000Z\\n</system>"
+        }
+      ]
+    },
+    {
+      "role": "model",
+      "parts": [
+        {
+          "text": "モデルが先頭に居る履歴"
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "parts": [
+        {
+          "text": "<user_input>\\nこんにちは\\n</user_input>"
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "parts": [
+        {
+          "text": "<event type=\\"info\\">\\n起動しました\\n</event>"
+        }
+      ]
+    },
+    {
+      "role": "model",
+      "parts": [
+        {
+          "text": "<report>はい</report>\\n<yield />"
+        }
+      ]
+    },
+    {
+      "role": "model",
+      "parts": [
+        {
+          "text": ""
+        }
+      ]
+    },
+    {
+      "role": "model",
+      "parts": [
+        {
+          "text": "   \\n"
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "parts": [
+        {
+          "text": "<user_input>\\nこれを見てください\\n二行目\\n</user_input>"
+        },
+        {
+          "text": "<user_attachment name=\\"a.txt\\">中身</user_attachment>"
+        },
+        {
+          "text": "\\n[System: The file 'system/temp/media/shot.png' was NOT sent. This provider needs a file-upload API key, which is not configured or has expired.]\\n"
+        },
+        {
+          "text": "<user_input>\\nあとの文\\n</user_input>"
+        },
+        {
+          "text": "\\n[System: The file 'data/doc.pdf' was NOT sent. This provider needs a file-upload API key, which is not configured or has expired.]\\n"
+        },
+        {
+          "text": "\\n[System: Attached file 'data/note.txt' (text/plain) cannot be processed directly because its format is not directly supported by this model's vision/file API. To analyze its content, please write and execute a script to process it from the VFS.]\\n"
+        },
+        {
+          "text": "\\n[System: Attached file 'data/a.zip' (application/zip) cannot be processed directly because its format is not directly supported by this model's vision/file API. To analyze its content, please write and execute a script to process it from the VFS.]\\n"
+        },
+        {
+          "text": "\\n[System: Attached file 'data/big.png' (image/png) cannot be processed directly because it exceeds the file size limit (100MB). To analyze its content, please write and execute a script to process it from the VFS.]\\n"
+        },
+        {
+          "text": "\\n[System: The file 'data/mid.pdf' was NOT sent. This provider needs a file-upload API key, which is not configured or has expired.]\\n"
+        },
+        {
+          "text": "\\n[System: The file 'data/mid.png' was NOT sent. This provider needs a file-upload API key, which is not configured or has expired.]\\n"
+        },
+        {
+          "text": "\\n[System: The file 'data/gone.png' was NOT sent. It could not be loaded from VFS.]\\n"
+        }
+      ]
+    },
+    {
+      "role": "model",
+      "parts": [
+        {
+          "text": "配列の model ターン"
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "parts": [
+        {
+          "text": "<tool_output tool=\\"read\\" status=\\"success\\" param_path=\\"a.md\\">\\nLines 1-2\\nabc\\n</tool_output>"
+        },
+        {
+          "text": "<tool_output tool=\\"take_screenshot\\" status=\\"success\\">\\ncaptured\\n</tool_output>"
+        },
+        {
+          "text": "\\n[System: The file 'system/temp/media/tool.png' was NOT sent. This provider needs a file-upload API key, which is not configured or has expired.]\\n"
+        },
+        {
+          "text": "<tool_output tool=\\"search\\" status=\\"error\\" param_query='say \\"hi\\"'>\\nboom\\n</tool_output>"
+        },
+        {
+          "text": "<tool_output tool=\\"attach_file\\" status=\\"success\\" param_path=\\"data/gone.png\\" />"
+        },
+        {
+          "text": "\\n[System: The file 'data/gone.png' was NOT sent. It could not be loaded from VFS.]\\n"
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "parts": [
+        {
+          "text": "<event type=\\"app_event\\">\\n通知\\n</event>"
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "parts": [
+        {
+          "text": "<user_input>\\n続けて\\n</user_input>"
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "parts": [
+        {
+          "text": "<user_input>\\n同じ役割が続く\\n</user_input>"
+        }
+      ]
+    }
+  ],
+  "fetch": [],
+  "media": {
+    "1:system/temp/media/shot.png": null,
+    "2:data/doc.pdf": null,
+    "3:data/note.txt": null,
+    "4:data/a.zip": null,
+    "5:data/big.png": null,
+    "6:data/mid.pdf": null,
+    "7:data/mid.png": null,
+    "8:data/gone.png": null,
+    "9:system/temp/media/tool.png": null,
+    "10:data/gone.png": null
+  }
+}"
+`;
+
+exports[`各社へ送る本文の金型 > gemini-nokey: 履歴が空（システムプロンプトだけ） 1`] = `
+"{
+  "payload": [
+    {
+      "role": "user",
+      "parts": [
+        {
+          "text": "SYS agent=Itera user=山内 lang=Japanese\\n\\n<system type=\\"time\\">\\nSession Started: <local>\\nTimestamp: 2026-01-02T03:04:05.000Z\\n</system>"
+        }
+      ]
+    }
+  ],
+  "fetch": [],
+  "media": {}
+}"
+`;
+
+exports[`各社へ送る本文の金型 > gemini-nokey: 控えのある添付は上げ直さない 1`] = `
+"{
+  "payload": [
+    {
+      "role": "user",
+      "parts": [
+        {
+          "text": "SYS agent=Itera user=山内 lang=Japanese\\n\\n<system type=\\"time\\">\\nSession Started: <local>\\nTimestamp: 2026-01-02T03:04:06.000Z\\n</system>"
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "parts": [
+        {
+          "text": "<user_input>\\n控えのある添付\\n</user_input>"
+        },
+        {
+          "fileData": {
+            "fileUri": "files/own-cached",
+            "mimeType": "image/png"
+          }
+        }
+      ]
+    }
+  ],
+  "fetch": [],
+  "media": {
+    "1:data/cached.png": {
+      "gemini": {
+        "fileUri": "files/own-cached",
+        "expirationTime": "2099-01-01T00:00:00Z",
+        "name": "files/own-cached"
+      },
+      "relay": {
+        "gemini": {
+          "fileUri": "files/relay-cached",
+          "expirationTime": "2099-01-01T00:00:00Z",
+          "name": "x"
+        },
+        "anthropic": {
+          "fileId": "file_cached"
+        }
+      }
+    }
+  }
+}"
+`;
+
+exports[`各社へ送る本文の金型 > gemini-relay: ひととおりの形を持つ履歴 1`] = `
+"{
+  "payload": [
+    {
+      "role": "user",
+      "parts": [
+        {
+          "text": "SYS agent=Itera user=山内 lang=Japanese\\n\\n<system type=\\"time\\">\\nSession Started: <local>\\nTimestamp: 2026-01-02T03:04:06.000Z\\n</system>"
+        }
+      ]
+    },
+    {
+      "role": "model",
+      "parts": [
+        {
+          "text": "モデルが先頭に居る履歴"
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "parts": [
+        {
+          "text": "<user_input>\\nこんにちは\\n</user_input>"
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "parts": [
+        {
+          "text": "<event type=\\"info\\">\\n起動しました\\n</event>"
+        }
+      ]
+    },
+    {
+      "role": "model",
+      "parts": [
+        {
+          "text": "<report>はい</report>\\n<yield />"
+        }
+      ]
+    },
+    {
+      "role": "model",
+      "parts": [
+        {
+          "text": ""
+        }
+      ]
+    },
+    {
+      "role": "model",
+      "parts": [
+        {
+          "text": "   \\n"
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "parts": [
+        {
+          "text": "<user_input>\\nこれを見てください\\n二行目\\n</user_input>"
+        },
+        {
+          "text": "<user_attachment name=\\"a.txt\\">中身</user_attachment>"
+        },
+        {
+          "fileData": {
+            "fileUri": "files/relay-1",
+            "mimeType": "image/png"
+          }
+        },
+        {
+          "text": "<user_input>\\nあとの文\\n</user_input>"
+        },
+        {
+          "fileData": {
+            "fileUri": "files/relay-2",
+            "mimeType": "application/pdf"
+          }
+        },
+        {
+          "text": "\\n[System: Attached file 'data/note.txt' (text/plain) cannot be processed directly because its format is not directly supported by this model's vision/file API. To analyze its content, please write and execute a script to process it from the VFS.]\\n"
+        },
+        {
+          "text": "\\n[System: Attached file 'data/a.zip' (application/zip) cannot be processed directly because its format is not directly supported by this model's vision/file API. To analyze its content, please write and execute a script to process it from the VFS.]\\n"
+        },
+        {
+          "text": "\\n[System: Attached file 'data/big.png' (image/png) cannot be processed directly because it exceeds the file size limit (15MB). To analyze its content, please write and execute a script to process it from the VFS.]\\n"
+        },
+        {
+          "text": "\\n[System: Attached file 'data/mid.pdf' (application/pdf) cannot be processed directly because it exceeds the file size limit (15MB). To analyze its content, please write and execute a script to process it from the VFS.]\\n"
+        },
+        {
+          "fileData": {
+            "fileUri": "files/relay-3",
+            "mimeType": "image/png"
+          }
+        },
+        {
+          "text": "\\n[System: The file 'data/gone.png' was NOT sent. It could not be loaded from VFS.]\\n"
+        }
+      ]
+    },
+    {
+      "role": "model",
+      "parts": [
+        {
+          "text": "配列の model ターン"
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "parts": [
+        {
+          "text": "<tool_output tool=\\"read\\" status=\\"success\\" param_path=\\"a.md\\">\\nLines 1-2\\nabc\\n</tool_output>"
+        },
+        {
+          "text": "<tool_output tool=\\"take_screenshot\\" status=\\"success\\">\\ncaptured\\n</tool_output>"
+        },
+        {
+          "fileData": {
+            "fileUri": "files/relay-4",
+            "mimeType": "image/png"
+          }
+        },
+        {
+          "text": "<tool_output tool=\\"search\\" status=\\"error\\" param_query='say \\"hi\\"'>\\nboom\\n</tool_output>"
+        },
+        {
+          "text": "<tool_output tool=\\"attach_file\\" status=\\"success\\" param_path=\\"data/gone.png\\" />"
+        },
+        {
+          "text": "\\n[System: The file 'data/gone.png' was NOT sent. It could not be loaded from VFS.]\\n"
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "parts": [
+        {
+          "text": "<event type=\\"app_event\\">\\n通知\\n</event>"
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "parts": [
+        {
+          "text": "<user_input>\\n続けて\\n</user_input>"
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "parts": [
+        {
+          "text": "<user_input>\\n同じ役割が続く\\n</user_input>"
+        }
+      ]
+    }
+  ],
+  "fetch": [
+    "POST https://relay.example/llmProxy/google/upload/v1beta/files",
+    "POST https://upload.example/relay/1",
+    "POST https://relay.example/llmProxy/google/upload/v1beta/files",
+    "POST https://upload.example/relay/2",
+    "POST https://relay.example/llmProxy/google/upload/v1beta/files",
+    "POST https://upload.example/relay/3",
+    "POST https://relay.example/llmProxy/google/upload/v1beta/files",
+    "POST https://upload.example/relay/4"
+  ],
+  "media": {
+    "1:system/temp/media/shot.png": {
+      "relay": {
+        "gemini": {
+          "fileUri": "files/relay-1",
+          "expirationTime": "2099-01-01T00:00:00Z",
+          "name": "files/relay-1"
+        }
+      }
+    },
+    "2:data/doc.pdf": {
+      "relay": {
+        "gemini": {
+          "fileUri": "files/relay-2",
+          "expirationTime": "2099-01-01T00:00:00Z",
+          "name": "files/relay-2"
+        }
+      }
+    },
+    "3:data/note.txt": null,
+    "4:data/a.zip": null,
+    "5:data/big.png": null,
+    "6:data/mid.pdf": null,
+    "7:data/mid.png": {
+      "relay": {
+        "gemini": {
+          "fileUri": "files/relay-3",
+          "expirationTime": "2099-01-01T00:00:00Z",
+          "name": "files/relay-3"
+        }
+      }
+    },
+    "8:data/gone.png": null,
+    "9:system/temp/media/tool.png": {
+      "relay": {
+        "gemini": {
+          "fileUri": "files/relay-4",
+          "expirationTime": "2099-01-01T00:00:00Z",
+          "name": "files/relay-4"
+        }
+      }
+    },
+    "10:data/gone.png": null
+  }
+}"
+`;
+
+exports[`各社へ送る本文の金型 > gemini-relay: 上げるのに失敗したとき 1`] = `
+"{
+  "payload": [
+    {
+      "role": "user",
+      "parts": [
+        {
+          "text": "SYS agent=Itera user=山内 lang=Japanese\\n\\n<system type=\\"time\\">\\nSession Started: <local>\\nTimestamp: 2026-01-02T03:04:06.000Z\\n</system>"
+        }
+      ]
+    },
+    {
+      "role": "model",
+      "parts": [
+        {
+          "text": "モデルが先頭に居る履歴"
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "parts": [
+        {
+          "text": "<user_input>\\nこんにちは\\n</user_input>"
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "parts": [
+        {
+          "text": "<event type=\\"info\\">\\n起動しました\\n</event>"
+        }
+      ]
+    },
+    {
+      "role": "model",
+      "parts": [
+        {
+          "text": "<report>はい</report>\\n<yield />"
+        }
+      ]
+    },
+    {
+      "role": "model",
+      "parts": [
+        {
+          "text": ""
+        }
+      ]
+    },
+    {
+      "role": "model",
+      "parts": [
+        {
+          "text": "   \\n"
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "parts": [
+        {
+          "text": "<user_input>\\nこれを見てください\\n二行目\\n</user_input>"
+        },
+        {
+          "text": "<user_attachment name=\\"a.txt\\">中身</user_attachment>"
+        },
+        {
+          "inlineData": {
+            "mimeType": "image/png",
+            "data": "B64(bytes of system/temp/media/shot.png)"
+          }
+        },
+        {
+          "text": "<user_input>\\nあとの文\\n</user_input>"
+        },
+        {
+          "inlineData": {
+            "mimeType": "application/pdf",
+            "data": "B64(bytes of data/doc.pdf)"
+          }
+        },
+        {
+          "text": "\\n[System: Attached file 'data/note.txt' (text/plain) cannot be processed directly because its format is not directly supported by this model's vision/file API. To analyze its content, please write and execute a script to process it from the VFS.]\\n"
+        },
+        {
+          "text": "\\n[System: Attached file 'data/a.zip' (application/zip) cannot be processed directly because its format is not directly supported by this model's vision/file API. To analyze its content, please write and execute a script to process it from the VFS.]\\n"
+        },
+        {
+          "text": "\\n[System: Attached file 'data/big.png' (image/png) cannot be processed directly because it exceeds the file size limit (15MB). To analyze its content, please write and execute a script to process it from the VFS.]\\n"
+        },
+        {
+          "text": "\\n[System: Attached file 'data/mid.pdf' (application/pdf) cannot be processed directly because it exceeds the file size limit (15MB). To analyze its content, please write and execute a script to process it from the VFS.]\\n"
+        },
+        {
+          "inlineData": {
+            "mimeType": "image/png",
+            "data": "B64(bytes of data/mid.png)"
+          }
+        },
+        {
+          "text": "\\n[System: The file 'data/gone.png' was NOT sent. It could not be loaded from VFS.]\\n"
+        }
+      ]
+    },
+    {
+      "role": "model",
+      "parts": [
+        {
+          "text": "配列の model ターン"
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "parts": [
+        {
+          "text": "<tool_output tool=\\"read\\" status=\\"success\\" param_path=\\"a.md\\">\\nLines 1-2\\nabc\\n</tool_output>"
+        },
+        {
+          "text": "<tool_output tool=\\"take_screenshot\\" status=\\"success\\">\\ncaptured\\n</tool_output>"
+        },
+        {
+          "inlineData": {
+            "mimeType": "image/png",
+            "data": "B64(bytes of system/temp/media/tool.png)"
+          }
+        },
+        {
+          "text": "<tool_output tool=\\"search\\" status=\\"error\\" param_query='say \\"hi\\"'>\\nboom\\n</tool_output>"
+        },
+        {
+          "text": "<tool_output tool=\\"attach_file\\" status=\\"success\\" param_path=\\"data/gone.png\\" />"
+        },
+        {
+          "text": "\\n[System: The file 'data/gone.png' was NOT sent. It could not be loaded from VFS.]\\n"
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "parts": [
+        {
+          "text": "<event type=\\"app_event\\">\\n通知\\n</event>"
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "parts": [
+        {
+          "text": "<user_input>\\n続けて\\n</user_input>"
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "parts": [
+        {
+          "text": "<user_input>\\n同じ役割が続く\\n</user_input>"
+        }
+      ]
+    }
+  ],
+  "fetch": [
+    "POST https://relay.example/llmProxy/google/upload/v1beta/files",
+    "POST https://relay.example/llmProxy/google/upload/v1beta/files",
+    "POST https://relay.example/llmProxy/google/upload/v1beta/files",
+    "POST https://relay.example/llmProxy/google/upload/v1beta/files"
+  ],
+  "media": {
+    "1:system/temp/media/shot.png": null,
+    "2:data/doc.pdf": null,
+    "3:data/note.txt": null,
+    "4:data/a.zip": null,
+    "5:data/big.png": null,
+    "6:data/mid.pdf": null,
+    "7:data/mid.png": null,
+    "8:data/gone.png": null,
+    "9:system/temp/media/tool.png": null,
+    "10:data/gone.png": null
+  }
+}"
+`;
+
+exports[`各社へ送る本文の金型 > gemini-relay: 履歴が空（システムプロンプトだけ） 1`] = `
+"{
+  "payload": [
+    {
+      "role": "user",
+      "parts": [
+        {
+          "text": "SYS agent=Itera user=山内 lang=Japanese\\n\\n<system type=\\"time\\">\\nSession Started: <local>\\nTimestamp: 2026-01-02T03:04:05.000Z\\n</system>"
+        }
+      ]
+    }
+  ],
+  "fetch": [],
+  "media": {}
+}"
+`;
+
+exports[`各社へ送る本文の金型 > gemini-relay: 控えのある添付は上げ直さない 1`] = `
+"{
+  "payload": [
+    {
+      "role": "user",
+      "parts": [
+        {
+          "text": "SYS agent=Itera user=山内 lang=Japanese\\n\\n<system type=\\"time\\">\\nSession Started: <local>\\nTimestamp: 2026-01-02T03:04:06.000Z\\n</system>"
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "parts": [
+        {
+          "text": "<user_input>\\n控えのある添付\\n</user_input>"
+        },
+        {
+          "fileData": {
+            "fileUri": "files/relay-cached",
+            "mimeType": "image/png"
+          }
+        }
+      ]
+    }
+  ],
+  "fetch": [],
+  "media": {
+    "1:data/cached.png": {
+      "gemini": {
+        "fileUri": "files/own-cached",
+        "expirationTime": "2099-01-01T00:00:00Z",
+        "name": "files/own-cached"
+      },
+      "relay": {
+        "gemini": {
+          "fileUri": "files/relay-cached",
+          "expirationTime": "2099-01-01T00:00:00Z",
+          "name": "x"
+        },
+        "anthropic": {
+          "fileId": "file_cached"
+        }
+      }
+    }
+  }
+}"
+`;
+
+exports[`各社へ送る本文の金型 > openai: ひととおりの形を持つ履歴 1`] = `
+"{
+  "payload": [
+    {
+      "role": "system",
+      "content": "SYS agent=Itera user=山内 lang=Japanese\\n\\n<system type=\\"time\\">\\nSession Started: <local>\\nTimestamp: 2026-01-02T03:04:06.000Z\\n</system>"
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "type": "text",
+          "text": "モデルが先頭に居る履歴"
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "text",
+          "text": "<user_input>\\nこんにちは\\n</user_input>"
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "text",
+          "text": "<event type=\\"info\\">\\n起動しました\\n</event>"
+        }
+      ]
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "type": "text",
+          "text": "<report>はい</report>\\n<yield />"
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "text",
+          "text": "<user_input>\\nこれを見てください\\n二行目\\n</user_input>"
+        },
+        {
+          "type": "text",
+          "text": "<user_attachment name=\\"a.txt\\">中身</user_attachment>"
+        },
+        {
+          "type": "image_url",
+          "image_url": {
+            "url": "data:image/png;base64,B64(bytes of system/temp/media/shot.png)"
+          }
+        },
+        {
+          "type": "text",
+          "text": "<user_input>\\nあとの文\\n</user_input>"
+        },
+        {
+          "type": "file",
+          "file": {
+            "filename": "doc.pdf",
+            "file_data": "data:application/pdf;base64,B64(bytes of data/doc.pdf)"
+          }
+        },
+        {
+          "type": "file",
+          "file": {
+            "filename": "note.txt",
+            "file_data": "data:text/plain;base64,B64(bytes of data/note.txt)"
+          }
+        },
+        {
+          "type": "text",
+          "text": "\\n[System: Attached file 'data/a.zip' (application/zip) cannot be processed directly because its format is not directly supported by this model's vision/file API. To analyze its content, please write and execute a script to process it from the VFS.]\\n"
+        },
+        {
+          "type": "text",
+          "text": "\\n[System: Attached file 'data/big.png' (image/png) cannot be processed directly because it exceeds the file size limit (50MB). To analyze its content, please write and execute a script to process it from the VFS.]\\n"
+        },
+        {
+          "type": "file",
+          "file": {
+            "filename": "mid.pdf",
+            "file_data": "data:application/pdf;base64,B64(bytes of data/mid.pdf)"
+          }
+        },
+        {
+          "type": "image_url",
+          "image_url": {
+            "url": "data:image/png;base64,B64(bytes of data/mid.png)"
+          }
+        },
+        {
+          "type": "text",
+          "text": "\\n[System: The file 'data/gone.png' was NOT sent. It could not be loaded from VFS.]\\n"
+        }
+      ]
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "type": "text",
+          "text": "配列の model ターン"
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "text",
+          "text": "<tool_output tool=\\"read\\" status=\\"success\\" param_path=\\"a.md\\">\\nLines 1-2\\nabc\\n</tool_output>"
+        },
+        {
+          "type": "text",
+          "text": "<tool_output tool=\\"take_screenshot\\" status=\\"success\\">\\ncaptured\\n</tool_output>"
+        },
+        {
+          "type": "image_url",
+          "image_url": {
+            "url": "data:image/png;base64,B64(bytes of system/temp/media/tool.png)"
+          }
+        },
+        {
+          "type": "text",
+          "text": "<tool_output tool=\\"search\\" status=\\"error\\" param_query='say \\"hi\\"'>\\nboom\\n</tool_output>"
+        },
+        {
+          "type": "text",
+          "text": "<tool_output tool=\\"attach_file\\" status=\\"success\\" param_path=\\"data/gone.png\\" />"
+        },
+        {
+          "type": "text",
+          "text": "\\n[System: The file 'data/gone.png' was NOT sent. It could not be loaded from VFS.]\\n"
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "text",
+          "text": "<event type=\\"app_event\\">\\n通知\\n</event>"
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "text",
+          "text": "<user_input>\\n続けて\\n</user_input>"
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "text",
+          "text": "<user_input>\\n同じ役割が続く\\n</user_input>"
+        }
+      ]
+    }
+  ],
+  "fetch": [],
+  "media": {
+    "1:system/temp/media/shot.png": null,
+    "2:data/doc.pdf": null,
+    "3:data/note.txt": null,
+    "4:data/a.zip": null,
+    "5:data/big.png": null,
+    "6:data/mid.pdf": null,
+    "7:data/mid.png": null,
+    "8:data/gone.png": null,
+    "9:system/temp/media/tool.png": null,
+    "10:data/gone.png": null
+  }
+}"
+`;
+
+exports[`各社へ送る本文の金型 > openai: 履歴が空（システムプロンプトだけ） 1`] = `
+"{
+  "payload": [
+    {
+      "role": "system",
+      "content": "SYS agent=Itera user=山内 lang=Japanese\\n\\n<system type=\\"time\\">\\nSession Started: <local>\\nTimestamp: 2026-01-02T03:04:05.000Z\\n</system>"
+    }
+  ],
+  "fetch": [],
+  "media": {}
+}"
+`;
+
+exports[`各社へ送る本文の金型 > openai: 控えのある添付は上げ直さない 1`] = `
+"{
+  "payload": [
+    {
+      "role": "system",
+      "content": "SYS agent=Itera user=山内 lang=Japanese\\n\\n<system type=\\"time\\">\\nSession Started: <local>\\nTimestamp: 2026-01-02T03:04:06.000Z\\n</system>"
+    },
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "text",
+          "text": "<user_input>\\n控えのある添付\\n</user_input>"
+        },
+        {
+          "type": "image_url",
+          "image_url": {
+            "url": "data:image/png;base64,B64(bytes of data/cached.png)"
+          }
+        }
+      ]
+    }
+  ],
+  "fetch": [],
+  "media": {
+    "1:data/cached.png": {
+      "gemini": {
+        "fileUri": "files/own-cached",
+        "expirationTime": "2099-01-01T00:00:00Z",
+        "name": "files/own-cached"
+      },
+      "relay": {
+        "gemini": {
+          "fileUri": "files/relay-cached",
+          "expirationTime": "2099-01-01T00:00:00Z",
+          "name": "x"
+        },
+        "anthropic": {
+          "fileId": "file_cached"
+        }
+      }
+    }
+  }
+}"
+`;
