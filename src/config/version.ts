@@ -4,5 +4,7 @@
  *
  * 土台が同じなので、Itera（itera2-dev・itera2）とミャク楽エージェントは同じ番号を名乗る。
  * package.json の version は別物（配布物ごとに違う意味を持つ）で、ここには関係しない。
+ *
+ * 上げ方（2026-11-11 山内さん）: ホスト（src/）を変える PR ごとに minor を上げる。細かい直しなら patch。
  */
 export const OS_VERSION = '2.1.0';
