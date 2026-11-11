@@ -15,6 +15,7 @@ import type { SpawnOptions } from '../shell/windowing/ProcessManager';
 import type { CompiledGuest } from '../shell/windowing/GuestCompiler';
 import { USER_PRINCIPAL } from '../core/vfs/types';
 import { attachmentPathsOf, buildAppendPlan, buildChatStatus, buildResetPlan, resolveAttachments } from './chatApi';
+import { LlmCalls, type LlmEndpointLike } from './LlmCalls';
 import { VfsEventFormatter } from '../core/vfs/VfsEventFormatter';
 import { buildGuestThemeCss } from '../shell/windowing/guestThemeCss';
 import { base64ToBlob, blobToDataUrl, dataUrlToBlob } from '../utils/binary';
@@ -39,6 +40,8 @@ export interface IProcessManager {
   getArgs(pid: string): Record<string, string> | null;
   reportError(pid: string, errorData: any): void;
   processes: Map<string, any>;
+  /** プロセスの出来事（`process_killed` は `(pid, proc)`） */
+  on?(event: string, callback: Function): void;
   _updateAddressBar(path: string): void;
   declareRoute(path: string, pid?: string): string | null;
 }
@@ -67,6 +70,10 @@ export interface IShell {
   getMergedProviders?(): Promise<any[]>;
   /** いま選んでいるモデルの文脈の上限（無ければ null） */
   getContextLimit?(): Promise<number | null>;
+  /** 設定（`llm.json` と同じ形）から上流への一組を組み立てる（MetaOS.llm。T-0807） */
+  resolveLlm?(config: { model: string; [key: string]: unknown }): Promise<LlmEndpointLike>;
+  /** 選べるモデルの一覧（鍵は含まない） */
+  listLlmModels?(): Promise<unknown[]>;
   panels: { chat: any };
   modals: { editor: any; camera: any; audio: any; filePicker?: any };
 }
@@ -465,6 +472,28 @@ export class HostApiRouter {
         contextLimit: d.shell?.getContextLimit ? await d.shell.getContextLimit() : null,
       });
     });
+
+    // LLM を 1 回呼ぶ口（MetaOS.llm。T-0807）。会話もエンジンも通らない。
+    // 開始はすぐ返し、文字・終了・失敗は呼んだプロセスにだけ通知する（ゲストの RPC は 150 秒で切れるため）。
+    const llmCalls = new LlmCalls({
+      resolveLlm: async (config) => {
+        if (!d.shell?.resolveLlm) throw new Error('The LLM is not available.');
+        return d.shell.resolveLlm(config);
+      },
+      vfs: d.vfs,
+      send: (pid, action, payload) => {
+        const target = d.processManager?.processes.get(pid)?.iframe?.contentWindow;
+        if (target) t.sendEvent(pid, action, payload, target);
+      },
+    });
+    // プロセスが終わったら、その呼び出しを止める（上流への接続を残さない）
+    d.processManager?.on?.('process_killed', (pid: string) => llmCalls.abortAll(pid));
+
+    t.registerHandler('llm:start', async (payload, sourcePid) => {
+      return { id: llmCalls.start(sourcePid, getPrincipal(sourcePid), payload).id };
+    });
+    t.registerHandler('llm:abort', async ({ id }, sourcePid) => ({ aborted: llmCalls.abort(sourcePid, id) }));
+    t.registerHandler('llm:models', async () => (d.shell?.listLlmModels ? await d.shell.listLlmModels() : []));
 
     t.registerHandler('chat:sessions', async () => {
       if (!d.sessionManager) throw new Error('Chat is not available.');

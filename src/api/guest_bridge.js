@@ -159,6 +159,78 @@
     // 届かなくても困らない（プロセスが終わるときに全部手放される）
     transport.requestHost('fs:release_blob', { hold }).catch(() => {});
   };
+  // LLM を 1 回呼ぶ（MetaOS.llm。T-0807）。開始の RPC はすぐ返り、文字・終了・失敗はこのプロセス宛ての通知で届く
+  // （RPC は 150 秒で切れるが、生成は何分も黙ることがある）。id はこちらで採る —— 開始の応答より先に通知が来ても取りこぼさない。
+  const llmCalls = new Map();
+  let llmSeq = 0;
+  const llmAbortError = () => {
+    const err = new Error('Aborted');
+    err.name = 'AbortError';
+    err.code = 'aborted';
+    return err;
+  };
+  const llmGenerate = (request, opts) =>
+    new Promise((resolve, reject) => {
+      const o = opts || {};
+      const signal = o.signal || null;
+      if (signal && signal.aborted) return reject(llmAbortError());
+      llmSeq += 1;
+      const id =
+        'llm_' + Date.now().toString(36) + '_' + llmSeq.toString(36) + '_' + Math.random().toString(36).slice(2, 8);
+      const call = {
+        text: '',
+        onChunk: typeof o.onChunk === 'function' ? o.onChunk : null,
+        resolve,
+        reject,
+        settle: null,
+      };
+      const onAbort = () => {
+        if (!llmCalls.has(id)) return;
+        call.settle();
+        // ホストの返事（llm:error）を待たずに終える。ホスト側の生成は abort で止まる
+        transport.requestHost('llm:abort', { id }).catch(() => {});
+        reject(llmAbortError());
+      };
+      call.settle = () => {
+        llmCalls.delete(id);
+        if (signal) signal.removeEventListener('abort', onAbort);
+      };
+      if (signal) signal.addEventListener('abort', onAbort);
+      llmCalls.set(id, call);
+      transport.requestHost('llm:start', { id, request, tag: o.tag }).catch((err) => {
+        if (!llmCalls.has(id)) return;
+        call.settle();
+        reject(err);
+      });
+    });
+  transport.on('llm:chunk', (p) => {
+    const call = p && llmCalls.get(p.id);
+    if (!call || typeof p.text !== 'string') return;
+    call.text += p.text;
+    if (call.onChunk) {
+      try {
+        call.onChunk(p.text);
+      } catch (e) {
+        console.error('[MetaOS.llm] onChunk failed', e);
+      }
+    }
+  });
+  transport.on('llm:end', (p) => {
+    const call = p && llmCalls.get(p.id);
+    if (!call) return;
+    call.settle();
+    call.resolve({ text: call.text, ...(p.result || {}) });
+  });
+  transport.on('llm:error', (p) => {
+    const call = p && llmCalls.get(p.id);
+    if (!call) return;
+    call.settle();
+    if (p.code === 'aborted') return call.reject(llmAbortError());
+    const err = new Error(p.message || 'The generation failed.');
+    err.code = p.code || 'failed';
+    call.reject(err);
+  });
+
   const localToolHandlers = new Map();
   const mountHandlers = new Map();
   // マウントごとの onMove（T-0689）。持つマウントだけ入る。提示（capabilities.move）はこの有無から導く
@@ -339,6 +411,16 @@
       switchSession: async (id) => transport.requestHost('chat:switch_session', { id }),
       saveSession: async (id = 'current') => transport.requestHost('chat:save_session', { id }),
       loadSession: async (path) => transport.requestHost('chat:load_session', { path }),
+    },
+    // LLM を 1 回呼ぶ（T-0807）。会話もエンジンも通らない —— 渡した messages が上流へ行き、返事が戻るだけ。
+    //   generate({ config, system, messages }, { onChunk, signal, tag }) → { text, provider, model, usage, stopReason }
+    //     config   … llm.json と同じ形で必須（{ model: 'provider/model', … }）。OS の設定を使うなら system.getConfig('llm') を渡す
+    //     messages … [{ role: 'user' | 'model', content: 文字列 | [{text} | {media:{path}}] }]（添付は呼んだアプリの権限で読む）
+    //     送れない添付があれば失敗する（err.code === 'media'）。止めたら AbortError（err.code === 'aborted'）
+    //   models() … 選べるモデル [{ id: 'provider/model', name, contextTokens, pricing, capabilities, defaultConfig, available }]
+    llm: {
+      generate: (request, opts = {}) => llmGenerate(request, opts),
+      models: async () => transport.requestHost('llm:models', {}),
     },
     // 従来の ai.* は chat.append / chat.stop の薄皮（ホストには chat:* しか無い）。
     // ask: 利用者の発言として置いて起こす（silent なら置くだけ）。task: system_task として起こす。log: 記録（trigger_llm で起こす）
