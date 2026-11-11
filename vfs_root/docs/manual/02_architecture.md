@@ -105,7 +105,7 @@ The **Guest** environment (where apps run) is isolated from the **Host** (where 
     *   `.append(role, content, opts)`: Puts one turn in the history. `role` is `'user'` or `'system'`; `content` is a string or an array of `{text}` / `{media:{path}}` parts; `opts: { wake=false, visible=true, eventType, attachments }`. Returns `{ id }`.
     *   `.wake()`: Asks the engine to evaluate the history (idle if nothing is unread). `.stop()`: aborts generation.
     *   `.reset({ summary, restoreTools=true })`: Clears the conversation (the current one is archived to the session history). It does not wake the AI; the next message does, and the AI reads `summary` then. Returns `{ archived, sessionId }`.
-    *   `.status()`: Engine state, turn count, current session and the last context size from the usage log.
+    *   `.status()`: Engine state, turn count, current session and `context` — the prompt size of the last reply in this conversation (read from the history, `null` until the first reply), with `limit` (the selected model's context size, `null` when the model list does not state it) and `recent` (the last replies, newest first).
     *   `.sessions()` / `.switchSession(id)` / `.saveSession(id)` / `.loadSession(path)`: the session history.
 
 *   **AI Interaction (`MetaOS.ai`)** — thin wrappers over `MetaOS.chat`:
