@@ -1,0 +1,711 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`組み立ての金型: 利用者の鍵で直接 > anthropic/… 1`] = `
+{
+  "adapter": {
+    "apiKey": "AK",
+    "baseUrl": null,
+    "config": {
+      "model": "anthropic/claude-x",
+      "thinking": {
+        "type": "enabled",
+      },
+    },
+    "kind": "AnthropicAdapter",
+    "modelName": "claude-x",
+    "reason": null,
+    "relay": null,
+  },
+  "relayShared": null,
+  "renderer": {
+    "apiKey": null,
+    "capabilities": {
+      "maxMediaSizeMB": 24,
+      "supportedMimes": [
+        "image/*",
+        "application/pdf",
+        "text/plain",
+      ],
+    },
+    "kind": "Anthropic",
+    "relay": null,
+  },
+  "status": [
+    "anthropic/claude-x",
+  ],
+}
+`;
+
+exports[`組み立ての金型: 利用者の鍵で直接 > custom/…（URL あり） 1`] = `
+{
+  "adapter": {
+    "apiKey": "CK",
+    "baseUrl": "http://127.0.0.1:8811/v1",
+    "config": {
+      "model": "custom/local",
+    },
+    "kind": "OpenAIAdapter",
+    "modelName": "local",
+    "reason": null,
+    "relay": null,
+  },
+  "relayShared": null,
+  "renderer": {
+    "apiKey": null,
+    "capabilities": {
+      "maxMediaSizeMB": 20,
+      "supportedMimes": [
+        "image/*",
+        "application/pdf",
+        "text/*",
+        "application/json",
+      ],
+    },
+    "kind": "OpenAI",
+    "relay": null,
+  },
+  "status": [
+    "custom/local",
+  ],
+}
+`;
+
+exports[`組み立ての金型: 利用者の鍵で直接 > custom/…（URL なし） 1`] = `
+{
+  "adapter": {
+    "apiKey": "",
+    "baseUrl": "http://localhost:11434/v1",
+    "config": {
+      "model": "custom/local",
+    },
+    "kind": "OpenAIAdapter",
+    "modelName": "local",
+    "reason": null,
+    "relay": null,
+  },
+  "relayShared": null,
+  "renderer": {
+    "apiKey": null,
+    "capabilities": {
+      "maxMediaSizeMB": 20,
+      "supportedMimes": [
+        "image/*",
+        "application/pdf",
+        "text/*",
+        "application/json",
+      ],
+    },
+    "kind": "OpenAI",
+    "relay": null,
+  },
+  "status": [
+    "custom/local",
+  ],
+}
+`;
+
+exports[`組み立ての金型: 利用者の鍵で直接 > google/…・鍵なし 1`] = `
+{
+  "adapter": {
+    "apiKey": "",
+    "baseUrl": "https://generativelanguage.googleapis.com/v1beta/models",
+    "config": {
+      "model": "google/gemini-x",
+    },
+    "kind": "GeminiAdapter",
+    "modelName": "gemini-x",
+    "reason": null,
+    "relay": null,
+  },
+  "relayShared": null,
+  "renderer": {
+    "apiKey": "",
+    "capabilities": {
+      "maxMediaSizeMB": 100,
+      "supportedMimes": [
+        "application/pdf",
+        "image/*",
+        "video/*",
+        "audio/*",
+      ],
+    },
+    "kind": "Gemini",
+    "relay": null,
+  },
+  "status": [
+    "google/gemini-x",
+  ],
+}
+`;
+
+exports[`組み立ての金型: 利用者の鍵で直接 > llm.json が無い（既定） 1`] = `
+{
+  "adapter": {
+    "apiKey": "GK",
+    "baseUrl": "https://generativelanguage.googleapis.com/v1beta/models",
+    "config": {
+      "model": "gemini-3.8-flash",
+    },
+    "kind": "GeminiAdapter",
+    "modelName": "gemini-3.8-flash",
+    "reason": null,
+    "relay": null,
+  },
+  "relayShared": null,
+  "renderer": {
+    "apiKey": "GK",
+    "capabilities": {
+      "maxMediaSizeMB": 100,
+      "supportedMimes": [
+        "application/pdf",
+        "image/*",
+        "video/*",
+        "audio/*",
+      ],
+    },
+    "kind": "Gemini",
+    "relay": null,
+  },
+  "status": [
+    "google/gemini-3.8-flash",
+  ],
+}
+`;
+
+exports[`組み立ての金型: 利用者の鍵で直接 > openai/… 1`] = `
+{
+  "adapter": {
+    "apiKey": "OK",
+    "baseUrl": "https://api.openai.com/v1",
+    "config": {
+      "model": "openai/gpt-x",
+      "reasoning_effort": "high",
+    },
+    "kind": "OpenAIAdapter",
+    "modelName": "gpt-x",
+    "reason": null,
+    "relay": null,
+  },
+  "relayShared": null,
+  "renderer": {
+    "apiKey": null,
+    "capabilities": {
+      "maxMediaSizeMB": 50,
+      "supportedMimes": [
+        "image/*",
+        "application/pdf",
+        "application/vnd.openxmlformats-officedocument.*",
+        "text/*",
+        "application/json",
+      ],
+    },
+    "kind": "OpenAI",
+    "relay": null,
+  },
+  "status": [
+    "openai/gpt-x",
+  ],
+}
+`;
+
+exports[`組み立ての金型: 利用者の鍵で直接 > openrouter/…（モデル名に / が入る） 1`] = `
+{
+  "adapter": {
+    "apiKey": "RK",
+    "baseUrl": "https://openrouter.ai/api/v1",
+    "config": {
+      "model": "openrouter/vendor/model-y",
+    },
+    "kind": "OpenAIAdapter",
+    "modelName": "vendor/model-y",
+    "reason": null,
+    "relay": null,
+  },
+  "relayShared": null,
+  "renderer": {
+    "apiKey": null,
+    "capabilities": {
+      "maxMediaSizeMB": 20,
+      "supportedMimes": [
+        "image/*",
+        "application/pdf",
+        "text/*",
+        "application/json",
+      ],
+    },
+    "kind": "OpenAI",
+    "relay": null,
+  },
+  "status": [
+    "openrouter/vendor/model-y",
+  ],
+}
+`;
+
+exports[`組み立ての金型: 利用者の鍵で直接 > 前置きなし → Google 1`] = `
+{
+  "adapter": {
+    "apiKey": "GK",
+    "baseUrl": "https://generativelanguage.googleapis.com/v1beta/models",
+    "config": {
+      "model": "gemini-3.8-flash",
+      "temperature": 0.5,
+    },
+    "kind": "GeminiAdapter",
+    "modelName": "gemini-3.8-flash",
+    "reason": null,
+    "relay": null,
+  },
+  "relayShared": null,
+  "renderer": {
+    "apiKey": "GK",
+    "capabilities": {
+      "maxMediaSizeMB": 100,
+      "supportedMimes": [
+        "application/pdf",
+        "image/*",
+        "video/*",
+        "audio/*",
+      ],
+    },
+    "kind": "Gemini",
+    "relay": null,
+  },
+  "status": [
+    "google/gemini-3.8-flash",
+  ],
+}
+`;
+
+exports[`組み立ての金型: 利用者の鍵で直接 > 前置きは大文字でも 1`] = `
+{
+  "adapter": {
+    "apiKey": "OK",
+    "baseUrl": "https://api.openai.com/v1",
+    "config": {
+      "model": "OpenAI/gpt-x",
+    },
+    "kind": "OpenAIAdapter",
+    "modelName": "gpt-x",
+    "reason": null,
+    "relay": null,
+  },
+  "relayShared": null,
+  "renderer": {
+    "apiKey": null,
+    "capabilities": {
+      "maxMediaSizeMB": 50,
+      "supportedMimes": [
+        "image/*",
+        "application/pdf",
+        "application/vnd.openxmlformats-officedocument.*",
+        "text/*",
+        "application/json",
+      ],
+    },
+    "kind": "OpenAI",
+    "relay": null,
+  },
+  "status": [
+    "openai/gpt-x",
+  ],
+}
+`;
+
+exports[`組み立ての金型: 利用者の鍵で直接 > 登録簿の層（llm_profiles.json）の capabilities が重なる 1`] = `
+{
+  "adapter": {
+    "apiKey": "OK",
+    "baseUrl": "https://api.openai.com/v1",
+    "config": {
+      "model": "openai/gpt-x",
+    },
+    "kind": "OpenAIAdapter",
+    "modelName": "gpt-x",
+    "reason": null,
+    "relay": null,
+  },
+  "relayShared": null,
+  "renderer": {
+    "apiKey": null,
+    "capabilities": {
+      "maxMediaSizeMB": 7,
+      "supportedMimes": [
+        "image/png",
+      ],
+    },
+    "kind": "OpenAI",
+    "relay": null,
+  },
+  "status": [
+    "openai/gpt-x",
+  ],
+}
+`;
+
+exports[`組み立ての金型: 利用者の鍵で直接 > 知らない前置き → Google の組 1`] = `
+{
+  "adapter": {
+    "apiKey": "FK",
+    "baseUrl": "https://generativelanguage.googleapis.com/v1beta/models",
+    "config": {
+      "model": "foo/bar",
+    },
+    "kind": "GeminiAdapter",
+    "modelName": "bar",
+    "reason": null,
+    "relay": null,
+  },
+  "relayShared": null,
+  "renderer": {
+    "apiKey": "FK",
+    "capabilities": {
+      "maxMediaSizeMB": 100,
+      "supportedMimes": [
+        "application/pdf",
+        "image/*",
+        "video/*",
+        "audio/*",
+      ],
+    },
+    "kind": "Gemini",
+    "relay": null,
+  },
+  "status": [
+    "foo/bar",
+  ],
+}
+`;
+
+exports[`組み立ての金型: 運営の中継（itera/…） > itera/fast 1`] = `
+{
+  "adapter": {
+    "apiKey": "",
+    "baseUrl": "https://generativelanguage.googleapis.com/v1beta/models",
+    "config": {
+      "model": "itera/fast",
+      "temperature": 0.2,
+    },
+    "kind": "GeminiAdapter",
+    "modelName": "fast",
+    "reason": null,
+    "relay": {
+      "authHeaders": "function",
+      "baseUrl": "https://asia-northeast1-x.cloudfunctions.net/llmProxy",
+      "stashBody": "function",
+      "strictOpenAISchema": true,
+    },
+  },
+  "relayShared": true,
+  "renderer": {
+    "apiKey": "",
+    "capabilities": {
+      "maxMediaSizeMB": 100,
+      "supportedMimes": [
+        "application/pdf",
+        "image/*",
+        "text/plain",
+      ],
+    },
+    "kind": "Gemini",
+    "relay": "https://asia-northeast1-x.cloudfunctions.net/llmProxy",
+  },
+  "status": [
+    "itera/fast",
+  ],
+}
+`;
+
+exports[`組み立ての金型: 運営の中継（itera/…） > itera/gpt 1`] = `
+{
+  "adapter": {
+    "apiKey": "",
+    "baseUrl": "https://asia-northeast1-x.cloudfunctions.net/llmProxy",
+    "config": {
+      "model": "itera/gpt",
+      "temperature": 0.2,
+    },
+    "kind": "OpenAIAdapter",
+    "modelName": "gpt",
+    "reason": null,
+    "relay": {
+      "authHeaders": "function",
+      "baseUrl": "https://asia-northeast1-x.cloudfunctions.net/llmProxy",
+      "stashBody": "function",
+      "strictOpenAISchema": true,
+    },
+  },
+  "relayShared": null,
+  "renderer": {
+    "apiKey": null,
+    "capabilities": {
+      "maxMediaSizeMB": 100,
+      "supportedMimes": [
+        "application/pdf",
+        "image/*",
+        "text/plain",
+      ],
+    },
+    "kind": "OpenAI",
+    "relay": null,
+  },
+  "status": [
+    "itera/gpt",
+  ],
+}
+`;
+
+exports[`組み立ての金型: 運営の中継（itera/…） > itera/smart 1`] = `
+{
+  "adapter": {
+    "apiKey": "",
+    "baseUrl": null,
+    "config": {
+      "model": "itera/smart",
+      "temperature": 0.2,
+    },
+    "kind": "AnthropicAdapter",
+    "modelName": "smart",
+    "reason": null,
+    "relay": {
+      "authHeaders": "function",
+      "baseUrl": "https://asia-northeast1-x.cloudfunctions.net/llmProxy",
+      "stashBody": "function",
+      "strictOpenAISchema": true,
+    },
+  },
+  "relayShared": true,
+  "renderer": {
+    "apiKey": null,
+    "capabilities": {
+      "maxMediaSizeMB": 9,
+      "supportedMimes": [
+        "application/pdf",
+        "image/*",
+        "text/plain",
+      ],
+    },
+    "kind": "Anthropic",
+    "relay": "https://asia-northeast1-x.cloudfunctions.net/llmProxy",
+  },
+  "status": [
+    "itera/smart",
+  ],
+}
+`;
+
+exports[`組み立ての金型: 運営の中継（itera/…） > itera/かしこい 1`] = `
+{
+  "adapter": {
+    "apiKey": "",
+    "baseUrl": null,
+    "config": {
+      "model": "itera/かしこい",
+      "temperature": 0.2,
+    },
+    "kind": "AnthropicAdapter",
+    "modelName": "smart",
+    "reason": null,
+    "relay": {
+      "authHeaders": "function",
+      "baseUrl": "https://asia-northeast1-x.cloudfunctions.net/llmProxy",
+      "stashBody": "function",
+      "strictOpenAISchema": true,
+    },
+  },
+  "relayShared": true,
+  "renderer": {
+    "apiKey": null,
+    "capabilities": {
+      "maxMediaSizeMB": 9,
+      "supportedMimes": [
+        "application/pdf",
+        "image/*",
+        "text/plain",
+      ],
+    },
+    "kind": "Anthropic",
+    "relay": "https://asia-northeast1-x.cloudfunctions.net/llmProxy",
+  },
+  "status": [
+    "itera/かしこい",
+  ],
+}
+`;
+
+exports[`組み立ての金型: 運営の中継（itera/…） > itera/賢い 1`] = `
+{
+  "adapter": {
+    "apiKey": "",
+    "baseUrl": null,
+    "config": {
+      "model": "itera/賢い",
+      "temperature": 0.2,
+    },
+    "kind": "AnthropicAdapter",
+    "modelName": "smart",
+    "reason": null,
+    "relay": {
+      "authHeaders": "function",
+      "baseUrl": "https://asia-northeast1-x.cloudfunctions.net/llmProxy",
+      "stashBody": "function",
+      "strictOpenAISchema": true,
+    },
+  },
+  "relayShared": true,
+  "renderer": {
+    "apiKey": null,
+    "capabilities": {
+      "maxMediaSizeMB": 9,
+      "supportedMimes": [
+        "application/pdf",
+        "image/*",
+        "text/plain",
+      ],
+    },
+    "kind": "Anthropic",
+    "relay": "https://asia-northeast1-x.cloudfunctions.net/llmProxy",
+  },
+  "status": [
+    "itera/賢い",
+  ],
+}
+`;
+
+exports[`組み立ての金型: 運営の中継（itera/…） > サインインしていない（台帳を見に行けていない）→ 生成時に理由を出す組 1`] = `
+{
+  "adapter": {
+    "apiKey": null,
+    "baseUrl": null,
+    "config": {
+      "model": "itera/smart",
+    },
+    "kind": "UnavailableRelayAdapter",
+    "modelName": null,
+    "reason": "The relay catalog has not been loaded yet (smart). Sign in to Itera Cloud, wait a moment, and try again.",
+    "relay": null,
+  },
+  "relayShared": null,
+  "renderer": {
+    "apiKey": "",
+    "capabilities": {
+      "maxMediaSizeMB": 100,
+      "supportedMimes": [
+        "application/pdf",
+        "image/*",
+        "text/plain",
+      ],
+    },
+    "kind": "Gemini",
+    "relay": null,
+  },
+  "status": [
+    "itera/smart",
+  ],
+}
+`;
+
+exports[`組み立ての金型: 運営の中継（itera/…） > バケットが分からなければ、大きな本文の置き場は無い 1`] = `
+{
+  "adapter": {
+    "apiKey": "",
+    "baseUrl": null,
+    "config": {
+      "model": "itera/smart",
+    },
+    "kind": "AnthropicAdapter",
+    "modelName": "smart",
+    "reason": null,
+    "relay": {
+      "authHeaders": "function",
+      "baseUrl": "https://asia-northeast1-x.cloudfunctions.net/llmProxy",
+      "stashBody": "undefined",
+      "strictOpenAISchema": true,
+    },
+  },
+  "relayShared": true,
+  "renderer": {
+    "apiKey": null,
+    "capabilities": {
+      "maxMediaSizeMB": 9,
+      "supportedMimes": [
+        "application/pdf",
+        "image/*",
+        "text/plain",
+      ],
+    },
+    "kind": "Anthropic",
+    "relay": "https://asia-northeast1-x.cloudfunctions.net/llmProxy",
+  },
+  "status": [
+    "itera/smart",
+  ],
+}
+`;
+
+exports[`組み立ての金型: 運営の中継（itera/…） > 台帳に無いモデル → 生成時に理由を出す組 1`] = `
+{
+  "adapter": {
+    "apiKey": null,
+    "baseUrl": null,
+    "config": {
+      "model": "itera/nope",
+    },
+    "kind": "UnavailableRelayAdapter",
+    "modelName": null,
+    "reason": ""nope" is not in the relay catalog. Pick a model from Settings.",
+    "relay": null,
+  },
+  "relayShared": null,
+  "renderer": {
+    "apiKey": "",
+    "capabilities": {
+      "maxMediaSizeMB": 100,
+      "supportedMimes": [
+        "application/pdf",
+        "image/*",
+        "text/plain",
+      ],
+    },
+    "kind": "Gemini",
+    "relay": null,
+  },
+  "status": [
+    "itera/nope",
+  ],
+}
+`;
+
+exports[`組み立ての金型: 運営の中継（itera/…） > 繋ぎ先（cloud.json）が無い → 生成時に理由を出す組 1`] = `
+{
+  "adapter": {
+    "apiKey": null,
+    "baseUrl": null,
+    "config": {
+      "model": "itera/smart",
+    },
+    "kind": "UnavailableRelayAdapter",
+    "modelName": null,
+    "reason": "This build has no Itera Cloud relay configured (system/config/cloud.json).",
+    "relay": null,
+  },
+  "relayShared": null,
+  "renderer": {
+    "apiKey": "",
+    "capabilities": {
+      "maxMediaSizeMB": 100,
+      "supportedMimes": [
+        "application/pdf",
+        "image/*",
+        "video/*",
+        "audio/*",
+      ],
+    },
+    "kind": "Gemini",
+    "relay": null,
+  },
+  "status": [
+    "itera/smart",
+  ],
+}
+`;
