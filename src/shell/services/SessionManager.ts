@@ -158,6 +158,11 @@ export class SessionManager {
     return this.currentMeta ? sessionMediaDir(this.currentMeta.id) : LEGACY_MEDIA_DIR;
   }
 
+  /** いまの会話の id（同期）。`init()` の前は null */
+  public currentId(): string | null {
+    return this.currentMeta ? this.currentMeta.id : null;
+  }
+
   /** いまの会話の札（一覧の先頭に出す） */
   public async currentSession(): Promise<SessionMeta> {
     const meta = await this._ensureCurrentMeta();

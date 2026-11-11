@@ -89,7 +89,7 @@ describe('別名の解決', () => {
 describe('繋げないときのアダプタ', () => {
   it('生成しようとした時点で理由を出して失敗する', async () => {
     const adapter = new UnavailableRelayAdapter('no Itera Cloud relay configured');
-    await expect(adapter.generateStream()).rejects.toThrow('no Itera Cloud relay configured');
+    await expect(adapter.generateStream([], () => {})).rejects.toThrow('no Itera Cloud relay configured');
   });
 });
 

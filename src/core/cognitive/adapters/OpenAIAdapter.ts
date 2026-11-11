@@ -3,7 +3,14 @@
  * Itera OS v2: OpenAI / Local (Ollama, LM Studio) API Adapter
  */
 
-import { BaseLLMAdapter, filterNestedObject, type LlmConfig, type RelayTransport } from './BaseAdapter';
+import {
+  BaseLLMAdapter,
+  filterNestedObject,
+  type LlmConfig,
+  type LlmResult,
+  type LlmUsage,
+  type RelayTransport,
+} from './BaseAdapter';
 import type { SystemLogger } from '../../state/SystemLogger';
 
 export class OpenAIAdapter extends BaseLLMAdapter {
@@ -25,7 +32,7 @@ export class OpenAIAdapter extends BaseLLMAdapter {
     this.baseUrl = baseUrl.replace(/\/$/, '');
   }
 
-  async generateStream(messages: any, onChunk: (text: string) => void, signal?: AbortSignal): Promise<void> {
+  protected async stream(messages: any, onChunk: (text: string) => void, signal?: AbortSignal): Promise<LlmResult> {
     // 中継（運営の鍵）を使うときは経路を中継の /v1/chat/completions に替える（本文の形式は同じ）
     const url = this.relay ? this.relayUrl('/v1/chat/completions') : `${this.baseUrl}/chat/completions`;
     const headers: Record<string, string> = {
@@ -117,6 +124,9 @@ export class OpenAIAdapter extends BaseLLMAdapter {
     await this.checkError(response, 'OpenAI');
 
     const reader = response.body!.getReader();
+    // usage の塊は最後に 1 回来る（include_usage）。毎回付けてくる互換サーバーもあるので、最後に見たものを採る
+    let usage: LlmUsage | null = null;
+    let stopReason: string | null = null;
 
     try {
       for await (const line of this.readSSELines(reader, signal)) {
@@ -131,23 +141,22 @@ export class OpenAIAdapter extends BaseLLMAdapter {
           const data = JSON.parse(dataStr);
 
           // ★ OpenAIの include_usage: true 時のトークン消費量抽出
-          if (data.usage && this.logger) {
+          if (data.usage) {
             const grossPrompt = data.usage.prompt_tokens || 0;
             const promptDetails = data.usage.prompt_tokens_details || {};
             const cached = promptDetails.cached_tokens || 0;
             const cacheWrite = promptDetails.cache_write_tokens || 0;
-            this.logger.log('usage', {
-              provider: 'openai_compatible',
-              model: this.modelName,
-              tokens: {
-                input: Math.max(0, grossPrompt - cached - cacheWrite),
-                cached: cached,
-                cacheWrite: cacheWrite,
-                output: data.usage.completion_tokens || 0,
-                total: data.usage.total_tokens || grossPrompt + (data.usage.completion_tokens || 0),
-              },
-            });
+            usage = {
+              input: Math.max(0, grossPrompt - cached - cacheWrite),
+              cached: cached,
+              cacheWrite: cacheWrite,
+              output: data.usage.completion_tokens || 0,
+              total: data.usage.total_tokens || grossPrompt + (data.usage.completion_tokens || 0),
+            };
           }
+
+          const finishReason = data.choices?.[0]?.finish_reason;
+          if (typeof finishReason === 'string' && finishReason) stopReason = finishReason;
 
           const delta = data.choices?.[0]?.delta;
           if (delta && delta.content) {
@@ -158,6 +167,7 @@ export class OpenAIAdapter extends BaseLLMAdapter {
           console.warn('[OpenAIAdapter] Stream Parse Warning:', e, dataStr);
         }
       }
+      return { provider: 'openai_compatible', model: this.modelName, usage, stopReason };
     } finally {
       reader.releaseLock();
     }

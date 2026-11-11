@@ -7,7 +7,6 @@
  */
 
 import type { Turn, TurnContent, TurnMeta } from '../core/state/HistoryManager';
-import { SYSTEM_PRINCIPAL, type Principal } from '../core/vfs/types';
 import {
   decideAttachment,
   mimeOfPath,
@@ -56,14 +55,28 @@ export interface ChatResetPlan {
   restoreTools: boolean;
 }
 
-/** `system/logs/usage/` の 1 行から読む「直近の文脈の長さ」 */
-export interface ContextUsage {
+/** 1 回の生成で、モデルに渡した長さと出力 */
+export interface ContextSample {
+  /** その返事を始めた時刻（ISO） */
+  at: string;
   /** モデルに渡した長さ（input ＋ cached ＋ cacheWrite）。出力は含めない */
   tokens: number;
   output: number;
-  model: string | null;
-  at: string;
 }
+
+/**
+ * いまの会話の文脈の長さ。**履歴**の最後の「usage を持つ model ターン」から読む（T-0806）。
+ * 台帳（`system/logs/usage/`）は読まない —— 台帳は OS 全体の使用量で、どの会話のものかを答える場所ではない。
+ */
+export interface ContextUsage extends ContextSample {
+  model: string | null;
+  /** いま選んでいるモデルの文脈の上限（トークン）。モデルの一覧に書いてなければ null（推測しない） */
+  limit: number | null;
+  /** 直近の生成（新しい順・最大 `CONTEXT_RECENT_MAX`。先頭はこの値自身）。伸び方を見るため */
+  recent: ContextSample[];
+}
+
+export const CONTEXT_RECENT_MAX = 10;
 
 export interface ChatStatus {
   running: boolean;
@@ -72,7 +85,7 @@ export interface ChatStatus {
   turns: number;
   lastTurnAt: number | null;
   session: { id: string; title: string; createdAt: number } | null;
-  /** 観測は 1 ターン遅れる（ログは応答のあとに書かれる）。読めなければ null */
+  /** 最後の返事の時点の値（そのあとに積まれたターンは含まない）。この会話でまだ返事が無ければ null */
   context: ContextUsage | null;
 }
 
@@ -215,39 +228,36 @@ export function buildResetPlan(opts: ChatResetOpts | null | undefined, source: s
 }
 
 /**
- * usage ログ（jsonl）の末尾から直近の 1 件を読む。壊れた行・tokens の無い行は飛ばす。
- * 文脈の長さは input ＋ cached ＋ cacheWrite（モデルに渡した分）。
+ * 履歴から、いまの会話の文脈の長さを読む。
+ * 見るのは model ターンの `meta.usage`（エンジンが生成の結果を置く）。持たないターン（失敗・中断・上流が usage を
+ * 返さなかった生成・この版より前の履歴）は飛ばす。1 つも無ければ null（推測値は返さない）。
  */
-export function latestContextUsage(jsonl: string): ContextUsage | null {
-  const lines = jsonl.split('\n');
-  for (let i = lines.length - 1; i >= 0; i--) {
-    const line = lines[i].trim();
-    if (!line) continue;
-    let e: any;
-    try {
-      e = JSON.parse(line);
-    } catch {
-      continue;
-    }
-    const t = e && isPlainObject(e.tokens) ? e.tokens : null;
-    if (!t) continue;
-    const n = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : 0);
-    const tokens = n(t.input) + n(t.cached) + n(t.cacheWrite);
-    return {
-      tokens,
-      output: n(t.output),
-      model: typeof e.model === 'string' ? e.model : null,
-      at: typeof e.timestamp === 'string' ? e.timestamp : '',
-    };
+export function contextFromHistory(turns: Turn[], limit: number | null): ContextUsage | null {
+  const n = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : 0);
+  const recent: ContextSample[] = [];
+  let model: string | null = null;
+  for (let i = turns.length - 1; i >= 0 && recent.length < CONTEXT_RECENT_MAX; i--) {
+    const turn = turns[i];
+    if (!turn || turn.role !== 'model') continue;
+    const u = turn.meta ? turn.meta.usage : null;
+    if (!isPlainObject(u)) continue;
+    if (recent.length === 0) model = typeof turn.meta.model === 'string' ? turn.meta.model : null;
+    recent.push({
+      at: new Date(turn.timestamp).toISOString(),
+      tokens: n(u.input) + n(u.cached) + n(u.cacheWrite),
+      output: n(u.output),
+    });
   }
-  return null;
+  if (recent.length === 0) return null;
+  return { ...recent[0], model, limit, recent };
 }
 
 export interface ChatStatusInput {
   engine: { running: boolean; busy: boolean; outstandingTools: number };
   turns: Turn[];
   session: { id: string; title: string; createdAt: number } | null;
-  context: ContextUsage | null;
+  /** いま選んでいるモデルの文脈の上限。分からなければ null */
+  contextLimit: number | null;
 }
 
 export function buildChatStatus(input: ChatStatusInput): ChatStatus {
@@ -259,36 +269,8 @@ export function buildChatStatus(input: ChatStatusInput): ChatStatus {
     turns: input.turns.length,
     lastTurnAt: last ? last.timestamp : null,
     session: input.session,
-    context: input.context,
+    context: contextFromHistory(input.turns, input.contextLimit),
   };
-}
-
-/** usage ログを読むのに要る VFS の口（VfsService が満たす） */
-export interface UsageLogReader {
-  exists(principal: Principal, path: string): boolean;
-  readFile(principal: Principal, path: string): Promise<string>;
-}
-
-/**
- * 直近の文脈の長さを usage ログから読む。ログは UTC の日付で切られ、応答のあとに書かれる（観測は 1 ターン遅れる）。
- * 今日に無ければ昨日を読む。読めなければ null（推測値は返さない）。
- */
-export async function readLatestContextUsage(
-  vfs: UsageLogReader,
-  now: number = Date.now(),
-): Promise<ContextUsage | null> {
-  for (const back of [0, 1]) {
-    const day = new Date(now - back * 86400000).toISOString().slice(0, 10);
-    const path = `system/logs/usage/${day}.jsonl`;
-    try {
-      if (!vfs.exists(SYSTEM_PRINCIPAL, path)) continue;
-      const found = latestContextUsage(await vfs.readFile(SYSTEM_PRINCIPAL, path));
-      if (found) return found;
-    } catch {
-      /* 読めなければ無いのと同じ */
-    }
-  }
-  return null;
 }
 
 /** `/status` の文面の語（配布物ごとに差し替える。共通部品に文言を埋めない） */
@@ -304,7 +286,6 @@ export interface StatusLabels {
   lastTurnMinAgo: string;
   context: string;
   tokensIn: string;
-  lagsOneTurn: string;
   unknown: string;
 }
 
@@ -320,15 +301,15 @@ export const STATUS_LABELS_EN: StatusLabels = {
   lastTurnMinAgo: 'last turn {n} min ago',
   context: 'context',
   tokensIn: 'tokens in',
-  lagsOneTurn: 'lags one turn',
-  unknown: 'unknown (no usage log yet)',
+  unknown: 'unknown (no reply yet)',
 };
 
 /** chat.status を人向けの 3 行にする（`/status` の本文。語は labels から） */
 export function formatChatStatus(s: ChatStatus, now: number = Date.now(), L: StatusLabels = STATUS_LABELS_EN): string {
   const age = s.lastTurnAt ? Math.round((now - s.lastTurnAt) / 60000) : null;
+  const num = (v: number) => v.toLocaleString('en-US');
   const ctx = s.context
-    ? `${s.context.tokens.toLocaleString('en-US')} ${L.tokensIn} (${s.context.model || '?'}, ${s.context.at}; ${L.lagsOneTurn})`
+    ? `${num(s.context.tokens)}${s.context.limit ? ` / ${num(s.context.limit)}` : ''} ${L.tokensIn} (${s.context.model || '?'}, ${s.context.at})`
     : L.unknown;
   const title = s.session ? (s.session.title ? `"${s.session.title}"` : L.untitled) : '-';
   const last = age === null ? '' : `, ${L.lastTurnMinAgo.replace('{n}', String(age))}`;

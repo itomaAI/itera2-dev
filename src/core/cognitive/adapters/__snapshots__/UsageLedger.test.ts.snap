@@ -19,25 +19,6 @@ exports[`台帳の行: 既存の欄と値（金型） > Anthropic 1`] = `
 ]
 `;
 
-exports[`台帳の行: 既存の欄と値（金型） > Anthropic: usage が流れて来なくても 0 の行を書く 1`] = `
-[
-  {
-    "category": "usage",
-    "payload": {
-      "model": "claude-test",
-      "provider": "anthropic",
-      "tokens": {
-        "cacheWrite": 0,
-        "cached": 0,
-        "input": 0,
-        "output": 0,
-        "total": 0,
-      },
-    },
-  },
-]
-`;
-
 exports[`台帳の行: 既存の欄と値（金型） > Gemini 1`] = `
 [
   {

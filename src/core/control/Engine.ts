@@ -9,7 +9,7 @@ import type { VfsService } from '../vfs/VfsService';
 import type { ConfigManager } from '../sys/ConfigManager';
 import { DEFAULT_MAX_CONTINUOUS_TOOLS } from '../sys/ConfigManager';
 import type { Projector } from '../cognitive/Projector';
-import type { BaseLLMAdapter } from '../cognitive/adapters/BaseAdapter';
+import { LLM_CALLER_ROOT, type BaseLLMAdapter, type LlmResult } from '../cognitive/adapters/BaseAdapter';
 import type { Translator, ParsedAction } from '../cognitive/Translator';
 import type { ToolRegistry } from './ToolRegistry';
 import { RESERVED_SYSTEM_TAGS } from '../cognitive/Translator';
@@ -42,6 +42,11 @@ export class Engine {
   public translator: Translator;
   public registry: ToolRegistry;
   public extraContext: Record<string, any>;
+  /**
+   * いまの会話（セッション）の id を答える口。台帳の行の `tag` に入る（T-0806）。
+   * 知っているのは SessionManager なので、組み立て（SystemBootstrapper）が差す。無ければ tag は書かれない。
+   */
+  public sessionTag: (() => string | null) | null = null;
 
   public isRunning: boolean = false;
   private abortController: AbortController | null = null;
@@ -375,22 +380,31 @@ export class Engine {
 
       let rawResponse = '';
       let streamError: any = null;
+      let result: LlmResult | null = null;
 
       try {
-        await this.llm.generateStream(
-          messages,
-          (chunk: string) => {
-            rawResponse += chunk;
-            this._emit('stream_chunk', chunk);
-          },
-          this.abortController.signal,
-        );
+        result =
+          (await this.llm.generateStream(
+            messages,
+            (chunk: string) => {
+              rawResponse += chunk;
+              this._emit('stream_chunk', chunk);
+            },
+            this.abortController.signal,
+            { caller: LLM_CALLER_ROOT, tag: this.sessionTag ? this.sessionTag() : null },
+          )) || null;
       } catch (err) {
         streamError = err;
       }
 
+      // 生成の結果（使ったトークン・止まった理由）は、その生成が作ったターンに置く（T-0806）。
+      // 「この会話の文脈はいま何トークンか」は履歴から答える（chat.status）。台帳は読み戻さない。
+      // 失敗・中断のときは結果が無いので何も置かない。
       const updatedTurn = this.state.history.update(modelTurn.id, rawResponse, {
         status: streamError ? 'error' : 'completed',
+        ...(result
+          ? { model: result.model, stopReason: result.stopReason, ...(result.usage ? { usage: result.usage } : {}) }
+          : {}),
       });
 
       if (updatedTurn) {

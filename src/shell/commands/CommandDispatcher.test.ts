@@ -1,8 +1,10 @@
 import { describe, it, expect, vi } from 'vitest';
 import { CommandDispatcher } from './CommandDispatcher';
 
-function harness(opts: { usage?: string; model?: string } = {}) {
+function harness(opts: { reply?: { usage: any; model: string }; limit?: number | null; model?: string } = {}) {
   const turns: any[] = [];
+  // この会話の最後の返事（エンジンが生成の結果を meta に置いた model ターン）
+  if (opts.reply) turns.push({ id: 'reply', timestamp: 1000, role: 'model', content: 'ok', meta: { ...opts.reply } });
   const shown: any[] = [];
   const engine = { stop: vi.fn(), status: () => ({ running: false, busy: true, outstandingTools: 2 }) };
   const history = {
@@ -25,12 +27,6 @@ function harness(opts: { usage?: string; model?: string } = {}) {
       llm.model = u.model;
     }),
   };
-  const files: Record<string, string> = {};
-  if (opts.usage !== undefined) files['system/logs/usage/1970-01-01.jsonl'] = opts.usage;
-  const vfs = {
-    exists: (_p: any, path: string) => path in files,
-    readFile: async (_p: any, path: string) => files[path],
-  };
   const opened: string[] = [];
   const d = new CommandDispatcher({
     engine,
@@ -38,7 +34,7 @@ function harness(opts: { usage?: string; model?: string } = {}) {
     sessionManager,
     processManager,
     config,
-    vfs,
+    contextLimit: async () => opts.limit ?? null,
     open: (t) => opened.push(t),
     show: (t) => shown.push(t),
     now: () => 60000,
@@ -65,22 +61,25 @@ describe('CommandDispatcher', () => {
     expect(h.shown).toEqual([h.turns[0]]);
   });
 
-  it('/status は engine・会話・usage ログの直近を 3 行で', async () => {
-    const h = harness({
-      usage: JSON.stringify({
-        timestamp: 'x',
-        model: 'm',
-        tokens: { input: 1000, cached: 500, cacheWrite: 0, output: 1 },
-      }),
-    });
+  it('/status は engine・会話・この会話の最後の返事の長さを 3 行で', async () => {
+    const h = harness({ reply: { usage: { input: 1000, cached: 500, cacheWrite: 0, output: 1 }, model: 'm' } });
     await h.d.tryDispatch('/status');
     const t = h.lastText();
     expect(t).toContain('engine: idle / busy (tools in flight: 2)');
-    expect(t).toContain('session: "T", 0 turns');
-    expect(t).toContain('context: 1,500 tokens in (m, x; lags one turn)');
+    expect(t).toContain('session: "T", 1 turns');
+    expect(t).toContain('context: 1,500 tokens in (m, 1970-01-01T00:00:01.000Z)');
   });
 
-  it('/status はログが無ければ unknown（推測値を出さない）', async () => {
+  it('/status は上限が分かっていれば並べる', async () => {
+    const h = harness({
+      reply: { usage: { input: 1000, cached: 500, cacheWrite: 0, output: 1 }, model: 'm' },
+      limit: 200000,
+    });
+    await h.d.tryDispatch('/status');
+    expect(h.lastText()).toContain('context: 1,500 / 200,000 tokens in (m, 1970-01-01T00:00:01.000Z)');
+  });
+
+  it('/status はこの会話に返事が無ければ unknown（推測値を出さない）', async () => {
     const h = harness();
     await h.d.tryDispatch('/status');
     expect(h.lastText()).toContain('context: unknown');

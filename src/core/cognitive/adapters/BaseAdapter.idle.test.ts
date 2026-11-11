@@ -15,11 +15,13 @@
 
 import { describe, it, expect, vi, afterEach } from 'vitest';
 
-import { BaseLLMAdapter, STREAM_IDLE_TIMEOUT_MS, STREAM_FIRST_CHUNK_TIMEOUT_MS } from './BaseAdapter';
+import { BaseLLMAdapter, STREAM_IDLE_TIMEOUT_MS, STREAM_FIRST_CHUNK_TIMEOUT_MS, type LlmResult } from './BaseAdapter';
 
 /** 本文の印: 塊の文字列に `TEXT` を含むものを「本文」とみなして markContentStarted を呼ぶ（実アダプタの onChunk の直前に相当） */
 class Probe extends BaseLLMAdapter {
-  async generateStream(): Promise<void> {}
+  protected async stream(): Promise<LlmResult> {
+    return { provider: 'probe', model: 'probe', usage: null, stopReason: null };
+  }
   async collect(reader: any, signal?: AbortSignal): Promise<string[]> {
     const out: string[] = [];
     for await (const chunk of this.monitorStream(reader, signal)) {

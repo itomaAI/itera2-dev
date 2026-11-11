@@ -217,6 +217,8 @@ export class SystemBootstrapper {
     sessionManager.setBusyProbe(() => engine.isBusy());
     // いまの会話の id を確定する（添付の置き場 `system/temp/sessions/<id>/` を同期で答えるため）
     await sessionManager.init();
+    // 生成が「どの会話のものか」を台帳に書けるように、いまの会話の id の取り方を渡す（知っているのは SessionManager）
+    engine.sessionTag = () => sessionManager.currentId();
     const themeService = new ThemeService(configManager, vfs);
     // UI の言語（appearance.locale）。英語はホストにあり、VFS の言語ファイルを上に重ねる（P-0046 / T-0545）
     const localeService = new LocaleService(configManager, vfs, eventBus, { layers: localeLayers });
@@ -264,6 +266,7 @@ export class SystemBootstrapper {
       // dispatch は同期で登録済みの handler を呼ぶだけなので、ここで router を握っていれば足りる
       _openPath: (path: string) => uriRouter.dispatch(`metaos://open/${path}`),
       getMergedProviders: () => cognitiveManager.getMergedProviders(),
+      getContextLimit: () => cognitiveManager.contextLimit(),
       processManager: processManager,
       navHistory: navHistory,
       resolver: resolver,
