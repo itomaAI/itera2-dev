@@ -113,11 +113,14 @@ describe('guest_bridge.js: MetaOS.llm', () => {
     expect((await p1).text).toBe('');
   });
 
-  it('開始が断られたら、その理由で失敗する', async () => {
+  it('開始が断られたら、その理由で失敗する（種類は failed）', async () => {
     const b = loadBridge();
     const p = b.llm.generate({ messages: [] });
     b.respond(b.requests('llm:start')[0], null, 'MetaOS.llm.generate: config.model is required');
-    await expect(p).rejects.toThrow('config.model is required');
+    const err: any = await p.catch((e: any) => e);
+    expect(err).toBeInstanceOf(Error);
+    expect(err.message).toContain('config.model is required');
+    expect(err.code).toBe('failed');
   });
 
   it('llm:error は種類（code）つきで失敗する。終わったあとの通知は無視する', async () => {
