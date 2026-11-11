@@ -79,5 +79,20 @@
     "icon": "\u2601\ufe0f",
     "path": "system/apps/gdrive_app.html",
     "description": "Manage Google Drive synchronization"
+  },
+  {
+    "id": "design_canvas",
+    "name": "Design Canvas",
+    "icon": "\ud83c\udfa8",
+    "path": "system/apps/design_canvas/design_canvas.html",
+    "description": "Lay out app screens and send the design to the AI",
+    "fileHandlers": [
+      {
+        "action": "view",
+        "extensions": [
+          "design"
+        ]
+      }
+    ]
   }
 ]

@@ -1,7 +1,8 @@
 {
   "extensions": {
     "md": "notes",
-    "txt": "notes"
+    "txt": "notes",
+    "design": "design_canvas"
   },
   "mimeTypes": {
     "text/markdown": "notes",
