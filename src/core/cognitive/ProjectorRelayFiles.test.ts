@@ -12,7 +12,9 @@
  */
 
 import { describe, expect, it, beforeEach, vi } from 'vitest';
-import { AnthropicProjector, GeminiProjector, buildMediaFailureNotice } from './Projector';
+import { agentMediaNotice, buildMediaFailureNotice } from './Projector';
+import { AnthropicRenderer, GeminiRenderer } from './Renderer';
+import { SYSTEM_PRINCIPAL } from '../vfs/types';
 import type { RelayTransport } from './adapters/BaseAdapter';
 
 const RELAY = 'https://asia-northeast1-itera2.cloudfunctions.net/llmProxy';
@@ -27,6 +29,8 @@ function fakeVfs(opts: { exists?: boolean; size?: number } = {}) {
     readBlob: async () => new Blob([new Uint8Array(size)], { type: 'image/png' }),
   } as any;
 }
+
+const envOf = (vfs: any) => ({ vfs, principal: SYSTEM_PRINCIPAL, mediaFallback: agentMediaNotice });
 
 function relay(): RelayTransport {
   return { baseUrl: RELAY, getAuthHeaders: async () => ({ Authorization: 'Bearer T' }) };
@@ -54,9 +58,9 @@ describe('Gemini: 鍵が無く中継があるとき', () => {
       .mockResolvedValueOnce(
         jsonResponse({ file: { uri: 'files/relay-1', name: 'files/relay-1', expirationTime: '2099-01-01T00:00:00Z' } }),
       );
-    const projector = new GeminiProjector('sys', undefined, '', relay());
+    const projector = new GeminiRenderer(undefined, '', relay());
     const media = { ...MEDIA };
-    const result = await (projector as any)._resolveMediaPart(media, fakeVfs(), '');
+    const result = await (projector as any)._resolveMediaPart(media, envOf(fakeVfs()));
     expect(result).toEqual({ ok: true, value: { fileData: { fileUri: 'files/relay-1', mimeType: 'image/png' } } });
 
     expect(fetchMock).toHaveBeenCalledTimes(2);
@@ -75,7 +79,7 @@ describe('Gemini: 鍵が無く中継があるとき', () => {
   });
 
   it('期限内の控え（metadata.relay.gemini）があれば上げ直さない。利用者の鍵の控えは使わない', async () => {
-    const projector = new GeminiProjector('sys', undefined, '', relay());
+    const projector = new GeminiRenderer(undefined, '', relay());
     const media = {
       ...MEDIA,
       metadata: {
@@ -83,28 +87,28 @@ describe('Gemini: 鍵が無く中継があるとき', () => {
         relay: { gemini: { fileUri: 'files/relay-cached', expirationTime: '2099-01-01T00:00:00Z' } },
       },
     };
-    const result = await (projector as any)._resolveMediaPart(media, fakeVfs(), '');
+    const result = await (projector as any)._resolveMediaPart(media, envOf(fakeVfs()));
     expect(result.value.fileData.fileUri).toBe('files/relay-cached');
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it('上げられなければ inlineData へ落とす（添付は送れる）', async () => {
     fetchMock.mockResolvedValueOnce(jsonResponse({ error: 'nope' }, {}, 404));
-    const projector = new GeminiProjector('sys', undefined, '', relay());
+    const projector = new GeminiRenderer(undefined, '', relay());
     (projector as any)._blobToBase64 = async () => 'QUJD';
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    const result = await (projector as any)._resolveMediaPart({ ...MEDIA }, fakeVfs(), '');
+    const result = await (projector as any)._resolveMediaPart({ ...MEDIA }, envOf(fakeVfs()));
     warn.mockRestore();
     expect(result).toEqual({ ok: true, value: { inlineData: { mimeType: 'image/png', data: 'QUJD' } } });
   });
 
   it('中継のときの大きさの上限は埋め込みの上限（20MB の 3/4）。鍵があれば従来どおり', () => {
-    const viaRelay = new GeminiProjector('sys', undefined, '', relay());
+    const viaRelay = new GeminiRenderer(undefined, '', relay());
     expect((viaRelay as any).getMaxMediaSizeMB('image/png')).toBeCloseTo(15, 5);
-    const direct = new GeminiProjector('sys', undefined, 'key', relay());
-    expect((direct as any).getMaxMediaSizeMB('image/png')).toBe(GeminiProjector.DEFAULT_CAPABILITIES.maxMediaSizeMB);
-    const noRelay = new GeminiProjector('sys', undefined, '');
-    expect((noRelay as any).getMaxMediaSizeMB('image/png')).toBe(GeminiProjector.DEFAULT_CAPABILITIES.maxMediaSizeMB);
+    const direct = new GeminiRenderer(undefined, 'key', relay());
+    expect((direct as any).getMaxMediaSizeMB('image/png')).toBe(GeminiRenderer.DEFAULT_CAPABILITIES.maxMediaSizeMB);
+    const noRelay = new GeminiRenderer(undefined, '');
+    expect((noRelay as any).getMaxMediaSizeMB('image/png')).toBe(GeminiRenderer.DEFAULT_CAPABILITIES.maxMediaSizeMB);
   });
 
   it('🔴 鍵があるときは中継を見ない（直接叩く経路は変えない）', async () => {
@@ -113,9 +117,9 @@ describe('Gemini: 鍵が無く中継があるとき', () => {
       .mockResolvedValueOnce(
         jsonResponse({ file: { uri: 'files/own', name: 'n', expirationTime: '2099-01-01T00:00:00Z' } }),
       );
-    const projector = new GeminiProjector('sys', undefined, 'key', relay());
+    const projector = new GeminiRenderer(undefined, 'key', relay());
     const media = { ...MEDIA };
-    const result = await (projector as any)._resolveMediaPart(media, fakeVfs(), 'key');
+    const result = await (projector as any)._resolveMediaPart(media, envOf(fakeVfs()));
     expect(result.value.fileData.fileUri).toBe('files/own');
     expect(String(fetchMock.mock.calls[0][0])).toBe(
       'https://generativelanguage.googleapis.com/upload/v1beta/files?key=key',
@@ -125,8 +129,8 @@ describe('Gemini: 鍵が無く中継があるとき', () => {
   });
 
   it('🔴 鍵も中継も無ければ従来どおり no_credentials の注記', async () => {
-    const projector = new GeminiProjector('sys', undefined, '');
-    const result = await (projector as any)._resolveMediaPart({ ...MEDIA }, fakeVfs(), '');
+    const projector = new GeminiRenderer(undefined, '');
+    const result = await (projector as any)._resolveMediaPart({ ...MEDIA }, envOf(fakeVfs()));
     expect(result).toEqual({ ok: false, reason: 'no_credentials' });
     expect(buildMediaFailureNotice(MEDIA.path, 'no_credentials')).toContain('NOT sent');
     expect(fetchMock).not.toHaveBeenCalled();
@@ -136,9 +140,9 @@ describe('Gemini: 鍵が無く中継があるとき', () => {
 describe('Anthropic: 中継があるとき', () => {
   it('multipart で中継の /anthropic/v1/files へ。file ブロックで参照し、控えは metadata.relay.anthropic', async () => {
     fetchMock.mockResolvedValueOnce(jsonResponse({ id: 'file_abc' }));
-    const projector = new AnthropicProjector('sys', undefined, relay());
+    const projector = new AnthropicRenderer(undefined, relay());
     const media = { ...MEDIA };
-    const result = await (projector as any)._resolveMediaFileAnthropic(media, fakeVfs());
+    const result = await (projector as any)._resolveMediaFileAnthropic(media, envOf(fakeVfs()));
     expect(result).toEqual({ ok: true, value: { type: 'image', source: { type: 'file', file_id: 'file_abc' } } });
     const [url, init] = fetchMock.mock.calls[0];
     expect(url).toBe(`${RELAY}/anthropic/v1/files`);
@@ -150,13 +154,13 @@ describe('Anthropic: 中継があるとき', () => {
   });
 
   it('控えがあれば上げ直さない。PDF は document の file ブロック', async () => {
-    const projector = new AnthropicProjector('sys', undefined, relay());
+    const projector = new AnthropicRenderer(undefined, relay());
     const media = {
       path: 'a.pdf',
       mimeType: 'application/pdf',
       metadata: { relay: { anthropic: { fileId: 'file_pdf' } } },
     };
-    const result = await (projector as any)._resolveMediaFileAnthropic(media, fakeVfs());
+    const result = await (projector as any)._resolveMediaFileAnthropic(media, envOf(fakeVfs()));
     expect(result).toEqual({
       ok: true,
       value: { type: 'document', source: { type: 'file', file_id: 'file_pdf' }, title: 'a.pdf' },
@@ -165,13 +169,16 @@ describe('Anthropic: 中継があるとき', () => {
   });
 
   it('text/* は中継に上げず、従来どおり本文へ', async () => {
-    const projector = new AnthropicProjector('sys', undefined, relay());
+    const projector = new AnthropicRenderer(undefined, relay());
     const vfs = {
       exists: () => true,
       stat: () => ({ size: 3 }),
       readBlob: async () => new Blob(['abc'], { type: 'text/plain' }),
     } as any;
-    const result = await (projector as any)._resolveMediaFileAnthropic({ path: 'n.txt', mimeType: 'text/plain' }, vfs);
+    const result = await (projector as any)._resolveMediaFileAnthropic(
+      { path: 'n.txt', mimeType: 'text/plain' },
+      envOf(vfs),
+    );
     expect(result).toEqual({
       ok: true,
       value: { type: 'document', source: { type: 'text', media_type: 'text/plain', data: 'abc' }, title: 'n.txt' },
@@ -181,10 +188,10 @@ describe('Anthropic: 中継があるとき', () => {
 
   it('上げられなければ従来の埋め込み（base64）へ落とす', async () => {
     fetchMock.mockResolvedValueOnce(jsonResponse({ error: 'denied' }, {}, 403));
-    const projector = new AnthropicProjector('sys', undefined, relay());
+    const projector = new AnthropicRenderer(undefined, relay());
     (projector as any)._blobToBase64 = async () => 'QUJD';
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    const result = await (projector as any)._resolveMediaFileAnthropic({ ...MEDIA }, fakeVfs());
+    const result = await (projector as any)._resolveMediaFileAnthropic({ ...MEDIA }, envOf(fakeVfs()));
     warn.mockRestore();
     expect(result).toEqual({
       ok: true,
@@ -193,9 +200,9 @@ describe('Anthropic: 中継があるとき', () => {
   });
 
   it('🔴 中継が無ければ従来どおり埋め込み（fetch しない）', async () => {
-    const projector = new AnthropicProjector('sys', undefined);
+    const projector = new AnthropicRenderer(undefined);
     (projector as any)._blobToBase64 = async () => 'QUJD';
-    const result = await (projector as any)._resolveMediaFileAnthropic({ ...MEDIA }, fakeVfs());
+    const result = await (projector as any)._resolveMediaFileAnthropic({ ...MEDIA }, envOf(fakeVfs()));
     expect(result.value.source.type).toBe('base64');
     expect(fetchMock).not.toHaveBeenCalled();
   });

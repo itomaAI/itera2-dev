@@ -8,7 +8,7 @@ import type { ToolExecutionEntry, ToolResult } from '../types/tools';
 import type { VfsService } from '../vfs/VfsService';
 import type { ConfigManager } from '../sys/ConfigManager';
 import { DEFAULT_MAX_CONTINUOUS_TOOLS } from '../sys/ConfigManager';
-import type { BaseProjector } from '../cognitive/Projector';
+import type { Projector } from '../cognitive/Projector';
 import type { BaseLLMAdapter } from '../cognitive/adapters/BaseAdapter';
 import type { Translator, ParsedAction } from '../cognitive/Translator';
 import type { ToolRegistry } from './ToolRegistry';
@@ -37,7 +37,7 @@ export const PENDING_LOG = '[Pending] Still running. The result will come in a l
 
 export class Engine {
   public state: EngineState;
-  public projector: BaseProjector | null;
+  public projector: Projector | null;
   public llm: BaseLLMAdapter | null;
   public translator: Translator;
   public registry: ToolRegistry;
@@ -89,7 +89,7 @@ export class Engine {
 
   constructor(
     state: EngineState,
-    projector: BaseProjector | null,
+    projector: Projector | null,
     llm: BaseLLMAdapter | null,
     translator: Translator,
     registry: ToolRegistry,

@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
-import { AnthropicProjector, buildMediaFailureNotice, GeminiProjector, OpenAIProjector } from './Projector';
+import { agentMediaNotice, buildMediaFailureNotice, projectTurn } from './Projector';
+import { AnthropicRenderer, GeminiRenderer, OpenAIRenderer } from './Renderer';
+import { SYSTEM_PRINCIPAL } from '../vfs/types';
 
 /**
  * 目的: 添付（画像・PDF）を送れなかったときの振る舞いを固定する。
@@ -45,7 +47,12 @@ function userTurn() {
   } as any;
 }
 
-const fakeState = (vfs: any) => ({ history: {} as any, vfs, configManager: {} as any });
+/** 各社の本文を作る場（エージェントの経路と同じ: エージェントの権限で読み、送れなければ注記を入れる）。 */
+const envOf = (vfs: any) => ({ vfs, principal: SYSTEM_PRINCIPAL, mediaFallback: agentMediaNotice });
+
+/** 履歴の 1 ターンを、この上流の部品にする（履歴 → 中立の部品 → 各社の器）。 */
+const partsOf = (renderer: any, turn: any, vfs: any): Promise<any[]> =>
+  renderer.renderParts({ role: 'user', parts: projectTurn(turn) }, envOf(vfs));
 
 /** parts の中から、注記らしいテキストを集める。 */
 function texts(parts: any[]): string {
@@ -93,8 +100,8 @@ describe('添付を組み立てられないとき（鍵が無い）', () => {
    * 事後条件: 黙って消さず、鍵が無いことを理由として注記が入ること。
    */
   it('Gemini: 道具の結果の画像を黙って落とさないこと', async () => {
-    const projector = new GeminiProjector('sys', undefined, '');
-    const parts = await (projector as any)._convertTurnToParts(toolTurn(), fakeVfs(), '');
+    const projector = new GeminiRenderer(undefined, '');
+    const parts = await partsOf(projector, toolTurn(), fakeVfs());
     expect(texts(parts)).toContain(buildMediaFailureNotice(MEDIA.path, 'no_credentials'));
   });
 
@@ -103,8 +110,8 @@ describe('添付を組み立てられないとき（鍵が無い）', () => {
    * 事後条件: 注記の理由が「鍵が無い」であること（VFS のせいにしない）。
    */
   it('Gemini: 利用者の添付では、理由を取り違えないこと', async () => {
-    const projector = new GeminiProjector('sys', undefined, '');
-    const parts = await (projector as any)._convertTurnToParts(userTurn(), fakeVfs(), '');
+    const projector = new GeminiRenderer(undefined, '');
+    const parts = await partsOf(projector, userTurn(), fakeVfs());
     const joined = texts(parts);
     expect(joined).toContain(buildMediaFailureNotice(MEDIA.path, 'no_credentials'));
     expect(joined).not.toContain('could not be loaded from VFS');
@@ -117,8 +124,8 @@ describe('VFS に実体が無いとき', () => {
    * 事後条件: 「VFS から読めなかった」として扱われること（鍵のせいにしない）。
    */
   it('Gemini: 鍵の有無ではなく、実体が無いことを理由にすること', async () => {
-    const projector = new GeminiProjector('sys', undefined, 'key');
-    const result = await (projector as any)._resolveMediaFile(MEDIA, fakeVfs({ exists: false }), 'key');
+    const projector = new GeminiRenderer(undefined, 'key');
+    const result = await (projector as any)._resolveMediaFile(MEDIA, envOf(fakeVfs({ exists: false })));
     expect(result).toEqual({ ok: false, reason: 'missing' });
   });
 
@@ -127,8 +134,8 @@ describe('VFS に実体が無いとき', () => {
    * 事後条件: 道具の結果でも注記が入ること。
    */
   it('OpenAI: 道具の結果の画像を黙って落とさないこと', async () => {
-    const projector = new OpenAIProjector('sys', undefined);
-    const parts = await (projector as any)._convertTurnToParts(toolTurn(), fakeVfs({ exists: false }));
+    const projector = new OpenAIRenderer(undefined);
+    const parts = await partsOf(projector, toolTurn(), fakeVfs({ exists: false }));
     expect(texts(parts)).toContain(buildMediaFailureNotice(MEDIA.path, 'missing'));
   });
 
@@ -137,8 +144,8 @@ describe('VFS に実体が無いとき', () => {
    * 事後条件: 道具の結果でも注記が入ること。
    */
   it('Anthropic: 道具の結果の画像を黙って落とさないこと', async () => {
-    const projector = new AnthropicProjector('sys', undefined);
-    const parts = await (projector as any)._convertTurnToParts(toolTurn(), fakeState(fakeVfs({ exists: false })));
+    const projector = new AnthropicRenderer(undefined);
+    const parts = await partsOf(projector, toolTurn(), fakeVfs({ exists: false }));
     expect(texts(parts)).toContain(buildMediaFailureNotice(MEDIA.path, 'missing'));
   });
 });
@@ -149,9 +156,9 @@ describe('添付を組み立てられたとき', () => {
    * 事後条件: 本文へ埋め込んだ data URL が返ること（鍵を使わずに通る経路）。
    */
   it('OpenAI: 鍵なしでも本文への埋め込みが成立すること', async () => {
-    const projector = new OpenAIProjector('sys', undefined);
+    const projector = new OpenAIRenderer(undefined);
     (projector as any)._blobToBase64 = async () => 'QUJD';
-    const result = await (projector as any)._resolveMediaDataUrl(MEDIA, fakeVfs());
+    const result = await (projector as any)._resolveMediaDataUrl(MEDIA, envOf(fakeVfs()));
     expect(result).toEqual({ ok: true, value: 'data:image/png;base64,QUJD' });
   });
 
@@ -163,9 +170,9 @@ describe('添付を組み立てられたとき', () => {
    * 叩けないため本文へ載せる方式にした。ここが鍵を要求し始めたら退行である。
    */
   it('Anthropic: 鍵なしでも本文への埋め込みが成立すること', async () => {
-    const projector = new AnthropicProjector('sys', undefined);
+    const projector = new AnthropicRenderer(undefined);
     (projector as any)._blobToBase64 = async () => 'QUJD';
-    const result = await (projector as any)._resolveMediaFileAnthropic(MEDIA, fakeVfs());
+    const result = await (projector as any)._resolveMediaFileAnthropic(MEDIA, envOf(fakeVfs()));
     expect(result).toEqual({
       ok: true,
       value: { type: 'image', source: { type: 'base64', media_type: 'image/png', data: 'QUJD' } },
@@ -177,10 +184,10 @@ describe('添付を組み立てられたとき', () => {
    * 事後条件: image ではなく document ブロックになること（型を取り違えると 400 になる）。
    */
   it('Anthropic: PDF は document ブロックになること', async () => {
-    const projector = new AnthropicProjector('sys', undefined);
+    const projector = new AnthropicRenderer(undefined);
     (projector as any)._blobToBase64 = async () => 'QUJD';
     const pdf = { path: 'data/doc.pdf', mimeType: 'application/pdf' } as any;
-    const result = await (projector as any)._resolveMediaFileAnthropic(pdf, fakeVfs());
+    const result = await (projector as any)._resolveMediaFileAnthropic(pdf, envOf(fakeVfs()));
     expect(result).toEqual({
       ok: true,
       value: {
@@ -198,9 +205,9 @@ describe('添付を組み立てられたとき', () => {
    * Anthropic は text を base64 の document として受け取らない。器を間違えると 400 になる。
    */
   it('Anthropic: text/* は document の text ソースで送ること', async () => {
-    const projector = new AnthropicProjector('sys', undefined);
+    const projector = new AnthropicRenderer(undefined);
     const media = { path: 'data/note.txt', mimeType: 'text/plain' } as any;
-    const result = await (projector as any)._resolveMediaFileAnthropic(media, fakeVfs({ text: 'ほんぶん' }));
+    const result = await (projector as any)._resolveMediaFileAnthropic(media, envOf(fakeVfs({ text: 'ほんぶん' })));
     expect(result).toEqual({
       ok: true,
       value: {
@@ -216,12 +223,12 @@ describe('添付を組み立てられたとき', () => {
    * 事後条件: 再アップロードせずに成功として返ること。
    */
   it('Gemini: 期限内の控えがあれば、それを使うこと', async () => {
-    const projector = new GeminiProjector('sys', undefined, 'key');
+    const projector = new GeminiRenderer(undefined, 'key');
     const media = {
       ...MEDIA,
       metadata: { gemini: { fileUri: 'files/xyz', expirationTime: new Date(Date.now() + 86400000).toISOString() } },
     };
-    const result = await (projector as any)._resolveMediaFile(media, fakeVfs(), 'key');
+    const result = await (projector as any)._resolveMediaFile(media, envOf(fakeVfs()));
     expect(result).toEqual({ ok: true, value: { fileUri: 'files/xyz', mimeType: 'image/png' } });
   });
 });
@@ -235,7 +242,7 @@ describe('埋め込みの上限（base64 の膨張分）', () => {
    * 割り戻さないと、上限ぎりぎりの実体が送信時に上限を超える。
    */
   it('公表値を実体の大きさへ割り戻し、種別ごとに分けること', () => {
-    const projector = new AnthropicProjector('sys', undefined);
+    const projector = new AnthropicRenderer(undefined);
     expect((projector as any).getMaxMediaSizeMB('image/png')).toBeCloseTo(3.75, 5);
     expect((projector as any).getMaxMediaSizeMB('application/pdf')).toBeCloseTo(24, 5);
   });
@@ -245,20 +252,17 @@ describe('埋め込みの上限（base64 の膨張分）', () => {
    * 事後条件: 断ること。base64 にすると 5.33MB になり、上流が 400 を返すため。
    */
   it('4MB の画像は、送ると 5MB を超えるので断ること', async () => {
-    const projector = new AnthropicProjector('sys', undefined);
-    const parts = await (projector as any)._convertTurnToParts(
-      userTurn(),
-      fakeState(fakeVfs({ size: 4 * 1024 * 1024 })),
-    );
+    const projector = new AnthropicRenderer(undefined);
+    const parts = await partsOf(projector, userTurn(), fakeVfs({ size: 4 * 1024 * 1024 }));
     expect(texts(parts)).toContain('exceeds the file size limit (3.75MB)');
   });
 
   /**
-   * 事前条件: 上限を上書きしていない Projector（OpenAI）。
+   * 事前条件: 上限を上書きしていない Renderer（OpenAI）。
    * 事後条件: 既定の受け口は capabilities の値をそのまま返すこと（他社を巻き込まない）。
    */
   it('上書きしていない経路は従来どおりであること', () => {
-    const projector = new OpenAIProjector('sys', undefined);
+    const projector = new OpenAIRenderer(undefined);
     expect((projector as any).getMaxMediaSizeMB('image/png')).toBe((projector as any).capabilities.maxMediaSizeMB);
   });
 });

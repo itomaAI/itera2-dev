@@ -129,7 +129,7 @@ Tool Execution Logには、ツール名、種別、PID、パラメータ、開�
 │ Engine, Translator, Tool Registry, Tool Execution         │
 ├──────────────────────────────────────────────────────────┤
 │ Cognitive                                                 │
-│ Projectors, Provider Adapters, Prompt Content             │
+│ Projector, Renderers, Provider Adapters, Prompt Content   │
 ├──────────────────────────────────────────────────────────┤
 │ State / System                                            │
 │ History, Config, App Registry, Logger, Associations       │
@@ -149,7 +149,7 @@ src/
 ├── api/                  Host API、Guest Bridge
 ├── config/               Provider、Prompt、生成済みVFS defaults
 ├── core/
-│   ├── cognitive/        Projector、Translator、LLM Adapter
+│   ├── cognitive/        Projector、Renderer、Translator、LLM Adapter
 │   ├── control/          Engine、Tool Registry、System Tool
 │   ├── state/            History、System Logger
 │   ├── sys/              Config、App Registry、File Association

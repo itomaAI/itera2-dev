@@ -2,7 +2,7 @@
  * src/core/cognitive/ProjectorGolden.test.ts
  * 各社へ送る本文の金型（T-0804）。
  *
- * 投影を「履歴 → 中立」「中立 → 各社」に割る前のコードが作った本文を、snapshot に固定してある。
+ * 投影を「履歴 → 中立」（Projector）「中立 → 各社」（Renderer）に割る前のコードが作った本文を、snapshot に固定してある。
  * 割ったあとも同じ本文・同じ上げ方（fetch の順）・同じ控え（添付の metadata）になることを、この金型で見る。
  *
  * 🔴 金型（`__snapshots__/ProjectorGolden.test.ts.snap`）を書き換えるのは、各社へ送る本文を意図して変えるときだけ。
@@ -10,7 +10,8 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { AnthropicProjector, GeminiProjector, OpenAIProjector } from './Projector';
+import { Projector } from './Projector';
+import { AnthropicRenderer, GeminiRenderer, OpenAIRenderer } from './Renderer';
 import type { RelayTransport } from './adapters/BaseAdapter';
 
 const RELAY = 'https://relay.example/llmProxy';
@@ -27,25 +28,25 @@ function relay(): RelayTransport {
 
 /** 履歴から各社の本文までを通す入口。作りを変えたら、変えるのはここだけ（金型は変えない） */
 function makeProjector(kind: Kind): { createContext(state: any, signal?: AbortSignal): Promise<any> } {
-  const projector = (() => {
+  const renderer = (() => {
     switch (kind) {
       case 'gemini-key':
-        return new GeminiProjector(SYSTEM_PROMPT, undefined, 'KEY');
+        return new GeminiRenderer(undefined, 'KEY');
       case 'gemini-nokey':
-        return new GeminiProjector(SYSTEM_PROMPT, undefined, '');
+        return new GeminiRenderer(undefined, '');
       case 'gemini-relay':
-        return new GeminiProjector(SYSTEM_PROMPT, undefined, '', relay());
+        return new GeminiRenderer(undefined, '', relay());
       case 'openai':
-        return new OpenAIProjector(SYSTEM_PROMPT, undefined);
+        return new OpenAIRenderer(undefined);
       case 'anthropic':
-        return new AnthropicProjector(SYSTEM_PROMPT, undefined);
+        return new AnthropicRenderer(undefined);
       case 'anthropic-relay':
-        return new AnthropicProjector(SYSTEM_PROMPT, undefined, relay());
+        return new AnthropicRenderer(undefined, relay());
     }
   })();
   // base64 は中身が読める形に（どのファイルが載ったかを金型で見分ける）
-  (projector as any)._blobToBase64 = async (blob: Blob) => `B64(${await blob.text()})`;
-  return projector;
+  (renderer as any)._blobToBase64 = async (blob: Blob) => `B64(${await blob.text()})`;
+  return new Projector(SYSTEM_PROMPT, renderer);
 }
 
 // ---- 代役 -------------------------------------------------------------------
