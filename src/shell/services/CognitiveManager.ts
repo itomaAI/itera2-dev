@@ -72,6 +72,24 @@ export interface LlmEndpoint {
   adapter: BaseLLMAdapter;
 }
 
+/** 選べるモデル 1 つ（MetaOS.llm.models が返す。鍵は含まない） */
+export interface LlmModelInfo {
+  /** `provider/model`。そのまま設定の `model` に入れられる */
+  id: string;
+  provider: string;
+  providerName: string;
+  model: string;
+  name: string;
+  /** 文脈の上限（トークン）。一覧に書いてなければ null */
+  contextTokens: number | null;
+  pricing: unknown;
+  capabilities: Record<string, unknown>;
+  /** 登録簿の既定の設定（プロバイダの既定にモデルの既定を重ねたもの） */
+  defaultConfig: Record<string, unknown>;
+  /** いま呼べるか: 利用者の鍵が入っている／中継ならサインインしている（`custom` は鍵が要らないので常に true） */
+  available: boolean;
+}
+
 /** `provider/model` を割る。前置きが無ければ Google。モデル名に `/` が入っていてもよい（最初の 1 つで割る） */
 export function splitModel(rawModel: string): { provider: string; modelName: string } {
   const slashIdx = rawModel.indexOf('/');
@@ -254,6 +272,44 @@ export class CognitiveManager {
       console.warn('[CognitiveManager] Failed to look up the context limit.', e);
     }
     return null;
+  }
+
+  /**
+   * 選べるモデルの一覧（登録簿と、在れば中継の台帳）。鍵そのものは返さない —— 入っているかどうかだけ。
+   * モデルを 1 つも持たないプロバイダ（`openrouter`・`custom`。モデル名は利用者が書く）は一覧に現れない。
+   */
+  public async listModels(): Promise<LlmModelInfo[]> {
+    const providers = await this.getMergedProviders();
+    let secrets: any = {};
+    try {
+      secrets = JSON.parse(localStorage.getItem('itera_llm_secrets') || '{}');
+    } catch (e) {}
+    const signedIn = !!(await this.readIdToken());
+    const obj = (v: unknown): Record<string, unknown> =>
+      typeof v === 'object' && v !== null && !Array.isArray(v) ? (v as Record<string, unknown>) : {};
+
+    const out: LlmModelInfo[] = [];
+    for (const p of providers) {
+      if (!p || typeof p.id !== 'string' || !Array.isArray(p.models)) continue;
+      const available = p.managed ? signedIn : p.id === 'custom' ? true : !!secrets?.[p.id];
+      for (const m of p.models) {
+        if (!m || typeof m.id !== 'string' || !m.id) continue;
+        const n = m.contextTokens;
+        out.push({
+          id: `${p.id}/${m.id}`,
+          provider: p.id,
+          providerName: typeof p.name === 'string' ? p.name : p.id,
+          model: m.id,
+          name: typeof m.name === 'string' && m.name ? m.name : m.id,
+          contextTokens: typeof n === 'number' && Number.isFinite(n) && n > 0 ? n : null,
+          pricing: m.pricing ?? null,
+          capabilities: { ...obj(p.defaultCapabilities), ...obj(m.capabilities) },
+          defaultConfig: { ...obj(p.defaultConfig), ...obj(m.defaultConfig) },
+          available,
+        });
+      }
+    }
+    return out;
   }
 
   public async refreshEngineConfig(): Promise<void> {

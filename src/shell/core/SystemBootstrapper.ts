@@ -267,6 +267,8 @@ export class SystemBootstrapper {
       _openPath: (path: string) => uriRouter.dispatch(`metaos://open/${path}`),
       getMergedProviders: () => cognitiveManager.getMergedProviders(),
       getContextLimit: () => cognitiveManager.contextLimit(),
+      resolveLlm: (config: any) => cognitiveManager.resolveLlm(config),
+      listLlmModels: () => cognitiveManager.listModels(),
       processManager: processManager,
       navHistory: navHistory,
       resolver: resolver,

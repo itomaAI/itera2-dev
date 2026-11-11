@@ -148,7 +148,7 @@ function isPlainObject(v: unknown): v is Record<string, unknown> {
  * `content`（文字列 または parts の配列）を履歴の TurnContent に正規化する。
  * 文字列は `{text}` 1 つ。配列は `{text}` / `{media:{path, mimeType?}}` だけを受け、それ以外は断る。
  */
-function normalizeContent(content: unknown): { ok: true; parts: any[] } | { ok: false; reason: string } {
+export function normalizeContent(content: unknown): { ok: true; parts: any[] } | { ok: false; reason: string } {
   if (typeof content === 'string') return { ok: true, parts: content ? [{ text: content }] : [] };
   if (content === undefined || content === null) return { ok: true, parts: [] };
   if (!Array.isArray(content)) return { ok: false, reason: 'content must be a string or an array of parts' };
