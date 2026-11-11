@@ -10,6 +10,7 @@ import { instanceGuard } from './core/sys/InstanceGuard';
 import './style.css';
 import { t } from './i18n/i18n';
 import { startStaticTexts } from './i18n/staticTexts';
+import { applyOsVersion } from './shell/core/OsVersion';
 
 /**
  * 起動して、終わったらローダーを消す。落ちたら起動失敗画面（T-0381）。
@@ -88,6 +89,8 @@ function renderWaiting(loader: HTMLElement, original: { className: string; html:
 document.addEventListener('DOMContentLoaded', async () => {
   // index.html の静的な文字を、前回の言語（控え）で当てる。以後は言語が切り替わるたびに当て直す（T-0545）
   startStaticTexts();
+  // 下の帯の版。番号の正は src/config/version.ts（T-0805）
+  applyOsVersion();
   const loader = document.getElementById('boot-loader');
   const original = loader ? { className: loader.className, html: loader.innerHTML } : null;
 
