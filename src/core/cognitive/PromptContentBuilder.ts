@@ -1,8 +1,9 @@
 /**
  * Provider-neutral traversal of the existing history content format.
  *
- * This module preserves content ordering and LPML wrapping while leaving
- * provider-specific part rendering and media resolution to each Projector.
+ * This module preserves content ordering and LPML wrapping. Projector turns
+ * its nodes into the neutral request (LlmRequest); provider-specific part
+ * rendering and media resolution are left to each Renderer.
  */
 
 import type { Turn } from '../state/HistoryManager';

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import { AnthropicProjector, OpenAIProjector } from './Projector';
+import { Projector } from './Projector';
+import { AnthropicRenderer, OpenAIRenderer } from './Renderer';
 
 /**
  * 目的: **中身の無い発話を LLM へ送らない**ことを守る（T-0074）。
@@ -21,8 +22,8 @@ const stateOf = (turns: any[]) =>
     configManager: { get: () => '' },
   }) as any;
 
-const anthropic = () => new (AnthropicProjector as any)('システムプロンプト', {}, 'dummy-key');
-const openai = () => new (OpenAIProjector as any)('システムプロンプト', {});
+const anthropic = () => new Projector('システムプロンプト', new AnthropicRenderer({}));
+const openai = () => new Projector('システムプロンプト', new OpenAIRenderer({}));
 
 describe('空白の発話を履歴から落とす（T-0074）', () => {
   it('Anthropic: 空文字の model ターンは messages に入らない', async () => {
@@ -60,6 +61,21 @@ describe('空白の発話を履歴から落とす（T-0074）', () => {
     );
 
     expect(messages.filter((m: any) => m.role === 'assistant')).toHaveLength(1);
+  });
+
+  it('配列の中身が空白だけのターンも落ちる（T-0804。文字列のターンと同じ規則）', async () => {
+    const turns = [
+      { role: 'user', content: 'こんにちは' },
+      { role: 'model', content: [{ text: '  \n ' }] },
+      { role: 'model', content: [{ text: 'はい' }, { text: '  ' }] },
+    ];
+    const { messages } = await anthropic().createContext(stateOf(turns));
+    // 空白だけのターンは無くなり、中身のあるターンは部品ごと残る
+    expect(messages.filter((m: any) => m.role === 'assistant')).toHaveLength(1);
+    expect(messages[1].content.map((c: any) => c.text)).toEqual(['はい', '  ']);
+
+    const viaOpenAI = await openai().createContext(stateOf(turns));
+    expect(viaOpenAI.filter((m: any) => m.role === 'assistant')).toHaveLength(1);
   });
 
   it('OpenAI 系でも同じ（空の発話を送らない）', async () => {

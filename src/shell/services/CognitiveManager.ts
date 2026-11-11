@@ -13,11 +13,12 @@ import { PROVIDERS } from '../../config/providers';
 import { REGISTRY_LAYERS } from '../../config/config_layers';
 import { overlayProviders } from '../../core/sys/registryMerge';
 
-import { GeminiProjector, OpenAIProjector, AnthropicProjector } from '../../core/cognitive/Projector';
+import { Projector } from '../../core/cognitive/Projector';
+import { GeminiRenderer, OpenAIRenderer, AnthropicRenderer, type BaseRenderer } from '../../core/cognitive/Renderer';
 import { GeminiAdapter } from '../../core/cognitive/adapters/GeminiAdapter';
 import { OpenAIAdapter } from '../../core/cognitive/adapters/OpenAIAdapter';
 import { AnthropicAdapter } from '../../core/cognitive/adapters/AnthropicAdapter';
-import type { RelayTransport } from '../../core/cognitive/adapters/BaseAdapter';
+import type { BaseLLMAdapter, RelayTransport } from '../../core/cognitive/adapters/BaseAdapter';
 import { uploadRelayBody } from '../../core/cognitive/relay/RelayBodyStash';
 import {
   RELAY_PROVIDER_ID,
@@ -58,6 +59,24 @@ function localStorageStore(key: string): RelayCatalogStore | null {
       }
     },
   };
+}
+
+/**
+ * 上流へ送る一組: 中立の要求を各社の本文にする側（Renderer）と、それを送る側（Adapter）。
+ * どちらも同じ設定・同じ鍵・同じ中継から作るので、必ず組で作る。
+ */
+export interface LlmEndpoint {
+  provider: string;
+  modelName: string;
+  renderer: BaseRenderer;
+  adapter: BaseLLMAdapter;
+}
+
+/** `provider/model` を割る。前置きが無ければ Google。モデル名に `/` が入っていてもよい（最初の 1 つで割る） */
+export function splitModel(rawModel: string): { provider: string; modelName: string } {
+  const slashIdx = rawModel.indexOf('/');
+  if (slashIdx === -1) return { provider: 'google', modelName: rawModel };
+  return { provider: rawModel.substring(0, slashIdx).toLowerCase(), modelName: rawModel.substring(slashIdx + 1) };
 }
 
 export class CognitiveManager {
@@ -207,29 +226,35 @@ export class CognitiveManager {
     const llmConfig = this.configManager.get('llm') || {
       model: 'gemini-3.8-flash',
     };
-    const rawModel = llmConfig.model;
     const systemPrompt = buildSystemPrompt({
       thinkingTag: llmConfig.thinkingTag !== false,
       paths: this.configManager.paths(),
     });
 
-    let provider = 'google';
-    let modelName = rawModel;
-
-    const slashIdx = rawModel.indexOf('/');
-    if (slashIdx !== -1) {
-      provider = rawModel.substring(0, slashIdx).toLowerCase();
-      modelName = rawModel.substring(slashIdx + 1);
+    const { provider, modelName } = splitModel(llmConfig.model);
+    if (this.onStatusUpdate) {
+      this.onStatusUpdate(`${provider}/${modelName}`);
     }
+
+    const endpoint = await this.resolveLlm(llmConfig);
+    this.engine.projector = new Projector(systemPrompt, endpoint.renderer);
+    this.engine.llm = endpoint.adapter;
+  }
+
+  /**
+   * 設定（`llm.json` と同じ形）から、上流へ送る一組を組み立てる。
+   *
+   * **組み立てはここ 1 か所**（T-0804）。鍵（localStorage）・登録簿（capabilities）・中継（繋ぎ先・台帳・認証）を
+   * 知っているのはここだけで、エンジンも、ほかの呼び手も、ここが返した組をそのまま使う。
+   * 履歴もシステムプロンプトもここは知らない。
+   */
+  public async resolveLlm(llmConfig: any): Promise<LlmEndpoint> {
+    const { provider, modelName } = splitModel(llmConfig.model);
 
     let secrets: any = {};
     try {
       secrets = JSON.parse(localStorage.getItem('itera_llm_secrets') || '{}');
     } catch (e) {}
-
-    if (this.onStatusUpdate) {
-      this.onStatusUpdate(`${provider}/${modelName}`);
-    }
 
     let capabilities: any = undefined;
     const mergedProviders = await this.getMergedProviders({
@@ -249,54 +274,58 @@ export class CognitiveManager {
 
     // 運営が用意した中継。利用者の鍵を使わず、Itera Cloud の ID トークンで通す
     if (provider === RELAY_PROVIDER_ID) {
-      await this.applyRelayEngine(providerData, modelName, capabilities, llmConfig, systemPrompt);
-      return;
+      return { provider, modelName, ...(await this.resolveRelay(providerData, modelName, capabilities, llmConfig)) };
     }
 
     const apiKey = secrets[provider] || '';
-    let newLlm, newProjector;
 
     switch (provider) {
       case 'openai':
       case 'openrouter':
-      case 'custom':
+      case 'custom': {
         const baseUrl =
           provider === 'openrouter'
             ? 'https://openrouter.ai/api/v1'
             : provider === 'custom'
               ? secrets.custom_url || 'http://localhost:11434/v1'
               : 'https://api.openai.com/v1';
-        newProjector = new OpenAIProjector(systemPrompt, capabilities);
-        newLlm = new OpenAIAdapter(apiKey, modelName, baseUrl, llmConfig, this.logger);
-        break;
+        return {
+          provider,
+          modelName,
+          renderer: new OpenAIRenderer(capabilities),
+          adapter: new OpenAIAdapter(apiKey, modelName, baseUrl, llmConfig, this.logger),
+        };
+      }
       case 'anthropic':
-        newProjector = new AnthropicProjector(systemPrompt, capabilities);
-        newLlm = new AnthropicAdapter(apiKey, modelName, llmConfig, this.logger);
-        break;
+        return {
+          provider,
+          modelName,
+          renderer: new AnthropicRenderer(capabilities),
+          adapter: new AnthropicAdapter(apiKey, modelName, llmConfig, this.logger),
+        };
       case 'google':
       default:
-        newProjector = new GeminiProjector(systemPrompt, capabilities, apiKey);
-        newLlm = new GeminiAdapter(apiKey, modelName, llmConfig, this.logger);
-        break;
+        return {
+          provider,
+          modelName,
+          renderer: new GeminiRenderer(capabilities, apiKey),
+          adapter: new GeminiAdapter(apiKey, modelName, llmConfig, this.logger),
+        };
     }
-
-    this.engine.projector = newProjector;
-    this.engine.llm = newLlm;
   }
 
   /**
-   * 中継（`itera`）用の Engine 部品を組み立てて挿す。
+   * 中継（`itera`）用の一組を組み立てる。
    *
    * 接続先か選択肢のどちらかが決まらないときは、**別のモデルで代用しない**。
-   * 黙って中身が変わるのがいちばん分かりにくい壊れ方なので、生成時に理由を出すアダプタを挿しておく。
+   * 黙って中身が変わるのがいちばん分かりにくい壊れ方なので、生成時に理由を出すアダプタを返す。
    */
-  private async applyRelayEngine(
+  private async resolveRelay(
     providerData: any,
     modelName: string,
     capabilities: any,
     llmConfig: any,
-    systemPrompt: string,
-  ): Promise<void> {
+  ): Promise<{ renderer: BaseRenderer; adapter: BaseLLMAdapter }> {
     const baseUrl = buildRelayBaseUrl(await this.readFunctionsBase());
     const entry = resolveRelayModel(providerData?.models, modelName);
 
@@ -309,9 +338,10 @@ export class CognitiveManager {
         : catalogSeen
           ? `"${modelName}" is not in the relay catalog. Pick a model from Settings.`
           : `The relay catalog has not been loaded yet (${modelName}). Sign in to Itera Cloud, wait a moment, and try again.`;
-      this.engine.projector = new GeminiProjector(systemPrompt, capabilities, '');
-      this.engine.llm = new UnavailableRelayAdapter(reason, llmConfig, this.logger);
-      return;
+      return {
+        renderer: new GeminiRenderer(capabilities, ''),
+        adapter: new UnavailableRelayAdapter(reason, llmConfig, this.logger),
+      };
     }
 
     // 大きな本文の置き場（T-0622）。バケットが分かる配布物でだけ口を開ける。無ければ 32 MiB で止まる（BaseAdapter）
@@ -347,20 +377,23 @@ export class CognitiveManager {
     switch (entry.upstream) {
       case 'anthropic':
         // 添付は中継の Files 経路で運営の鍵へ上げる（毎ターン本文へ埋めない。T-0623）
-        this.engine.projector = new AnthropicProjector(systemPrompt, modelCapabilities, relay);
-        this.engine.llm = new AnthropicAdapter('', alias, llmConfig, this.logger, relay);
-        break;
+        return {
+          renderer: new AnthropicRenderer(modelCapabilities, relay),
+          adapter: new AnthropicAdapter('', alias, llmConfig, this.logger, relay),
+        };
       case 'openai':
-        this.engine.projector = new OpenAIProjector(systemPrompt, modelCapabilities);
-        this.engine.llm = new OpenAIAdapter('', alias, baseUrl, llmConfig, this.logger, relay);
-        break;
+        return {
+          renderer: new OpenAIRenderer(modelCapabilities),
+          adapter: new OpenAIAdapter('', alias, baseUrl, llmConfig, this.logger, relay),
+        };
       case 'google':
       default:
-        // Gemini の Files API は鍵が要る。中継では GeminiProjector が中継の Files 経路（start だけ代行）で
+        // Gemini の Files API は鍵が要る。中継では GeminiRenderer が中継の Files 経路（start だけ代行）で
         // 運営の鍵へ上げ、上げられなければ inlineData へ落とす（T-0623。以前は添付を送れなかった）
-        this.engine.projector = new GeminiProjector(systemPrompt, modelCapabilities, '', relay);
-        this.engine.llm = new GeminiAdapter('', alias, llmConfig, this.logger, relay);
-        break;
+        return {
+          renderer: new GeminiRenderer(modelCapabilities, '', relay),
+          adapter: new GeminiAdapter('', alias, llmConfig, this.logger, relay),
+        };
     }
   }
 }
