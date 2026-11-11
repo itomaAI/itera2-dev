@@ -220,6 +220,42 @@ export class CognitiveManager {
     }
   }
 
+  /**
+   * いま選んでいるモデル（`llm.json`）の文脈の上限（トークン）。
+   *
+   * モデルの一覧（登録簿の `llm_profiles.json`・中継の台帳）に `contextTokens` が書いてあるときだけ返す。
+   * 無ければ null —— 推測値は入れない（「まだ余裕がある」という誤った安心を作るので）。
+   * 選んでいるプロバイダの下を先に見て、無ければ同じ id のモデルを一覧の全体から探す
+   * （`custom/…` で使っているモデルの上限を、本来のプロバイダの下に書いてある場合）。
+   */
+  public async contextLimit(): Promise<number | null> {
+    const model = this.configManager.get('llm')?.model;
+    if (typeof model !== 'string' || !model) return null;
+    const { provider, modelName } = splitModel(model);
+    const limitOf = (entry: any): number | null => {
+      const n = entry?.contextTokens;
+      return typeof n === 'number' && Number.isFinite(n) && n > 0 ? n : null;
+    };
+    try {
+      const providers = await this.getMergedProviders({ relayCatalog: provider === RELAY_PROVIDER_ID });
+      const modelsOf = (p: any): any[] => (Array.isArray(p?.models) ? p.models : []);
+      const selected = providers.find((p: any) => p.id === provider);
+      const own =
+        provider === RELAY_PROVIDER_ID
+          ? resolveRelayModel(modelsOf(selected), modelName)
+          : modelsOf(selected).find((m: any) => m?.id === modelName);
+      if (limitOf(own) !== null) return limitOf(own);
+      for (const p of providers) {
+        for (const m of modelsOf(p)) {
+          if ((m?.id === model || m?.id === modelName) && limitOf(m) !== null) return limitOf(m);
+        }
+      }
+    } catch (e) {
+      console.warn('[CognitiveManager] Failed to look up the context limit.', e);
+    }
+    return null;
+  }
+
   public async refreshEngineConfig(): Promise<void> {
     if (!this.engine) return;
 

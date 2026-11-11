@@ -20,7 +20,7 @@
  * 繋ぎ先の無い配布物（itera2-dev）では中継は存在しない（提供者一覧にも出ない）。
  */
 
-import { BaseLLMAdapter, type LlmConfig } from '../adapters/BaseAdapter';
+import { BaseLLMAdapter, type LlmConfig, type LlmResult } from '../adapters/BaseAdapter';
 import type { SystemLogger } from '../../state/SystemLogger';
 
 /** `system/config/llm.json` の `model` に前置きされるプロバイダ名（`itera/smart`） */
@@ -99,7 +99,7 @@ export class UnavailableRelayAdapter extends BaseLLMAdapter {
     this.reason = reason;
   }
 
-  async generateStream(): Promise<void> {
+  protected async stream(): Promise<LlmResult> {
     throw new Error(`The LLM is not available: ${this.reason}`);
   }
 }

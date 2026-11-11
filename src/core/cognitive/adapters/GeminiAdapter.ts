@@ -3,7 +3,7 @@
  * Itera OS v2: Google Gemini API Adapter
  */
 
-import { BaseLLMAdapter, filterNestedObject, type LlmConfig, type RelayTransport } from './BaseAdapter';
+import { BaseLLMAdapter, filterNestedObject, type LlmConfig, type LlmResult, type RelayTransport } from './BaseAdapter';
 import type { SystemLogger } from '../../state/SystemLogger';
 
 export class GeminiAdapter extends BaseLLMAdapter {
@@ -23,7 +23,7 @@ export class GeminiAdapter extends BaseLLMAdapter {
     this.modelName = modelName;
   }
 
-  async generateStream(messages: any, onChunk: (text: string) => void, signal?: AbortSignal): Promise<void> {
+  protected async stream(messages: any, onChunk: (text: string) => void, signal?: AbortSignal): Promise<LlmResult> {
     const headers: Record<string, string> = { 'Content-Type': 'application/json' };
     let url: string;
     if (this.relay) {
@@ -78,6 +78,7 @@ export class GeminiAdapter extends BaseLLMAdapter {
 
     const reader = response.body!.getReader();
     let finalUsageMetadata: any = null;
+    let stopReason: string | null = null;
 
     try {
       for await (const line of this.readSSELines(reader, signal)) {
@@ -102,28 +103,30 @@ export class GeminiAdapter extends BaseLLMAdapter {
           if (data.usageMetadata) {
             finalUsageMetadata = data.usageMetadata;
           }
+          const finishReason = data.candidates?.[0]?.finishReason;
+          if (typeof finishReason === 'string' && finishReason) stopReason = finishReason;
         } catch (e) {
           console.warn('[GeminiAdapter] Stream JSON parse warning:', e);
         }
       }
 
-      if (this.logger && finalUsageMetadata) {
+      const result: LlmResult = { provider: 'google', model: this.modelName, usage: null, stopReason };
+      if (finalUsageMetadata) {
         const cached = finalUsageMetadata.cachedContentTokenCount || 0;
         const promptTotal = finalUsageMetadata.promptTokenCount || 0;
         const input = Math.max(0, promptTotal - cached);
         const output = finalUsageMetadata.candidatesTokenCount || 0;
 
-        this.logger.log('usage', {
-          provider: 'google',
-          model: this.modelName,
-          tokens: {
-            input: input,
-            cached: cached,
-            output: output,
-            total: finalUsageMetadata.totalTokenCount || promptTotal + output,
-          },
-        });
+        result.usage = {
+          input: input,
+          cached: cached,
+          // Gemini はキャッシュへの書き込みを別に報告しない
+          cacheWrite: 0,
+          output: output,
+          total: finalUsageMetadata.totalTokenCount || promptTotal + output,
+        };
       }
+      return result;
     } finally {
       reader.releaseLock();
     }

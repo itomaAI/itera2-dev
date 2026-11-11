@@ -1,0 +1,94 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`台帳の行: 既存の欄と値（金型） > Anthropic 1`] = `
+[
+  {
+    "category": "usage",
+    "payload": {
+      "model": "claude-test",
+      "provider": "anthropic",
+      "tokens": {
+        "cacheWrite": 100,
+        "cached": 900,
+        "input": 10,
+        "output": 42,
+        "total": 1052,
+      },
+    },
+  },
+]
+`;
+
+exports[`台帳の行: 既存の欄と値（金型） > Gemini 1`] = `
+[
+  {
+    "category": "usage",
+    "payload": {
+      "model": "gemini-test",
+      "provider": "google",
+      "tokens": {
+        "cached": 800,
+        "input": 400,
+        "output": 50,
+        "total": 1300,
+      },
+    },
+  },
+]
+`;
+
+exports[`台帳の行: 既存の欄と値（金型） > Gemini: totalTokenCount が無ければ prompt ＋ 出力 1`] = `
+[
+  {
+    "category": "usage",
+    "payload": {
+      "model": "gemini-test",
+      "provider": "google",
+      "tokens": {
+        "cached": 0,
+        "input": 70,
+        "output": 5,
+        "total": 75,
+      },
+    },
+  },
+]
+`;
+
+exports[`台帳の行: 既存の欄と値（金型） > OpenAI 形式 1`] = `
+[
+  {
+    "category": "usage",
+    "payload": {
+      "model": "gpt-test",
+      "provider": "openai_compatible",
+      "tokens": {
+        "cacheWrite": 100,
+        "cached": 600,
+        "input": 300,
+        "output": 30,
+        "total": 1030,
+      },
+    },
+  },
+]
+`;
+
+exports[`台帳の行: 既存の欄と値（金型） > OpenAI 形式: total_tokens が無ければ prompt ＋ 出力 1`] = `
+[
+  {
+    "category": "usage",
+    "payload": {
+      "model": "gpt-test",
+      "provider": "openai_compatible",
+      "tokens": {
+        "cacheWrite": 0,
+        "cached": 0,
+        "input": 40,
+        "output": 2,
+        "total": 42,
+      },
+    },
+  },
+]
+`;

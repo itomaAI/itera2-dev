@@ -368,7 +368,6 @@
         const EVENTS_DIR = `${APPDATA}/events`;
         const TASKS_DIR = `${APPDATA}/tasks`;
         const BRIDGE_CONFIG = 'system/config/local_bridge.json'; // 端末の状態（Local Bridge の設定アプリ・デーモンと同じ場所）
-        const USAGE_DIR = 'system/logs/usage'; // ホストが 1 ターン 1 行で書く（SystemLogger）
 
         const DOM = (id) => document.getElementById(id);
         const esc = (v) =>
@@ -546,79 +545,30 @@
         };
         const refreshApps = async () => renderShortcuts(await loadApps());
 
-        // ---------- 会話の長さ（usage ログから） ----------
-        const promptTokens = (row) => {
-          const t = row.tokens || {};
-          const cached = t.cached || 0;
-          const write = t.cacheWrite || 0;
-          // キャッシュを作り直したターンは cached と cacheWrite の両方に全体が入ることがある。そのときは大きい方だけ数える
-          const overlapping = cached > 0 && write > cached * 0.8;
-          const sum = (t.input || 0) + (overlapping ? Math.max(cached, write) : cached + write);
-          return sum > 0 ? sum : Math.max(0, (t.total || 0) - (t.output || 0));
-        };
-        const readUsage = async (n) => {
-          const rows = [];
-          for (let back = 0; back < 3 && rows.length < n; back++) {
-            const d = new Date(Date.now() - back * 86400000);
-            const path = `${USAGE_DIR}/${d.toISOString().slice(0, 10)}.jsonl`;
-            let text;
-            try {
-              if (!(await MetaOS.fs.exists(path))) continue;
-              text = await MetaOS.fs.read(path);
-            } catch (e) {
-              continue;
-            }
-            const lines = text.split('\n').filter((l) => l.trim());
-            for (let i = lines.length - 1; i >= 0 && rows.length < n; i--) {
-              try {
-                const o = JSON.parse(lines[i]);
-                if (o && o.tokens) rows.push(o);
-              } catch (e) {}
-            }
-          }
-          return rows;
-        };
-        /**
-         * いまのモデルの文脈の上限。モデルの一覧（llm_profiles。層を重ねた値はホストが持つ）に書いてある値だけを使う。
-         * 見つからなければ null —— 推測値は入れない（「まだ余裕がある」という誤った安心を作るので）。
-         */
-        let providersCache = null;
-        const contextLimitOf = async (model) => {
-          if (!model) return null;
-          if (!providersCache) {
-            try {
-              if (window.MetaOS?.system?.getProviders) providersCache = await MetaOS.system.getProviders();
-            } catch (e) {}
-            if (!Array.isArray(providersCache)) {
-              const profiles = await readJson('system/registry/llm_profiles.json', null);
-              providersCache = profiles && Array.isArray(profiles.providers) ? profiles.providers : [];
-            }
-          }
-          const bare = model.replace(/^[^/]+\//, '');
-          for (const p of providersCache) {
-            for (const m of (p && p.models) || []) {
-              if ((m.id === model || m.id === bare) && typeof m.contextTokens === 'number' && m.contextTokens > 0)
-                return m.contextTokens;
-            }
-          }
-          return null;
-        };
+        // ---------- 会話の長さ（MetaOS.chat.status から） ----------
+        // 数えるのはホスト（いまの会話の履歴の、最後の返事）。上限もホストが答える（モデルの一覧に無ければ null）。
+        // ここは表示だけで、usage のログは読まない。取り直すのは 1 分ごとと、モデルを替えたとき
+        // （ホストは system/logs/ の変更をゲストへ知らせないので、ログの書き込みは合図にならない）。
         const loadContext = async () => {
-          const rows = await readUsage(10);
-          if (!rows.length) {
+          let ctx = null;
+          try {
+            ctx = (await MetaOS.chat.status()).context;
+          } catch (e) {}
+          if (!ctx) {
             DOM('ctx-num').textContent = '–';
             DOM('ctx-sub').textContent = 'No usage recorded yet';
             paint('ctx-fill', 0, 'bg-primary');
             return;
           }
-          const limit = await contextLimitOf(State.model || rows[0].model);
-          // 単発の跳ね（キャッシュの作り直し）は直近 3 行の中央値で落とす
+          const rows = Array.isArray(ctx.recent) && ctx.recent.length ? ctx.recent : [ctx];
+          const limit = typeof ctx.limit === 'number' && ctx.limit > 0 ? ctx.limit : null;
+          // 単発の跳ねは直近 3 回の中央値で落とす
           const med3 = (i) => {
             const v = rows
               .slice(i, i + 3)
-              .map(promptTokens)
+              .map((r) => r.tokens)
               .sort((a, b) => a - b);
-            return v.length >= 3 ? v[1] : promptTokens(rows[i]);
+            return v.length >= 3 ? v[1] : rows[i].tokens;
           };
           const now = med3(0);
           const span = rows.length - 1;
@@ -1184,7 +1134,6 @@
             renderTasks();
           }, 500);
           const notesD = debounce(renderNotes, 800);
-          const ctxD = debounce(loadContext, 1500);
           // 板の変化は Loom デーモンの知らせで拾う。デーモンが居ないときだけ vfs_mutation で拾う
           MetaOS.system.on('loom.changed', () => loomD());
           MetaOS.system.on('loom.ready', () => loomD());
@@ -1194,7 +1143,6 @@
               if (!loomViaDaemon) loomD();
             } else if (p.startsWith(`${EVENTS_DIR}/`) || p.startsWith(`${TASKS_DIR}/`)) calD();
             else if ((p.startsWith(`${USER_HOME}/`) && isNotePath(p)) || p.startsWith(`${JOURNALS}/`)) notesD();
-            else if (p.startsWith(`${USAGE_DIR}/`)) ctxD();
             else if (p === BRIDGE_CONFIG) loadBridge();
           });
           // 設定・登録簿は、持ち主（ホスト）が「値が変わった」ときだけ知らせる（T-0539 / T-0540）

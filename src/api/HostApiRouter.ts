@@ -14,14 +14,7 @@ import { GuestLocalStore } from '../core/sys/GuestLocalStore';
 import type { SpawnOptions } from '../shell/windowing/ProcessManager';
 import type { CompiledGuest } from '../shell/windowing/GuestCompiler';
 import { USER_PRINCIPAL } from '../core/vfs/types';
-import {
-  attachmentPathsOf,
-  buildAppendPlan,
-  buildChatStatus,
-  buildResetPlan,
-  readLatestContextUsage,
-  resolveAttachments,
-} from './chatApi';
+import { attachmentPathsOf, buildAppendPlan, buildChatStatus, buildResetPlan, resolveAttachments } from './chatApi';
 import { VfsEventFormatter } from '../core/vfs/VfsEventFormatter';
 import { buildGuestThemeCss } from '../shell/windowing/guestThemeCss';
 import { base64ToBlob, blobToDataUrl, dataUrlToBlob } from '../utils/binary';
@@ -72,6 +65,8 @@ export interface IShell {
   _revealInExplorer?(path: string): boolean;
   _openPath?(path: string): void;
   getMergedProviders?(): Promise<any[]>;
+  /** いま選んでいるモデルの文脈の上限（無ければ null） */
+  getContextLimit?(): Promise<number | null>;
   panels: { chat: any };
   modals: { editor: any; camera: any; audio: any; filePicker?: any };
 }
@@ -467,7 +462,7 @@ export class HostApiRouter {
         engine: d.engine.status(),
         turns: d.history.get(),
         session,
-        context: await readLatestContextUsage(d.vfs),
+        contextLimit: d.shell?.getContextLimit ? await d.shell.getContextLimit() : null,
       });
     });
 

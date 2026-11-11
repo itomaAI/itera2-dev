@@ -35,6 +35,51 @@ export interface LlmConfig {
 }
 
 /**
+ * 1 回の生成で使ったトークン（T-0806）。各社の数え方を 1 つの形に揃えたもの。
+ *
+ *   - `input` …… キャッシュに当たらず、キャッシュにも書かなかった入力
+ *   - `cached` …… キャッシュから読んだ入力
+ *   - `cacheWrite` …… キャッシュへ書いた入力（Gemini は報告しないので 0）
+ *   - `output` …… 出力
+ *   - `total` …… 上流が報告した合計（無ければ足したもの）
+ *
+ * モデルに渡した長さ（文脈の長さ）は `input + cached + cacheWrite`。
+ */
+export interface LlmUsage {
+  input: number;
+  cached: number;
+  cacheWrite: number;
+  output: number;
+  total: number;
+}
+
+/** 生成の結果。文字は `onChunk` で流れ、これは終わったあとに返る */
+export interface LlmResult {
+  /** 台帳の `provider` 欄の値（`google`／`anthropic`／`openai_compatible`） */
+  provider: string;
+  /** 上流へ送ったモデル名（中継では台帳の正規キー） */
+  model: string;
+  /** 上流が usage を返さなかったら null（推測しない） */
+  usage: LlmUsage | null;
+  /** 止まった理由。各社の値そのまま（`STOP`／`end_turn`／`stop`／`MAX_TOKENS`／`max_tokens`／`length` …）。拾えなければ null */
+  stopReason: string | null;
+}
+
+/**
+ * 誰の生成か。台帳の行に書く（文脈の長さは台帳からは読まない —— 呼び手が結果を自分で持つ）。
+ *
+ *   - `caller` …… ホストが付ける。OS のチャットは `root`
+ *   - `tag` …… 呼び手が付ける任意の文字列。`root` は会話（セッション）の id
+ */
+export interface LlmCallOrigin {
+  caller: string;
+  tag?: string | null;
+}
+
+/** OS のチャット（ホストのエンジン）が台帳に名乗る名前 */
+export const LLM_CALLER_ROOT = 'root';
+
+/**
  * 中継（運営の鍵で LLM を呼ぶプロキシ。itera2 の Functions `llmProxy`）を使うときだけ渡す送信設定。
  *
  * 各アダプタは既定では各社の URL と鍵を内側に持っている。中継ではその 2 点だけが別物になるため、
@@ -182,11 +227,46 @@ export abstract class BaseLLMAdapter {
   }
 
   /**
-   * @param messages - 各社プロバイダのフォーマットに合わせたメッセージ配列 (Projectorが生成)
-   * @param onChunk - テキストのチャンクを受信した際のコールバック
-   * @param signal - 中断用のAbortSignal
+   * 生成する。文字は `onChunk` へ流し、終わったら結果（usage・止まった理由）を返す。
+   *
+   * **台帳（`system/logs/usage/`）を書くのはここ 1 か所**（T-0806）。各社のアダプタは流れを読んで結果を返すだけで、
+   * 自分ではログを書かない。失敗・中断で投げたときは書かない（結果が無い）。
+   *
+   * @param messages - 各社の形式の本文（Renderer が作る）
+   * @param onChunk - 文字の塊を受けるたびに呼ばれる
+   * @param signal - 中断
+   * @param origin - 誰の生成か（台帳の `caller`・`tag`）
    */
-  abstract generateStream(messages: any, onChunk: (text: string) => void, signal?: AbortSignal): Promise<void>;
+  async generateStream(
+    messages: any,
+    onChunk: (text: string) => void,
+    signal?: AbortSignal,
+    origin?: LlmCallOrigin,
+  ): Promise<LlmResult> {
+    const result = await this.stream(messages, onChunk, signal);
+    this.recordUsage(result, origin);
+    return result;
+  }
+
+  /** 各社の送信と流れの読み取り。ログは書かない */
+  protected abstract stream(messages: any, onChunk: (text: string) => void, signal?: AbortSignal): Promise<LlmResult>;
+
+  /**
+   * 台帳に 1 行書く。usage が拾えたときだけ（拾えなかった生成を 0 として数えない）。
+   * `provider`・`model`・`tokens` はこの改修の前から在る欄で、ゲスト（`billing.html` ほか）が読む —— 形と値を変えない。
+   */
+  private recordUsage(result: LlmResult, origin?: LlmCallOrigin): void {
+    if (!this.logger || !result.usage) return;
+    const u = result.usage;
+    void this.logger.log('usage', {
+      provider: result.provider,
+      model: result.model,
+      tokens: { input: u.input, cached: u.cached, cacheWrite: u.cacheWrite, output: u.output, total: u.total },
+      ...(origin ? { caller: origin.caller } : {}),
+      ...(origin && typeof origin.tag === 'string' && origin.tag ? { tag: origin.tag } : {}),
+      stopReason: result.stopReason,
+    });
+  }
 
   /**
    * 生成の要求を送る（3 つのアダプタ共通。T-0622。ミャク楽 T-0594 / T-0600）。

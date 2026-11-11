@@ -100,7 +100,7 @@ export class EventOrchestrator {
       sessionManager,
       processManager,
       config: configManager,
-      vfs,
+      contextLimit: () => cognitiveManager.contextLimit(),
       open: (target) => {
         if (/^metaos:\/\//i.test(target)) {
           try {

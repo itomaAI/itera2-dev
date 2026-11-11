@@ -519,7 +519,7 @@ All methods (except \`on/off\`) are **Asynchronous** and return a \`Promise\`.
 - \`wake()\`: Asks the engine to evaluate the history. If nothing is unread after your last turn, it ends idle (no empty turn is produced). Does not lift the continuous-tool cap.
 - \`stop()\`: Aborts generation and abandons the tool batch in flight.
 - \`reset(opts)\`: Clears the conversation (the current one is archived to the session history). \`opts: { summary, restoreTools=true }\`. Works even when the context is too long for you to answer. It does not wake you: the next message does, and you read \`summary\` then. Returns \`{ archived, sessionId }\`.
-- \`status()\`: \`{ running, busy, outstandingTools, turns, lastTurnAt, session: {id, title, createdAt}, context: {tokens, output, model, at} | null }\` (\`context\` is the last usage log line; it lags one turn).
+- \`status()\`: \`{ running, busy, outstandingTools, turns, lastTurnAt, session: {id, title, createdAt}, context: {tokens, output, model, at, limit, recent} | null }\` (\`context\` is your last reply in this conversation, read from the history: \`tokens\` is the prompt length it was given, \`limit\` the selected model's context size or \`null\` when the model list does not state it, \`recent\` the last replies as \`{at, tokens, output}\`, newest first. \`null\` until the first reply).
 - \`sessions()\`, \`switchSession(id)\`, \`saveSession(id='current')\`, \`loadSession(path)\`: the session history (refused with \`{ ok:false, reason:'busy' }\` while the engine is busy).
 
 **AI & History (MetaOS.ai)** — thin wrappers over \`chat.append\` / \`chat.stop\` (kept for compatibility):

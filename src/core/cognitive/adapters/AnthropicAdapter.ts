@@ -3,7 +3,7 @@
  * Itera OS v2: Anthropic API Adapter
  */
 
-import { BaseLLMAdapter, filterNestedObject, type LlmConfig, type RelayTransport } from './BaseAdapter';
+import { BaseLLMAdapter, filterNestedObject, type LlmConfig, type LlmResult, type RelayTransport } from './BaseAdapter';
 import type { SystemLogger } from '../../state/SystemLogger';
 
 export class AnthropicAdapter extends BaseLLMAdapter {
@@ -22,7 +22,7 @@ export class AnthropicAdapter extends BaseLLMAdapter {
     this.modelName = modelName;
   }
 
-  async generateStream(payloadData: any, onChunk: (text: string) => void, signal?: AbortSignal): Promise<void> {
+  protected async stream(payloadData: any, onChunk: (text: string) => void, signal?: AbortSignal): Promise<LlmResult> {
     const { system, messages } = payloadData;
     // ブラウザから直接叩く。プロキシは挟まない（この OS はブラウザ単独で動くことを目指しているため）。
     // 中継（運営の鍵）を使うときだけ、経路を中継の /v1/messages に替える（本文の形式は同じ）。
@@ -90,6 +90,9 @@ export class AnthropicAdapter extends BaseLLMAdapter {
     let outputTokens = 0;
     let cachedTokens = 0;
     let cacheWriteTokens = 0;
+    // usage を 1 つも受け取らなかった生成を「0 トークン」として返さない（推測しない）
+    let sawUsage = false;
+    let stopReason: string | null = null;
 
     try {
       let eventType: string | null = null;
@@ -121,11 +124,17 @@ export class AnthropicAdapter extends BaseLLMAdapter {
             const standardInput = data.message.usage.input_tokens || 0;
             const cached = data.message.usage.cache_read_input_tokens || 0;
             const cacheWrite = data.message.usage.cache_creation_input_tokens || 0;
+            sawUsage = true;
             inputTokens = standardInput;
             cachedTokens = cached;
             cacheWriteTokens = cacheWrite;
-          } else if (eventType === 'message_delta' && data.usage) {
-            outputTokens = data.usage.output_tokens || 0;
+          } else if (eventType === 'message_delta') {
+            if (data.usage) {
+              sawUsage = true;
+              outputTokens = data.usage.output_tokens || 0;
+            }
+            const reason = data.delta?.stop_reason;
+            if (typeof reason === 'string' && reason) stopReason = reason;
           } else if (eventType === 'content_block_delta') {
             if (data.delta && data.delta.type === 'text_delta') {
               this.markContentStarted();
@@ -141,19 +150,20 @@ export class AnthropicAdapter extends BaseLLMAdapter {
         }
       }
 
-      if (this.logger) {
-        this.logger.log('usage', {
-          provider: 'anthropic',
-          model: this.modelName,
-          tokens: {
-            input: inputTokens,
-            cached: cachedTokens,
-            cacheWrite: cacheWriteTokens,
-            output: outputTokens,
-            total: inputTokens + cachedTokens + cacheWriteTokens + outputTokens,
-          },
-        });
-      }
+      return {
+        provider: 'anthropic',
+        model: this.modelName,
+        usage: sawUsage
+          ? {
+              input: inputTokens,
+              cached: cachedTokens,
+              cacheWrite: cacheWriteTokens,
+              output: outputTokens,
+              total: inputTokens + cachedTokens + cacheWriteTokens + outputTokens,
+            }
+          : null,
+        stopReason,
+      };
     } finally {
       reader.releaseLock();
     }

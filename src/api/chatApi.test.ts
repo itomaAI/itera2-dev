@@ -5,7 +5,9 @@ import { describe, it, expect } from 'vitest';
 import {
   buildAppendPlan,
   buildResetPlan,
-  latestContextUsage,
+  contextFromHistory,
+  CONTEXT_RECENT_MAX,
+  formatChatStatus,
   buildChatStatus,
   mimeOfAttachment,
   resolveAttachments,
@@ -131,21 +133,80 @@ describe('chat.reset の計画', () => {
   });
 });
 
-describe('直近の文脈の長さ（usage ログ）', () => {
-  const line = (o: any) => JSON.stringify(o);
-  it('末尾から tokens を持つ行を読み、長さは input＋cached＋cacheWrite', () => {
-    const jsonl = [
-      line({ timestamp: 't1', model: 'm', tokens: { input: 10, cached: 5, cacheWrite: 1, output: 3, total: 19 } }),
-      'broken {',
-      line({ timestamp: 't2', model: 'm', tokens: { input: 100, cached: 50, cacheWrite: 0, output: 7, total: 157 } }),
-      line({ timestamp: 't3', other: true }),
-      '',
-    ].join('\n');
-    expect(latestContextUsage(jsonl)).toEqual({ tokens: 150, output: 7, model: 'm', at: 't2' });
+describe('文脈の長さ（履歴から）', () => {
+  const model = (timestamp: number, usage: any, extra: any = {}) => ({
+    id: `m${timestamp}`,
+    timestamp,
+    role: 'model' as const,
+    content: 'y',
+    meta: { ...(usage === undefined ? {} : { usage }), ...extra },
   });
-  it('読める行が無ければ null', () => {
-    expect(latestContextUsage('')).toBeNull();
-    expect(latestContextUsage('{"a":1}\n')).toBeNull();
+  const user = (timestamp: number) => ({
+    id: `u${timestamp}`,
+    timestamp,
+    role: 'user' as const,
+    content: 'x',
+    meta: {},
+  });
+  const at = (ms: number) => new Date(ms).toISOString();
+
+  it('最後の usage を持つ model ターンから読み、長さは input＋cached＋cacheWrite', () => {
+    const turns = [
+      user(1),
+      model(2, { input: 10, cached: 5, cacheWrite: 1, output: 3, total: 19 }, { model: 'old' }),
+      user(3),
+      model(4, { input: 100, cached: 50, cacheWrite: 7, output: 9, total: 166 }, { model: 'm' }),
+      user(5),
+    ];
+    expect(contextFromHistory(turns, 200000)).toEqual({
+      tokens: 157,
+      output: 9,
+      model: 'm',
+      at: at(4),
+      limit: 200000,
+      recent: [
+        { at: at(4), tokens: 157, output: 9 },
+        { at: at(2), tokens: 16, output: 3 },
+      ],
+    });
+  });
+
+  it('usage を持たない model ターン（失敗・中断・古い履歴）は飛ばす', () => {
+    const turns = [
+      model(1, { input: 40, cached: 0, cacheWrite: 0, output: 2, total: 42 }, { model: 'm' }),
+      model(2, undefined, { status: 'error' }),
+      model(3, null),
+      model(4, 'broken'),
+    ];
+    const c = contextFromHistory(turns, null);
+    expect(c?.tokens).toBe(40);
+    expect(c?.at).toBe(at(1));
+    expect(c?.limit).toBeNull();
+    expect(c?.recent).toHaveLength(1);
+  });
+
+  it('model 以外のターンの meta.usage は見ない', () => {
+    const turns = [{ id: 's', timestamp: 1, role: 'system' as const, content: 'x', meta: { usage: { input: 5 } } }];
+    expect(contextFromHistory(turns, null)).toBeNull();
+  });
+
+  it('1 つも無ければ null（上限が分かっていても）', () => {
+    expect(contextFromHistory([], 1000)).toBeNull();
+    expect(contextFromHistory([user(1), model(2, undefined)], 1000)).toBeNull();
+  });
+
+  it('recent は新しい順で最大 10', () => {
+    const turns = Array.from({ length: 14 }, (_v, i) =>
+      model(i + 1, { input: i + 1, cached: 0, cacheWrite: 0, output: 0 }),
+    );
+    const c = contextFromHistory(turns, null)!;
+    expect(c.recent).toHaveLength(CONTEXT_RECENT_MAX);
+    expect(c.recent.map((r) => r.tokens)).toEqual([14, 13, 12, 11, 10, 9, 8, 7, 6, 5]);
+    expect(c.tokens).toBe(14);
+  });
+
+  it('model 名が無ければ null', () => {
+    expect(contextFromHistory([model(1, { input: 1 })], null)?.model).toBeNull();
   });
 });
 
@@ -158,7 +219,7 @@ describe('chat.status', () => {
         { id: 'b', timestamp: 9, role: 'model', content: 'y', meta: {} },
       ],
       session: { id: 's', title: '', createdAt: 0 },
-      context: null,
+      contextLimit: null,
     });
     expect(s).toEqual({
       running: false,
@@ -174,8 +235,39 @@ describe('chat.status', () => {
         engine: { running: false, busy: false, outstandingTools: 0 },
         turns: [],
         session: null,
-        context: null,
+        contextLimit: null,
       }).lastTurnAt,
     ).toBeNull();
+  });
+
+  it('context は履歴から（上限は渡された値）', () => {
+    const s = buildChatStatus({
+      engine: { running: false, busy: false, outstandingTools: 0 },
+      turns: [
+        { id: 'a', timestamp: 1, role: 'user', content: 'x', meta: {} },
+        {
+          id: 'b',
+          timestamp: 9,
+          role: 'model',
+          content: 'y',
+          meta: { usage: { input: 1000, cached: 500, cacheWrite: 0, output: 4, total: 1504 }, model: 'm' },
+        },
+      ],
+      session: null,
+      contextLimit: 200000,
+    });
+    expect(s.context).toEqual({
+      tokens: 1500,
+      output: 4,
+      model: 'm',
+      at: '1970-01-01T00:00:00.009Z',
+      limit: 200000,
+      recent: [{ at: '1970-01-01T00:00:00.009Z', tokens: 1500, output: 4 }],
+    });
+    expect(formatChatStatus(s, 9)).toContain('context: 1,500 / 200,000 tokens in (m, 1970-01-01T00:00:00.009Z)');
+    expect(formatChatStatus({ ...s, context: { ...s.context!, limit: null } }, 9)).toContain(
+      'context: 1,500 tokens in (m, 1970-01-01T00:00:00.009Z)',
+    );
+    expect(formatChatStatus({ ...s, context: null }, 9)).toContain('context: unknown (no reply yet)');
   });
 });

@@ -13,10 +13,8 @@ import {
   buildChatStatus,
   buildResetPlan,
   formatChatStatus,
-  readLatestContextUsage,
   STATUS_LABELS_EN,
   type StatusLabels,
-  type UsageLogReader,
 } from '../../api/chatApi';
 import {
   COMMAND_TEXTS_EN,
@@ -56,7 +54,8 @@ export interface CommandDeps {
     get(category: 'llm'): { model?: string } | undefined;
     update(category: 'llm', updates: { model: string }): Promise<void>;
   };
-  vfs: UsageLogReader;
+  /** いま選んでいるモデルの文脈の上限（無ければ null） */
+  contextLimit?: () => Promise<number | null>;
   /** パス（関連付けのアプリ）または `metaos://…` を開く */
   open(target: string): void;
   /** 結果のターンを画面に出す */
@@ -144,7 +143,7 @@ export class CommandDispatcher {
             engine: d.engine.status(),
             turns: d.history.get(),
             session,
-            context: await readLatestContextUsage(d.vfs, now()),
+            contextLimit: d.contextLimit ? await d.contextLimit() : null,
           });
           return { ok: true, text: formatChatStatus(s, now(), L) };
         },
