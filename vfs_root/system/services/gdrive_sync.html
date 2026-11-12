@@ -90,6 +90,8 @@
       let remoteCache = {};
       let syncTimer = null;
       let isSyncing = false;
+      /** 照合が空くのを待っている onMove の数。照合はこれを見て途中で譲る（T-0691） */
+      let moveWaiting = 0;
       let lastError = null;
 
       // ==========================================
@@ -806,6 +808,8 @@
           } catch (e) {
             if (e.message === 'NOT_AUTHENTICATED' || e.message === 'TOKEN_EXPIRED') {
               log('Waiting for authentication...');
+            } else if (e.message === 'YIELD_TO_MOVE') {
+              log('Reconciliation paused for a move. It restarts after the move.');
             } else {
               lastError = e.message;
               log(`Sync failed: ${e.message}`, 'error');
@@ -871,6 +875,19 @@
         };
 
         for (const path of allPaths) {
+          // ★ 改名・移動を待たせない（T-0691）。照合は数万件で 1 分近くかかることがあり、終わるのを待つと
+          //   onMove が見切って核の実体化に落ちる。途中で止めても失うものは無い —— newAnchor は成功した操作の後に
+          //   だけ書くので、ここまでの分は正しい部分集合である（ANCHOR_FLUSH_MS の途中保存と同じ理由）。
+          //   次の照合は L・R・A を読み直して最初からやり直す。
+          if (moveWaiting > 0) {
+            try {
+              await saveAnchor(newAnchor);
+            } catch (e2) {
+              log(`Could not persist anchor before yielding to a move: ${e2.message}`, 'warn');
+            }
+            if (indexDirty) await saveIndex();
+            throw new Error('YIELD_TO_MOVE');
+          }
           if (!isUnderMount(path)) continue;
           if (isExcluded(path)) continue;
 
@@ -1087,12 +1104,13 @@
           // 実体化したのでアンカーのローカル側ハッシュを更新する。
           // ここを怠ると次のサイクルで「ローカルが変化した」と誤判定し、
           // 落としたばかりの内容をそのまま押し返してしまう。
+          // 書き戻しは読み直してから（onMove の鍵の付け替えと直列。古い写しで上書きしない）
           try {
             const stat = await MetaOS.fs.stat(path);
-            if (stat && anchor[path]) {
-              anchor[path].hash = stat.hash || null;
-              await saveAnchor(anchor);
-            }
+            await updateAnchor((a) => {
+              if (!stat || !a[path]) return false;
+              a[path].hash = stat.hash || null;
+            });
           } catch (e) {
             log(`Could not refresh anchor hash for ${path}: ${e.message}`, 'warn');
           }
@@ -1101,6 +1119,273 @@
         } catch (e) {
           log(`onFetchContent failed for ${path}: ${e.message}`, 'error');
           return false;
+        }
+      }
+
+      // ==========================================
+      // 改名・移動（T-0691）
+      //
+      // 核（VfsService）は、プロバイダが onMove を持つとき、手元を動かす「前」にこれを頼み、
+      // true なら stub を実体化せずに手元を動かす。Drive の項目は fileId が正で、パスは parents から
+      // 導く派生情報にすぎない。だから向こうでは files.update（parents と name）を 1 回出せば済み、
+      // 中身は 1 バイトも通らない。フォルダなら配下ごと動く。
+      // 手元で要るのはアンカーの鍵（パス）の付け替えだけ —— onFetchContent はアンカーの fileId で取りに行くので、
+      // 動かした stub は新パスのまま取れる。
+      // ==========================================
+
+      /**
+       * Drive の側で動かしてよいか・何を動かすかを決める。純粋関数（試験で押さえる）。
+       * 揃わなければ { ok: false, reason } を返す。核は実体化してから動かす経路に戻る（遅いが正しい）。
+       *
+       *   - 両方ともマウントの中で、同期の対象（除外の外）。マウントそのものと自分の配下へは動かさない
+       *   - 旧パスが Drive に在り、アンカーが同じ fileId を指している（指していなければ同期が追いついていない）
+       *   - 旧パスの親が Drive でもその項目の親である（removeParents に渡す id を推測しない）
+       *   - 行き先とその配下が Drive にもアンカーにも無い（上書きにしない）
+       *   - 行き先の親の鎖にファイルが無い。親が Drive に無ければ作る（newParentId: null）
+       * 未送信の変更や未取得の子は断る理由にならない —— アンカーの値をそのまま新パスの鍵へ移すので、
+       * 3-way の状態（手元だけ変わった・Drive だけ変わった・未取得）は移動の後も同じ形で残る。
+       *
+       * 戻り値の moves はアンカーの鍵の付け替え [旧, 新] の一覧（旧パスとその配下）。
+       */
+      function planDriveMove(oldFull, newFull, A, R, byId, rootId) {
+        if (!isUnderMount(oldFull) || !isUnderMount(newFull)) return { ok: false, reason: 'outside the mount' };
+        if (oldFull === mountPath || newFull === mountPath) return { ok: false, reason: 'the mount itself' };
+        const oldRel = toRel(oldFull);
+        const newRel = toRel(newFull);
+        if (!oldRel || !newRel) return { ok: false, reason: 'the mount itself' };
+        if (newFull === oldFull || newFull.startsWith(oldFull + '/')) return { ok: false, reason: 'into itself' };
+        if (isExcluded(oldFull) || isExcluded(newFull)) return { ok: false, reason: 'excluded path' };
+
+        const r = R[oldFull];
+        const a = A[oldFull];
+        if (!r) return { ok: false, reason: 'not on Drive' };
+        if (!a || !a.id || a.id !== r.id) return { ok: false, reason: 'the anchor does not point to the Drive item' };
+        const node = byId[r.id];
+        if (!node) return { ok: false, reason: 'not in the index' };
+
+        const dirOf = (rel) => {
+          const i = rel.lastIndexOf('/');
+          return i === -1 ? '' : rel.substring(0, i);
+        };
+        const baseOf = (rel) => rel.substring(rel.lastIndexOf('/') + 1);
+        const under = (p, base) => p === base || p.startsWith(base + '/');
+
+        const oldParentRel = dirOf(oldRel);
+        let oldParentId = rootId;
+        if (oldParentRel) {
+          const d = R[toFull(oldParentRel)];
+          oldParentId = d && d.kind === 'directory' ? d.id : null;
+        }
+        if (!oldParentId || !(node.parents || []).includes(oldParentId)) {
+          return { ok: false, reason: 'the parent on Drive is not the expected one' };
+        }
+
+        if (Object.keys(R).some((p) => under(p, newFull))) return { ok: false, reason: 'destination exists on Drive' };
+        if (Object.keys(A).some((p) => under(p, newFull))) return { ok: false, reason: 'destination is in the anchor' };
+
+        const newParentRel = dirOf(newRel);
+        let newParentId = rootId;
+        if (newParentRel) {
+          let acc = '';
+          for (const part of newParentRel.split('/')) {
+            acc = acc ? `${acc}/${part}` : part;
+            const d = R[toFull(acc)];
+            if (d && d.kind !== 'directory')
+              return { ok: false, reason: `a file is in the way on Drive: ${toFull(acc)}` };
+          }
+          const d = R[toFull(newParentRel)];
+          newParentId = d ? d.id : null;
+        }
+
+        const moves = Object.keys(A)
+          .filter((p) => under(p, oldFull))
+          .map((p) => [p, newFull + p.slice(oldFull.length)]);
+        return {
+          ok: true,
+          id: r.id,
+          oldName: baseOf(oldRel),
+          newName: baseOf(newRel),
+          oldParentId,
+          newParentId,
+          newParentRel,
+          moves,
+        };
+      }
+
+      /** アンカーの鍵を [旧, 新] の組で付け替える（値はそのまま）。純粋関数。逆向きの組で元に戻る。 */
+      function rekeyAnchor(anchor, moves) {
+        const moved = moves.filter(([from]) => anchor[from]).map(([from, to]) => [to, anchor[from]]);
+        for (const [from] of moves) delete anchor[from];
+        for (const [to, entry] of moved) anchor[to] = entry;
+        return anchor;
+      }
+
+      /**
+       * アンカーを読み直して書き換え、書き戻す。onMove と onFetchContent の書き戻しを直列にする
+       * （それぞれが古い写しを丸ごと書き戻すと、相手の書き込みを消す）。fn が false を返したら書かない。
+       */
+      let anchorChain = Promise.resolve();
+      function updateAnchor(fn) {
+        const run = anchorChain.then(async () => {
+          const anchor = await getAnchor();
+          if ((await fn(anchor)) === false) return;
+          await saveAnchor(anchor);
+        });
+        anchorChain = run.catch(() => {});
+        return run;
+      }
+
+      /** files.update で親と名前を変える（中身は通らない）。結果を索引へ反映する。 */
+      async function moveDriveItem(id, name, fromParentId, toParentId) {
+        const fields = encodeURIComponent('id,name,mimeType,md5Checksum,size,modifiedTime,parents');
+        let url = `${DRIVE_API}/files/${encodeURIComponent(id)}?fields=${fields}`;
+        if (fromParentId !== toParentId) {
+          url += `&addParents=${encodeURIComponent(toParentId)}&removeParents=${encodeURIComponent(fromParentId)}`;
+        }
+        const f = await driveFetch(url, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name }),
+        });
+        if (!f || f.id !== id) throw new Error('unexpected response from files.update');
+        index.byId[id] = nodeFromDriveFile(f);
+        markIndexDirty();
+        return f;
+      }
+
+      /** Drive の側の移動を戻す（手元が動かなかったとき・動かした後で失敗したとき）。 */
+      async function undoDriveMove(done) {
+        const { plan, toParentId, anchorMoved } = done;
+        try {
+          await moveDriveItem(plan.id, plan.oldName, toParentId, plan.oldParentId);
+          if (anchorMoved)
+            await updateAnchor((anchor) =>
+              rekeyAnchor(
+                anchor,
+                plan.moves.map(([f, t]) => [t, f]),
+              ),
+            );
+          await trashCreatedFolders(done.created);
+          remoteCache = derivePathMap();
+          await saveIndex();
+          return true;
+        } catch (e) {
+          log(`Could not undo the move of ${plan.id} on Drive: ${e.message}`, 'error');
+          return false;
+        }
+      }
+
+      /** 行き先の親として作ったフォルダを、深いほうから片付ける（移動を取りやめたとき）。 */
+      async function trashCreatedFolders(ids) {
+        for (const id of [...(ids || [])].reverse()) {
+          try {
+            await trashRemote(id);
+          } catch (e) {
+            log(`Could not remove the folder ${id} created for a move: ${e.message}`, 'warn');
+          }
+        }
+      }
+
+      // 照合（reconcile）と排他する。照合の最中はアンカーと写しが動くので、終わるのを待ってから動かす
+      // （断ると、動かした直後の 2 度目の移動が毎回ホストの実体化に落ちる —— 1 度目の改名が照合を起こすため。
+      //  firebase_sync で 2026-10-21 に踏んだ）。待ちは有界（核の RPC は 150 秒で切れる）。
+      const MOVE_WAIT_MS = 30 * 1000;
+      const MOVE_POLL_MS = 50;
+
+      async function acquireSyncSlot(deadlineMs) {
+        const until = Date.now() + deadlineMs;
+        while (isSyncing) {
+          if (Date.now() > until) return false;
+          await new Promise((r) => setTimeout(r, 100));
+        }
+        isSyncing = true;
+        return true;
+      }
+
+      /**
+       * true を返した後、手元が動くまで照合を止めておく。
+       * Drive とアンカーは新パス・手元はまだ旧パス、の間に照合が走ると、新パスは「手元で消された」と読まれて
+       * Drive のゴミ箱へ送られ、旧パスの stub は鍵を失う。核は true を受けた直後に手元を動かすので普通は一瞬だが、
+       * 手元の改名が失敗したとき（権限・競合）は MOVE_WAIT_MS で見切り、Drive の側を戻す。
+       */
+      async function holdUntilMoved(oldFull, newFull, done) {
+        try {
+          const until = Date.now() + MOVE_WAIT_MS;
+          while (Date.now() < until) {
+            if (await MetaOS.fs.exists(newFull)) return;
+            await new Promise((r) => setTimeout(r, MOVE_POLL_MS));
+          }
+          if (await MetaOS.fs.exists(oldFull)) {
+            log(`The host did not move ${oldFull} -> ${newFull}. Undoing the move on Drive.`, 'warn');
+            await undoDriveMove(done);
+          }
+        } catch (e) {
+          log(`Could not confirm the local move ${oldFull} -> ${newFull}: ${e.message}`, 'warn');
+        } finally {
+          isSyncing = false;
+          triggerSync();
+        }
+      }
+
+      async function onMove(oldFull, newFull) {
+        if (!rootFolderId || !(await loadToken())) return false;
+        let acquired;
+        moveWaiting++;
+        try {
+          acquired = await acquireSyncSlot(MOVE_WAIT_MS);
+        } finally {
+          moveWaiting--;
+        }
+        if (!acquired) {
+          log(`onMove ${oldFull} -> ${newFull}: left to the host (reconciliation is busy)`, 'warn');
+          return false;
+        }
+        let held = false;
+        let done = null;
+        let created = [];
+        try {
+          foreignMountPaths = await resolveForeignMounts();
+          const R = await getRemoteState();
+          remoteCache = R;
+          const A = await getAnchor();
+          const plan = planDriveMove(oldFull, newFull, A, R, index.byId, rootFolderId);
+          if (!plan.ok) {
+            log(`onMove ${oldFull} -> ${newFull}: left to the host (${plan.reason})`);
+            return false;
+          }
+
+          const before = new Set(Object.keys(R));
+          const toParentId = plan.newParentId || (await ensureRemoteFolder(plan.newParentRel, R));
+          created = Object.keys(R)
+            .filter((p) => !before.has(p))
+            .map((p) => R[p].id);
+          await moveDriveItem(plan.id, plan.newName, plan.oldParentId, toParentId);
+          done = { plan, toParentId, created, anchorMoved: false };
+
+          await updateAnchor((anchor) => rekeyAnchor(anchor, plan.moves));
+          done.anchorMoved = true;
+          remoteCache = derivePathMap();
+          await saveIndex();
+
+          log(
+            `Moved on Drive: ${oldFull} -> ${newFull} (${plan.moves.length} anchor entr${plan.moves.length === 1 ? 'y' : 'ies'})`,
+          );
+          held = true;
+          holdUntilMoved(oldFull, newFull, done);
+          return true;
+        } catch (e) {
+          if (isAuthError(e)) log(`onMove ${oldFull} -> ${newFull}: left to the host (not authenticated)`, 'warn');
+          else log(`onMove ${oldFull} -> ${newFull} failed; left to the host: ${e.message}`, 'warn');
+          // Drive の側だけ動いた状態で false を返すと、核は旧パスで実体化してから手元を動かす。
+          // 戻せなければ次の照合で衝突として現れる（実体は fileId で取れるので失われない）
+          if (done) await undoDriveMove(done);
+          else await trashCreatedFolders(created);
+          return false;
+        } finally {
+          if (!held) {
+            isSyncing = false;
+            triggerSync(); // 譲らせた照合をやり直す
+          }
         }
       }
 
@@ -1135,6 +1420,7 @@
         await MetaOS.fs.registerSyncProvider(mountPath, {
           onFetchContent,
           onMutate: () => triggerSync(),
+          onMove, // 持つことが「申し出」になる（capabilities.move）。T-0691
         });
 
         log(mountPath ? `Mounted at /${mountPath}` : 'Mounted at VFS root');
