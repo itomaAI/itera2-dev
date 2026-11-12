@@ -66,6 +66,16 @@ How a guest document comes to exist: the host puts a small bootstrap in the ifra
 
 Which references are "static": the compiler resolves what it can see in the files it reads — HTML attributes, CSS, and ES modules (import specifiers and `new URL('…', import.meta.url)`), each relative to the file that contains it. Module specifiers are not replaced by URLs: they are rewritten to synthetic bare specifiers (`@vfs/<VFS path>`), and one import map per document, placed before the first module, binds them to the object URLs. A module body therefore never contains the URL of another module, which is why circular imports work and why the order in which URLs are created does not matter. The entry document also receives its own VFS path, which the bridge exposes synchronously as `MetaOS.app`. The full list of resolved forms, and what is not resolved, is in `04_development.md` ("An app made of several files").
 
+### Running guests on the host origin (Itera only)
+
+The globe button next to the sudo lock (top of the Explorer) removes the boundary for a while: every running guest is restarted with `allow-same-origin`, so its document takes the **host's origin**. `localStorage`, `sessionStorage` and `indexedDB` then work as in an ordinary web page — this is for running a web app you are building inside Itera. While it is on, the button is red and a guest *is* the host: it can read and change the host's storage (the VFS, the session history, the LLM keys) and the host page itself, bypassing ACL.
+
+- Only a person switches it, with that button. There is no API, tool or setting for it.
+- The state is kept in memory only. Reloading the host always brings guests back to the opaque origin.
+- Switching it off restarts every guest in isolation and removes any Service Worker registered under the host's directory (the host uses none). Leaving "Reload the host" checked also discards anything a guest left in the host page (replaced functions, listeners). Changes a guest made to the host's storage are not undone.
+- Data a guest stores while it is on lives in the host origin's storage, shared with the host and with every other guest, and is not part of the VFS (not synced, invisible once the boundary is back).
+- Distributions decide whether the button exists (`src/config/guest_origin_policy.ts`). Myaku Raku does not have it.
+
 ### Contents are immutable; names move; a handed-out handle lives until it is given back or its process ends
 
 The `Blob` handles above are files in the host's OPFS. An OPFS `File` obtained with `getFile()` becomes unreadable the moment the entry it came from is overwritten, deleted or replaced (Chromium `NotReadableError`, Firefox `AbortError`; a `fetch` of an object URL made from it fails with `TypeError`). Wrapping it in a new `Blob` does not help; only bytes already expanded with `arrayBuffer()` survive. So the VFS never overwrites an entry:

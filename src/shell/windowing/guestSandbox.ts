@@ -17,10 +17,29 @@
  * - allow-popups: `target=_blank`・`window.open`
  * - allow-popups-to-escape-sandbox: 開いた先（外のサイト）に sandbox を継がせない。無いと外のサイトが opaque origin で開いて壊れる
  * - allow-downloads: `a[download]` で保存できるように（T-0345）
- * `allow-same-origin` は付けない（上）。
+ * `allow-same-origin` は付けない（上）。例外は人が境界を外している間だけ（下の `GUEST_SANDBOX_SAME_ORIGIN`）。
  */
 export const GUEST_SANDBOX =
   'allow-scripts allow-forms allow-modals allow-popups allow-popups-to-escape-sandbox allow-downloads';
+
+/**
+ * 境界を外したときの旗（T-0838）。上に `allow-same-origin` を足しただけ。
+ * ゲストの文書は srcdoc なので、この旗でホストのオリジンを継ぐ —— ホストの `localStorage` / IndexedDB / OPFS / DOM に届き、
+ * 自分の iframe の sandbox を外すこともできる。使うのは、人がホストの画面で境界を外している間だけ
+ * （`ProcessManager.setGuestSameOrigin`・配布物の可否は `src/config/guest_origin_policy.ts`）。
+ */
+export const GUEST_SANDBOX_SAME_ORIGIN = `${GUEST_SANDBOX} allow-same-origin`;
+
+/** 起動するゲストに与える旗。同一オリジンは配布物が許すときだけ（許さなければ引数によらず opaque） */
+export function guestSandbox(sameOrigin: boolean, allowed: boolean): string {
+  return sameOrigin && allowed ? GUEST_SANDBOX_SAME_ORIGIN : GUEST_SANDBOX;
+}
+
+/** その iframe が同一オリジンの旗で作られたか（表示は記録ではなく、iframe そのものから描く） */
+export function isSameOriginFrame(iframe: { getAttribute(name: string): string | null } | null | undefined): boolean {
+  const flags = (iframe?.getAttribute('sandbox') ?? '').split(/\s+/);
+  return flags.includes('allow-same-origin');
+}
 
 /**
  * Permissions Policy（`allow` 属性）で iframe に委ねる機能。

@@ -42,6 +42,8 @@ import { LpmlRenderer } from '../services/LpmlRenderer';
 import { PanelLayout } from './PanelLayout';
 import { t } from '../../i18n/i18n';
 import { bindText } from '../../i18n/staticTexts';
+import { GUEST_SAME_ORIGIN_SWITCH } from '../../config/guest_origin_policy';
+import { unregisterHostServiceWorkers } from '../windowing/hostServiceWorkers';
 
 export class DesktopEnvironment {
   // Components
@@ -124,6 +126,7 @@ export class DesktopEnvironment {
     this._bindMobileNavigation();
     this._bindCommandPaletteShortcut();
     this._bindSudoToggle();
+    this._bindGuestOriginToggle(processManager);
     this._bindCloudSync(adapterHost);
   }
 
@@ -410,6 +413,85 @@ export class DesktopEnvironment {
         if (window.AppUI) window.AppUI.notify(t('shell.sudo.enabled'), 'warning');
       }
     }
+  }
+
+  /**
+   * ゲストとホストの境界のスイッチ（T-0838）。切り替えるのは人だけ（このボタン）。AI の道具・設定・ゲストの API には口が無い。
+   * 表示は ProcessManager の状態と、同一オリジンの旗で動いている iframe から描く（押した記録からは描かない）。
+   */
+  private _bindGuestOriginToggle(processManager: ProcessManager): void {
+    const btn = document.getElementById('btn-guest-origin');
+    if (!btn) return;
+    if (!GUEST_SAME_ORIGIN_SWITCH) {
+      btn.remove();
+      return;
+    }
+    let busy = false;
+    btn.onclick = async () => {
+      if (busy) return;
+      busy = true;
+      try {
+        await this._toggleGuestOrigin(processManager);
+      } finally {
+        busy = false;
+        this._updateGuestOriginUI(processManager);
+      }
+    };
+    const refresh = () => this._updateGuestOriginUI(processManager);
+    processManager.on('process_spawned', refresh);
+    processManager.on('process_killed', refresh);
+    processManager.on('guest_origin_changed', refresh);
+    refresh();
+  }
+
+  private async _toggleGuestOrigin(processManager: ProcessManager): Promise<void> {
+    const on = processManager.isGuestSameOrigin() || processManager.sameOriginPids().length > 0;
+    if (!on) {
+      const res = await window.AppUI?.showMessageBox({
+        title: t('shell.guestOrigin.enableTitle'),
+        message: t('shell.guestOrigin.enableMessage'),
+        type: 'warning',
+        buttons: [
+          { label: t('common.cancel'), value: false, style: 'normal', isCancel: true },
+          { label: t('shell.guestOrigin.enableConfirm'), value: true, style: 'danger', isDefault: true },
+        ],
+      });
+      if (!res || res.action !== true) return;
+      await processManager.setGuestSameOrigin(true);
+      if (window.AppUI) window.AppUI.notify(t('shell.guestOrigin.enabled'), 'warning');
+      return;
+    }
+    const res = await window.AppUI?.showMessageBox({
+      title: t('shell.guestOrigin.disableTitle'),
+      message: t('shell.guestOrigin.disableMessage'),
+      type: 'info',
+      checkbox: { label: t('shell.guestOrigin.reloadHost'), defaultChecked: true },
+      buttons: [
+        { label: t('common.cancel'), value: false, style: 'normal', isCancel: true },
+        { label: t('shell.guestOrigin.disableConfirm'), value: true, style: 'primary', isDefault: true },
+      ],
+    });
+    if (!res || res.action !== true) return;
+    // ホストは Service Worker を使わない。ホストの範囲に在る登録は、境界を外している間にゲストが置いたもの
+    await unregisterHostServiceWorkers(location.href);
+    if (res.checkboxChecked) {
+      // 状態はメモリにだけ在るので、読み直せば全ゲストが opaque で起き、ホストの実行環境も作り直される
+      location.reload();
+      return;
+    }
+    await processManager.setGuestSameOrigin(false);
+    if (window.AppUI) window.AppUI.notify(t('shell.guestOrigin.disabled'), 'info');
+  }
+
+  private _updateGuestOriginUI(processManager: ProcessManager): void {
+    const btn = document.getElementById('btn-guest-origin');
+    if (!btn) return;
+    const on = processManager.isGuestSameOrigin() || processManager.sameOriginPids().length > 0;
+    btn.classList.toggle('text-error', on);
+    btn.classList.toggle('bg-error/10', on);
+    btn.classList.toggle('text-text-muted', !on);
+    btn.classList.toggle('hover:text-warning', !on);
+    bindText(btn, on ? 'shell.guestOrigin.disable' : 'shell.guestOrigin.enable', undefined, 'title');
   }
 
   private _updateSudoUI(): void {
