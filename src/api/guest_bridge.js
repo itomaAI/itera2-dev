@@ -144,6 +144,33 @@
   }
 
   const MY_PID = window.__ITERA_PID__ || window.name || 'unknown';
+
+  // このプロセスの入口の文書の VFS のパス（GuestCompiler が差し込む。T-0822）。
+  // アプリが「自分のフォルダの中のファイル」を、置き場所を決め打ちせずに指すための出どころ。
+  const MY_PATH = typeof window.__ITERA_PATH__ === 'string' ? window.__ITERA_PATH__ : '';
+  const MY_DIR = MY_PATH.includes('/') ? MY_PATH.slice(0, MY_PATH.lastIndexOf('/')) : '';
+
+  // 相対パス → VFS のパス。規則はコンパイラが静的な参照を解決するときと同じ（src/utils/path.ts の resolveRelativePath）:
+  // './' '../' と裸の名前は自分のフォルダから、先頭の '/' は VFS の根から。根より上には出ない。
+  // 🔴 同じ規則の 2 つ目の置き場（ゲストは TS を import できない）。guest_bridge.test.ts が 2 つを同じ表で突き合わせる。
+  function resolveAppPath(relPath) {
+    let base = MY_DIR;
+    let rel = String(relPath === undefined || relPath === null ? '' : relPath);
+    if (rel.startsWith('/')) {
+      base = '';
+      rel = rel.substring(1);
+    }
+    const stack = base ? base.split('/') : [];
+    for (const part of rel.split('/')) {
+      if (part === '.' || part === '') continue;
+      if (part === '..') {
+        if (stack.length > 0) stack.pop();
+      } else {
+        stack.push(part);
+      }
+    }
+    return stack.join('/');
+  }
   const transport = new GuestTransport(MY_PID);
 
   // resolveUrl が作った object URL → その実体の保持を手放すための券（T-0798）。
@@ -326,6 +353,10 @@
   });
 
   global.MetaOS = {
+    // このプロセス自身（同期で読める。T-0822）。
+    //   path: 入口の文書の VFS のパス ／ dir: そのフォルダ ／ resolve(rel): 相対パス → VFS のパス
+    // 例: MetaOS.fs.read(MetaOS.app.resolve('items.json'))・MetaOS.fs.resolveUrl(MetaOS.app.resolve('img/a.png'))
+    app: Object.freeze({ pid: MY_PID, path: MY_PATH, dir: MY_DIR, resolve: resolveAppPath }),
     fs: {
       read: async (path, opts = {}) => transport.requestHost('fs:read', { path, opts }),
       write: async (path, content, opts = {}) => transport.requestHost('fs:write', { path, content, opts }),
