@@ -367,7 +367,6 @@
         const LOOM_DIR = `${APPDATA}/loom`;
         const EVENTS_DIR = `${APPDATA}/events`;
         const TASKS_DIR = `${APPDATA}/tasks`;
-        const BRIDGE_CONFIG = 'system/config/local_bridge.json'; // 端末の状態（Local Bridge の設定アプリ・デーモンと同じ場所）
 
         const DOM = (id) => document.getElementById(id);
         const esc = (v) =>
@@ -614,7 +613,8 @@
           }
         };
         const loadBridge = async () => {
-          const cfg = await readJson(BRIDGE_CONFIG, null);
+          // 設定の層から読む（Local Bridge のデーモン・設定アプリと同じ。T-0831）
+          const cfg = await App.Config.get('local_bridge').catch(() => null);
           const conns = ((cfg && cfg.connections) || []).filter((c) => c && c.enabled !== false && c.serverUrl);
           const el = DOM('bridge-list');
           if (!conns.length) {
@@ -1142,9 +1142,9 @@
               if (!loomViaDaemon) loomD();
             } else if (p.startsWith(`${EVENTS_DIR}/`) || p.startsWith(`${TASKS_DIR}/`)) calD();
             else if ((p.startsWith(`${USER_HOME}/`) && isNotePath(p)) || p.startsWith(`${JOURNALS}/`)) notesD();
-            else if (p === BRIDGE_CONFIG) loadBridge();
           });
           // 設定・登録簿は、持ち主（ホスト）が「値が変わった」ときだけ知らせる（T-0539 / T-0540）
+          App.Config.onChange('local_bridge', () => loadBridge());
           App.Config.onChange('preferences', (prefs) => {
             applyPreferences(prefs);
             updateClock();

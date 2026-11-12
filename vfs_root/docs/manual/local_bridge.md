@@ -12,7 +12,7 @@ Connects part of the VFS to a real directory on a host machine (your PC or a GPU
 | Host-side server | `services/itera_bridge_server.py` | One file that is both the server and the CLI. Handles several roots |
 | OS-side daemon | `services/local_bridge.html` (pid `local_bridge`) | Mounting, reconciliation, the LPML tools |
 | Settings app | `apps/local_bridge_settings.html` | List and operate connections and roots, distribute the server |
-| Connection settings | `system/config/local_bridge.json` | Connections and ignore patterns |
+| Connection settings | config category `local_bridge` (`MetaOS.system.getConfig('local_bridge')` / `updateConfig`; the file is `local_bridge.json` in the config layers — `system/config/`, and the user layer when the build declares one) | Connections and ignore patterns |
 | Anchors | `data/apps/local_bridge/anchors/` | The state of the last sync and **the identity of the other side** |
 
 Mount point: **`local/<connection>/<root>`**.

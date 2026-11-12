@@ -13,7 +13,9 @@
       (async function main() {
         if (!window.MetaOS) return setTimeout(main, 100);
 
-        const CONFIG_PATH = 'system/config/local_bridge.json';
+        // 設定は OS の設定の層（配信の既定 → 利用者の上書き）から読む。設定のファイルを
+        // 直接読むと、利用者の層（itera2 の `user/config/`）を見ない（T-0831）。
+        const CONFIG_CATEGORY = 'local_bridge';
         // アンカーは非揮発の場所に置く。system/temp はセッション破棄で消え、
         // 「アンカーが無い」状態は調停の分岐4（ローカルに新規）を誤成立させる。
         const ANCHOR_DIR = 'data/apps/local_bridge/anchors';
@@ -52,14 +54,18 @@
         };
 
         let config = DEFAULT_CONFIG;
+        let stored = null;
         try {
-          config = { ...DEFAULT_CONFIG, ...JSON.parse(await MetaOS.fs.read(CONFIG_PATH)) };
+          stored = await MetaOS.system.getConfig(CONFIG_CATEGORY);
         } catch (e) {
+          console.warn('[LocalBridge] Could not read the settings: ' + e.message);
+        }
+        if (stored && typeof stored === 'object' && Object.keys(stored).length > 0) {
+          config = { ...DEFAULT_CONFIG, ...stored };
+        } else {
+          // どの層にも無い（初めての起動）。既定を書いておく（設定アプリはこれを読んで表示する）
           try {
-            await MetaOS.fs.write(CONFIG_PATH, JSON.stringify(DEFAULT_CONFIG, null, 2), {
-              overwrite: true,
-              silent: true,
-            });
+            await MetaOS.system.updateConfig(CONFIG_CATEGORY, DEFAULT_CONFIG);
           } catch (e2) {}
         }
 
@@ -67,7 +73,7 @@
 
         async function saveConfig() {
           try {
-            await MetaOS.fs.write(CONFIG_PATH, JSON.stringify(config, null, 2), { overwrite: true, silent: true });
+            await MetaOS.system.updateConfig(CONFIG_CATEGORY, config);
           } catch (e) {
             log(`Could not write the settings back: ${e.message}`);
           }

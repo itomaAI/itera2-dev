@@ -72,7 +72,15 @@
     <div id="igmodal"></div>
 
     <script>
-      const CONFIG_PATH = 'system/config/local_bridge.json';
+      // 設定は OS の設定の層から読み書きする（デーモンと同じ。ファイルを直接読むと利用者の層を見ない。T-0831）
+      const CONFIG_CATEGORY = 'local_bridge';
+      async function readConfig() {
+        const cfg = await MetaOS.system.getConfig(CONFIG_CATEGORY);
+        if (!cfg || typeof cfg !== 'object' || Object.keys(cfg).length === 0) {
+          throw new Error('no settings yet (start the Local Bridge daemon once)');
+        }
+        return cfg;
+      }
       const ANCHOR_DIR = 'data/apps/local_bridge/anchors';
       // 配信後は system/services/ に入る。開発中のこの環境では services/ にある。
       // どちらでも動くよう両方を見る。
@@ -98,14 +106,14 @@
       async function mutateConfig(fn) {
         let cfg;
         try {
-          cfg = JSON.parse(await MetaOS.fs.read(CONFIG_PATH));
+          cfg = await readConfig();
         } catch (e) {
           alertBox('Could not read the settings: ' + e.message, 'error');
           return false;
         }
         const next = fn(cfg);
         if (!next) return false;
-        await MetaOS.fs.write(CONFIG_PATH, JSON.stringify(next, null, 2), { overwrite: true });
+        await MetaOS.system.updateConfig(CONFIG_CATEGORY, next);
         await refresh();
         return true;
       }
@@ -222,10 +230,10 @@
         DOM('alerts').innerHTML = '';
         let cfg;
         try {
-          cfg = JSON.parse(await MetaOS.fs.read(CONFIG_PATH));
+          cfg = await readConfig();
         } catch (e) {
           DOM('conns').innerHTML = '';
-          alertBox('Cannot read the settings file: ' + CONFIG_PATH, 'error');
+          alertBox('Cannot read the settings: ' + e.message, 'error');
           return;
         }
         state.config = cfg;
