@@ -10,7 +10,8 @@ import { USER_PRINCIPAL } from '../../core/vfs/types';
 import { GuestCompiler, typedBlob } from './GuestCompiler';
 import type { CompiledGuest } from './GuestCompiler';
 import { GuestBoot, bootstrapHtml } from './guestBoot';
-import { GUEST_SANDBOX, guestAllow } from './guestSandbox';
+import { guestAllow, guestSandbox, isSameOriginFrame } from './guestSandbox';
+import { GUEST_SAME_ORIGIN_SWITCH } from '../../config/guest_origin_policy';
 import { resolveRelativePath } from '../../utils/path';
 import { t } from '../../i18n/i18n';
 import { declaredRoute } from './declaredRoute';
@@ -93,6 +94,12 @@ export class ProcessManager {
   public processes: Map<string, Process> = new Map();
   public currentRoute: CurrentRoute | null = null;
   private MAX_APPS = 10;
+  /**
+   * ゲストをホストと同一オリジンで起動するか（T-0838）。人がホストの画面で切り替える。
+   * メモリにだけ持つ —— ホストを読み直せば必ず false（opaque）に戻る。保存しないのは、同一オリジンのゲストが
+   * 保存先を書き換えて「読み直しても外れたまま」にできないようにするため。
+   */
+  private guestSameOrigin = false;
   private events: Record<string, Function[]> = {};
   private els: Record<string, HTMLElement | null> = {};
 
@@ -239,8 +246,9 @@ export class ProcessManager {
       }
     }
 
-    // 新規起動または強制リロード
-    this.kill(pid);
+    // 新規起動または強制リロード。表示するなら前面は新しい起動が取るので、kill に前面を渡させない
+    // （渡させると、前面のホームを起動し直すときに kill がホームを別に起こし、iframe が 2 つになる。T-0838 で見つけた）
+    this.kill(pid, { refocus: !show });
 
     if (show && this.els.LOADER) {
       this.els.LOADER.classList.remove('hidden');
@@ -253,8 +261,8 @@ export class ProcessManager {
       const iframe = document.createElement('iframe');
       iframe.id = `proc-${pid}`;
       iframe.name = pid;
-      // ゲストはホストと同一オリジンではない（旗の意味は guestSandbox.ts）
-      iframe.sandbox = GUEST_SANDBOX;
+      // ゲストはホストと同一オリジンではない（旗の意味は guestSandbox.ts）。人が境界を外している間だけ同一オリジン（T-0838）
+      iframe.setAttribute('sandbox', guestSandbox(this.guestSameOrigin, GUEST_SAME_ORIGIN_SWITCH));
       iframe.allow = guestAllow();
 
       if (type === 'app') {
@@ -352,8 +360,13 @@ export class ProcessManager {
     }
   }
 
-  kill(pid: string): boolean {
+  /**
+   * プロセスを終わらせる。前面のアプリだったときは、残りのアプリかホームへ前面を渡す。
+   * `refocus: false` は「前面は呼び手が決める」（spawn が同じ pid を表示つきで起動し直すとき）。
+   */
+  kill(pid: string, opts: { refocus?: boolean } = {}): boolean {
     if (!this.processes.has(pid)) return false;
+    const refocus = opts.refocus !== false;
 
     const proc = this.processes.get(pid)!;
 
@@ -374,7 +387,7 @@ export class ProcessManager {
       this.events['process_killed'].forEach((cb) => cb(pid, proc));
     }
 
-    if (proc.state === 'foreground') {
+    if (proc.state === 'foreground' && refocus) {
       const apps = Array.from(this.processes.values()).filter((p) => p.type === 'app');
       if (apps.length > 0) {
         apps.sort((a, b) => b.lastActiveTime - a.lastActiveTime);
@@ -388,6 +401,54 @@ export class ProcessManager {
 
     console.log(`[ProcessManager] Killed [${pid}]`);
     return true;
+  }
+
+  /** 次に起動するゲストを同一オリジンにするか（T-0838） */
+  isGuestSameOrigin(): boolean {
+    return this.guestSameOrigin;
+  }
+
+  /** いま同一オリジンの旗で動いているゲスト（iframe そのものを見る） */
+  sameOriginPids(): string[] {
+    return Array.from(this.processes.values())
+      .filter((p) => isSameOriginFrame(p.iframe))
+      .map((p) => p.pid);
+  }
+
+  /**
+   * ゲストとホストの境界を外す／戻す（T-0838）。走っているゲストを全部その旗で起動し直す ——
+   * sandbox は次に文書を読み込んだときから効くので、旗を変えただけでは走っている文書は変わらない。
+   * 戻すときも全部起動し直す（残すと、そのゲストは戻した後もホストに届く）。
+   * ホストの実行環境に仕込まれたもの（差し替えられた関数など）はこれでは消えない。消すのはホストの再読み込み。
+   */
+  async setGuestSameOrigin(on: boolean): Promise<void> {
+    if (on && !GUEST_SAME_ORIGIN_SWITCH)
+      throw new Error('[ProcessManager] Same-origin guests are not available in this build.');
+    this.guestSameOrigin = on;
+    await this.restartAll();
+    if (this.events['guest_origin_changed']) {
+      this.events['guest_origin_changed'].forEach((cb) => cb(on));
+    }
+  }
+
+  /** 走っているゲストを全部起動し直す。前面のアプリは最後に（先に消すと別のアプリかホームへ前面が移るため） */
+  async restartAll(): Promise<void> {
+    const procs = Array.from(this.processes.values());
+    const front = procs.find((p) => p.state === 'foreground');
+    const order = [...procs.filter((p) => p !== front), ...(front ? [front] : [])];
+    await Promise.all(
+      order.map((p) =>
+        this.spawn({
+          pid: p.pid,
+          path: p.path,
+          type: p.type,
+          show: p === front,
+          forceReload: true,
+          args: p.args,
+          currentUri: p.currentUri,
+        }),
+      ),
+    );
   }
 
   killAll(): void {
