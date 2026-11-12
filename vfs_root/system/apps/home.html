@@ -547,8 +547,8 @@
 
         // ---------- 会話の長さ（MetaOS.chat.status から） ----------
         // 数えるのはホスト（いまの会話の履歴の、最後の返事）。上限もホストが答える（モデルの一覧に無ければ null）。
-        // ここは表示だけで、usage のログは読まない。取り直すのは 1 分ごとと、モデルを替えたとき
-        // （ホストは system/logs/ の変更をゲストへ知らせないので、ログの書き込みは合図にならない）。
+        // ここは表示だけで、usage のログは読まない。取り直すのは、会話が変わったとき（ホストの chat_changed。
+        // 返事の終わり・リセット・会話の切り替え）と、モデルを替えたとき（上限が変わる）。
         const loadContext = async () => {
           let ctx = null;
           try {
@@ -1124,7 +1124,6 @@
 
           setInterval(updateClock, 1000);
           setInterval(fetchWeather, 30 * 60 * 1000);
-          setInterval(() => !document.hidden && loadContext(), 60 * 1000);
           setInterval(() => !document.hidden && loadBridge(), 30 * 1000);
           setInterval(() => !document.hidden && loadVfs(), 5 * 60 * 1000);
 
@@ -1164,6 +1163,9 @@
             loadContext();
           });
           App.Registry.onChange('apps', () => refreshApps());
+          // 会話の長さは、会話が変わったとき（返事の終わり・リセット・切り替え）にホストが知らせる（chat_changed。T-0819）
+          const contextD = debounce(loadContext, 300);
+          MetaOS.system.on('chat_changed', () => contextD());
         };
         document.readyState === 'loading' ? document.addEventListener('DOMContentLoaded', boot) : boot();
       })();

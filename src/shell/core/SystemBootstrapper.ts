@@ -359,7 +359,7 @@ export class SystemBootstrapper {
     orchestrator.bindAll();
     themeService.start();
     localeService.start();
-    // OS の状態の告知（config_changed / theme_changed）。反応するかはアプリが決める（T-0539）
+    // OS の状態の告知（config_changed / theme_changed / registry_changed / chat_changed）。反応するかはアプリが決める（T-0539）
     // nav_changed もここから出る（活性の変化。ホストの ← → は DesktopEnvironment が別に購読する）
     wireOsAnnouncements({
       configManager,
@@ -367,6 +367,7 @@ export class SystemBootstrapper {
       navHistory,
       appRegistry,
       associations: resolver,
+      history,
       broadcast: (name, payload) => processManager.broadcast(name, payload),
     });
     cognitiveManager.start(); // llm.json の変更でアダプタを作り直す（入口では作り直さない。T-0313）

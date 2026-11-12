@@ -1,5 +1,12 @@
 import { describe, it, expect } from 'vitest';
-import { wireOsAnnouncements, CONFIG_CHANGED, THEME_CHANGED, NAV_CHANGED, REGISTRY_CHANGED } from './OsAnnouncer';
+import {
+  wireOsAnnouncements,
+  CONFIG_CHANGED,
+  THEME_CHANGED,
+  NAV_CHANGED,
+  REGISTRY_CHANGED,
+  CHAT_CHANGED,
+} from './OsAnnouncer';
 
 /** 持ち主の知らせを名前を付けて配るだけであること（T-0539）。 */
 function harness() {
@@ -8,6 +15,7 @@ function harness() {
   const navListeners = new Set<(s: any) => void>();
   const regListeners = new Set<(changed: ReadonlySet<string>) => void>();
   const assocListeners = new Set<() => void>();
+  const historyListeners = new Set<(p: any) => void>();
   const sent: Array<[string, unknown]> = [];
   const deps = {
     configManager: {
@@ -40,6 +48,12 @@ function harness() {
         return () => assocListeners.delete(cb);
       },
     },
+    history: {
+      on(event: 'change', cb: (p: any) => void) {
+        if (event === 'change') historyListeners.add(cb);
+        return () => historyListeners.delete(cb);
+      },
+    },
     broadcast: (name: string, payload: unknown) => sent.push([name, payload]),
   };
   const fireConfig = (changed: string[]) => configListeners.forEach((cb) => cb({}, new Set(changed)));
@@ -47,6 +61,7 @@ function harness() {
   const fireNav = (s: unknown) => navListeners.forEach((cb) => cb(s));
   const fireRegistry = (changed: string[]) => regListeners.forEach((cb) => cb(new Set(changed)));
   const fireAssoc = () => assocListeners.forEach((cb) => cb());
+  const fireHistory = (p: unknown) => historyListeners.forEach((cb) => cb(p));
   return {
     deps,
     sent,
@@ -55,11 +70,13 @@ function harness() {
     fireNav,
     fireRegistry,
     fireAssoc,
+    fireHistory,
     configListeners,
     themeListeners,
     navListeners,
     regListeners,
     assocListeners,
+    historyListeners,
   };
 }
 
@@ -96,6 +113,19 @@ describe('wireOsAnnouncements', () => {
     ]);
   });
 
+  it('chat_changed carries only the kind of change, not the turn', () => {
+    const h = harness();
+    wireOsAnnouncements(h.deps);
+    h.fireHistory({ type: 'append', count: 3, turn: { id: 't3', role: 'model', content: '' } });
+    h.fireHistory({ type: 'update', count: 3, turn: { id: 't3', role: 'model', content: 'secret reply' } });
+    h.fireHistory({ type: 'clear', count: 0, previousCount: 3, turn: null });
+    expect(h.sent).toEqual([
+      [CHAT_CHANGED, { change: 'append' }],
+      [CHAT_CHANGED, { change: 'update' }],
+      [CHAT_CHANGED, { change: 'clear' }],
+    ]);
+  });
+
   it('does not decide anything on its own: nothing is sent until an owner speaks', () => {
     const h = harness();
     wireOsAnnouncements(h.deps);
@@ -111,9 +141,11 @@ describe('wireOsAnnouncements', () => {
     expect(h.navListeners.size).toBe(0);
     expect(h.regListeners.size).toBe(0);
     expect(h.assocListeners.size).toBe(0);
+    expect(h.historyListeners.size).toBe(0);
     h.fireConfig(['appearance']);
     h.fireTheme();
     h.fireNav({ canBack: false, canForward: false, current: null });
+    h.fireHistory({ type: 'append', count: 1, turn: {} });
     expect(h.sent).toEqual([]);
   });
 });

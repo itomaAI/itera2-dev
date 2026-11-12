@@ -13,6 +13,11 @@
  *   - nav_changed { canBack, canForward, current } … NavHistory。戻る／進むの活性（T-0453 で入った形をそのまま移した）
  *   - registry_changed { registries } … AppRegistry（'apps' / 'services'）と FileAssociationResolver（'associations'）。
  *     名前は getRegistry の引数と同じ。値が実際に変わったものだけ。受け手は getRegistry で読み直す（T-0540）
+ *   - chat_changed { change } … HistoryManager（会話の持ち主）。change は HistoryManager の変更の種類そのまま
+ *     （'append' | 'update' | 'delete' | 'clear' | 'load'）。ターンの中身は配らない。受け手は MetaOS.chat.status() で読み直す。
+ *     名前は持ち主のクラスではなくゲストが読む口（MetaOS.chat）に揃える（registry_changed が getRegistry に揃えるのと同じ）。
+ *     モデルの返事は「空のターンの append → 結果（usage・止まった理由）を付けた update」の 2 回で、文字の流れでは出ない。
+ *     エンジンの running / busy は履歴の持ち主のものではないので、ここからは告げない（T-0819）
  *
  * OS がゲストへ告げるものの一覧はこのファイルである。ただし vfs_mutation だけは別（EventOrchestrator が出す）——
  * 状態の変化ではなく VFS の変更 1 件ごとの流れで、件数が多く、system/logs/ を除く判定や容量表示の更新と同居しているため。
@@ -24,6 +29,7 @@ export const CONFIG_CHANGED = 'config_changed';
 export const THEME_CHANGED = 'theme_changed';
 export const NAV_CHANGED = 'nav_changed';
 export const REGISTRY_CHANGED = 'registry_changed';
+export const CHAT_CHANGED = 'chat_changed';
 
 export interface RegistryChangedPayload {
   registries: string[];
@@ -31,6 +37,12 @@ export interface RegistryChangedPayload {
 
 export interface ConfigChangedPayload {
   categories: string[];
+}
+
+export type ChatChange = 'append' | 'update' | 'delete' | 'clear' | 'load';
+
+export interface ChatChangedPayload {
+  change: ChatChange;
 }
 
 export interface OsAnnouncerDeps {
@@ -43,6 +55,7 @@ export interface OsAnnouncerDeps {
   };
   appRegistry: { onChange(callback: (changed: ReadonlySet<string>) => void): () => void };
   associations: { onChange(callback: () => void): () => void };
+  history: { on(event: 'change', callback: (payload: { type: ChatChange }) => void): () => void };
   broadcast(eventName: string, payload: unknown): void;
 }
 
@@ -65,11 +78,16 @@ export function wireOsAnnouncements(deps: OsAnnouncerDeps): () => void {
     const payload: RegistryChangedPayload = { registries: ['associations'] };
     deps.broadcast(REGISTRY_CHANGED, payload);
   });
+  const offChat = deps.history.on('change', (p) => {
+    const payload: ChatChangedPayload = { change: p.type };
+    deps.broadcast(CHAT_CHANGED, payload);
+  });
   return () => {
     offConfig();
     offTheme();
     offNav();
     offRegistry();
     offAssociations();
+    offChat();
   };
 }
