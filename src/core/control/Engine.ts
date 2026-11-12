@@ -437,7 +437,7 @@ export class Engine {
         const warningMsg = [
           `<system type="syntax_warning">`,
           `[LPML Syntax Violation] You output raw text outside of valid tags.`,
-          `ABSOLUTE PROHIBITION: All responses must be enclosed in valid tags (e.g., <report>, <yield />). Raw text is ignored.`,
+          `ABSOLUTE PROHIBITION: All responses must be enclosed in valid tags (e.g., <memo>, <report>, <yield />). Raw text is ignored.`,
           `</system>`,
         ].join('\n');
 
