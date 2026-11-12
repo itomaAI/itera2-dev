@@ -1,0 +1,287 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`GuestCompiler: 金型 — 既存の書き方のアプリの出力は変えない（T-0822） > DOCTYPE も head の閉じも無い最小の文書（引数なし） 1`] = `
+{
+  "assets": [
+    {
+      "body": "[blob type=application/javascript] 1;",
+      "id": "__ITERA_ASSET_NONCE_0__",
+      "kind": "blob",
+      "mime": "application/javascript",
+      "path": "x.js",
+    },
+  ],
+  "hash": "",
+  "html": "<!DOCTYPE html>
+<html lang="en"><head>
+<script>window.__ITERA_PID__ = "x";</script>
+<script>/*BRIDGE*/</script>
+<style id="itera-guest-theme">/*THEME*/</style>
+</head><body><p>hi</p><script src="__ITERA_ASSET_NONCE_0__"></script>
+<script>/*HTML_TO_IMAGE*/</script>
+<script>
+window.addEventListener('message', async (e) => {
+    if (e.data.action === 'CAPTURE') {
+        // 撮影のあいだだけ requestAnimationFrame を setTimeout に差し替える（T-0350）。
+        //
+        // html-to-image は画像を読み込んだあと requestAnimationFrame を待つ。
+        // ところがブラウザの窓が実際に描かれていないとき（利用者が別の窓・別のタブを見ている、
+        // 窓が他のウィンドウに完全に隠れている）rAF は発火しない。document.visibilityState は
+        // 'visible' のままなので、外からは「見えている」ようにしか見えないが、撮影は永久に返らない。
+        // 自律で動いている時間帯は、まさに利用者が見ていない時間帯なので、ここが効く。
+        const rafOriginal = window.requestAnimationFrame;
+        window.requestAnimationFrame = (cb) => window.setTimeout(() => cb(performance.now()), 0);
+        try {
+            if (typeof window.htmlToImage === 'undefined') throw new Error('html-to-image failed to load');
+            const data = await window.htmlToImage.toPng(document.body, {
+                backgroundColor: null,
+                skipOnError: true,
+                preferredFontFormat: 'woff2',
+                filter: (node) => {
+                    if (node.tagName === 'IMG' && (!node.src || node.src === '' || node.src === window.location.href)) return false;
+                    return true;
+                }
+            });
+            parent.postMessage({ type: 'SCREENSHOT_RESULT', pid: "x", data }, '*');
+        } catch (err) {
+            parent.postMessage({ type: 'SCREENSHOT_ERROR', pid: "x", message: String(err) }, '*');
+        } finally {
+            window.requestAnimationFrame = rafOriginal;
+        }
+    }
+});
+</script>
+
+</body></html>",
+}
+`;
+
+exports[`GuestCompiler: 金型 — 既存の書き方のアプリの出力は変えない（T-0822） > 読めない入口（無い・ディレクトリ） 1`] = `
+{
+  "assets": [],
+  "hash": "",
+  "html": "<!doctype html><html lang="en"><head><meta charset="utf-8"><title>File not found</title></head><body style="margin:0;height:100vh;display:flex;align-items:center;justify-content:center;background:#1e1e2e;color:#cdd6f4;font-family:system-ui,sans-serif;"><div style="text-align:center;padding:2rem;"><div style="font-size:2rem;">404</div><p style="margin:.5rem 0 0;">File not found</p><p style="margin:.25rem 0 0;opacity:.7;font-size:.85rem;word-break:break-all;">nowhere/app.html</p></div></body></html>",
+}
+`;
+
+exports[`GuestCompiler: 金型 — 既存の書き方のアプリの出力は変えない（T-0822） > 読めない入口（無い・ディレクトリ） 2`] = `
+{
+  "assets": [],
+  "hash": "",
+  "html": "<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Not a file (directory)</title></head><body style="margin:0;height:100vh;display:flex;align-items:center;justify-content:center;background:#1e1e2e;color:#cdd6f4;font-family:system-ui,sans-serif;"><div style="text-align:center;padding:2rem;"><div style="font-size:2rem;">404</div><p style="margin:.5rem 0 0;">Not a file (directory)</p><p style="margin:.25rem 0 0;opacity:.7;font-size:.85rem;word-break:break-all;">dir</p></div></body></html>",
+}
+`;
+
+exports[`GuestCompiler: 金型 — 既存の書き方のアプリの出力は変えない（T-0822） > 静的な参照を並べたアプリ（引数あり） 1`] = `
+{
+  "assets": [
+    {
+      "body": "[blob type=application/javascript] window.AppUI = {};",
+      "id": "__ITERA_ASSET_NONCE_0__",
+      "kind": "blob",
+      "mime": "application/javascript",
+      "path": "system/core/ui.js",
+    },
+    {
+      "body": "[blob type=application/javascript] console.log('app');",
+      "id": "__ITERA_ASSET_NONCE_1__",
+      "kind": "blob",
+      "mime": "application/javascript",
+      "path": "apps/demo/js/app.js",
+    },
+    {
+      "body": "[blob type=application/javascript] window.util = 1;",
+      "id": "__ITERA_ASSET_NONCE_2__",
+      "kind": "blob",
+      "mime": "application/javascript",
+      "path": "apps/shared/util.js",
+    },
+    {
+      "body": "[blob type=image/png] HERO",
+      "id": "__ITERA_ASSET_NONCE_3__",
+      "kind": "blob",
+      "mime": "image/png",
+      "path": "apps/demo/img/hero.png",
+    },
+    {
+      "body": "[blob type=font/woff2] WOFF2",
+      "id": "__ITERA_ASSET_NONCE_4__",
+      "kind": "blob",
+      "mime": "font/woff2",
+      "path": "apps/demo/fonts/x.woff2",
+    },
+    {
+      "body": "[blob type=image/png] LOGO",
+      "id": "__ITERA_ASSET_NONCE_5__",
+      "kind": "blob",
+      "mime": "image/png",
+      "path": "apps/demo/img/logo.png",
+    },
+    {
+      "body": "html { color: black; } .logo { background: url("__ITERA_ASSET_NONCE_5__"); }",
+      "id": "__ITERA_ASSET_NONCE_6__",
+      "kind": "text",
+      "mime": "text/css",
+      "path": "apps/demo/css/base.css",
+    },
+    {
+      "body": "@import url(__ITERA_ASSET_NONCE_6__);
+@font-face { font-family: X; src: url("__ITERA_ASSET_NONCE_4__") format("woff2"); }
+body { background: url(__ITERA_ASSET_NONCE_3__) no-repeat; }
+.ext { background: url(https://example.com/a.png); }
+.inline { background: url(data:image/gif;base64,R0lGOD); }",
+      "id": "__ITERA_ASSET_NONCE_7__",
+      "kind": "text",
+      "mime": "text/css",
+      "path": "apps/demo/css/main.css",
+    },
+    {
+      "body": "[blob type=image/png] LOGO",
+      "id": "__ITERA_ASSET_NONCE_8__",
+      "kind": "blob",
+      "mime": "image/png",
+      "path": "apps/demo/img/logo.png",
+    },
+    {
+      "body": "<!doctype html><html lang="en"><head><meta charset="utf-8"><title>File not found</title></head><body style="margin:0;height:100vh;display:flex;align-items:center;justify-content:center;background:#1e1e2e;color:#cdd6f4;font-family:system-ui,sans-serif;"><div style="text-align:center;padding:2rem;"><div style="font-size:2rem;">404</div><p style="margin:.5rem 0 0;">File not found</p><p style="margin:.25rem 0 0;opacity:.7;font-size:.85rem;word-break:break-all;">apps/demo/img/missing.png</p></div></body></html>",
+      "id": "__ITERA_ASSET_NONCE_9__",
+      "kind": "text",
+      "mime": "text/html",
+      "path": "apps/demo/img/missing.png",
+    },
+    {
+      "body": "[blob type=application/javascript] window.help = 1;",
+      "id": "__ITERA_ASSET_NONCE_10__",
+      "kind": "blob",
+      "mime": "application/javascript",
+      "path": "apps/demo/help/help.js",
+    },
+    {
+      "body": "[blob type=image/png] Q",
+      "id": "__ITERA_ASSET_NONCE_11__",
+      "kind": "blob",
+      "mime": "image/png",
+      "path": "apps/demo/help/q.png",
+    },
+    {
+      "body": "p { background: url(__ITERA_ASSET_NONCE_11__); }",
+      "id": "__ITERA_ASSET_NONCE_12__",
+      "kind": "text",
+      "mime": "text/css",
+      "path": "apps/demo/help/help.css",
+    },
+    {
+      "body": "<html><head><link rel="stylesheet" href="__ITERA_ASSET_NONCE_12__"></head><body><img src="__ITERA_ASSET_NONCE_5__"><script src="__ITERA_ASSET_NONCE_10__"></script></body></html>",
+      "id": "__ITERA_ASSET_NONCE_13__",
+      "kind": "text",
+      "mime": "text/html",
+      "path": "apps/demo/help/index.html",
+    },
+    {
+      "body": "[blob type=video/mp4] MP4",
+      "id": "__ITERA_ASSET_NONCE_14__",
+      "kind": "blob",
+      "mime": "video/mp4",
+      "path": "apps/demo/media/clip.mp4",
+    },
+    {
+      "body": "[blob type=audio/mpeg] MP3",
+      "id": "__ITERA_ASSET_NONCE_15__",
+      "kind": "blob",
+      "mime": "audio/mpeg",
+      "path": "apps/demo/media/beep.mp3",
+    },
+    {
+      "body": "[blob type=video/webm] WEBM",
+      "id": "__ITERA_ASSET_NONCE_16__",
+      "kind": "blob",
+      "mime": "video/webm",
+      "path": "apps/demo/media/clip.webm",
+    },
+    {
+      "body": "[blob type=application/pdf] PDF",
+      "id": "__ITERA_ASSET_NONCE_17__",
+      "kind": "blob",
+      "mime": "application/pdf",
+      "path": "apps/demo/doc/sheet.pdf",
+    },
+  ],
+  "hash": "#top",
+  "html": "<!DOCTYPE html>
+<html lang="en"><head>
+<script>window.__ITERA_PID__ = "demo";</script>
+<script>window.__ITERA_ARGS__ = {"tab":"1","note":"\\u003c/script\\u003e\\u003cb\\u003e"};</script>
+<script>/*BRIDGE*/</script>
+
+    <meta charset="UTF-8">
+    <title>demo</title>
+    <script src="__ITERA_ASSET_NONCE_0__"></script>
+    <script src="__ITERA_ASSET_NONCE_1__"></script>
+    <script src="__ITERA_ASSET_NONCE_2__"></script>
+    <script src="https://cdn.example.com/lib.js"></script>
+    <link rel="stylesheet" href="__ITERA_ASSET_NONCE_7__">
+    <link rel="icon" href="data:image/png;base64,AAAA">
+    <style>
+      .hero { background: url('__ITERA_ASSET_NONCE_3__'); }
+      .mask { clip-path: url(#clip); }
+    </style>
+  <style id="itera-guest-theme">/*THEME*/</style>
+</head>
+  <body>
+    <img src="__ITERA_ASSET_NONCE_8__#v2" alt="logo">
+    <img src="https://example.com/x.png">
+    <img src="__ITERA_ASSET_NONCE_9__">
+    <div style="background-image: url(__ITERA_ASSET_NONCE_3__)"></div>
+    <iframe src="__ITERA_ASSET_NONCE_13__"></iframe>
+    <video src="__ITERA_ASSET_NONCE_14__"></video>
+    <audio src="__ITERA_ASSET_NONCE_15__"></audio>
+    <video><source src="__ITERA_ASSET_NONCE_16__"></video>
+    <embed src="__ITERA_ASSET_NONCE_17__">
+    <object data="__ITERA_ASSET_NONCE_17__"></object>
+    <a href="other.html">other</a>
+    <a href="js/app.js">source</a>
+    <script>
+      const later = './js/app.js';
+      fetch('data/items.json');
+      const tpl = \`<img src="img/logo.png">\`;
+    </script>
+    <script type="text/template" id="row"><img src="img/logo.png"></script>
+  
+
+<script>/*HTML_TO_IMAGE*/</script>
+<script>
+window.addEventListener('message', async (e) => {
+    if (e.data.action === 'CAPTURE') {
+        // 撮影のあいだだけ requestAnimationFrame を setTimeout に差し替える（T-0350）。
+        //
+        // html-to-image は画像を読み込んだあと requestAnimationFrame を待つ。
+        // ところがブラウザの窓が実際に描かれていないとき（利用者が別の窓・別のタブを見ている、
+        // 窓が他のウィンドウに完全に隠れている）rAF は発火しない。document.visibilityState は
+        // 'visible' のままなので、外からは「見えている」ようにしか見えないが、撮影は永久に返らない。
+        // 自律で動いている時間帯は、まさに利用者が見ていない時間帯なので、ここが効く。
+        const rafOriginal = window.requestAnimationFrame;
+        window.requestAnimationFrame = (cb) => window.setTimeout(() => cb(performance.now()), 0);
+        try {
+            if (typeof window.htmlToImage === 'undefined') throw new Error('html-to-image failed to load');
+            const data = await window.htmlToImage.toPng(document.body, {
+                backgroundColor: null,
+                skipOnError: true,
+                preferredFontFormat: 'woff2',
+                filter: (node) => {
+                    if (node.tagName === 'IMG' && (!node.src || node.src === '' || node.src === window.location.href)) return false;
+                    return true;
+                }
+            });
+            parent.postMessage({ type: 'SCREENSHOT_RESULT', pid: "demo", data }, '*');
+        } catch (err) {
+            parent.postMessage({ type: 'SCREENSHOT_ERROR', pid: "demo", message: String(err) }, '*');
+        } finally {
+            window.requestAnimationFrame = rafOriginal;
+        }
+    }
+});
+</script>
+
+</body></html>",
+}
+`;
