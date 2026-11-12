@@ -5,6 +5,67 @@
 
 import type { VfsNode } from './types';
 
+/**
+ * 起動時の読み込みで 1 回の `getAll()` が受け取る件数（T-0829）。
+ *
+ * IndexedDB の 1 回の応答には大きさの上限がある（Chromium で約 246 MiB）。全ノードを 1 回で受け取ると、
+ * ノードの合計がそれを超えた VFS は起動できなくなる（2026-11-12、同期先 143,800 ファイルの VFS で
+ * `The serialized value is too large`）。件数で区切れば、1 回の応答はノードの数に依らない。
+ */
+export const LOAD_PAGE_SIZE = 5000;
+
+/**
+ * 主キーの順に `pageSize` 件ずつ読み、全部をつないで返す。1 つの読み取りトランザクションの中で読むので、
+ * 読んでいる間に書き込みが割り込んでも、どの時点かの一貫した写しになる。
+ */
+export function readAllPaged<T>(
+  db: IDBDatabase,
+  storeName: string,
+  pageSize: number,
+  keyOf: (value: T) => IDBValidKey,
+): Promise<T[]> {
+  return new Promise((resolve, reject) => {
+    let transaction: IDBTransaction;
+    try {
+      transaction = db.transaction([storeName], 'readonly');
+    } catch (err) {
+      return reject(err);
+    }
+    const store = transaction.objectStore(storeName);
+    const out: T[] = [];
+    let settled = false;
+    const fail = (err: unknown) => {
+      if (settled) return;
+      settled = true;
+      reject(err);
+    };
+    transaction.onabort = () => fail(transaction.error);
+
+    const readPage = (after: IDBValidKey | undefined) => {
+      let request: IDBRequest;
+      try {
+        const range = after === undefined ? undefined : IDBKeyRange.lowerBound(after, true);
+        request = store.getAll(range, pageSize);
+      } catch (err) {
+        return fail(err);
+      }
+      request.onsuccess = () => {
+        if (settled) return;
+        const page = request.result as T[];
+        for (const value of page) out.push(value);
+        if (page.length < pageSize) {
+          settled = true;
+          resolve(out);
+        } else {
+          readPage(keyOf(page[page.length - 1]));
+        }
+      };
+      request.onerror = () => fail(request.error);
+    };
+    readPage(undefined);
+  });
+}
+
 export class NodeStore {
   private dbName = 'itera_vfs_v2';
   private storeName = 'nodes';
@@ -91,30 +152,24 @@ export class NodeStore {
 
   async loadAll(): Promise<void> {
     const db = await this.dbPromise;
-    return new Promise((resolve, reject) => {
-      const transaction = db.transaction([this.storeName], 'readonly');
-      const store = transaction.objectStore(this.storeName);
-      const request = store.getAll();
+    let nodes: VfsNode[];
+    try {
+      nodes = await readAllPaged<VfsNode>(db, this.storeName, LOAD_PAGE_SIZE, (node) => node.id);
+    } catch (e) {
+      console.error('[NodeStore] Failed to load metadata:', e);
+      throw e;
+    }
 
-      request.onsuccess = (e) => {
-        const nodes = (e.target as any).result as VfsNode[];
-        this.memoryMap.clear();
-        for (const node of nodes) {
-          this.memoryMap.set(node.id, node);
-        }
+    // 全部読めてから差し替える（途中で失敗したら、メモリは前の状態のまま）
+    this.memoryMap.clear();
+    for (const node of nodes) {
+      this.memoryMap.set(node.id, node);
+    }
 
-        // メモリマップのロード完了後にインデックスを構築
-        this.rebuildIndex();
+    // メモリマップのロード完了後にインデックスを構築
+    this.rebuildIndex();
 
-        console.log(`[NodeStore] Boot complete. Loaded ${this.memoryMap.size} metadata nodes into memory.`);
-        resolve();
-      };
-
-      request.onerror = (e) => {
-        console.error('[NodeStore] Failed to load metadata:', (e.target as any).error);
-        reject((e.target as any).error);
-      };
-    });
+    console.log(`[NodeStore] Boot complete. Loaded ${this.memoryMap.size} metadata nodes into memory.`);
   }
 
   // --- Index Management ---
