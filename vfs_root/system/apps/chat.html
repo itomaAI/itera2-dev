@@ -1,0 +1,849 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Chat</title>
+    <script src="/system/vendor/tw.js"></script>
+    <script src="/system/core/ui.js"></script>
+    <script src="/system/core/std.js"></script>
+    <script src="/system/lib/md.js"></script>
+    <style>
+      html,
+      body {
+        height: 100%;
+        margin: 0;
+      }
+      .msg-body p {
+        margin: 0.4em 0;
+      }
+      .msg-body pre {
+        overflow-x: auto;
+        padding: 0.6em 0.8em;
+        border-radius: 6px;
+      }
+      .msg-body ul,
+      .msg-body ol {
+        padding-left: 1.4em;
+        margin: 0.4em 0;
+      }
+      .msg-body ul {
+        list-style: disc;
+      }
+      .msg-body ol {
+        list-style: decimal;
+      }
+      .msg-body table {
+        border-collapse: collapse;
+      }
+      .msg-body th,
+      .msg-body td {
+        border: 1px solid var(--c-border-main, #8884);
+        padding: 2px 6px;
+      }
+      .plain {
+        white-space: pre-wrap;
+        word-break: break-word;
+      }
+      #sidebar.hidden-sb {
+        display: none;
+      }
+      #dropMask {
+        pointer-events: none;
+      }
+      .thumb {
+        max-width: 220px;
+        max-height: 160px;
+        border-radius: 6px;
+        cursor: pointer;
+      }
+    </style>
+  </head>
+  <body class="bg-app text-text-main">
+    <div class="flex h-full">
+      <!-- Sidebar -->
+      <aside id="sidebar" class="w-60 shrink-0 bg-panel border-r border-border-main flex flex-col">
+        <div class="p-3 border-b border-border-main">
+          <button
+            id="btnNew"
+            class="w-full px-3 py-2 rounded bg-primary text-text-inverted text-sm font-bold hover:opacity-90"
+          >
+            + New chat
+          </button>
+        </div>
+        <div id="convList" class="flex-1 overflow-y-auto p-2 space-y-1 text-sm"></div>
+      </aside>
+
+      <!-- Main -->
+      <main id="main" class="flex-1 flex flex-col min-w-0 relative">
+        <header class="flex items-center gap-2 px-3 py-2 bg-panel border-b border-border-main text-sm">
+          <button id="btnSidebar" class="px-2 py-1 rounded hover:bg-hover" title="Show / hide the list">☰</button>
+          <div id="title" class="font-bold truncate flex-1 cursor-pointer hover:underline" title="Click to rename">
+            New chat
+          </div>
+          <select id="modelSel" class="bg-card border border-border-main rounded px-2 py-1 max-w-[16rem]"></select>
+          <button id="btnSystem" class="px-2 py-1 rounded hover:bg-hover" title="System prompt">⚙</button>
+          <button id="btnDelete" class="px-2 py-1 rounded hover:bg-hover text-error" title="Delete this chat">🗑</button>
+        </header>
+
+        <div id="systemBox" class="hidden px-3 py-2 bg-panel border-b border-border-main">
+          <div class="text-xs text-text-muted mb-1">System prompt (this chat only; not sent when empty)</div>
+          <textarea
+            id="systemInput"
+            rows="3"
+            class="w-full bg-card border border-border-main rounded p-2 text-sm"
+          ></textarea>
+        </div>
+
+        <div id="messages" class="flex-1 overflow-y-auto px-4 py-4 space-y-4"></div>
+
+        <footer class="border-t border-border-main bg-panel px-3 pt-3 pb-1.5">
+          <div id="pending" class="flex flex-wrap gap-2 mb-2 empty:hidden"></div>
+          <div class="flex gap-2 items-stretch">
+            <textarea
+              id="input"
+              rows="3"
+              placeholder="Message (Enter to send, Shift+Enter for a new line)"
+              class="flex-1 bg-card border border-border-main rounded p-2 text-sm resize-none focus:outline-none focus:border-border-highlight"
+            ></textarea>
+            <div class="flex flex-col justify-between gap-1 w-20">
+              <div class="flex justify-center gap-1">
+                <button
+                  id="btnAttach"
+                  class="flex-1 py-1 rounded hover:bg-hover"
+                  title="Attach files from this device (drag &amp; drop or paste also works)"
+                >
+                  📎
+                </button>
+                <button
+                  id="btnAttachVfs"
+                  class="flex-1 py-1 rounded hover:bg-hover"
+                  title="Attach a file from your files"
+                >
+                  📁
+                </button>
+              </div>
+              <button
+                id="btnSend"
+                class="w-full py-2 rounded bg-primary text-text-inverted text-sm font-bold hover:opacity-90"
+              >
+                Send
+              </button>
+            </div>
+          </div>
+          <div id="status" class="text-xs text-text-muted h-4 mt-1 truncate"></div>
+          <input id="fileInput" type="file" multiple class="hidden" />
+        </footer>
+
+        <div
+          id="dropMask"
+          class="hidden absolute inset-0 bg-primary/10 border-4 border-dashed border-primary flex items-center justify-center text-primary font-bold"
+        >
+          Drop to attach
+        </div>
+      </main>
+    </div>
+
+    <script>
+      (() => {
+        const DIR = 'data/apps/chat';
+        const FILES = DIR + '/files';
+        const OS_MODEL = '__os__';
+        const UNTITLED = '(untitled)';
+        const TEXT_EXT = [
+          'txt',
+          'md',
+          'markdown',
+          'csv',
+          'tsv',
+          'json',
+          'jsonl',
+          'yaml',
+          'yml',
+          'xml',
+          'html',
+          'htm',
+          'css',
+          'js',
+          'mjs',
+          'ts',
+          'tsx',
+          'jsx',
+          'py',
+          'rb',
+          'go',
+          'rs',
+          'java',
+          'c',
+          'h',
+          'cpp',
+          'hpp',
+          'cs',
+          'sh',
+          'bash',
+          'zsh',
+          'sql',
+          'tex',
+          'bib',
+          'toml',
+          'ini',
+          'cfg',
+          'log',
+          'r',
+          'jl',
+          'lua',
+          'php',
+          'swift',
+          'kt',
+          'scala',
+          'lpml',
+        ];
+        const MIME_EXT = {
+          png: 'image/png',
+          jpg: 'image/jpeg',
+          jpeg: 'image/jpeg',
+          gif: 'image/gif',
+          webp: 'image/webp',
+          svg: 'image/svg+xml',
+          pdf: 'application/pdf',
+          mp3: 'audio/mpeg',
+          wav: 'audio/wav',
+          m4a: 'audio/mp4',
+          ogg: 'audio/ogg',
+          mp4: 'video/mp4',
+          webm: 'video/webm',
+          mov: 'video/quicktime',
+        };
+
+        const $ = (id) => document.getElementById(id);
+        const esc = (s) => MD.escape(s);
+        const extOf = (name) => {
+          const m = String(name)
+            .toLowerCase()
+            .match(/\.([a-z0-9]+)$/);
+          return m ? m[1] : '';
+        };
+        const isTextName = (name) => TEXT_EXT.includes(extOf(name));
+        const mimeOf = (name, given) => given || MIME_EXT[extOf(name)] || (isTextName(name) ? 'text/plain' : '');
+        const fmtSize = (n) =>
+          n == null
+            ? ''
+            : n < 1024
+              ? `${n} B`
+              : n < 1048576
+                ? `${(n / 1024).toFixed(1)} KB`
+                : `${(n / 1048576).toFixed(1)} MB`;
+
+        let models = []; // MetaOS.llm.models() の available のもの
+        let osConfig = null; // getConfig('llm')
+        let convs = []; // [{ id, title, updatedAt }]
+        let cur = null; // 開いている会話（全体）
+        let pending = []; // 次の発言に付ける添付 [{ path, name, mime, size }]
+        let controller = null; // 生成中の AbortController
+        let streaming = ''; // 生成中の文字
+        const urlCache = new Map();
+
+        const newId = () => {
+          const d = new Date(),
+            p = (n) => String(n).padStart(2, '0');
+          return `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}-${Math.random().toString(36).slice(2, 6)}`;
+        };
+        const blankConv = () => ({
+          id: newId(),
+          title: '',
+          createdAt: new Date().toISOString(),
+          updatedAt: null,
+          system: '',
+          messages: [],
+          lastUsage: null,
+        });
+
+        // 会話を切り替えたら、前の会話の画像の URL を手放す（resolveUrl の URL は revoke するまでホストが実体を持ち続ける）
+        function releaseUrls() {
+          for (const url of urlCache.values()) {
+            try {
+              URL.revokeObjectURL(url);
+            } catch (e) {
+              /* よい */
+            }
+          }
+          urlCache.clear();
+        }
+
+        // ---------- 保存 ----------
+        async function ensureDir(path) {
+          let acc = '';
+          for (const part of path.split('/')) {
+            acc = acc ? `${acc}/${part}` : part;
+            try {
+              if (!(await MetaOS.fs.exists(acc))) await MetaOS.fs.mkdir(acc);
+            } catch (e) {
+              /* 既にある等 */
+            }
+          }
+        }
+        async function loadList() {
+          convs = [];
+          let files = [];
+          try {
+            files = await MetaOS.fs.list(DIR);
+          } catch (e) {
+            files = [];
+          }
+          for (const f of files) {
+            const name = f.split('/').pop();
+            if (!name.endsWith('.json')) continue;
+            try {
+              const c = JSON.parse(await MetaOS.fs.read(`${DIR}/${name}`));
+              convs.push({ id: c.id, title: c.title || UNTITLED, updatedAt: c.updatedAt || c.createdAt });
+            } catch (e) {
+              console.warn('unreadable chat', name, e);
+            }
+          }
+          convs.sort((a, b) => String(b.updatedAt).localeCompare(String(a.updatedAt)));
+          renderList();
+        }
+        async function saveCur() {
+          if (!cur || cur.messages.length === 0) return;
+          cur.updatedAt = new Date().toISOString();
+          await ensureDir(DIR);
+          await MetaOS.fs.write(`${DIR}/${cur.id}.json`, JSON.stringify(cur, null, 2), { overwrite: true });
+          const i = convs.findIndex((c) => c.id === cur.id);
+          const row = { id: cur.id, title: cur.title || UNTITLED, updatedAt: cur.updatedAt };
+          if (i >= 0) convs.splice(i, 1);
+          convs.unshift(row);
+          App.Local.set('lastConv', cur.id).catch(() => {});
+          renderList();
+        }
+        // 保存に失敗しても画面の会話は残す（理由だけ出す）
+        async function saveCurOrWarn() {
+          try {
+            await saveCur();
+          } catch (e) {
+            AppUI.alert('Could not save the chat: ' + (e.message || e), 'Error');
+          }
+        }
+        async function discardPending() {
+          for (const a of pending) {
+            try {
+              await MetaOS.fs.delete(a.path, { permanent: true });
+            } catch (e) {
+              /* 無ければよい */
+            }
+          }
+          pending = [];
+          renderPending();
+        }
+        async function openConv(id) {
+          if (controller) return;
+          let c;
+          try {
+            c = JSON.parse(await MetaOS.fs.read(`${DIR}/${id}.json`));
+          } catch (e) {
+            AppUI.alert('Could not read the chat: ' + e.message, 'Error');
+            return;
+          }
+          await discardPending();
+          releaseUrls();
+          cur = c;
+          if (cur.model && [...$('modelSel').options].some((o) => o.value === cur.model))
+            $('modelSel').value = cur.model;
+          App.Local.set('lastConv', id).catch(() => {});
+          renderAll();
+        }
+        async function newConv() {
+          if (controller) return;
+          await discardPending();
+          releaseUrls();
+          cur = blankConv();
+          App.Local.remove('lastConv').catch(() => {});
+          renderAll();
+          $('input').focus();
+        }
+        async function deleteConv() {
+          if (!cur || controller) return;
+          if (cur.messages.length === 0) {
+            newConv();
+            return;
+          }
+          if (
+            !(await AppUI.confirm(
+              `Delete "${cur.title || UNTITLED}"? Its attachments go to the trash with it.`,
+              'Delete',
+            ))
+          )
+            return;
+          try {
+            await MetaOS.fs.delete(`${DIR}/${cur.id}.json`);
+          } catch (e) {
+            console.warn(e);
+          }
+          try {
+            if (await MetaOS.fs.exists(`${FILES}/${cur.id}`)) await MetaOS.fs.delete(`${FILES}/${cur.id}`);
+          } catch (e) {
+            console.warn(e);
+          }
+          convs = convs.filter((c) => c.id !== cur.id);
+          await newConv();
+          renderList();
+        }
+        async function editTitle() {
+          if (!cur) return;
+          const t = await AppUI.prompt('Chat title', cur.title || '', 'Rename');
+          if (t == null) return;
+          cur.title = String(t).trim();
+          $('title').textContent = cur.title || 'New chat';
+          if (cur.messages.length) await saveCurOrWarn();
+          else renderList();
+        }
+
+        // ---------- 添付 ----------
+        const safeName = (name) =>
+          String(name || 'file')
+            .replace(/[\\/:*?"<>|\s]+/g, '_')
+            .slice(-80);
+        async function attachDir() {
+          const d = `${FILES}/${cur.id}`;
+          await ensureDir(d);
+          return d;
+        }
+
+        async function addLocalFiles(fileList) {
+          const files = [...fileList];
+          if (!files.length) return;
+          const d = await attachDir();
+          for (const f of files) {
+            try {
+              const name = f.name || `pasted.${f.type.split('/')[1] || 'bin'}`;
+              const path = `${d}/${Date.now()}_${safeName(name)}`;
+              await MetaOS.fs.write(path, new Uint8Array(await f.arrayBuffer()));
+              pending.push({ path, name, mime: mimeOf(name, f.type), size: f.size });
+            } catch (e) {
+              AppUI.alert(`Could not attach: ${f.name}\n${e.message || e}`, 'Attachment');
+            }
+          }
+          renderPending();
+        }
+        async function addVfsFile() {
+          const src = await MetaOS.host.showOpenDialog({ title: 'Attach a file', mode: 'file' });
+          if (!src) return;
+          try {
+            const name = src.split('/').pop();
+            const d = await attachDir();
+            const path = `${d}/${Date.now()}_${safeName(name)}`;
+            await MetaOS.fs.copy(src, path);
+            let size = null;
+            try {
+              size = (await MetaOS.fs.stat(path)).size;
+            } catch (e) {
+              /* 無くてよい */
+            }
+            pending.push({ path, name, mime: mimeOf(name), size, from: src });
+            renderPending();
+          } catch (e) {
+            AppUI.alert(`Could not attach: ${src}\n${e.message || e}`, 'Attachment');
+          }
+        }
+        async function removePending(i) {
+          const a = pending.splice(i, 1)[0];
+          if (a) {
+            try {
+              await MetaOS.fs.delete(a.path, { permanent: true });
+            } catch (e) {
+              /* よい */
+            }
+          }
+          renderPending();
+        }
+
+        // 選んだモデルで送れそうか（最終判定は呼んだ結果）
+        function capabilityProblems(atts) {
+          const m = selectedModelInfo();
+          if (!m || !m.capabilities) return [];
+          const { supportedMimes = [], maxMediaSizeMB } = m.capabilities;
+          const ok = (mime) =>
+            supportedMimes.some((p) => p === mime || (p.endsWith('/*') && mime.startsWith(p.slice(0, -1))));
+          const out = [];
+          for (const a of atts) {
+            if (isTextName(a.name)) continue; // 文字として送る
+            if (!a.mime || !ok(a.mime))
+              out.push(`${a.name} (${a.mime || 'unknown type'} may not be supported by this model)`);
+            else if (maxMediaSizeMB && a.size && a.size > maxMediaSizeMB * 1048576)
+              out.push(`${a.name} (${fmtSize(a.size)} exceeds the ${maxMediaSizeMB} MB limit)`);
+          }
+          return out;
+        }
+
+        // 保存した発言 → 上流へ送る形
+        async function toRequestMessage(m) {
+          if (!m.attachments || !m.attachments.length) return { role: m.role, content: m.content };
+          const parts = [];
+          for (const a of m.attachments) {
+            if (isTextName(a.name)) {
+              let body;
+              try {
+                body = await MetaOS.fs.read(a.path);
+              } catch (e) {
+                body = `(could not be read: ${e.message || e})`;
+              }
+              parts.push({ text: `--- Attached file: ${a.name} ---\n${body}\n--- End of file ---` });
+            } else {
+              const media = { path: a.path };
+              if (a.mime) media.mimeType = a.mime;
+              parts.push({ media });
+            }
+          }
+          if (m.content) parts.push({ text: m.content });
+          return { role: m.role, content: parts };
+        }
+
+        // ---------- モデル ----------
+        async function loadModels() {
+          try {
+            osConfig = await MetaOS.system.getConfig('llm');
+          } catch (e) {
+            osConfig = null;
+          }
+          try {
+            models = (await MetaOS.llm.models()).filter((m) => m.available);
+          } catch (e) {
+            models = [];
+          }
+          const sel = $('modelSel');
+          sel.innerHTML = '';
+          if (osConfig && osConfig.model) {
+            const o = document.createElement('option');
+            o.value = OS_MODEL;
+            o.textContent = `Same as OS (${osConfig.model})`;
+            sel.appendChild(o);
+          }
+          for (const m of models) {
+            const o = document.createElement('option');
+            o.value = m.id;
+            o.textContent = m.name || m.id;
+            sel.appendChild(o);
+          }
+          const saved = await App.Local.get('model', null);
+          if (saved && [...sel.options].some((o) => o.value === saved)) sel.value = saved;
+        }
+        function selectedModelInfo() {
+          const v = $('modelSel').value;
+          const id = v === OS_MODEL ? osConfig && osConfig.model : v;
+          return models.find((x) => x.id === id) || null;
+        }
+        function currentConfig() {
+          const v = $('modelSel').value;
+          if (v === OS_MODEL) return { ...osConfig };
+          const m = models.find((x) => x.id === v);
+          if (!m) return null;
+          return { model: m.id, ...(m.defaultConfig || {}) };
+        }
+
+        // ---------- 描画 ----------
+        function renderList() {
+          const box = $('convList');
+          if (convs.length === 0) {
+            box.innerHTML = '<div class="text-text-muted text-xs p-2">No chats yet</div>';
+            return;
+          }
+          box.innerHTML = convs
+            .map((c) => {
+              const active = cur && cur.id === c.id;
+              const when = c.updatedAt
+                ? new Date(c.updatedAt).toLocaleString(undefined, {
+                    month: 'numeric',
+                    day: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                  })
+                : '';
+              return `<div data-id="${esc(c.id)}" class="conv px-2 py-1.5 rounded cursor-pointer ${active ? 'bg-hover font-bold' : 'hover:bg-hover'}">
+        <div class="truncate">${esc(c.title)}</div><div class="text-[10px] text-text-muted">${esc(when)}</div></div>`;
+            })
+            .join('');
+          box.querySelectorAll('.conv').forEach((el) => el.addEventListener('click', () => openConv(el.dataset.id)));
+        }
+        function attHtml(a) {
+          const mime = a.mime || '';
+          if (mime.startsWith('image/')) {
+            return `<img class="thumb att-img" data-path="${esc(a.path)}" alt="${esc(a.name)}" title="${esc(a.name)}">`;
+          }
+          const icon =
+            mime === 'application/pdf'
+              ? '📄'
+              : isTextName(a.name)
+                ? '📝'
+                : mime.startsWith('audio/')
+                  ? '🎵'
+                  : mime.startsWith('video/')
+                    ? '🎬'
+                    : '📎';
+          return `<span class="att-open inline-flex items-center gap-1 px-2 py-1 rounded bg-card border border-border-main text-xs cursor-pointer" data-path="${esc(a.path)}" title="Open">${icon} ${esc(a.name)}</span>`;
+        }
+        function msgHtml(m, live) {
+          const isUser = m.role === 'user';
+          const atts = (m.attachments || []).length
+            ? `<div class="flex flex-wrap gap-2 mb-1">${m.attachments.map(attHtml).join('')}</div>`
+            : '';
+          const text = m.content || '';
+          const body = isUser
+            ? text
+              ? `<div class="plain">${esc(text)}</div>`
+              : ''
+            : `<div class="msg-body">${text ? MD.render(text) : '<span class="text-text-muted">…</span>'}</div>`;
+          return `<div class="flex ${isUser ? 'justify-end' : 'justify-start'}">
+      <div class="max-w-[85%] rounded-lg px-3 py-2 text-sm ${isUser ? 'bg-primary/15 border border-primary/30' : 'bg-card border border-border-main'}${live ? ' opacity-90' : ''}">${atts}${body}</div></div>`;
+        }
+        async function hydrate(root) {
+          for (const img of root.querySelectorAll('img.att-img[data-path]')) {
+            const p = img.dataset.path;
+            try {
+              if (!urlCache.has(p)) urlCache.set(p, await MetaOS.fs.resolveUrl(p));
+              img.src = urlCache.get(p);
+            } catch (e) {
+              img.replaceWith(
+                Object.assign(document.createElement('span'), {
+                  textContent: `(image not found: ${img.alt})`,
+                  className: 'text-xs text-text-muted',
+                }),
+              );
+            }
+            img.addEventListener('click', () => MetaOS.host.open(p));
+          }
+          root
+            .querySelectorAll('.att-open[data-path]')
+            .forEach((el) => el.addEventListener('click', () => MetaOS.host.open(el.dataset.path)));
+        }
+        function renderMessages() {
+          const box = $('messages');
+          const atBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 40;
+          let html = cur.messages.map((m) => msgHtml(m, false)).join('');
+          if (controller) html += msgHtml({ role: 'model', content: streaming }, true);
+          if (!html)
+            html =
+              '<div class="text-text-muted text-sm text-center mt-16">A standalone chat, separate from the OS conversation.</div>';
+          box.innerHTML = html;
+          hydrate(box);
+          if (atBottom || controller) box.scrollTop = box.scrollHeight;
+        }
+        function renderPending() {
+          const box = $('pending');
+          box.innerHTML = pending
+            .map(
+              (
+                a,
+                i,
+              ) => `<span class="inline-flex items-center gap-1 px-2 py-1 rounded bg-card border border-border-main text-xs">
+      ${a.mime && a.mime.startsWith('image/') ? '🖼' : isTextName(a.name) ? '📝' : '📎'} ${esc(a.name)}
+      <span class="text-text-muted">${esc(fmtSize(a.size))}</span>
+      <button data-i="${i}" class="rm ml-1 text-text-muted hover:text-error" title="Remove">✕</button></span>`,
+            )
+            .join('');
+          box
+            .querySelectorAll('.rm')
+            .forEach((b) => b.addEventListener('click', () => removePending(Number(b.dataset.i))));
+        }
+        function renderStatus(extra) {
+          const u = (cur && cur.lastUsage) || {};
+          const prompt = (u.input || 0) + (u.cached || 0) + (u.cacheWrite || 0);
+          const m = selectedModelInfo();
+          const lim = m ? m.contextTokens : null;
+          const s =
+            `Context: ${prompt.toLocaleString()} tokens` +
+            (lim ? ` / ${lim.toLocaleString()} (${((prompt / lim) * 100).toFixed(1)}%)` : '') +
+            ` · output ${(u.output || 0).toLocaleString()}`;
+          $('status').textContent = extra || s;
+        }
+        function renderAll() {
+          $('title').textContent = cur.title || 'New chat';
+          $('systemInput').value = cur.system || '';
+          renderMessages();
+          renderPending();
+          renderList();
+          renderStatus();
+          $('btnSend').textContent = controller ? 'Stop' : 'Send';
+          $('btnSend').classList.toggle('bg-error', !!controller);
+          $('btnSend').classList.toggle('bg-primary', !controller);
+        }
+
+        // ---------- 送信 ----------
+        async function send() {
+          if (controller) {
+            controller.abort();
+            return;
+          }
+          const text = $('input').value.trim();
+          if (!text && pending.length === 0) return;
+          const config = currentConfig();
+          if (!config || !config.model) {
+            AppUI.alert('No model is available. Check your API key settings.', 'Model');
+            return;
+          }
+
+          const problems = capabilityProblems(pending);
+          if (
+            problems.length &&
+            !(await AppUI.confirm(
+              'These attachments may not go through. Send anyway?\n\n' + problems.join('\n'),
+              'Attachments',
+            ))
+          )
+            return;
+
+          const atts = pending;
+          pending = [];
+          cur.system = $('systemInput').value;
+          cur.model = $('modelSel').value;
+          if (!cur.title) cur.title = (text || atts.map((a) => a.name).join(', ')).replace(/\s+/g, ' ').slice(0, 40);
+          const userMsg = { role: 'user', content: text, at: new Date().toISOString() };
+          if (atts.length) userMsg.attachments = atts.map(({ path, name, mime, size }) => ({ path, name, mime, size }));
+          cur.messages.push(userMsg);
+          $('input').value = '';
+          controller = new AbortController();
+          streaming = '';
+          renderAll();
+          renderStatus('Generating…');
+
+          // 生成の失敗だけをここで受ける（保存の失敗を「生成の失敗」として発言を戻さないため）
+          let r = null;
+          let failure = null;
+          try {
+            const messages = [];
+            for (const m of cur.messages) messages.push(await toRequestMessage(m));
+            r = await MetaOS.llm.generate(
+              { config, system: cur.system.trim() || undefined, messages },
+              {
+                onChunk: (t) => {
+                  streaming += t;
+                  renderMessages();
+                },
+                signal: controller.signal,
+                tag: 'chat-' + cur.id,
+              },
+            );
+          } catch (err) {
+            failure = err;
+          }
+          const partial = streaming;
+          controller = null;
+          streaming = '';
+
+          if (!failure) {
+            cur.messages.push({
+              role: 'model',
+              content: r.text,
+              at: new Date().toISOString(),
+              model: `${r.provider}/${r.model}`,
+              stopReason: r.stopReason,
+            });
+            cur.lastUsage = r.usage || cur.lastUsage;
+            await saveCurOrWarn();
+            renderAll();
+            if (r.stopReason && /max/i.test(String(r.stopReason)))
+              renderStatus(`Stopped at the output limit (${r.stopReason})`);
+            return;
+          }
+          // generate の失敗には必ず code が付く（'aborted' | 'media' | 'failed'）
+          const code = failure.code;
+          if (code === 'aborted') {
+            if (partial)
+              cur.messages.push({ role: 'model', content: partial + '\n\n(stopped)', at: new Date().toISOString() });
+            await saveCurOrWarn();
+            renderAll();
+            renderStatus('Stopped');
+            return;
+          }
+          // 失敗した発言は戻して、入力欄と添付欄に返す
+          const last = cur.messages.pop();
+          if (last) {
+            if (!$('input').value) $('input').value = last.content || '';
+            pending = (last.attachments || []).concat(pending);
+          }
+          if (cur.messages.length === 0) cur.title = '';
+          renderAll();
+          renderStatus('');
+          const hint = code === 'media' ? '\n(Remove the attachment or choose another model.)' : '';
+          AppUI.alert(`Generation failed (${code})\n${failure.message || failure}${hint}`, 'Error');
+        }
+
+        // ---------- イベント ----------
+        $('btnSend').addEventListener('click', send);
+        $('btnNew').addEventListener('click', newConv);
+        $('btnDelete').addEventListener('click', deleteConv);
+        $('title').addEventListener('click', editTitle);
+        $('btnSystem').addEventListener('click', () => $('systemBox').classList.toggle('hidden'));
+        $('btnSidebar').addEventListener('click', () => {
+          const sb = $('sidebar');
+          sb.classList.toggle('hidden-sb');
+          App.Local.set('sidebarHidden', sb.classList.contains('hidden-sb')).catch(() => {});
+        });
+        $('btnAttach').addEventListener('click', () => $('fileInput').click());
+        $('btnAttachVfs').addEventListener('click', addVfsFile);
+        $('fileInput').addEventListener('change', async (e) => {
+          await addLocalFiles(e.target.files);
+          e.target.value = '';
+        });
+        $('systemInput').addEventListener('change', () => {
+          cur.system = $('systemInput').value;
+          saveCurOrWarn();
+        });
+        $('modelSel').addEventListener('change', () => {
+          App.Local.set('model', $('modelSel').value).catch(() => {});
+          renderStatus();
+        });
+        $('input').addEventListener('keydown', (e) => {
+          if (e.key === 'Enter' && !e.shiftKey && !e.isComposing && e.keyCode !== 229) {
+            e.preventDefault();
+            send();
+          }
+        });
+        $('input').addEventListener('paste', (e) => {
+          const files = [...((e.clipboardData && e.clipboardData.files) || [])];
+          if (files.length) {
+            e.preventDefault();
+            addLocalFiles(files);
+          }
+        });
+        // ドラッグ＆ドロップ
+        let dragDepth = 0;
+        const main = $('main');
+        main.addEventListener('dragenter', (e) => {
+          if ([...e.dataTransfer.types].includes('Files')) {
+            dragDepth++;
+            $('dropMask').classList.remove('hidden');
+            e.preventDefault();
+          }
+        });
+        main.addEventListener('dragover', (e) => {
+          if ([...e.dataTransfer.types].includes('Files')) e.preventDefault();
+        });
+        main.addEventListener('dragleave', () => {
+          if (--dragDepth <= 0) {
+            dragDepth = 0;
+            $('dropMask').classList.add('hidden');
+          }
+        });
+        main.addEventListener('drop', (e) => {
+          dragDepth = 0;
+          $('dropMask').classList.add('hidden');
+          if (e.dataTransfer.files && e.dataTransfer.files.length) {
+            e.preventDefault();
+            addLocalFiles(e.dataTransfer.files);
+          }
+        });
+
+        // ---------- 起動 ----------
+        (async () => {
+          cur = blankConv();
+          if (await App.Local.get('sidebarHidden', false)) $('sidebar').classList.add('hidden-sb');
+          await loadModels();
+          await loadList();
+          const last = await App.Local.get('lastConv', null);
+          if (last && convs.some((c) => c.id === last)) await openConv(last);
+          else renderAll();
+          $('input').focus();
+        })();
+      })();
+    </script>
+  </body>
+</html>
