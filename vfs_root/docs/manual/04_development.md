@@ -30,6 +30,61 @@ Use the system libraries (`ui.js` and `std.js`) to inherit the OS theme and stan
 ```
 To show your app in the Launcher, you must add it to the system registry at `system/registry/apps.json`.
 
+### An app made of several files (relative paths, ES modules, `MetaOS.app`)
+
+Keep an app's files in one folder and refer to them **relative to the file you are writing in**. Nothing inside the folder then needs to know where the folder is installed, so the app keeps working when it is moved or copied.
+
+```
+apps/mine/
+├── index.html        <script type="module" src="./main.js">, <link rel="stylesheet" href="css/main.css">
+├── main.js           import { load } from './lib/store.js';
+├── lib/store.js      import { parse } from './parse.js';
+├── lib/parse.js
+├── css/main.css      @import "base.css";  background: url(../img/bg.png);
+├── img/bg.png
+└── assets/items.json
+```
+
+An app's document is not served from its VFS path (it is written into a sandboxed iframe, see `02_architecture.md` "The Guest Origin"). When the app starts, the OS reads its files and resolves the references that are **written statically**. "Relative" always means relative to the file that contains the reference; a leading `/` means the VFS root; URLs with a scheme (`https:`, `data:`, `blob:` …) and `//host/…` are left alone.
+
+| In | Resolved forms |
+| :-- | :-- |
+| HTML | `src` / `href` of `script`, `link`, `img`, `iframe`, `video`, `audio`, `source`, `embed`, `track`, `input type="image"`; `object data`; `video poster`; `srcset` / `imagesrcset`; `href` of SVG `image` / `use` / `feImage`; `style` attributes and `<style>`; all of these inside `<template>` too |
+| CSS | `url(...)`, `@import "..."`, `image-set("...")` |
+| ES modules — `<script type="module" src>`, every module they import, and scripts written inline in the HTML (module or classic) | `import … from './x.js'`, `import './x.js'`, `export … from './x.js'`, `import('./x.js')` with a string literal, `new URL('./file.png', import.meta.url)` with a string literal, JSON modules (`import data from './x.json' with { type: 'json' }`) |
+
+Notes on modules:
+
+- Circular imports work, and a module imported from several places is one instance.
+- Bare names (`import { h } from 'ui'`) work through the app's own `<script type="importmap">`; its targets are resolved from the HTML file's folder, and targets outside the VFS (`https://…`) are kept as they are. `scopes` and `integrity` have no effect, and keys that are paths (`"./a.js"`) are ignored.
+- A query string on a specifier is dropped: `./a.js?v=2` and `./a.js` are the same module.
+- A module that cannot be read fails when it is loaded, with `Cannot load module "<VFS path>": … (imported from <file>)`.
+- Stack traces and the developer tools show modules as `vfs:///<VFS path>`.
+
+**Not resolved** — the OS either does not read the file or cannot know the value:
+
+- Anything computed at run time: `img.src = './a.png'`, `fetch('./items.json')`, `import(name)`, `new Worker('./w.js')`. Use `MetaOS.app` (below).
+- The contents of classic external scripts (`<script src>` without `type="module"`) and of Worker files. Keep a Worker in one self-contained classic file and start it with `new Worker(new URL('./worker.js', import.meta.url))`. (A module Worker with imports cannot be started from an opaque origin in a way that works in both Chromium and Firefox.)
+- `<a href>` (links are navigation, which belongs to the OS) and inline event-handler attributes (`onclick="import('./x.js')"`).
+- A nested HTML document: `<iframe src="page.html">` is displayed, but it is a separate opaque origin and cannot load the app's scripts, styles or images. Keep the UI in one document.
+
+**`MetaOS.app` — where am I?** Synchronous, available as soon as the bridge is (no `await`):
+
+| Member | Value |
+| :-- | :-- |
+| `MetaOS.app.path` | VFS path of the app's entry HTML, e.g. `apps/mine/index.html` |
+| `MetaOS.app.dir` | Its folder, e.g. `apps/mine` (`''` at the VFS root) |
+| `MetaOS.app.pid` | The process id |
+| `MetaOS.app.resolve(rel)` | Relative path → VFS path, by the same rule the OS uses for static references: `'assets/x.json'`, `'./x'` and `'../shared/y'` are taken from the app's folder, a leading `/` is the VFS root |
+
+```js
+// A file next to the app, read as text
+const items = JSON.parse(await MetaOS.fs.read(MetaOS.app.resolve('assets/items.json')));
+
+// A file next to the app, as a URL chosen at run time
+img.src = await MetaOS.fs.resolveUrl(MetaOS.app.resolve(`img/${name}.png`));
+```
+
 ## 2. Background Daemons
 
 Daemons are invisible HTML/JS files that run continuously in the background. They are perfect for timers, WebSocket connections (like Nostr), or cron jobs.
