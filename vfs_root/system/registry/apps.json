@@ -81,6 +81,13 @@
     "description": "Manage Google Drive synchronization"
   },
   {
+    "id": "chat",
+    "name": "Chat",
+    "icon": "\ud83d\udcac",
+    "path": "system/apps/chat.html",
+    "description": "Standalone LLM chat, separate from the OS conversation"
+  },
+  {
     "id": "design_canvas",
     "name": "Design Canvas",
     "icon": "\ud83c\udfa8",
