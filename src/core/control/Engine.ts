@@ -500,20 +500,20 @@ export class Engine {
     const tags = actions.trailingTags ?? [];
     const forged = tags.filter((t) => RESERVED_SYSTEM_TAGS.has(t));
     if (forged.length) {
+      // 口調は穏やかに（T-0858。山内さん「自罰的になられても意味がない。システムは無視する、やっちゃったらいい感じに
+      // リカバリしてね、くらいの温度感で」）。事実（無視した・実行していない・結果はシステムが次のターンに出す）は落とさない
       return [
         `<system type="syntax_warning">`,
-        `[LPML Protocol Violation] After your terminal tag ${term} you kept generating and wrote ${forged.map((t) => `<${t}>`).join(', ')}, which only the OS may inject.`,
-        `Everything after ${term} was ignored and has no effect: NO tag there was executed. Your text is kept in the history as you wrote it.`,
-        `NEVER generate system-only tags yourself. The terminal tag must be the last element of your turn.`,
+        `Your last turn went on after its terminal tag ${term} and wrote ${forged.map((t) => `<${t}>`).join(', ')}, which only the system writes. That part was ignored and not executed; everything before ${term} ran as usual, and your text stays in the history as you wrote it.`,
+        `Tool results always come from the system in the next turn, so there is no need to write them yourself. Continue from the real results.`,
         `</system>`,
       ].join('\n');
     }
     const shown = tags.slice(0, 8).map((t) => `<${t}>`);
     return [
       `<system type="syntax_warning">`,
-      `[LPML Syntax Violation] You wrote content after your terminal tag ${term}.`,
-      `Everything after ${term} was ignored and NOT executed${shown.length ? ` (including ${shown.join(', ')}${tags.length > shown.length ? ', ...' : ''})` : ''}.`,
-      `The terminal tag must be the last element of your turn. If you need those actions, request them again before the terminal tag.`,
+      `Your last turn went on after its terminal tag ${term}. That part was ignored and not executed${shown.length ? ` (including ${shown.join(', ')}${tags.length > shown.length ? ', ...' : ''})` : ''}; everything before ${term} ran as usual, and your text stays in the history as you wrote it.`,
+      `No harm done. If you still need any of those actions, request them in this turn.`,
       `</system>`,
     ].join('\n');
   }
