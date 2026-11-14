@@ -323,7 +323,8 @@ export class CognitiveManager {
       model: 'gemini-3.8-flash',
     };
     const systemPrompt = buildSystemPrompt({
-      thinkingTag: llmConfig.thinkingTag !== false,
+      // 既定は使わない。llm.json に thinkingTag: true と書いたときだけ（T-0856）
+      thinkingTag: llmConfig.thinkingTag === true,
       paths: this.configManager.paths(),
     });
 

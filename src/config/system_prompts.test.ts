@@ -3,16 +3,17 @@ import { SYSTEM_PROMPT, buildSystemPrompt } from './system_prompts';
 import { normalizeGuestPaths } from '../core/sys/GuestPaths';
 
 describe('buildSystemPrompt', () => {
-  it('includes memo always and thinking by default', () => {
-    const p = buildSystemPrompt();
+  it('includes memo always and thinking only when asked (default off since T-0856)', () => {
+    const p = buildSystemPrompt({ thinkingTag: true });
     expect(p).toContain('<define_tag name="memo">');
     expect(p).toContain('<define_tag name="thinking">');
   });
 
-  it('omits every trace of thinking when disabled', () => {
-    const p = buildSystemPrompt({ thinkingTag: false });
-    expect(p).toContain('<define_tag name="memo">');
-    expect(p).not.toMatch(/thinking/i);
+  it('omits every trace of thinking by default and when disabled', () => {
+    for (const p of [buildSystemPrompt(), buildSystemPrompt({ thinkingTag: false })]) {
+      expect(p).toContain('<define_tag name="memo">');
+      expect(p).not.toMatch(/thinking/i);
+    }
   });
 
   it('SYSTEM_PROMPT equals the default build', () => {
