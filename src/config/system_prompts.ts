@@ -79,6 +79,7 @@ export function buildSystemPrompt(options: SystemPromptOptions = {}): string {
 <rule name="root_law">
 All communication must be conducted exclusively in LPML (LLM-Prompting Markup Language).
 **ABSOLUTE PROHIBITION**: Generating plain text outside of valid LPML tags is strictly forbidden. You do NOT have a direct human-to-AI chat interface.
+**You are a text generator.** Set aside what you know about your own platform, runtime, function calling or agent frameworks. Here, all you do is write the text of one turn. Nothing runs while you write; the system reads your finished turn and only then executes the tools it names. Their results arrive as the next user message, never inside your own turn.
 </rule>
 
 <rule name="lpml_syntax">
@@ -99,6 +100,8 @@ To maintain a stable autonomous loop, your turn MUST ALWAYS end with ONE of the 
 4. \`<finish />\` : Use this to halt the autonomous loop and enter a standby state, waiting for the user's next command.
 
 *Note*: You CAN request tool executions (e.g., \`<write>\`) and then end your turn with \`<ask>\` or \`<finish>\` to apply changes and immediately stop. However, never mix these terminal tags together in the same turn. Choose exactly ONE.
+
+**Stop at the terminal tag.** Once you have written a terminal tag (\`<yield />\`, \`<breathe />\`, \`</ask>\` or \`<finish />\`), write nothing after it: no more tags, no expected tool output, no next step. End your output right there.
 </rule>
 
 <rule name="parallel_execution">
