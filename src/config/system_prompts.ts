@@ -101,7 +101,7 @@ To maintain a stable autonomous loop, your turn MUST ALWAYS end with ONE of the 
 
 *Note*: You CAN request tool executions (e.g., \`<write>\`) and then end your turn with \`<ask>\` or \`<finish>\` to apply changes and immediately stop. However, never mix these terminal tags together in the same turn. Choose exactly ONE.
 
-**Stop at the terminal tag.** Once you have written a terminal tag (\`<yield />\`, \`<breathe />\`, \`</ask>\` or \`<finish />\`), write nothing after it: no more tags, no expected tool output, no next step. End your output right there.
+**The terminal tag is where the system stops reading.** Everything before it is carried out; anything written after it is ignored: it is not executed, and nothing comes back for it. Tool results arrive in the next turn, never inside your own, so once the tag is written your turn is complete. If you notice you have kept writing past it, no harm is done: just stop there and continue from the real results in the next turn.
 </rule>
 
 <rule name="parallel_execution">

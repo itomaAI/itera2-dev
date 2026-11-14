@@ -118,7 +118,8 @@ describe('Engine: output after the terminal tag (T-0593)', () => {
     await go(h);
     const w = warnings(h);
     expect(w).toHaveLength(1);
-    expect(w[0].content).toContain('[LPML Protocol Violation]');
+    expect(w[0].content).toContain('which only the system writes');
+    expect(w[0].content).toContain('ignored and not executed');
     expect(w[0].content).toContain('<tool_output>');
     expect(w[0].content).toContain('<yield />');
     expect(w[0].meta.type).toBe(TurnType.ERROR);
@@ -127,12 +128,13 @@ describe('Engine: output after the terminal tag (T-0593)', () => {
     expect(h.turns.indexOf(w[0])).toBe(h.turns.indexOf(model(h)) + 1);
   });
 
-  it('warns (as a syntax violation) about other content after the terminal tag and names the ignored tags', async () => {
+  it('notes (calmly, T-0858) other content after the terminal tag and names the ignored tags', async () => {
     const h = run('<memo>x</memo>\n<finish />\nI will now delete it.\n<delete_file path="a.txt" />');
     await go(h);
     const w = warnings(h);
     expect(w).toHaveLength(1);
-    expect(w[0].content).toContain('[LPML Syntax Violation]');
+    expect(w[0].content).toContain('ignored and not executed');
+    expect(w[0].content).not.toMatch(/NEVER|must be the last|Violation/);
     expect(w[0].content).toContain('<finish />');
     expect(w[0].content).toContain('<delete_file>');
     expect(h.executed).not.toContain('delete_file');
