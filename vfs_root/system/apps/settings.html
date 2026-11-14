@@ -207,8 +207,8 @@
                   >Thinking Tag</label
                 >
                 <p class="text-[10px] text-text-muted mt-0.5">
-                  Let the agent think out loud in a &lt;thinking&gt; block before acting. Turn this off for providers
-                  that reject prompts asking for explicit reasoning.
+                  Let the agent think out loud in a &lt;thinking&gt; block before acting. Off by default: most models
+                  already think before they answer.
                 </p>
               </div>
             </div>
@@ -805,7 +805,7 @@
 
         // OS 内部のスイッチであって API の引数ではない。持ち主をチェック箱だけにし、JSON の箱には出さない。
         const thinkingTagEl = DOM('ui-thinking-tag');
-        if (thinkingTagEl) thinkingTagEl.checked = thinkingTag !== false;
+        if (thinkingTagEl) thinkingTagEl.checked = thinkingTag === true;
 
         if (textarea) {
           if (Object.keys(extraParams).length > 0) {
@@ -939,7 +939,7 @@
 
         // 設定の更新はディープマージなので、鍵は「書かないこと」では消せない。常に明示的に書く。
         const thinkingTagEl = DOM('ui-thinking-tag');
-        newLlmConfig.thinkingTag = thinkingTagEl ? thinkingTagEl.checked : true;
+        newLlmConfig.thinkingTag = thinkingTagEl ? thinkingTagEl.checked : false;
 
         configs.llm = newLlmConfig;
 

@@ -8,9 +8,9 @@ import { EMPTY_GUEST_PATHS, type GuestPaths } from '../core/sys/GuestPaths';
 export interface SystemPromptOptions {
   /**
    * Include the <thinking> tag definition in the prompt.
-   * Controlled by "thinkingTag" in system/config/llm.json (default: true).
-   * Some providers reject prompts that request explicit reasoning output;
-   * turning this off leaves <memo> as the only carry-over channel.
+   * Controlled by "thinkingTag" in system/config/llm.json (default: false since 2026-11, T-0856:
+   * most models now have their own thinking phase, so asking them to think out loud as well is
+   * redundant). Without it, <memo> is the only carry-over channel.
    */
   thinkingTag?: boolean;
   /**
@@ -70,7 +70,7 @@ Use this space to process complex reasoning step-by-step (think out loud) before
 `;
 
 export function buildSystemPrompt(options: SystemPromptOptions = {}): string {
-  const { thinkingTag = true, paths = EMPTY_GUEST_PATHS } = options;
+  const { thinkingTag = false, paths = EMPTY_GUEST_PATHS } = options;
   return `
 <!-- ================================================================= -->
 <!-- 1. LPML DEFINITION & TURN LIFECYCLE                               -->

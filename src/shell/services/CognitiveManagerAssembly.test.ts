@@ -200,10 +200,12 @@ describe('組み立ての金型: 運営の中継（itera/…）', () => {
 });
 
 describe('システムプロンプト', () => {
-  it('thinkingTag: false のときだけ <thinking> の節が落ちる', async () => {
-    const on = (await assemble({ model: 'anthropic/x' })).engine.projector.systemPrompt as string;
+  it('<thinking> の節は thinkingTag: true のときだけ入る（既定は入れない。T-0856）', async () => {
+    const def = (await assemble({ model: 'anthropic/x' })).engine.projector.systemPrompt as string;
+    const on = (await assemble({ model: 'anthropic/x', thinkingTag: true })).engine.projector.systemPrompt as string;
     const off = (await assemble({ model: 'anthropic/x', thinkingTag: false })).engine.projector.systemPrompt as string;
-    expect(typeof on).toBe('string');
-    expect(off.length).toBeLessThan(on.length);
+    expect(on).toContain('<define_tag name="thinking">');
+    expect(def).not.toContain('<define_tag name="thinking">');
+    expect(def).toBe(off);
   });
 });
