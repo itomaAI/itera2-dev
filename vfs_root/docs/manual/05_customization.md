@@ -31,6 +31,13 @@ This directory holds the dynamic configuration of your OS environment.
       "temperature": 1.0
     }
     ```
+    For a Gemini model called with your own API key, `"geminiApi": "interactions"` sends the conversation through
+    Google's Interactions API (`/v1beta/interactions`) instead of `streamGenerateContent`. Each reply is stored by
+    Google (`store=true`; see Google's data retention rules), and the next turn sends only the new messages with
+    `previous_interaction_id`, so the model keeps its own reasoning across turns. Whenever the history no longer
+    continues the last reply (the conversation was compressed, cleared or edited, or the model changed, or the page
+    was reloaded), the whole history is sent again. Input tokens are counted the same way as before: the carried-over
+    history is billed as input. Without the key, or through the Itera Cloud relay, Gemini is called as before.
 *   **`appearance.json`**: Controls the visual layout, the active theme path and the interface language (`locale`, e.g. `"ja"`).
     The interface language is separate from `preferences.language`, which is the language the AI answers in.
 *   **`network.json`**: Configures the CORS proxy URL.
