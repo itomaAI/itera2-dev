@@ -61,12 +61,19 @@ Notes on modules:
 - A module that cannot be read fails when it is loaded, with `Cannot load module "<VFS path>": … (imported from <file>)`.
 - Stack traces and the developer tools show modules as `vfs:///<VFS path>`.
 
+**Nested documents.** An HTML file of the app that is written statically in a frame — `<iframe src="help/index.html">`, `<embed src>`, `<object data>` — starts the same way as the app itself: its own static references are resolved from _its_ folder, and it loads them. It is a separate document with its own opaque origin (`02_architecture.md` "The Guest Origin"), so:
+
+- It has no `MetaOS`, no theme CSS, and no access to the app's DOM or variables. The two documents talk with `postMessage` (`frame.contentWindow.postMessage(msg, '*')` / `parent.postMessage(msg, '*')`).
+- Files are per document: a module imported by both the app and the nested document is two instances.
+- A frame that points back to its own document, or to a document it is nested in, is left as written (with a console warning).
+- An HTML file referenced any other way — `fetch(new URL('./part.html', import.meta.url))` — is data: the text you get has its references resolved for the document that fetched it. Use it to insert a fragment into your own DOM, not as the `src` of a frame.
+
 **Not resolved** — the OS either does not read the file or cannot know the value:
 
 - Anything computed at run time: `img.src = './a.png'`, `fetch('./items.json')`, `import(name)`, `new Worker('./w.js')`. Use `MetaOS.app` (below).
 - The contents of classic external scripts (`<script src>` without `type="module"`) and of Worker files. Keep a Worker in one self-contained classic file and start it with `new Worker(new URL('./worker.js', import.meta.url))`. (A module Worker with imports cannot be started from an opaque origin in a way that works in both Chromium and Firefox.)
 - `<a href>` (links are navigation, which belongs to the OS) and inline event-handler attributes (`onclick="import('./x.js')"`).
-- A nested HTML document: `<iframe src="page.html">` is displayed, but it is a separate opaque origin and cannot load the app's scripts, styles or images. Keep the UI in one document.
+- A frame whose `src` is set at run time (`frame.src = 'page.html'`). Write the frame in the HTML.
 
 **`MetaOS.app` — where am I?** Synchronous, available as soon as the bridge is (no `await`):
 
