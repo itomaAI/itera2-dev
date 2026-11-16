@@ -85,7 +85,6 @@ const APP: Record<string, Entry | string> = {
     <img src="https://example.com/x.png" />
     <img src="img/missing.png" />
     <div style="background-image: url(img/hero.png)"></div>
-    <iframe src="help/index.html"></iframe>
     <video src="media/clip.mp4"></video>
     <audio src="media/beep.mp3"></audio>
     <video><source src="media/clip.webm" /></video>
@@ -113,10 +112,6 @@ body { background: url(../img/hero.png) no-repeat; }
   'apps/demo/fonts/x.woff2': 'WOFF2',
   'apps/demo/img/hero.png': { kind: 'file', text: 'HERO', mimeType: 'image/png' },
   'apps/demo/img/logo.png': 'LOGO',
-  'apps/demo/help/index.html': `<html><head><link rel="stylesheet" href="help.css"></head><body><img src="../img/logo.png"><script src="help.js"></script></body></html>`,
-  'apps/demo/help/help.css': 'p { background: url(q.png); }',
-  'apps/demo/help/q.png': 'Q',
-  'apps/demo/help/help.js': 'window.help = 1;',
   'apps/demo/media/clip.mp4': 'MP4',
   'apps/demo/media/beep.mp3': 'MP3',
   'apps/demo/media/clip.webm': 'WEBM',
@@ -125,12 +120,42 @@ body { background: url(../img/hero.png) no-repeat; }
   'apps/demo/data/items.json': '[]',
 };
 
+/**
+ * 入れ子の文書（枠に書いた VFS の HTML）を持つアプリ。親と子が同じ画像（logo.png）を使う。
+ * ここの出力は T-0827 で形が変わる（入れ子の文書は自分の束を持つ）。上の APP の出力は変わらない。
+ */
+const NESTED_APP: Record<string, Entry | string> = {
+  'apps/demo/index.html': `<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>nested</title>
+    <link rel="stylesheet" href="css/main.css" />
+  </head>
+  <body>
+    <img src="img/logo.png" alt="logo" />
+    <iframe src="help/index.html#intro"></iframe>
+  </body>
+</html>`,
+  'apps/demo/css/main.css': 'body { background: url(../img/logo.png); }',
+  'apps/demo/img/logo.png': 'LOGO',
+  'apps/demo/help/index.html': `<html><head><link rel="stylesheet" href="help.css"></head><body><img src="../img/logo.png"><script src="help.js"></script></body></html>`,
+  'apps/demo/help/help.css': 'p { background: url(q.png); }',
+  'apps/demo/help/q.png': 'Q',
+  'apps/demo/help/help.js': 'window.help = 1;',
+};
+
 describe('GuestCompiler: 金型 — 既存の書き方のアプリの出力は変えない（T-0822）', () => {
   it('静的な参照を並べたアプリ（引数あり）', async () => {
     const compiled = await new GuestCompiler().compile(vfsOf(APP), 'apps/demo/index.html?tab=1#top', 'demo', {
       tab: '1',
       note: '</script><b>',
     });
+    expect(await dump(compiled)).toMatchSnapshot();
+  });
+
+  it('入れ子の文書（枠に書いた VFS の HTML）を持つアプリ', async () => {
+    const compiled = await new GuestCompiler().compile(vfsOf(NESTED_APP), 'apps/demo/index.html', 'nested');
     expect(await dump(compiled)).toMatchSnapshot();
   });
 
