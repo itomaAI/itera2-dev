@@ -15,6 +15,10 @@
  * 渡す —— バイト列は複製されず handle が共有される（T-0770 E1: 50 MB × 10 枚で +0.1〜0.2 MB/枚）。
  * 寿命はゲストの文書と同じなので、ホスト側に URL の台帳も revoke も要らない。
  *
+ * 束は文書ごとに分かれる（T-0827）。アプリが枠（`<iframe src>` `<embed src>` `<object data>`）に書いた VFS の HTML は
+ * 入口とは別の文書（別のオリジン）で、入口が作った URL を 1 つも読めない。だから入れ子の文書は自分の束を持ち
+ * （資源 `kind: 'doc'`）、入口と同じ二段起動で起きる —— 束を渡すのは親の文書で、ホストは関わらない。
+ *
  * ブリッジ（`guest_bridge.js`）と撮影の助っ人（html-to-image）は本文にインラインで入れる。
  * `<script src>` で別の文書から読ませる形だと、opaque origin のゲストはそれを読めない（T-0760）。
  */
@@ -25,6 +29,7 @@ import guestBridgeSource from '../../api/guest_bridge.js?raw';
 import htmlToImageSource from 'html-to-image/dist/html-to-image.js?raw';
 import { resolveRelativePath } from '../../utils/path';
 import { buildGuestThemeCss, GUEST_THEME_STYLE_ID } from './guestThemeCss';
+import { nestedBootstrapHtml } from './guestBoot';
 import { t, escapeHtml, i18n } from '../../i18n/i18n';
 import {
   applyReplacements,
@@ -48,19 +53,26 @@ import {
 /**
  * ゲストへ渡す資源 1 つ。`id` は HTML／CSS の中に埋めた目印で、ゲストはこれを自分が作った object URL に置き換える。
  * - `blob`: VFS の実体（読まずに handle のまま渡す）。MIME は {@link typedBlob} で付け済み
- * - `text`: 中に他の資源の目印を含むテキスト（CSS・入れ子の HTML）。先に並ぶ資源の URL で置換してから Blob にする
+ * - `text`: 中に他の資源の目印を含むテキスト（CSS・モジュール・データとして読む HTML）。先に並ぶ資源の URL で置換してから Blob にする
+ * - `doc`: 入れ子の文書（枠に書いた VFS の HTML）。`doc` はその文書ひとつぶんの束、`boot` はその 1 段目（小さな HTML）。
+ *   親の文書は `boot` を URL にして枠に入れ、起きてきた子に `doc` を渡す。`doc` の中の目印は子が自分の URL に置き換える
  */
 export type GuestAsset = { id: string; path: string; mime: string } & (
-  { kind: 'blob'; blob: Blob } | { kind: 'text'; text: string }
+  { kind: 'blob'; blob: Blob } | { kind: 'text'; text: string } | { kind: 'doc'; boot: string; doc: GuestDocument }
 );
 
-export interface CompiledGuest {
-  /** 入口の文書。資源への参照は目印になっている。ゲストが置換して `document.write` する */
+/** 文書ひとつぶんの束。object URL はそれを作った文書だけが読めるので、束は文書ごとに分かれる */
+export interface GuestDocument {
+  /** 文書。資源への参照は目印になっている。ゲストが置換して `document.write` する */
   html: string;
-  /** 入口に付いていた `#hash`（無ければ ''）。ゲストが書く前に `location.hash` に写す */
-  hash: string;
   /** 依存の後順（子が先）。text の資源が参照する目印は、必ずそれより前に並ぶ */
   assets: GuestAsset[];
+}
+
+/** 入口の文書の束 */
+export interface CompiledGuest extends GuestDocument {
+  /** 入口に付いていた `#hash`（無ければ ''）。ゲストが書く前に `location.hash` に写す */
+  hash: string;
 }
 
 /**
@@ -166,6 +178,15 @@ interface DocScope {
   roots: Set<string>;
 }
 
+/** VFS に在る HTML のファイルか（枠に書かれたとき、入れ子の文書として起こすもの） */
+function isHtmlFile(ctx: Compilation, absPath: string): boolean {
+  return (
+    absPath.endsWith('.html') &&
+    ctx.vfs.exists(USER_PRINCIPAL, absPath) &&
+    ctx.vfs.stat(USER_PRINCIPAL, absPath).kind === 'file'
+  );
+}
+
 function dirOf(filePath: string): string {
   return filePath.includes('/') ? filePath.substring(0, filePath.lastIndexOf('/')) : '';
 }
@@ -174,11 +195,16 @@ function dirOf(filePath: string): string {
 const IN_PROGRESS = Symbol('in-progress');
 
 /**
- * 1 回の compile の状態。資源の一覧・目印の採番・訪問表はここに閉じる。
+ * 文書ひとつぶんの compile の状態。資源の一覧・目印の採番・訪問表はここに閉じる。
  * コンパイラは全プロセスで 1 つを共有し compile は非同期なので、インスタンスに持つと並行する起動どうしで混ざる。
+ * 入れ子の文書は別のインスタンスで compile する（{@link nested}）—— 束は文書ごとなので、親と子で資源も目印も分かれる。
  */
 class Compilation {
   readonly assets: GuestAsset[] = [];
+  /** この文書と、その祖先の文書（VFS のパス。根が先頭）。枠の参照がここを指したら循環 */
+  readonly lineage: string[];
+  /** 入れ子の文書として束にしたもの: VFS のパス → 目印 */
+  private readonly docs = new Map<string, string>();
   /** 目印に混ぜる印。アプリの本文がたまたま同じ文字列を含んでいても置換が当たらないように */
   private readonly nonce = Math.random().toString(36).slice(2, 10);
   /** absPath + hash → 目印（解決済み）／IN_PROGRESS（解決中） */
@@ -196,10 +222,24 @@ class Compilation {
   readonly pid: string;
   readonly args: Record<string, string> | undefined;
 
-  constructor(vfs: VfsService, pid: string, args: Record<string, string> | undefined) {
+  constructor(vfs: VfsService, pid: string, args: Record<string, string> | undefined, lineage: string[] = []) {
     this.vfs = vfs;
     this.pid = pid;
     this.args = args;
+    this.lineage = lineage;
+  }
+
+  /** この状態で compile する文書を決める。自分への参照は循環として扱われる */
+  enter(docPath: string): void {
+    this.lineage.push(docPath);
+    this.begin(docPath);
+  }
+
+  /** 入れ子の文書ひとつぶんの状態（資源・目印・モジュールの表は親と分かれる。祖先は引き継ぐ） */
+  nested(docPath: string): Compilation {
+    const child = new Compilation(this.vfs, this.pid, this.args, [...this.lineage]);
+    child.enter(docPath);
+    return child;
   }
 
   lookup(key: string): string | typeof IN_PROGRESS | undefined {
@@ -223,6 +263,18 @@ class Compilation {
   addBlob(path: string, mime: string, blob: Blob): string {
     const id = this.nextMarker();
     this.assets.push({ id, path, mime, kind: 'blob', blob: typedBlob(blob, mime) });
+    return id;
+  }
+
+  docMarker(path: string): string | undefined {
+    return this.docs.get(path);
+  }
+
+  /** 入れ子の文書の束を資源にする。1 段目の文書は、採番した目印から作る */
+  addDoc(path: string, doc: GuestDocument, bootOf: (id: string) => string): string {
+    const id = this.nextMarker();
+    this.assets.push({ id, path, mime: 'text/html', kind: 'doc', boot: bootOf(id), doc });
+    this.docs.set(path, id);
     return id;
   }
 
@@ -315,7 +367,7 @@ export class GuestCompiler {
     const problem = this._checkFile(ctx, absPath);
     if (problem) return missingDocumentHtml(absPath, problem);
 
-    ctx.begin(absPath);
+    ctx.enter(absPath);
     const body = await this._compileHtml(ctx, absPath);
     ctx.finish(absPath, '');
     return this._injectHtmlScripts(body, ctx.pid, ctx.args, absPath);
@@ -362,6 +414,33 @@ export class GuestCompiler {
     return ref;
   }
 
+  /**
+   * 枠（`<iframe src>`・`<embed src>`・`<object data>`）に書かれた参照。VFS の HTML を指していれば、入れ子の文書として
+   * 束にする: その文書を別の状態で compile し、枠には 1 段目の文書の目印を書く（T-0827）。
+   * 入れ子の文書は親と別の文書（別のオリジン）なので、親の束に混ぜても、親が作った URL を子は読めない。
+   * HTML でないもの（PDF・画像 …）と読めないものは、ふつうの資源（{@link _resolveRef}）。
+   */
+  private async _resolveFrameRef(ctx: Compilation, requestPath: string, currentDir: string): Promise<string> {
+    const { basePath, hash } = parsePath(requestPath);
+    if (!basePath || isForeign(basePath)) return requestPath;
+    const absPath = resolveRelativePath(currentDir, basePath);
+    if (!isHtmlFile(ctx, absPath)) return this._resolveRef(ctx, requestPath, currentDir);
+
+    if (ctx.lineage.includes(absPath)) {
+      // 自分か祖先の文書を枠に入れている。辿ると終わらないので、参照はそのまま残す
+      console.warn(`[GuestCompiler] Circular reference: ${absPath}`);
+      return requestPath;
+    }
+    let marker = ctx.docMarker(absPath);
+    if (marker === undefined) {
+      const child = ctx.nested(absPath);
+      const html = await this._compileHtml(child, absPath);
+      marker = ctx.addDoc(absPath, { html, assets: child.assets }, nestedBootstrapHtml);
+    }
+    // `#hash` は 1 段目の文書の URL に付く。本体を書いても文書の URL は変わらないので、そのまま残る
+    return marker + hash;
+  }
+
   private async _compileAsset(ctx: Compilation, absPath: string): Promise<string> {
     const mime = ctx.vfs.stat(USER_PRINCIPAL, absPath).mimeType || this.getMimeType(absPath);
     if (absPath.endsWith('.html')) {
@@ -378,7 +457,7 @@ export class GuestCompiler {
   }
 
   /**
-   * HTML を読み、静的参照を目印に置き換えた文書を返す。ブリッジ等の注入は入口だけ（呼び手が行う）。
+   * HTML を読み、静的参照を目印に置き換えた文書を返す。ブリッジ等の注入は入口だけ（呼び手が行う。入れ子の文書には入れない）。
    * モジュールを使う文書には、指定子を実体に結ぶ import map を 1 枚置く（{@link _writeImportMap}）。
    */
   private async _compileHtml(ctx: Compilation, absPath: string): Promise<string> {
@@ -415,6 +494,14 @@ export class GuestCompiler {
         const ref = await this._resolveRef(ctx, val, dir);
         if (ref !== val) el.setAttribute(attr, ref);
       });
+    // 枠。VFS の HTML なら入れ子の文書として束にする（ほかは rewrite と同じ）
+    const frame = (selector: string, attr: string) =>
+      each(selector, async (el) => {
+        const val = el.getAttribute(attr);
+        if (!val) return;
+        const ref = await this._resolveFrameRef(ctx, val, dir);
+        if (ref !== val) el.setAttribute(attr, ref);
+      });
 
     // 1. 前から解決していた形。<a href> は OS のナビゲーションを運ぶので触らない
     await each('script[src]', async (el) => {
@@ -437,12 +524,12 @@ export class GuestCompiler {
       if (ref !== val) el.setAttribute('href', ref);
     });
     await rewrite('img[src]', 'src');
-    await rewrite('iframe[src]', 'src');
+    await frame('iframe[src]', 'src');
     await rewrite('video[src]', 'src');
     await rewrite('audio[src]', 'src');
     await rewrite('source[src]', 'src');
-    await rewrite('embed[src]', 'src');
-    await rewrite('object[data]', 'data');
+    await frame('embed[src]', 'src');
+    await frame('object[data]', 'data');
 
     await each('[style]', async (el) => {
       const style = el.getAttribute('style');

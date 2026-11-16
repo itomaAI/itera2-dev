@@ -6,6 +6,9 @@
  * 2 段目: ホストは {@link GuestBoot.body}（compile の結果）を返し、ゲストが自分の窓で object URL を作って本体を書く。
  * 本体のブリッジは文書の load で `sys:ready` を送り、{@link GuestBoot.ready} が解ける。spawn はそれを待つ
  * （以前の「入口の文書の load を待つ」と同じ時点。失敗・kill・時間切れでも待ちは解ける）。
+ *
+ * 入れ子の文書（アプリが枠に書いた VFS の HTML）も同じブートストラップで起きるが、相手はホストではなく親の文書
+ * （{@link nestedBootstrapHtml}。T-0827）。ホストはそこに関わらない。
  */
 
 import bootstrapSource from './guest_bootstrap.js?raw';
@@ -17,6 +20,18 @@ export function bootstrapHtml(pid: string): string {
   return (
     `<!DOCTYPE html><html><head><meta charset="utf-8">` +
     `<script>window.__ITERA_PID__ = ${jsLiteral(pid)};</script></head>` +
+    `<body><script>${bootstrapSource}</script></body></html>`
+  );
+}
+
+/**
+ * 入れ子の文書の 1 段目（T-0827）。コンパイラが束に入れ、親の文書がこれを URL にして枠に入れる。
+ * 中のブートストラップは、親の文書に自分の束を頼む。`docId` は親の束の中でその文書を指す目印。
+ */
+export function nestedBootstrapHtml(docId: string): string {
+  return (
+    `<!DOCTYPE html><html><head><meta charset="utf-8">` +
+    `<script>window.__ITERA_DOC__ = ${jsLiteral(docId)};</script></head>` +
     `<body><script>${bootstrapSource}</script></body></html>`
   );
 }

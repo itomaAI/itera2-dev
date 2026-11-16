@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { GuestBoot, bootstrapHtml } from './guestBoot';
+import { GuestBoot, bootstrapHtml, nestedBootstrapHtml } from './guestBoot';
 import type { CompiledGuest } from './GuestCompiler';
 
 /**
@@ -17,6 +17,19 @@ describe('bootstrapHtml', () => {
     expect(html).toContain("action: 'sys:boot'");
     expect(html).not.toContain('<script src=');
     expect(html.length).toBeLessThan(6000); // 1 段目は小さいまま（T-0770 E4: 1.1 KB。ブリッジはここに入れない）
+  });
+});
+
+describe('nestedBootstrapHtml', () => {
+  it('文書の目印を JSON リテラルで渡し、入口と同じブートストラップ本体を持つ（PID は渡さない）', () => {
+    const html = nestedBootstrapHtml('__ITERA_ASSET_ab12_3__');
+    expect(html).toContain('<script>window.__ITERA_DOC__ = "__ITERA_ASSET_ab12_3__";</script>');
+    expect(html).not.toContain('window.__ITERA_PID__ =');
+    expect(html).toContain("'itera:doc:v1'");
+    expect(html).not.toContain('<script src=');
+    // 中身は入口の 1 段目と同じスクリプト（違うのは渡す名前だけ）
+    const script = (s: string) => s.slice(s.indexOf('<body><script>'));
+    expect(script(html)).toBe(script(bootstrapHtml('p')));
   });
 });
 
