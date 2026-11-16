@@ -2,7 +2,17 @@
 import { describe, it, expect, vi, afterEach, beforeAll } from 'vitest';
 import { GuestCompiler } from './GuestCompiler';
 import { scanScriptRefs, scriptLexerReady } from './guestRefScan';
-import { assetOf, importMapOf, markersPrecede, page, parse, textOf, vfsOf, MARKER } from './guestCompilerTestKit';
+import {
+  assetOf,
+  docOf,
+  importMapOf,
+  markersPrecede,
+  page,
+  parse,
+  textOf,
+  vfsOf,
+  MARKER,
+} from './guestCompilerTestKit';
 
 /**
  * src/shell/windowing/GuestCompiler.modules.test.ts
@@ -432,7 +442,7 @@ describe('GuestCompiler: new URL(…, import.meta.url)', () => {
 });
 
 describe('GuestCompiler: 入れ子の文書（iframe）とモジュール', () => {
-  it('import map は文書ごとに 1 枚。その文書から届くモジュールだけが載る', async () => {
+  it('import map は文書ごとに 1 枚。モジュールの資源も文書ごと（親と子が同じファイルを import すれば両方の束に載る）', async () => {
     const { html, assets } = await compile(
       {
         'apps/index.html': page('<iframe src="sub/page.html"></iframe>', '<script type="module" src="p.js"></script>'),
@@ -444,12 +454,10 @@ describe('GuestCompiler: 入れ子の文書（iframe）とモジュール', () =
       },
       'apps/index.html',
     );
-    expect(assets.map((x) => x.path)).toEqual([
-      'apps/shared.js',
-      'apps/p.js',
-      'apps/sub/only-child.js',
-      'apps/sub/c.js',
-      'apps/sub/page.html',
+    expect(assets.map((x) => [x.path, x.kind])).toEqual([
+      ['apps/shared.js', 'text'],
+      ['apps/p.js', 'text'],
+      ['apps/sub/page.html', 'doc'],
     ]);
     const id = (path: string) => assetOf(assets, path).id;
     expect(importMapOf(html)!.imports).toEqual({
@@ -457,17 +465,21 @@ describe('GuestCompiler: 入れ子の文書（iframe）とモジュール', () =
       '@vfs/apps/shared.js': id('apps/shared.js'),
     });
 
-    const child = textOf(assetOf(assets, 'apps/sub/page.html'));
-    expect(importMapOf(child)!.imports).toEqual({
-      '@vfs/apps/sub/c.js': id('apps/sub/c.js'),
-      '@vfs/apps/shared.js': id('apps/shared.js'),
-      '@vfs/apps/sub/only-child.js': id('apps/sub/only-child.js'),
+    // 入れ子の文書は自分の束を持つ（T-0827）。import map が結ぶのは、子の束のモジュール
+    const child = docOf(assetOf(assets, 'apps/sub/page.html'));
+    expect(child.assets.map((x) => x.path)).toEqual(['apps/shared.js', 'apps/sub/only-child.js', 'apps/sub/c.js']);
+    const cid = (path: string) => assetOf(child.assets, path).id;
+    expect(importMapOf(child.html)!.imports).toEqual({
+      '@vfs/apps/sub/c.js': cid('apps/sub/c.js'),
+      '@vfs/apps/shared.js': cid('apps/shared.js'),
+      '@vfs/apps/sub/only-child.js': cid('apps/sub/only-child.js'),
     });
-    const childDoc = parse(child);
+    expect(cid('apps/shared.js')).not.toBe(id('apps/shared.js'));
+    const childDoc = parse(child.html);
     expect(childDoc.head.firstElementChild!.getAttribute('type')).toBe('importmap');
-    expect(childDoc.querySelector('script[type="module"]')!.getAttribute('src')).toBe(id('apps/sub/c.js'));
-    // 入れ子の文書（text の資源）が指す目印は、すべて先に並んでいる
+    expect(childDoc.querySelector('script[type="module"]')!.getAttribute('src')).toBe(cid('apps/sub/c.js'));
     expect(markersPrecede(assets)).toBe(true);
+    expect(markersPrecede(child.assets)).toBe(true);
   });
 });
 

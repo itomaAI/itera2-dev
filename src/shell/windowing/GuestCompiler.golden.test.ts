@@ -1,10 +1,11 @@
 // @vitest-environment jsdom
 import { describe, it, expect } from 'vitest';
 import { GuestCompiler, stripSourceMapComment } from './GuestCompiler';
-import type { CompiledGuest } from './GuestCompiler';
+import type { CompiledGuest, GuestDocument } from './GuestCompiler';
 import type { VfsService } from '../../core/vfs/VfsService';
 import guestBridgeSource from '../../api/guest_bridge.js?raw';
 import htmlToImageSource from 'html-to-image/dist/html-to-image.js?raw';
+import bootstrapSource from './guest_bootstrap.js?raw';
 
 /**
  * src/shell/windowing/GuestCompiler.golden.test.ts
@@ -17,7 +18,7 @@ import htmlToImageSource from 'html-to-image/dist/html-to-image.js?raw';
  *
  * 伏せるもの（コンパイラの仕事ではない・毎回変わる）:
  *   - 目印の中の印（1 回の compile に固有の乱数）
- *   - ブリッジと撮影の助っ人の本文（別のファイルの中身）・テーマの CSS（ホストの :root の計算値）
+ *   - ブリッジと撮影の助っ人・ブートストラップの本文（別のファイルの中身）・テーマの CSS（ホストの :root の計算値）
  *   - 入口のパスを渡す行（T-0822 で足す。足す前は無いので何も起きない）
  */
 
@@ -36,6 +37,7 @@ function vfsOf(entries: Record<string, Entry | string>): VfsService {
 
 const BRIDGE = guestBridgeSource;
 const HTML_TO_IMAGE = stripSourceMapComment(htmlToImageSource);
+const BOOTSTRAP = bootstrapSource;
 
 function normalizeText(s: string): string {
   return s
@@ -43,23 +45,30 @@ function normalizeText(s: string): string {
     .join('/*BRIDGE*/')
     .split(HTML_TO_IMAGE)
     .join('/*HTML_TO_IMAGE*/')
+    .split(BOOTSTRAP)
+    .join('/*BOOTSTRAP*/')
     .replace(/__ITERA_ASSET_[a-z0-9]+_(\d+)__/g, '__ITERA_ASSET_NONCE_$1__')
     .replace(/(<style id="itera-guest-theme">)[\s\S]*?(<\/style>)/, '$1/*THEME*/$2')
     .replace(/<script>window\.__ITERA_PATH__ = [^<]*;<\/script>\n/g, '');
 }
 
-async function dump(compiled: CompiledGuest) {
+/** 文書ひとつぶんの束。入れ子の文書（kind: 'doc'）は、その束を同じ形で中に持つ */
+async function dumpDocument(doc: GuestDocument): Promise<{ html: string; assets: unknown[] }> {
   const assets = [];
-  for (const a of compiled.assets) {
-    assets.push({
-      id: normalizeText(a.id),
-      path: a.path,
-      mime: a.mime,
-      kind: a.kind,
-      body: a.kind === 'text' ? normalizeText(a.text) : `[blob type=${a.blob.type}] ` + (await a.blob.text()),
-    });
+  for (const a of doc.assets) {
+    const head = { id: normalizeText(a.id), path: a.path, mime: a.mime, kind: a.kind };
+    if (a.kind === 'doc') {
+      assets.push({ ...head, boot: normalizeText(a.boot), doc: await dumpDocument(a.doc) });
+    } else {
+      const body = a.kind === 'text' ? normalizeText(a.text) : `[blob type=${a.blob.type}] ` + (await a.blob.text());
+      assets.push({ ...head, body });
+    }
   }
-  return { html: normalizeText(compiled.html), hash: compiled.hash, assets };
+  return { html: normalizeText(doc.html), assets };
+}
+
+async function dump(compiled: CompiledGuest) {
+  return { ...(await dumpDocument(compiled)), hash: compiled.hash };
 }
 
 /** 前から解決していた形と、前から触らなかった形を 1 つのアプリに並べる */
@@ -122,7 +131,7 @@ body { background: url(../img/hero.png) no-repeat; }
 
 /**
  * 入れ子の文書（枠に書いた VFS の HTML）を持つアプリ。親と子が同じ画像（logo.png）を使う。
- * ここの出力は T-0827 で形が変わる（入れ子の文書は自分の束を持つ）。上の APP の出力は変わらない。
+ * 入れ子の文書は自分の束を持つ（T-0827。それより前は親の束に混ざっていて、子は 1 つも読めなかった）。
  */
 const NESTED_APP: Record<string, Entry | string> = {
   'apps/demo/index.html': `<!DOCTYPE html>

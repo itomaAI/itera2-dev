@@ -2,7 +2,7 @@
  * src/shell/windowing/guestCompilerTestKit.ts
  * GuestCompiler の試験が共有する小さな道具（最小の VFS・出力の読み方）。試験からだけ import する。
  */
-import type { GuestAsset } from './GuestCompiler';
+import type { GuestAsset, GuestDocument } from './GuestCompiler';
 import type { VfsService } from '../../core/vfs/VfsService';
 
 export type Entry = { kind: 'file' | 'directory'; text?: string; mimeType?: string };
@@ -33,6 +33,12 @@ export function assetOf(assets: GuestAsset[], path: string, kind?: GuestAsset['k
     throw new Error(`expected exactly one asset for ${path}${kind ? ` (${kind})` : ''}, got ${found.length}`);
   }
   return found[0];
+}
+
+/** 入れ子の文書の資源（kind: 'doc'）の束。そうでなければ試験を落とす */
+export function docOf(a: GuestAsset): GuestDocument {
+  if (a.kind !== 'doc') throw new Error(`expected a nested document for ${a.path}, got ${a.kind}`);
+  return a.doc;
 }
 
 export const parse = (html: string) => new DOMParser().parseFromString(html, 'text/html');

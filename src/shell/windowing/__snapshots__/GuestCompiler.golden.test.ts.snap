@@ -74,30 +74,42 @@ exports[`GuestCompiler: 金型 — 既存の書き方のアプリの出力は変
       "path": "apps/demo/css/main.css",
     },
     {
-      "body": "[blob type=application/javascript] window.help = 1;",
+      "boot": "<!DOCTYPE html><html><head><meta charset="utf-8"><script>window.__ITERA_DOC__ = "__ITERA_ASSET_NONCE_2__";</script></head><body><script>/*BOOTSTRAP*/</script></body></html>",
+      "doc": {
+        "assets": [
+          {
+            "body": "[blob type=application/javascript] window.help = 1;",
+            "id": "__ITERA_ASSET_NONCE_0__",
+            "kind": "blob",
+            "mime": "application/javascript",
+            "path": "apps/demo/help/help.js",
+          },
+          {
+            "body": "[blob type=image/png] Q",
+            "id": "__ITERA_ASSET_NONCE_1__",
+            "kind": "blob",
+            "mime": "image/png",
+            "path": "apps/demo/help/q.png",
+          },
+          {
+            "body": "p { background: url(__ITERA_ASSET_NONCE_1__); }",
+            "id": "__ITERA_ASSET_NONCE_2__",
+            "kind": "text",
+            "mime": "text/css",
+            "path": "apps/demo/help/help.css",
+          },
+          {
+            "body": "[blob type=image/png] LOGO",
+            "id": "__ITERA_ASSET_NONCE_3__",
+            "kind": "blob",
+            "mime": "image/png",
+            "path": "apps/demo/img/logo.png",
+          },
+        ],
+        "html": "<html><head><link rel="stylesheet" href="__ITERA_ASSET_NONCE_2__"></head><body><img src="__ITERA_ASSET_NONCE_3__"><script src="__ITERA_ASSET_NONCE_0__"></script></body></html>",
+      },
       "id": "__ITERA_ASSET_NONCE_2__",
-      "kind": "blob",
-      "mime": "application/javascript",
-      "path": "apps/demo/help/help.js",
-    },
-    {
-      "body": "[blob type=image/png] Q",
-      "id": "__ITERA_ASSET_NONCE_3__",
-      "kind": "blob",
-      "mime": "image/png",
-      "path": "apps/demo/help/q.png",
-    },
-    {
-      "body": "p { background: url(__ITERA_ASSET_NONCE_3__); }",
-      "id": "__ITERA_ASSET_NONCE_4__",
-      "kind": "text",
-      "mime": "text/css",
-      "path": "apps/demo/help/help.css",
-    },
-    {
-      "body": "<html><head><link rel="stylesheet" href="__ITERA_ASSET_NONCE_4__"></head><body><img src="__ITERA_ASSET_NONCE_0__"><script src="__ITERA_ASSET_NONCE_2__"></script></body></html>",
-      "id": "__ITERA_ASSET_NONCE_5__",
-      "kind": "text",
+      "kind": "doc",
       "mime": "text/html",
       "path": "apps/demo/help/index.html",
     },
@@ -115,7 +127,7 @@ exports[`GuestCompiler: 金型 — 既存の書き方のアプリの出力は変
 </head>
   <body>
     <img src="__ITERA_ASSET_NONCE_0__" alt="logo">
-    <iframe src="__ITERA_ASSET_NONCE_5__#intro"></iframe>
+    <iframe src="__ITERA_ASSET_NONCE_2__#intro"></iframe>
   
 
 <script>/*HTML_TO_IMAGE*/</script>
