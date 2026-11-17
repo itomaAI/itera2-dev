@@ -24,7 +24,7 @@
 | もの | どう走るか |
 | :-- | :-- |
 | `*.test.ts` | `npm test`（vitest の include は既定＝プロジェクト全域なので、この位置でも走る） |
-| `test_bridge_server.py` | `python3 -m pytest tests/guest/test_bridge_server.py -q`（vitest では走らない。CI にも入っていない） |
+| `test_bridge_server.py`・`test_bridge_server_token.py` | `python3 -m pytest tests/guest/test_bridge_server.py tests/guest/test_bridge_server_token.py -q`（vitest では走らない。CI にも入っていない） |
 | `../lpml_regex_test.html` | ブラウザで開いて目で見る |
 
 ## 中身
@@ -34,5 +34,7 @@
 - `localBridgeRelease.test.ts` … スタブへ戻す操作（ホスト側の一致を確かめてから消す）
 - `localBridgeVanished.test.ts` … リモートから消えたときの扱い
 - `test_bridge_server.py` … long-poll と版（rev）の表現
+- `test_bridge_server_token.py` … 接続用トークン（`serve --require-token`）。関門・CORS・トークンのファイル・CLI。後半は本物のサーバーと CLI を別プロセスで起こす（設定の置き場は一時ディレクトリ・港はその場で取る）
+- `localBridgeToken.test.ts` … トークンを送る側（デーモンの道 1 つ・401 の扱い、設定アプリの確かめと保存、ホーム）
 - `pdfTool.test.ts` / `pdfExtract.test.ts` … PDF の道具（`pdf_tool.html`・`pdf_text.js`）
 - `zipTool.test.ts` … zip の道具（`zip_tool.html`・`zip_core.js`。偽の VFS で往復する）

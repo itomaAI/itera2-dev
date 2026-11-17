@@ -25,6 +25,9 @@
         // v3.5 以降のサーバーは long-poll に対応し、変化があるまで応答を保留する。
         // ROOT_POLL_MS は「旧サーバー相手の間隔」と「切断時の再確認の間隔」として残す。
         const ROOT_POLL_MS = 5000;
+        // トークンで断られている接続を見直す間隔。設定を直してデーモンを起こし直すまで結果は変わらないので、
+        // 切断のときの間隔（ROOT_POLL_MS）で叩き続けない。サーバーの側が必須をやめたときはこの間隔で戻る。
+        const AUTH_RETRY_MS = 60000;
         // 保留の上限。長すぎると詰まったときの復帰が遅れ、短すぎると往復が増える。
         const LONG_POLL_SEC = 25;
         // long-poll のつもりが即座に返り続ける相手（想定外のサーバー）でも
@@ -88,6 +91,10 @@
             name: cfg.name || null,
             serverUrl: (cfg.serverUrl || '').replace(/\/+$/, ''),
             execMode: cfg.execMode || 'ask',
+            // サーバーが --require-token のときに送るトークン。無ければ何も付けない（今までと同じ要求になる）。
+            token: typeof cfg.token === 'string' ? cfg.token.trim() : '',
+            // 'required'（トークンが要るのに持っていない）| 'rejected'（送ったトークンが通らない）| null
+            auth: null,
             identity: null,
           }));
 
@@ -213,7 +220,7 @@
           const want = ignoreListToSend(conn, r.name);
           if (want.join('\n') === r.ignorePatterns.join('\n')) return;
           try {
-            const res = await getJson(api(conn, `/api/${r.name}/ignore`), {
+            const res = await getJson(conn, `/api/${r.name}/ignore`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ ignorePatterns: want }),
@@ -236,7 +243,34 @@
         }
 
         // ---------- 補助 ----------
-        const api = (conn, path) => `${conn.serverUrl}${path}`;
+        // サーバーへの道はここ 1 つ。接続のトークンはここでだけ付ける。素の fetch をほかで呼ばない
+        // （道が何本もあると、付け忘れた 1 本だけが必須のサーバーで 401 になり、同期が半端に進む）。
+        // トークンの無い接続では、要求は今までと 1 バイトも変わらない（preflight も増えない）。
+        function bridgeFetch(conn, path, opts) {
+          const o = { ...(opts || {}) };
+          if (conn.token) o.headers = { ...(o.headers || {}), Authorization: `Bearer ${conn.token}` };
+          return fetch(`${conn.serverUrl}${path}`, o).then((res) => {
+            noteAuth(conn, res.status);
+            return res;
+          });
+        }
+
+        // 401 は「サーバーが止まっている」と分けて覚える。ログは状態が変わったときに 1 度だけ。
+        // 401 でない応答は関門を通っている（404 や 409 も、通った先の返事である）。
+        function noteAuth(conn, httpStatus) {
+          const now = httpStatus === 401 ? (conn.token ? 'rejected' : 'required') : null;
+          if (conn.auth === now) return;
+          const was = conn.auth;
+          conn.auth = now;
+          log(now ? authMessage(conn) : `${conn.name || conn.serverUrl}: the token was accepted (was: ${was})`);
+        }
+
+        function authMessage(conn) {
+          const who = conn.name || conn.serverUrl;
+          return conn.auth === 'required'
+            ? `${who}: the server requires a token. Set it in the Local Bridge settings, then restart the daemon`
+            : `${who}: the server did not accept the token. Check it in the Local Bridge settings, then restart the daemon`;
+        }
 
         // 長い巡回の途中で、ほかの仕事に順番を譲る。setTimeout(0) は使わない（T-0544）。
         // 背景のタブでは setTimeout が約 1 秒に間引かれる（2026-09-26・Firefox 156 で 1 回 1,015ms を実測）。
@@ -255,11 +289,11 @@
             yieldChannel.port2.postMessage(0);
           });
 
-        async function getJson(url, opts) {
-          const res = await fetch(url, opts);
+        async function getJson(conn, path, opts) {
+          const res = await bridgeFetch(conn, path, opts);
           if (!res.ok) {
             const text = await res.text().catch(() => '');
-            const err = new Error(`HTTP ${res.status} ${text.slice(0, 200)}`);
+            const err = new Error(res.status === 401 ? authMessage(conn) : `HTTP ${res.status} ${text.slice(0, 200)}`);
             err.status = res.status;
             throw err;
           }
@@ -435,7 +469,7 @@
           let saved = null;
           try {
             const u8 = await MetaOS.fs.read(full, { encoding: 'binary' });
-            saved = await getJson(api(conn, `/api/${root}/file/${backupRel}`), { method: 'PUT', body: u8 });
+            saved = await getJson(conn, `/api/${root}/file/${backupRel}`, { method: 'PUT', body: u8 });
           } catch (e) {
             notifyOnce(
               `[Local Bridge] /${mountPath}/${rel} has changed on both sides.` +
@@ -561,7 +595,7 @@
           const { conn, root, mountPath } = mount;
           let remote;
           try {
-            remote = await getJson(api(conn, `/api/${root}/meta`));
+            remote = await getJson(conn, `/api/${root}/meta`);
           } catch (e) {
             log(`Could not fetch meta (${conn.name}/${root}): ${e.message}`);
             return;
@@ -652,7 +686,7 @@
 
               // 2. ローカルで削除された → リモートへ反映
               if (isLocallyDeleted(l, r, a, same)) {
-                const res = await fetch(api(conn, `/api/${root}/file/${rel}`), {
+                const res = await bridgeFetch(conn, `/api/${root}/file/${rel}`, {
                   method: 'DELETE',
                   headers: a.hash ? { 'X-Expected-Hash': a.hash } : {},
                 });
@@ -731,7 +765,7 @@
               if (l && !r && !a) {
                 if (l.kind === 'directory') continue;
                 const u8 = await MetaOS.fs.read(full, { encoding: 'binary' });
-                const data = await getJson(api(conn, `/api/${root}/file/${rel}`), { method: 'PUT', body: u8 });
+                const data = await getJson(conn, `/api/${root}/file/${rel}`, { method: 'PUT', body: u8 });
                 next[rel] = { kind: 'file', size: data.size, updatedAt: data.updatedAt, hash: data.hash };
                 continue;
               }
@@ -740,7 +774,7 @@
               if (l && r && !same(l, a) && same(r, a)) {
                 if (l.kind === 'directory') continue;
                 const u8 = await MetaOS.fs.read(full, { encoding: 'binary' });
-                const data = await getJson(api(conn, `/api/${root}/file/${rel}`), {
+                const data = await getJson(conn, `/api/${root}/file/${rel}`, {
                   method: 'PUT',
                   headers: a?.hash ? { 'X-Expected-Hash': a.hash } : {},
                   body: u8,
@@ -1035,7 +1069,7 @@
             onFetchContent: async (reqPath) => {
               const rel = reqPath.substring(mountPath.length + 1);
               try {
-                const res = await fetch(api(conn, `/api/${root}/file/${rel}`));
+                const res = await bridgeFetch(conn, `/api/${root}/file/${rel}`);
                 if (!res.ok) return false;
                 const buf = await res.arrayBuffer();
                 // 中身を取り寄せただけで更新日時が「今」になってしまわないよう、
@@ -1074,7 +1108,7 @@
               }
               if (mount.halted) return false;
               try {
-                const res = await getJson(api(conn, `/api/${root}/move`), {
+                const res = await getJson(conn, `/api/${root}/move`, {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
                   body: JSON.stringify({ from: plan.oldRel, to: plan.newRel }),
@@ -1289,7 +1323,7 @@
           const query = waitSec && conn.revToken ? `?wait=${waitSec}&since=${encodeURIComponent(conn.revToken)}` : '';
           let status;
           try {
-            status = await getJson(api(conn, '/api/status' + query));
+            status = await getJson(conn, '/api/status' + query);
           } catch (e) {
             return null;
           }
@@ -1339,7 +1373,8 @@
             }
             const spent = Date.now() - started;
             // 保留してもらえた場合だけ即座に次を投げる。それ以外は間隔をあける。
-            const gap = status && conn.longPoll ? MIN_LOOP_MS - spent : ROOT_POLL_MS;
+            const idle = conn.auth ? AUTH_RETRY_MS : ROOT_POLL_MS;
+            const gap = status && conn.longPoll ? MIN_LOOP_MS - spent : idle;
             if (gap > 0) await new Promise((r) => setTimeout(r, gap));
           }
         }
@@ -1476,7 +1511,7 @@ Attributes:
                 if (!res || res.action !== true) return '[not executed] The user did not allow it.';
               }
 
-              const data = await getJson(api(conn, '/api/exec'), {
+              const data = await getJson(conn, '/api/exec', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ root, cwd: p.cwd || '.', command, scope, timeout: parseInt(p.timeout) || 60 }),
@@ -1496,7 +1531,7 @@ Attributes:
             try {
               const conn = resolveConn(p.connection);
               const root = resolveRoot(conn, p.root);
-              const data = await getJson(api(conn, `/api/${root}/search`), {
+              const data = await getJson(conn, `/api/${root}/search`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -1563,7 +1598,7 @@ Attributes:
               //   『VFS に実体があるか』の報告であって『ホストと一致しているか』の報告ではない。
               //   中身が食い違っていても「既に実体」と答えるため、修復に使えないばかりか
               //   「確認した」という誤った安心を与えていた（T-0013 で実際に踏んだ）。
-              const remote = await getJson(api(conn, `/api/${root}/meta`));
+              const remote = await getJson(conn, `/api/${root}/meta`);
               const mount = mounts.get(mountPath);
 
               let done = 0,
@@ -1654,7 +1689,7 @@ Attributes:
             // 途中まで進んでいることがあるので、その分を持たせて投げる（無かったことにしない）。
             let verify;
             try {
-              verify = await getJson(api(conn, `/api/${root}/verify`), {
+              verify = await getJson(conn, `/api/${root}/verify`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ paths: rels }),
@@ -1789,13 +1824,15 @@ Attributes:
           const status = await refreshConn(conn);
           if (!status) {
             summary.push(
-              `${connLabel(conn)}: not connected (${conn.serverUrl}) — retrying every ${ROOT_POLL_MS / 1000}s`,
+              conn.auth
+                ? `${authMessage(conn)} (${conn.serverUrl})`
+                : `${connLabel(conn)}: not connected (${conn.serverUrl}) — retrying every ${ROOT_POLL_MS / 1000}s`,
             );
           } else {
             const id = conn.identity || {};
             const who = id.hostname ? `${id.hostname} / ${id.user || '?'}` : 'unnamed (server older than v3.1)';
             summary.push(
-              `${connLabel(conn)}: v${status.version} [${who}] ${(status.roots || []).length} root(s) / exec ${conn.execMode}`,
+              `${connLabel(conn)}: v${status.version} [${who}] ${(status.roots || []).length} root(s) / exec ${conn.execMode}${status.tokenRequired ? ' / token required' : ''}`,
             );
           }
           // 起動時に繋がらなくても巡回は必ず仕掛ける。
@@ -1805,7 +1842,7 @@ Attributes:
         }
 
         MetaOS.ai.log(
-          'Local Bridge (daemon v3.13) started\n' + (summary.join('\n') || '(no enabled connections)'),
+          'Local Bridge (daemon v3.14) started\n' + (summary.join('\n') || '(no enabled connections)'),
           'system',
         );
       })();

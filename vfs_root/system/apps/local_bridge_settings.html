@@ -99,6 +99,8 @@
       const short = (id) => (id ? String(id).slice(0, 8) : '—');
 
       let state = { config: null, conns: [], mounts: [], daemon: false, details: {}, busy: false };
+      // トークンの入力欄（開いている接続の URL・打ちかけの値）。画面は定期的に描き直されるので、欄の外に持つ。
+      let tokenEdit = { url: null, draft: '', focus: false };
 
       // 設定は「読んで・変えて・書く」を毎回やり直す。
       // 開いたときの内容を持ち回って書き戻すと、デーモンが書き込む name / machineId を
@@ -133,13 +135,24 @@
 
       async function probe(cfgConn) {
         const url = (cfgConn.serverUrl || '').replace(/\/+$/, '');
-        const out = { cfg: cfgConn, url, ok: false, status: null, error: null };
+        // auth: 'required'（トークンが要るのに設定に無い）| 'rejected'（設定のトークンが通らない）| null
+        const out = { cfg: cfgConn, url, ok: false, status: null, error: null, auth: null };
         if (cfgConn.enabled === false) {
           out.error = 'Disabled';
           return out;
         }
+        const token = typeof cfgConn.token === 'string' ? cfgConn.token.trim() : '';
         try {
-          const res = await fetch(url + '/api/status');
+          // トークンの無い接続には何も付けない（デーモンと同じ）
+          const res = await fetch(url + '/api/status', token ? { headers: { Authorization: `Bearer ${token}` } } : {});
+          if (res.status === 401) {
+            out.auth = token ? 'rejected' : 'required';
+            throw new Error(
+              token
+                ? 'The server did not accept the token.'
+                : 'This server requires a token. On the host: python3 itera_bridge_server.py token',
+            );
+          }
           if (!res.ok) throw new Error('HTTP ' + res.status);
           out.status = await res.json();
           out.ok = true;
@@ -286,6 +299,12 @@
       }
 
       async function render() {
+        // 打ちかけのトークンを、描き直しで失わない
+        const typing = DOM('token-input');
+        if (typing) {
+          tokenEdit.draft = typing.value;
+          tokenEdit.focus = document.activeElement === typing;
+        }
         const parts = [];
         for (const c of state.conns) {
           const st = c.status;
@@ -294,7 +313,9 @@
             ? '<span class="text-success text-xs font-bold">Connected</span>'
             : c.cfg.enabled === false
               ? '<span class="text-text-muted text-xs">Disabled</span>'
-              : '<span class="text-error text-xs font-bold">Not connected</span>';
+              : c.auth
+                ? `<span class="text-warning text-xs font-bold whitespace-nowrap">${c.auth === 'required' ? 'Token required' : 'Token rejected'}</span>`
+                : '<span class="text-error text-xs font-bold">Not connected</span>';
 
           const roots = [];
           if (c.ok && Array.isArray(st.roots)) {
@@ -343,12 +364,12 @@
 
           parts.push(`
             <section class="border border-border-main rounded-xl overflow-hidden">
-              <div class="flex items-center justify-between px-4 py-3 border-b border-border-main">
+              <div class="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 px-4 py-3 border-b border-border-main">
                 <div class="flex items-center gap-3 min-w-0">
                   <h2 class="font-bold truncate">${esc(name || '(name not settled yet)')}</h2>
                   ${badge}
                   <code class="text-[0.6875rem] text-text-muted truncate">${esc(c.url)}</code>
-                  ${c.ok ? `<span class="text-[0.6875rem] text-text-muted">v${esc(st.version)}</span>` : ''}
+                  ${c.ok ? `<span class="text-[0.6875rem] text-text-muted">v${esc(st.version)}${st.tokenRequired ? ' · token required' : ''}</span>` : ''}
                 </div>
                 <div class="flex items-center gap-2 shrink-0">
                   <label class="text-[0.6875rem] text-text-muted">Exec</label>
@@ -358,6 +379,11 @@
                     <option value="auto" ${c.cfg.execMode === 'auto' ? 'selected' : ''}>Automatic</option>
                   </select>
                   ${name ? ignoreButton('conn', name, null) : ''}
+                  <button onclick="editToken('${esc(c.url)}')"
+                          title="The token this connection sends (for a server started with --require-token)"
+                          class="px-2 py-1 rounded border border-border-main text-xs hover:bg-hover">
+                    ${c.cfg.token ? 'Token ✓' : 'Token…'}
+                  </button>
                   <button onclick="toggleEnabled('${esc(c.url)}')"
                           class="px-2 py-1 rounded border border-border-main text-xs hover:bg-hover">
                     ${c.cfg.enabled === false ? 'Enable' : 'Disable'}
@@ -367,6 +393,7 @@
                 </div>
               </div>
               <div class="px-4 py-2 text-sm border-b border-border-main/60">${ident}</div>
+              ${tokenEdit.url === c.url ? tokenRow(c.url) : ''}
               <table class="w-full text-sm px-4">
                 <thead class="text-[0.6875rem] text-text-muted">
                   <tr><th class="text-left py-2 pl-4">Root</th><th class="text-left">Real path on the host</th>
@@ -378,6 +405,47 @@
         }
         DOM('conns').innerHTML =
           parts.join('') || '<p class="text-text-muted text-sm">No connections are configured.</p>';
+        const input = DOM('token-input');
+        if (input) {
+          input.value = tokenEdit.draft;
+          if (tokenEdit.focus) input.focus();
+        }
+      }
+
+      // 接続のトークンの入力欄。保存済みのトークンは画面に出さない（欄はいつも空で開く）。
+      function tokenRow(url) {
+        return `<div class="px-4 py-2 border-b border-border-main/60 flex items-center gap-2">
+                  <input id="token-input" type="password" autocomplete="off" spellcheck="false"
+                         placeholder="Token (on the host: python3 itera_bridge_server.py token). Save it empty to remove."
+                         class="flex-1 min-w-0 bg-app border border-border-main rounded px-2 py-1 text-xs font-mono" />
+                  <button onclick="saveToken('${esc(url)}')"
+                          class="px-2 py-1 rounded bg-primary text-text-inverted text-xs font-bold hover:bg-primary/90">Save</button>
+                  <button onclick="editToken(null)"
+                          class="px-2 py-1 rounded border border-border-main text-xs hover:bg-hover">Cancel</button>
+                </div>`;
+      }
+
+      async function editToken(url) {
+        tokenEdit = { url, draft: '', focus: !!url };
+        const stale = DOM('token-input');
+        if (stale) stale.value = '';
+        await render();
+      }
+
+      // 空で保存したら、トークンを設定から外す。
+      async function saveToken(url) {
+        const input = DOM('token-input');
+        const token = input ? input.value.trim() : '';
+        tokenEdit = { url: null, draft: '', focus: false };
+        if (input) input.value = '';
+        const ok = await mutateConfig((cfg) => {
+          const c = (cfg.connections || []).find((x) => (x.serverUrl || '').replace(/\/+$/, '') === url);
+          if (!c) return null;
+          if (token) c.token = token;
+          else delete c.token;
+          return cfg;
+        });
+        if (ok) notifyRestartNeeded();
       }
 
       function renderDist() {
@@ -400,7 +468,9 @@
             <pre class="bg-hover/50 border border-border-main rounded-lg p-3 text-[0.75rem] overflow-x-auto">python3 itera_bridge_server.py serve --port 8001
 python3 itera_bridge_server.py attach ~/projects/foo   # add a root
 python3 itera_bridge_server.py ls
-python3 itera_bridge_server.py detach foo</pre>
+python3 itera_bridge_server.py detach foo
+python3 itera_bridge_server.py serve --port 8001 --require-token   # let in only clients that send the token
+python3 itera_bridge_server.py token                               # print the token (enter it with "Token…" above)</pre>
             <p class="text-text-muted text-[0.6875rem] mt-2">
               To reach a machine over ssh, forward the port with <code>ssh -L 8002:localhost:8002 &lt;host&gt;</code> and
               add <code>http://127.0.0.1:8002</code> here. The connection name comes from the host name the server reports.

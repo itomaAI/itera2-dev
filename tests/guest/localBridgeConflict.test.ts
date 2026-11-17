@@ -234,25 +234,18 @@ function loadResolveConflict(opts: { putFails?: boolean; backupStubFails?: boole
     host: { notify: (msg: string) => notices.push(msg) },
     ai: { log: (msg: string) => notices.push(msg) },
   };
-  const getJson = async (url: string, o: any) => {
-    puts.push({ url, size: o.body.length });
+  // デーモンの getJson(conn, path, opts) と同じ形（サーバーへの道は 1 つ。T-0874）
+  const getJson = async (conn: any, path: string, o: any) => {
+    puts.push({ url: `${conn.serverUrl}${path}`, size: o.body.length });
     if (opts.putFails) throw new Error('HTTP 500 ホストが受け取らなかった');
     return { size: 3, updatedAt: 111, hash: 'BACKUP' };
   };
-  const api = (conn: any, path: string) => `${conn.serverUrl}${path}`;
   const log = (msg: string) => notices.push(msg);
   const conflictNotified = new Set<string>();
 
-  const factory = new Function(
-    'MetaOS',
-    'getJson',
-    'api',
-    'log',
-    'conflictNotified',
-    `${m[0]}\nreturn resolveConflict;`,
-  );
+  const factory = new Function('MetaOS', 'getJson', 'log', 'conflictNotified', `${m[0]}\nreturn resolveConflict;`);
   return {
-    resolveConflict: factory(MetaOS, getJson, api, log, conflictNotified),
+    resolveConflict: factory(MetaOS, getJson, log, conflictNotified),
     puts,
     stubs,
     notices,

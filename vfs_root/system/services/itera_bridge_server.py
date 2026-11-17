@@ -9,6 +9,8 @@ Itera OS の VFS へ `local/<接続名>/<ルート名>` としてマウントさ
     python itera_bridge_server.py attach [DIR] [--name NAME] [--port 8001]
     python itera_bridge_server.py detach NAME [--port 8001]
     python itera_bridge_server.py ls [--port 8001]
+    python itera_bridge_server.py serve --require-token   # トークンを持った相手だけを通す
+    python itera_bridge_server.py token [--rotate]        # トークンを表示する（無ければ作る）
 
 依存: fastapi, uvicorn, watchdog (任意), requests (CLI のみ)
 
@@ -19,6 +21,9 @@ Itera OS の VFS へ `local/<接続名>/<ルート名>` としてマウントさ
   * シェル実行の「都度確認」は OS 側（ブラウザ）の責務。ホストには UI が無いため、
     サーバーは --exec off という固い遮断だけを持つ。
   * 作業ディレクトリは永続化しない。毎回ルート起点で実行し、実効ディレクトリを返す。
+  * 認証は任意。serve --require-token を付けたサーバーだけが、設定の置き場の token ファイルと
+    同じトークン（Authorization: Bearer）を持った相手を通す。付けなければ今までどおり誰でも通す。
+    届く範囲を決めるのは listen 先と経路で、トークンはその内側の関門である。
 """
 
 import argparse
@@ -26,9 +31,11 @@ import asyncio
 import fnmatch
 import getpass
 import hashlib
+import hmac
 import json
 import os
 import platform
+import secrets
 import shutil
 import socket
 import subprocess
@@ -38,7 +45,7 @@ import time
 import uuid
 from pathlib import Path
 
-VERSION = "3.8.1"
+VERSION = "3.9.0"
 # long-poll（変更があるまで応答を保留する）の上限と刻み。
 # 刻みは応答の遅れの下限になるので細かく、ただし空回りが目に見えない程度に。
 MAX_LONG_POLL_SEC = 60.0
@@ -87,6 +94,65 @@ def save_state(state):
     tmp = ROOTS_FILE.with_suffix(".json.tmp")
     tmp.write_text(json.dumps(state, indent=2, ensure_ascii=False), encoding="utf-8")
     tmp.replace(ROOTS_FILE)
+
+
+# --------------------------------------------------------------------------
+# 接続用トークン（serve --require-token のときだけ検査する）
+# --------------------------------------------------------------------------
+
+_token_cache = {"key": None, "value": None}
+
+
+def token_path():
+    # 呼ばれるたびに CONFIG_DIR から導く。定数にすると、試験が CONFIG_DIR を差し替えても
+    # 実運用の ~/.itera/token を見てしまう。
+    return CONFIG_DIR / "token"
+
+
+def read_token():
+    """トークンを返す。ファイルが無い・空なら None。
+
+    走っているサーバーが作り直し（token --rotate）に追随できるよう、毎回ファイルの
+    stat を見て、変わったときだけ読み直す。
+    """
+    p = token_path()
+    try:
+        st = p.stat()
+    except FileNotFoundError:
+        _token_cache["key"] = None
+        _token_cache["value"] = None
+        return None
+    key = (str(p), st.st_mtime_ns, st.st_size, st.st_ino)
+    if _token_cache["key"] != key:
+        _token_cache["value"] = p.read_text(encoding="utf-8").strip() or None
+        _token_cache["key"] = key
+    return _token_cache["value"]
+
+
+def write_token(value):
+    CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+    p = token_path()
+    tmp = p.with_name(p.name + ".tmp")
+    # 持ち主だけが読める形で作ってから書く（書いてから絞ると、その間だけ他人に読める）。
+    fd = os.open(str(tmp), os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    try:
+        os.chmod(str(tmp), 0o600)  # 前回の残りが別の権限で在った場合
+    except OSError:
+        pass
+    with os.fdopen(fd, "w", encoding="utf-8") as f:
+        f.write(value + "\n")
+    tmp.replace(p)
+
+
+def ensure_token(rotate=False):
+    """(トークン, 新しく作ったか) を返す。無ければ作る。rotate=True なら作り直す。"""
+    if not rotate:
+        current = read_token()
+        if current:
+            return current, False
+    value = secrets.token_urlsafe(32)
+    write_token(value)
+    return value, True
 
 
 # --------------------------------------------------------------------------
@@ -298,10 +364,12 @@ class RootScanner:
 
 
 class Bridge:
-    def __init__(self, exec_enabled=True):
+    def __init__(self, exec_enabled=True, require_token=False):
         self.state = load_state()
         self.scanners = {}
         self.exec_enabled = exec_enabled
+        # True のとき、トークンを持った相手だけを通す（build_app の TokenGate が読む）。
+        self.require_token = require_token
         # 変更検知。serve のときだけ入る（CLI では None のまま）。
         self.watcher = None
         for name, path in self.state["roots"].items():
@@ -420,7 +488,61 @@ def build_app(bridge):
     from fastapi.middleware.cors import CORSMiddleware
     from fastapi.responses import JSONResponse, Response
 
+    class TokenGate:
+        """必須のとき、トークンを持った相手だけを通す（素の ASGI ミドルウェア）。
+
+        * /api/ に限らず全部の道を見る（/docs・/openapi.json も出さない）。
+        * CORS のミドルウェアより内側に置く。ブラウザの preflight（OPTIONS）は外側の CORS が
+          答えるのでここへは届かず、ここが返す 401 には外側で CORS のヘッダが付く
+          （付かないと、ブラウザの側では 401 ではなく通信の失敗に見える）。
+        * 必須なのにトークンのファイルが読めないときは、全部断る（開けない側へ倒す）。
+        """
+
+        def __init__(self, inner):
+            self.inner = inner
+
+        async def __call__(self, scope, receive, send):
+            if scope["type"] != "http" or not bridge.require_token:
+                await self.inner(scope, receive, send)
+                return
+            supplied = None
+            for key, value in scope.get("headers") or []:
+                if key == b"authorization":
+                    supplied = value.decode("latin-1")
+                    break
+            try:
+                expected = read_token()
+            except OSError:
+                expected = None
+            if supplied is None:
+                code = "token_required"
+            else:
+                scheme, _, credential = supplied.partition(" ")
+                same = bool(expected) and hmac.compare_digest(
+                    credential.strip().encode("utf-8"), (expected or "").encode("utf-8")
+                )
+                code = None if scheme.lower() == "bearer" and same else "token_invalid"
+            if code is None:
+                await self.inner(scope, receive, send)
+                return
+            detail = (
+                "This server requires a token" if code == "token_required" else "The token was not accepted"
+            )
+            body = json.dumps({"detail": detail, "code": code, "tokenRequired": True}).encode("utf-8")
+            await send({
+                "type": "http.response.start",
+                "status": 401,
+                "headers": [
+                    (b"content-type", b"application/json"),
+                    (b"content-length", str(len(body)).encode("ascii")),
+                    (b"www-authenticate", b"Bearer"),
+                ],
+            })
+            await send({"type": "http.response.body", "body": body})
+
     app = FastAPI(title="Itera Local Bridge", version=VERSION)
+    # add_middleware は後から足したものが外側になる。関門を先に、CORS を後に足す。
+    app.add_middleware(TokenGate)
     app.add_middleware(
         CORSMiddleware,
         allow_origins=["*"], allow_methods=["*"], allow_headers=["*"], expose_headers=["*"],
@@ -445,6 +567,8 @@ def build_app(bridge):
             "version": VERSION,
             "configDir": str(CONFIG_DIR),
             "execEnabled": bridge.exec_enabled,
+            # この応答が読めている相手は、既に関門を通っている。画面に「保護されている」と出すための旗。
+            "tokenRequired": bridge.require_token,
             "roots": bridge.describe(),
             "ignorePatterns": bridge.state["ignorePatterns"],
             # 変更検知の版。OS 側はこれをそのまま since に載せて返してくる。
@@ -940,9 +1064,24 @@ def cli_request(port, method, path, payload=None, host="127.0.0.1"):
     req = urllib.request.Request(url, data=data, method=method)
     if data:
         req.add_header("Content-Type", "application/json")
+    # 同じ機械の、同じ設定の置き場のトークンを送る（必須でないサーバーは見ないだけ）。
+    try:
+        token = read_token()
+    except OSError:
+        token = None
+    if token:
+        req.add_header("Authorization", f"Bearer {token}")
     try:
         with urllib.request.urlopen(req, timeout=10) as res:
             return json.loads(res.read().decode() or "{}")
+    except urllib.error.HTTPError as e:
+        if e.code == 401:
+            raise SystemExit(
+                f"[itera] The server at {url} requires a token and did not accept ours ({token_path()}). "
+                "Run this command with the same ITERA_CONFIG_DIR as the server."
+            )
+        detail = e.read().decode("utf-8", "replace")[:200]
+        raise SystemExit(f"[itera] The server refused the request ({url}): HTTP {e.code} {detail}")
     except urllib.error.URLError as e:
         raise SystemExit(f"[itera] Cannot reach the server ({url}): {e}")
 
@@ -956,6 +1095,10 @@ def main():
     p_serve.add_argument("--host", default="127.0.0.1")
     p_serve.add_argument("--dir", action="append", default=[], help="root to add at startup (repeatable)")
     p_serve.add_argument("--exec", dest="exec_mode", choices=["on", "off"], default="on")
+    p_serve.add_argument(
+        "--require-token", action="store_true",
+        help="let in only the clients that send the token (see the token command)",
+    )
 
     p_attach = sub.add_parser("attach", help="add a root")
     p_attach.add_argument("dir", nargs="?", default=".")
@@ -968,6 +1111,9 @@ def main():
     p_detach.add_argument("--port", type=int, default=8001)
     p_detach.add_argument("--host", default="127.0.0.1", help="where the server listens (serve --host)")
 
+    p_token = sub.add_parser("token", help="print the connection token (creates it if missing)")
+    p_token.add_argument("--rotate", action="store_true", help="replace the token with a new one")
+
     p_ls = sub.add_parser("ls", help="list the roots")
     p_ls.add_argument("--port", type=int, default=8001)
     p_ls.add_argument("--host", default="127.0.0.1", help="where the server listens (serve --host)")
@@ -977,7 +1123,13 @@ def main():
     if args.cmd in (None, "serve"):
         port = getattr(args, "port", 8001)
         host = getattr(args, "host", "127.0.0.1")
-        bridge = Bridge(exec_enabled=getattr(args, "exec_mode", "on") == "on")
+        require_token = bool(getattr(args, "require_token", False))
+        if require_token:
+            # 必須なのにトークンが無いまま港を開けない（誰も通れないサーバーになる）。
+            _, created = ensure_token()
+            if created:
+                print(f"[itera] Token created: {token_path()}")
+        bridge = Bridge(exec_enabled=getattr(args, "exec_mode", "on") == "on", require_token=require_token)
         for d in getattr(args, "dir", []):
             name = bridge.add_root(d)
             print(f"[itera] Root added: {name} -> {Path(d).expanduser().resolve()}")
@@ -995,7 +1147,23 @@ def main():
             state = "watching" if r["watching"] else f"not watching ({r['watchError'] or 'reason unknown'})"
             print(f"[itera]   {r['name']}: {state}")
         print(f"[itera] Shell exec: {'enabled' if bridge.exec_enabled else 'disabled (--exec off)'}")
+        if bridge.require_token:
+            print(f"[itera] Token: required ({token_path()}; print it with the token command)")
+        else:
+            print("[itera] Token: not required (anyone who can reach this port gets in; see --require-token)")
         uvicorn.run(build_app(bridge), host=host, port=port, log_level="warning")
+        return
+
+    if args.cmd == "token":
+        value, created = ensure_token(rotate=args.rotate)
+        # 標準出力にはトークンだけを出す（$(… token) で受けられるように）。説明は標準エラーへ。
+        if created:
+            what = "Replaced" if args.rotate else "Created"
+            print(
+                f"[itera] {what}: {token_path()} (a running server picks it up without a restart)",
+                file=sys.stderr,
+            )
+        print(value)
         return
 
     if args.cmd == "attach":
