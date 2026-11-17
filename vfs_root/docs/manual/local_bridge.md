@@ -193,6 +193,11 @@ That is what "Clean up ignored stubs" on each root is for.
   Only `MetaOS.fs.getSyncState()` can: check `syncState === 'stub'`.
   Note that `getSyncState()` does not return `size`.
 * Changes to the settings **take effect when the daemon is restarted** (button in the settings app).
+* **Chromium-based browsers (Chrome, Edge) ask before a site may reach the local network.**
+  When Itera is served from a public address, a connection to a bridge server (`127.0.0.1`, a private IP, a tailnet address)
+  needs the browser's "local network access" permission for the Itera site. If it is blocked, every request fails at once
+  (`Failed to fetch`) although the server is running — check the site's permissions in the browser.
+  Before OS 2.5.1 the permission was not delegated to guests, so the daemon could not connect while guests were isolated.
 * **When changes are slow to appear, first check whether the watcher is attached.**
   If `watching` is `false` for a root in `curl -s localhost:<port>/api/status`, change detection is off and the root
   runs **only on the 60-second safety scan** (slow, but not stopped).

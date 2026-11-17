@@ -47,8 +47,22 @@ export function isSameOriginFrame(iframe: { getAttribute(name: string): string |
  *   決して `self` に当たらないので、委ねないと Chromium では利用者の操作があっても拒まれる（Firefox は委ねなくても通る。
  *   2026-11-09 に Chromium 149 / Firefox 151 で実測）。読み（clipboard-read）は渡さない —— アプリがクリップボードを
  *   読む必要は無く、貼り付けは利用者の操作（paste イベント）で届く。
+ * - local-network / loopback-network / local-network-access: ゲストの中から、ローカルネットワーク（プライベート IP・
+ *   tailnet など）とこの機械自身（127.0.0.1）のサーバーへ `fetch` する（Local Bridge のデーモン、手元のサーバーを叩くアプリ）。
+ *   Chromium 系の Local Network Access は、公開のサイトからのこの通信を利用者の許可の後ろに置く。既定の allowlist は
+ *   `self` で、opaque origin は決して `self` に当たらないので、委ねないと、利用者がホストのサイトに許可していても拒まれる
+ *   （T-0872。2026-11-17 に Chromium で実測: 委ねない opaque は拒否・委ねると通る・利用者が「ブロック」ならどちらも拒否）。
+ *   許可するかを決めるのは利用者のままで、問われるのはホストのオリジンに対して。ゲストは `MetaOS.net.fetch`（ホストが
+ *   代わりに fetch する）でも同じ先に届くので、委ねても届く範囲は広がらない。
+ *   名前が 3 つあるのは版の違い: `local-network-access` は 2 つをまとめた旧名で、新しい版は 2 つに分けた名前も知る。
+ *   下の `guestAllow` が、そのブラウザが知っている名前だけを並べる。
  */
-export const GUEST_ALLOW_FEATURES = ['clipboard-write'] as const;
+export const GUEST_ALLOW_FEATURES = [
+  'clipboard-write',
+  'local-network',
+  'loopback-network',
+  'local-network-access',
+] as const;
 
 /**
  * `allow` 属性の値。ブラウザが名前を知っている機能だけを並べる（知らない名前を書くと Firefox は iframe ごとに警告を出す）。

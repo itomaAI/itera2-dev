@@ -58,6 +58,7 @@ What that means for an app, in one table:
 | `parent.document`, `window.top.location`, `document.referrer`, `location.ancestorOrigins` | not readable / empty | `MetaOS.vendor.resolve(name)` for host-shipped assets; `MetaOS.host.*` for host UI |
 | `new Worker('https://…')` | refused (a Worker must be same-origin with its document) | fetch the script and start the Worker from a URL you own: a `blob:` URL for a classic worker, a `data:` URL for a **module** worker (Chromium refuses module workers from `blob:` in an opaque origin). Hand the Worker object to the library (pdf.js: `workerPort`), not the URL (`pdf_tool.html` does this) |
 | `fetch(url)` to an external service | sent with `Origin: null` | `MetaOS.net.fetch` (host origin, proxy, credentials) when the service cares about `Origin` |
+| `fetch(url)` to a server on the local network or on this machine (private IPs, `http://127.0.0.1:…`) | allowed once the user has allowed local network access for the Itera site: Chromium-based browsers ask for it, and the permission (`local-network`, `loopback-network`) is delegated to the iframe. Blocked if the user blocks it | — |
 | `MetaOS.fs.resolveUrl(path)` | returns `blob:null/…`, created in the app's own window | — (contract unchanged: path → URL string, valid in this document only) |
 | `navigator.clipboard.writeText` on a user gesture | allowed (`clipboard-write` is delegated to the iframe); `readText` is not | paste arrives as a user action (`paste` event) |
 | `target="_blank"` links | open outside the sandbox (`allow-popups-to-escape-sandbox`) | — |

@@ -48,10 +48,29 @@ describe('guest sandbox', () => {
     expect(GUEST_ALLOW_FEATURES).not.toContain('clipboard-read');
   });
 
+  it('ローカルネットワークへの通信を委ねる（Local Network Access。分けた名前 2 つと旧名・T-0872）', () => {
+    for (const f of ['local-network', 'loopback-network', 'local-network-access']) {
+      expect(GUEST_ALLOW_FEATURES).toContain(f);
+    }
+  });
+
+  it('委ねる機能はこの一覧だけ（足すのは、ゲストに何を渡すかの決定）', () => {
+    expect([...GUEST_ALLOW_FEATURES].sort()).toEqual(
+      ['clipboard-write', 'local-network', 'local-network-access', 'loopback-network'].sort(),
+    );
+  });
+
   it('allow 属性は、ブラウザが知っている機能だけを並べる', () => {
     const knows = (names: string[]) => ({ featurePolicy: { features: () => names } }) as unknown as Document;
     expect(guestAllow(knows(['clipboard-write', 'camera']))).toBe('clipboard-write *');
     expect(guestAllow(knows(['camera']))).toBe('');
+    // 新しい Chromium 系は分けた名前と旧名を知る。古い版は旧名だけ
+    expect(
+      guestAllow(knows(['camera', 'clipboard-write', 'local-network', 'local-network-access', 'loopback-network'])),
+    ).toBe('clipboard-write *; local-network *; loopback-network *; local-network-access *');
+    expect(guestAllow(knows(['clipboard-write', 'local-network-access']))).toBe(
+      'clipboard-write *; local-network-access *',
+    );
     expect(guestAllow({} as Document)).toBe('');
   });
 });
