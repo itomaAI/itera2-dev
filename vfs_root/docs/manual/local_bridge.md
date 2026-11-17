@@ -1,6 +1,6 @@
 # Local Bridge — working with a local machine from Itera
 
-Last updated: 2026-10-21 / server v3.8.0 / daemon v3.13
+Last updated: 2026-11-17 / server v3.9.0 / daemon v3.14
 
 Connects part of the VFS to a real directory on a host machine (your PC or a GPU server).
 **It is not only file sync: it also covers shell execution, search, and materialising / releasing files to stubs.**
@@ -42,6 +42,38 @@ Do not fake `HOME` for this: `bash_exec` resolves `~` and the default working di
 `scope: host` from `HOME`, so the shell would land in the wrong place.
 For a machine behind ssh, forward with `ssh -L 8002:localhost:8002 <host>` and add
 `http://127.0.0.1:8002` in the settings app. **You do not have to type a connection name** (the server announces its own).
+
+## Requiring a token (optional — server v3.9.0, daemon v3.14)
+
+By default the server lets in anyone who can reach its port: there is no authentication, and what limits the reach
+is where the server listens and the route to it. Started with `--require-token`, it lets in only the clients that send its token.
+
+```bash
+python3 itera_bridge_server.py serve --port 8001 --require-token
+python3 itera_bridge_server.py token            # print the token (creates it if missing)
+python3 itera_bridge_server.py token --rotate   # replace it; a running server picks the new one up without a restart
+```
+
+* The token lives in `<config dir>/token` (`~/.itera/token`, or under `ITERA_CONFIG_DIR`), readable by the owner only.
+  `serve --require-token` creates it when it is missing. It is not written to the server's output.
+* On the Itera side the token belongs to a connection: settings app → **Token…** on the connection → Save → **Restart daemon**.
+  It is kept in the connection settings (`connections[].token` in the `local_bridge` category) and sent as
+  `Authorization: Bearer <token>` by the daemon, the settings app and Home. A connection without a token sends exactly what it sent before.
+  Saving an empty value removes the token. The settings app does not show a saved token.
+* **The connection settings travel wherever the build syncs settings**, and the token travels with them: your other devices get it.
+  An Itera that does not have it — someone else's, or another instance with its own settings — cannot connect.
+* Without the right token every path answers `401`, `/api/status` included (it carries the host name, the user, the machine id and the real paths of the roots).
+  The body tells the two cases apart: `code: "token_required"` (no token was sent) or `"token_invalid"`.
+  The settings app shows **Token required** / **Token rejected** instead of "Not connected", Home shows `token required` / `token rejected`,
+  and the daemon logs it once and checks again every 60 s instead of every 5 s.
+  A refusal is handled like a disconnection: nothing is unmounted and nothing is deleted.
+* The CLI (`attach` / `detach` / `ls`) sends the token of **its own** config directory. For a second server, run it with the same
+  `ITERA_CONFIG_DIR` as that server.
+* `/api/status` carries `tokenRequired`. Whoever can read it has already passed the check; the flag is there for display.
+* What the token does **not** do. It does not keep a client inside the roots (`POST /api/roots` adds any directory, and `scope: host` runs anywhere).
+  It does not encrypt: over plain `http` on a shared network it can be read in transit — use loopback, an ssh tunnel or https (for example `tailscale serve`).
+* To turn it on for a connection that is in use, without cutting yourself off: run `token` on the host, put the token into the connection
+  (a server that does not require one ignores it), restart the daemon, and only then restart the server with `--require-token`.
 
 ## Connection names and identity
 
@@ -248,6 +280,11 @@ The large spread comes from that 0–5 seconds.
 
 ## Change log
 
+* Server v3.9.0 / daemon v3.14 — **Optional connection token** (T-0874). `serve --require-token` lets in only the clients that send
+  the token kept in `<config dir>/token`; `token` / `token --rotate` print and replace it. The daemon, the settings app and Home send
+  the token of the connection (`connections[].token`), and a refusal shows as "Token required" / "Token rejected" rather than as a
+  disconnection. In the daemon every request to the server now goes through one function, which is where the header is added.
+  A server started without the flag and a connection without a token behave exactly as before. See "Requiring a token".
 * v3.8.1 — `ITERA_CONFIG_DIR` picks the config directory (`roots.json` / `machine.json`), so two servers on one machine can keep separate roots and identities. `/api/status` carries `configDir`. The CLI (`attach` / `detach` / `ls`) takes `--host` for a server that does not listen on `127.0.0.1`.
 * Daemon v3.13 / server v3.8.0 — **Renames and moves are done on the host side (`onMove`, T-0691)**.
   Renaming or moving a folder that contains stubs (files whose contents have not been fetched) used to make the OS fetch

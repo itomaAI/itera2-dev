@@ -314,7 +314,7 @@
             : c.cfg.enabled === false
               ? '<span class="text-text-muted text-xs">Disabled</span>'
               : c.auth
-                ? `<span class="text-warning text-xs font-bold">${c.auth === 'required' ? 'Token required' : 'Token rejected'}</span>`
+                ? `<span class="text-warning text-xs font-bold whitespace-nowrap">${c.auth === 'required' ? 'Token required' : 'Token rejected'}</span>`
                 : '<span class="text-error text-xs font-bold">Not connected</span>';
 
           const roots = [];
@@ -364,7 +364,7 @@
 
           parts.push(`
             <section class="border border-border-main rounded-xl overflow-hidden">
-              <div class="flex items-center justify-between px-4 py-3 border-b border-border-main">
+              <div class="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 px-4 py-3 border-b border-border-main">
                 <div class="flex items-center gap-3 min-w-0">
                   <h2 class="font-bold truncate">${esc(name || '(name not settled yet)')}</h2>
                   ${badge}

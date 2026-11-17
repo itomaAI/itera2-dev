@@ -668,7 +668,7 @@
                 title = roots.map((r) => `${r.name} (${r.files} files)`).join('\n');
               }
               const host = st && st.hostname && st.hostname !== c.name ? ` · ${esc(st.hostname)}` : '';
-              return `<div class="flex items-center gap-2 py-0.5" title="${esc(title)}"><span class="w-2 h-2 rounded-full ${dot} shrink-0"></span><span class="font-mono truncate">${esc(c.name)}</span><span class="text-[10px] text-text-muted ml-auto shrink-0 whitespace-nowrap">${text}${host}</span></div>`;
+              return `<div class="flex items-center gap-2 py-0.5" title="${esc(title)}"><span class="w-2 h-2 rounded-full ${dot} shrink-0"></span><span class="font-mono truncate">${esc(c.name || c.serverUrl)}</span><span class="text-[10px] text-text-muted ml-auto shrink-0 whitespace-nowrap">${text}${host}</span></div>`;
             })
             .join('');
           DOM('bridge-sum').textContent = `${ok}/${conns.length}`;
