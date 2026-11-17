@@ -70,7 +70,8 @@ function load(opts: {
     },
   };
 
-  const getJson = async (_url: string, init: any) => {
+  // デーモンの getJson(conn, path, opts) と同じ形（サーバーへの道は 1 つ。T-0874）
+  const getJson = async (_conn: any, _path: string, init: any) => {
     const paths: string[] = JSON.parse(init.body).paths;
     verifyCalls.push(paths);
     if (opts.failVerifyOnCall && verifyCalls.length === opts.failVerifyOnCall) {
@@ -89,16 +90,9 @@ function load(opts: {
     'MOUNT_BASE',
     'MetaOS',
     'getJson',
-    'api',
     `${chunkSrc}\n${isStubSrc}\n${fnSrc}\nreturn { releaseVerified, VERIFY_CHUNK };`,
   );
-  const mod = factory(
-    () => undefined,
-    'local',
-    MetaOS,
-    getJson,
-    (_c: any, p: string) => `http://host${p}`,
-  );
+  const mod = factory(() => undefined, 'local', MetaOS, getJson);
 
   return { release: mod.releaseVerified, stubbed, verifyCalls, chunk: mod.VERIFY_CHUNK };
 }

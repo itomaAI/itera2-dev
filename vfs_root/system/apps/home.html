@@ -601,12 +601,18 @@
         DOM('vfs-btn').onclick = () => MetaOS.host.revealInExplorer('trash');
 
         // ---------- Local Bridge（設定の各接続に /api/status を直接訊く。デーモンは触らない） ----------
-        const fetchJson = async (url, ms) => {
+        const fetchJson = async (url, ms, token) => {
           const ctl = new AbortController();
           const t = setTimeout(() => ctl.abort(), ms);
           try {
-            const r = await fetch(url, { signal: ctl.signal });
-            if (!r.ok) throw new Error(`HTTP ${r.status}`);
+            // 接続にトークンがあれば送る（--require-token のサーバー。無ければ何も付けない）
+            const auth = token ? { headers: { Authorization: `Bearer ${token}` } } : {};
+            const r = await fetch(url, { signal: ctl.signal, ...auth });
+            if (!r.ok) {
+              const e = new Error(`HTTP ${r.status}`);
+              e.status = r.status;
+              throw e;
+            }
             return await r.json();
           } finally {
             clearTimeout(t);
@@ -628,25 +634,28 @@
           } catch (e) {}
           const results = await Promise.all(
             conns.map(async (c) => {
+              const token = typeof c.token === 'string' ? c.token.trim() : '';
               try {
-                return { c, st: await fetchJson(`${c.serverUrl}/api/status`, 3000) };
+                return { c, st: await fetchJson(`${c.serverUrl}/api/status`, 3000, token) };
               } catch (e) {
-                return { c, err: e.name === 'AbortError' ? 'No response (3 s)' : e.message };
+                // 401 は止まっているのではなく、トークンで断られている
+                const auth = e.status === 401 ? (token ? 'token rejected' : 'token required') : null;
+                return { c, auth, err: e.name === 'AbortError' ? 'No response (3 s)' : e.message };
               }
             }),
           );
           let ok = 0;
           el.innerHTML = results
-            .map(({ c, st, err }) => {
+            .map(({ c, st, err, auth }) => {
               const roots = (st && st.roots) || [];
               const unwatched = roots.filter((r) => !r.watching);
               const mounted = mounts.filter((m) => m.mountPath && m.mountPath.startsWith(`local/${c.name}/`));
               const dead = mounted.filter((m) => m.alive === false).length;
               let dot, text, title;
               if (!st) {
-                dot = 'bg-text-muted';
-                text = 'offline';
-                title = err;
+                dot = auth ? 'bg-warning' : 'bg-text-muted';
+                text = auth || 'offline';
+                title = auth ? 'Set the token in the Local Bridge settings' : err;
               } else if (unwatched.length || dead) {
                 ok++;
                 dot = 'bg-warning';
