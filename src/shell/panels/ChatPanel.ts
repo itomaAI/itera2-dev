@@ -90,6 +90,7 @@ const DOM_IDS = {
   AI_TYPING: 'ai-typing',
   AI_TYPING_LABEL: 'ai-typing-label',
   RESIZER: 'chat-resizer',
+  INPUT_RESIZER: 'chat-input-resizer',
   PANEL: 'chat-panel',
   RESIZE_OVERLAY: 'resize-overlay',
   APPS_CONTAINER: 'apps-container',
@@ -113,6 +114,7 @@ export class ChatPanel {
     this._initElements();
     this._bindEvents();
     this._initResizer();
+    this._initInputResizer();
     this._initScrollTracking();
   }
 
@@ -258,6 +260,63 @@ export class ChatPanel {
       if (w > 300 && w < 800) {
         panel.style.setProperty('--chat-w', `${w}px`);
       }
+      e.preventDefault();
+    };
+
+    resizer.addEventListener('mousedown', start as EventListener);
+    document.addEventListener('mousemove', move as EventListener);
+    document.addEventListener('mouseup', stop);
+    window.addEventListener('blur', stop);
+  }
+
+  /**
+   * 入力欄の高さのつまみ（T-0884）。幅のリサイザと同じ作りで、書く先は #chat-input の CSS 変数 `--chat-input-h`。
+   * - 高さ＝つかんだときの実寸 ＋ ポインタが上へ動いた分。下限・上限は CSS（style.css）が決めるので、ここでは丸めない
+   * - 離したとき、変数を実際に効いた高さに合わせる（上限を越えて引いた値を残さない）
+   * - 保存は PanelLayout が実寸を観測して行う
+   */
+  private _initInputResizer() {
+    const resizer = this.els.INPUT_RESIZER;
+    const input = this.els.INPUT;
+    const overlay = this.els.RESIZE_OVERLAY;
+
+    if (!resizer || !input) return;
+
+    let isResizing = false;
+    let startY = 0;
+    let startHeight = 0;
+
+    const start = (e: MouseEvent) => {
+      isResizing = true;
+      startY = e.clientY;
+      startHeight = input.offsetHeight;
+      document.body.style.cursor = 'row-resize';
+      resizer.classList.add('resizing');
+      if (overlay) {
+        overlay.style.cursor = 'row-resize';
+        overlay.classList.remove('hidden');
+      }
+      e.preventDefault();
+    };
+
+    const stop = () => {
+      if (!isResizing) return;
+      isResizing = false;
+      document.body.style.cursor = '';
+      resizer.classList.remove('resizing');
+      if (overlay) {
+        overlay.style.cursor = '';
+        overlay.classList.add('hidden');
+      }
+      if (input.style.getPropertyValue('--chat-input-h')) {
+        input.style.setProperty('--chat-input-h', `${Math.round(input.offsetHeight)}px`);
+      }
+    };
+
+    const move = (e: MouseEvent) => {
+      if (!isResizing) return;
+      const h = Math.max(0, Math.round(startHeight + (startY - e.clientY)));
+      input.style.setProperty('--chat-input-h', `${h}px`);
       e.preventDefault();
     };
 

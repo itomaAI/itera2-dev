@@ -4,7 +4,8 @@
  *
  * - 「畳む」は `.panel-collapsed`（md 以上でだけ display:none。スマホの引き出しには効かない）
  * - 幅は各パネルの CSS 変数（`--explorer-w` / `--chat-w`）に置き、md 以上でだけ効く
- * - 開閉と幅は localStorage に残す（端末ごとの見え方なので VFS の設定には入れない）
+ * - チャットの入力欄の高さも同じ（`#chat-input` の `--chat-input-h`・T-0884）。書くのは ChatPanel のつまみで、ここは観測して保存し、起動時に戻す
+ * - 開閉・幅・入力欄の高さは localStorage に残す（端末ごとの見え方なので VFS の設定には入れない）
  * - チャットの全画面（`.chat-full`）は中央の上に重ねるだけ。中央は再レイアウトされない。保存しない
  * - 集中モード（`body.focus-mode`・T-0641）は、上の帯・エクスプローラ・中央の道具帯を隠して主画面をアプリだけにする。
  *   チャットは右から重なる引き出し（`.focus-chat-open`）。登録簿で `immersive: true` のアプリが前面に出たら
@@ -20,6 +21,7 @@ const IDS = {
   EXPLORER_RESIZER: 'explorer-resizer',
   CHAT: 'chat-panel',
   CHAT_RESIZER: 'chat-resizer',
+  CHAT_INPUT: 'chat-input',
   BTN_EXPLORER: 'btn-toggle-explorer',
   BTN_CHAT: 'btn-toggle-chat',
   BTN_FULL: 'btn-chat-fullscreen',
@@ -34,9 +36,16 @@ export interface LayoutState {
   chat: boolean;
   explorerWidth: number | null;
   chatWidth: number | null;
+  chatInputHeight: number | null;
 }
 
-const DEFAULT_STATE: LayoutState = { explorer: true, chat: true, explorerWidth: null, chatWidth: null };
+const DEFAULT_STATE: LayoutState = {
+  explorer: true,
+  chat: true,
+  explorerWidth: null,
+  chatWidth: null,
+  chatInputHeight: null,
+};
 
 export function readLayoutState(storage: Pick<Storage, 'getItem'>): LayoutState {
   try {
@@ -49,6 +58,7 @@ export function readLayoutState(storage: Pick<Storage, 'getItem'>): LayoutState 
       chat: j.chat !== false,
       explorerWidth: num(j.explorerWidth),
       chatWidth: num(j.chatWidth),
+      chatInputHeight: num(j.chatInputHeight),
     };
   } catch {
     return { ...DEFAULT_STATE };
@@ -79,6 +89,8 @@ export class PanelLayout {
 
     if (this.state.explorerWidth) SIDEBAR.style.setProperty('--explorer-w', `${this.state.explorerWidth}px`);
     if (this.state.chatWidth) CHAT.style.setProperty('--chat-w', `${this.state.chatWidth}px`);
+    const CHAT_INPUT = this.els.CHAT_INPUT;
+    if (this.state.chatInputHeight) CHAT_INPUT?.style.setProperty('--chat-input-h', `${this.state.chatInputHeight}px`);
     this._apply();
 
     BTN_EXPLORER?.addEventListener('click', () => this.toggleExplorer());
@@ -98,10 +110,11 @@ export class PanelLayout {
       else if (this.focus) this.setFocus(false);
     });
 
-    // 幅はリサイザが CSS 変数に書く。ここでは観測して保存するだけ
+    // 幅と入力欄の高さは、リサイザが CSS 変数に書く。ここでは観測して保存するだけ
     if (typeof ResizeObserver !== 'undefined') {
-      new ResizeObserver(() => this._persistWidths()).observe(SIDEBAR);
-      new ResizeObserver(() => this._persistWidths()).observe(CHAT);
+      new ResizeObserver(() => this._persistSizes()).observe(SIDEBAR);
+      new ResizeObserver(() => this._persistSizes()).observe(CHAT);
+      if (CHAT_INPUT) new ResizeObserver(() => this._persistSizes()).observe(CHAT_INPUT);
     }
   }
 
@@ -209,9 +222,9 @@ export class PanelLayout {
     CHAT.style.setProperty('--chat-full-left', `${left}px`);
   }
 
-  private _persistWidths(): void {
-    if (window.innerWidth < MD) return; // 引き出し表示の幅は保存しない
-    const { SIDEBAR, CHAT } = this.els;
+  private _persistSizes(): void {
+    if (window.innerWidth < MD) return; // 引き出し表示の寸法は保存しない
+    const { SIDEBAR, CHAT, CHAT_INPUT } = this.els;
     let changed = false;
     if (SIDEBAR && this.state.explorer && SIDEBAR.offsetWidth > 0) {
       const w = Math.round(SIDEBAR.offsetWidth);
@@ -224,6 +237,14 @@ export class PanelLayout {
       const w = Math.round(CHAT.offsetWidth);
       if (w !== this.state.chatWidth) {
         this.state.chatWidth = w;
+        changed = true;
+      }
+    }
+    // 入力欄は全画面・集中モードでも同じ欄なので、そのまま保存する。畳んでいる間（実寸 0）は前の値を残す
+    if (CHAT_INPUT && CHAT_INPUT.offsetHeight > 0) {
+      const h = Math.round(CHAT_INPUT.offsetHeight);
+      if (h !== this.state.chatInputHeight) {
+        this.state.chatInputHeight = h;
         changed = true;
       }
     }

@@ -574,7 +574,9 @@
         <!-- scroll-smooth を付けないこと。自動スクロールが「途中の位置」を読んで追従を止める（ChatPanel._scrollToBottom の註・T-0355） -->
         <div id="chat-history" class="flex-1 overflow-y-auto p-4 space-y-4 bg-app/50"></div>
 
-        <div id="chat-composer" class="p-3 bg-panel border-t border-border-main pb-20 md:pb-3">
+        <!-- 入力欄の高さのつまみ（PC のみ）。ドラッグで #chat-input の --chat-input-h を書く（ChatPanel._initInputResizer・T-0884） -->
+        <div id="chat-input-resizer" class="resizer-h hidden md:block"></div>
+        <div id="chat-composer" class="p-3 bg-panel border-t border-border-main md:border-t-0 pb-20 md:pb-3">
           <div id="file-preview-area" class="mb-2 hidden flex flex-wrap gap-2"></div>
           <div id="ai-typing" class="text-xs text-primary mb-2 hidden flex items-center gap-1">
             <span class="animate-pulse">●</span> <span id="ai-typing-label">Thinking...</span>
