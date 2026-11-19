@@ -9,6 +9,7 @@ import type { FileAssociationResolver } from '../../core/sys/FileAssociationReso
 import type { Principal, VfsStat } from '../../core/vfs/types';
 import { VfsEventFormatter, type VfsEventItem } from '../../core/vfs/VfsEventFormatter';
 import { TreeView } from './TreeView';
+import { bindDragResize } from '../core/dragResize';
 import JSZip from 'jszip';
 import { triggerBrowserDownload } from '../../utils/download';
 import { t } from '../../i18n/i18n';
@@ -24,7 +25,6 @@ const DOM_IDS = {
   CONTEXT_MENU: 'context-menu',
   SIDEBAR: 'sidebar',
   RESIZER: 'explorer-resizer',
-  RESIZE_OVERLAY: 'resize-overlay',
 
   BTN_NEW_FILE: 'btn-new-file',
   BTN_NEW_FOLDER: 'btn-new-folder',
@@ -667,41 +667,18 @@ export class Explorer {
   private _initResizer(): void {
     const resizer = this.els.RESIZER;
     const sidebar = this.els.SIDEBAR;
-    const overlay = this.els.RESIZE_OVERLAY;
 
     if (!resizer || !sidebar) return;
 
-    let isResizing = false;
-
-    const start = (e: MouseEvent) => {
-      isResizing = true;
-      document.body.style.cursor = 'col-resize';
-      resizer.classList.add('resizing');
-      if (overlay) overlay.classList.remove('hidden');
-      e.preventDefault();
-    };
-
-    const stop = () => {
-      if (!isResizing) return;
-      isResizing = false;
-      document.body.style.cursor = '';
-      resizer.classList.remove('resizing');
-      if (overlay) overlay.classList.add('hidden');
-    };
-
-    const move = (e: MouseEvent) => {
-      if (!isResizing) return;
-      const newWidth = e.clientX;
-      if (newWidth > 150 && newWidth < 600) {
-        sidebar.style.setProperty('--explorer-w', `${newWidth}px`);
-      }
-      e.preventDefault();
-    };
-
-    resizer.addEventListener('mousedown', start);
-    document.addEventListener('mousemove', move);
-    document.addEventListener('mouseup', stop);
-    window.addEventListener('blur', stop);
+    bindDragResize(resizer, {
+      cursor: 'col-resize',
+      onMove: (e) => {
+        const newWidth = e.clientX;
+        if (newWidth > 150 && newWidth < 600) {
+          sidebar.style.setProperty('--explorer-w', `${newWidth}px`);
+        }
+      },
+    });
   }
 
   public async _promptRename(path: string) {

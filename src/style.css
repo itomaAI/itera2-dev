@@ -20,11 +20,22 @@ body {
 
 .resizer:hover, .resizer.resizing { background: rgb(var(--c-accent-primary)); }
 
+/* 横長のつまみ（上下に動かす）。チャットの入力欄の高さ（T-0884） */
+.resizer-h {
+    height: 4px; background: rgb(var(--c-bg-panel)); cursor: row-resize; flex-shrink: 0;
+    border-top: 1px solid rgb(var(--c-border-main)); transition: background 0.2s;
+}
+.resizer-h:hover, .resizer-h.resizing { background: rgb(var(--c-accent-primary)); }
+/* つまみはポインタを捕まえてドラッグする（shell/core/dragResize.ts）。タッチのドラッグをスクロールに取られないように */
+.resizer, .resizer-h { touch-action: none; }
+
 /* --- パネルの開閉・幅・チャット全画面（PC のみ。スマホの引き出しには効かない） --- */
 @media (min-width: 768px) {
     #sidebar { width: var(--explorer-w, 260px); }
     #chat-panel { width: var(--chat-w, 400px); }
     .panel-collapsed { display: none !important; }
+    /* 入力欄の高さ。つまみが変数に書く。下限（1 行）と上限はここだけで決める（JS は丸めない）。変数が無ければ rows の高さ */
+    #chat-input { height: var(--chat-input-h, auto); min-height: 72px; max-height: 60vh; }
     #chat-panel.chat-full {
         position: absolute; top: 0; bottom: 0; right: 0; left: var(--chat-full-left, 0px);
         width: auto; z-index: 45; border-left: 0;
