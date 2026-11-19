@@ -9,6 +9,7 @@ import type { Turn } from '../../core/state/HistoryManager';
 import type { Principal } from '../../core/vfs/types';
 import { USER_PRINCIPAL } from '../../core/vfs/types';
 import type { LpmlRenderer } from '../services/LpmlRenderer';
+import { bindDragResize } from '../core/dragResize';
 import { renderMarkdownTables } from '../../utils/markdownTable';
 import { renderMarkdownLite } from '../../utils/markdownLite';
 import { triggerBrowserDownload } from '../../utils/download';
@@ -92,8 +93,6 @@ const DOM_IDS = {
   RESIZER: 'chat-resizer',
   INPUT_RESIZER: 'chat-input-resizer',
   PANEL: 'chat-panel',
-  RESIZE_OVERLAY: 'resize-overlay',
-  APPS_CONTAINER: 'apps-container',
 };
 
 export class ChatPanel {
@@ -229,101 +228,53 @@ export class ChatPanel {
   private _initResizer() {
     const resizer = this.els.RESIZER;
     const panel = this.els.PANEL;
-    const overlay = this.els.RESIZE_OVERLAY;
-    const iframeContainer = this.els.APPS_CONTAINER;
 
     if (!resizer || !panel) return;
 
-    let isResizing = false;
-
-    const start = (e: MouseEvent) => {
-      isResizing = true;
-      document.body.style.cursor = 'col-resize';
-      resizer.classList.add('resizing');
-      if (overlay) overlay.classList.remove('hidden');
-      if (iframeContainer) iframeContainer.style.pointerEvents = 'none';
-      e.preventDefault();
-    };
-
-    const stop = () => {
-      if (!isResizing) return;
-      isResizing = false;
-      document.body.style.cursor = '';
-      resizer.classList.remove('resizing');
-      if (overlay) overlay.classList.add('hidden');
-      if (iframeContainer) iframeContainer.style.pointerEvents = '';
-    };
-
-    const move = (e: MouseEvent) => {
-      if (!isResizing) return;
-      const w = document.body.clientWidth - e.clientX;
-      if (w > 300 && w < 800) {
-        panel.style.setProperty('--chat-w', `${w}px`);
-      }
-      e.preventDefault();
-    };
-
-    resizer.addEventListener('mousedown', start as EventListener);
-    document.addEventListener('mousemove', move as EventListener);
-    document.addEventListener('mouseup', stop);
-    window.addEventListener('blur', stop);
+    bindDragResize(resizer, {
+      cursor: 'col-resize',
+      onMove: (e) => {
+        const w = document.body.clientWidth - e.clientX;
+        if (w > 300 && w < 800) {
+          panel.style.setProperty('--chat-w', `${w}px`);
+        }
+      },
+    });
   }
 
   /**
    * 入力欄の高さのつまみ（T-0884）。幅のリサイザと同じ作りで、書く先は #chat-input の CSS 変数 `--chat-input-h`。
    * - 高さ＝つかんだときの実寸 ＋ ポインタが上へ動いた分。下限・上限は CSS（style.css）が決めるので、ここでは丸めない
    * - 離したとき、変数を実際に効いた高さに合わせる（上限を越えて引いた値を残さない）
+   * - ダブルクリックで変数を消す（既定の高さに戻る・T-0885）
    * - 保存は PanelLayout が実寸を観測して行う
    */
   private _initInputResizer() {
     const resizer = this.els.INPUT_RESIZER;
     const input = this.els.INPUT;
-    const overlay = this.els.RESIZE_OVERLAY;
 
     if (!resizer || !input) return;
 
-    let isResizing = false;
     let startY = 0;
     let startHeight = 0;
 
-    const start = (e: MouseEvent) => {
-      isResizing = true;
-      startY = e.clientY;
-      startHeight = input.offsetHeight;
-      document.body.style.cursor = 'row-resize';
-      resizer.classList.add('resizing');
-      if (overlay) {
-        overlay.style.cursor = 'row-resize';
-        overlay.classList.remove('hidden');
-      }
-      e.preventDefault();
-    };
-
-    const stop = () => {
-      if (!isResizing) return;
-      isResizing = false;
-      document.body.style.cursor = '';
-      resizer.classList.remove('resizing');
-      if (overlay) {
-        overlay.style.cursor = '';
-        overlay.classList.add('hidden');
-      }
-      if (input.style.getPropertyValue('--chat-input-h')) {
-        input.style.setProperty('--chat-input-h', `${Math.round(input.offsetHeight)}px`);
-      }
-    };
-
-    const move = (e: MouseEvent) => {
-      if (!isResizing) return;
-      const h = Math.max(0, Math.round(startHeight + (startY - e.clientY)));
-      input.style.setProperty('--chat-input-h', `${h}px`);
-      e.preventDefault();
-    };
-
-    resizer.addEventListener('mousedown', start as EventListener);
-    document.addEventListener('mousemove', move as EventListener);
-    document.addEventListener('mouseup', stop);
-    window.addEventListener('blur', stop);
+    bindDragResize(resizer, {
+      cursor: 'row-resize',
+      onStart: (e) => {
+        startY = e.clientY;
+        startHeight = input.offsetHeight;
+      },
+      onMove: (e) => {
+        const h = Math.max(0, Math.round(startHeight + (startY - e.clientY)));
+        input.style.setProperty('--chat-input-h', `${h}px`);
+      },
+      onEnd: () => {
+        if (input.style.getPropertyValue('--chat-input-h')) {
+          input.style.setProperty('--chat-input-h', `${Math.round(input.offsetHeight)}px`);
+        }
+      },
+    });
+    resizer.addEventListener('dblclick', () => input.style.removeProperty('--chat-input-h'));
   }
 
   private _handlePaste(e: ClipboardEvent) {

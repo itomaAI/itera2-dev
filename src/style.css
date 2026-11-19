@@ -26,6 +26,8 @@ body {
     border-top: 1px solid rgb(var(--c-border-main)); transition: background 0.2s;
 }
 .resizer-h:hover, .resizer-h.resizing { background: rgb(var(--c-accent-primary)); }
+/* つまみはポインタを捕まえてドラッグする（shell/core/dragResize.ts）。タッチのドラッグをスクロールに取られないように */
+.resizer, .resizer-h { touch-action: none; }
 
 /* --- パネルの開閉・幅・チャット全画面（PC のみ。スマホの引き出しには効かない） --- */
 @media (min-width: 768px) {
