@@ -224,3 +224,121 @@ describe('Translator: 実行されるのは閉じた要素だけ（T-0878）', (
     expect(a.map((x) => [x.type, x.closed])).toEqual([['wrapper', false]]);
   });
 });
+describe('Translator: CDATA で中身を丸ごと包む（T-0881）', () => {
+  // 中身は生の字で、エスケープは要らない。書けないのは 1 つだけ —— その要素自身の閉じタグの字面（そこで閉じる）。
+  // 中身を丸ごと CDATA で包めば、それも書ける。終わりは「CDATA の閉じ ＋ その要素自身の閉じタグ」。
+  // 丸ごとの包みでない CDATA（中身の途中・最上位）は、印ごと文字として残り、中のタグは読まれない。
+  //
+  // CDATA の印と閉じタグの字面は、部品から組み立てる（この試験ファイルを古い版の OS の上でも書けるように）。
+  const OPEN = '<!' + '[CDATA[';
+  const CLOSE = ']]' + '>';
+  const cd = (s: string) => OPEN + s + CLOSE;
+  const END = (tag: string) => '</' + tag + '>';
+  const W = (body: string) => '<write path="a.txt">' + body + END('write');
+  const read = (text: string, extra: string[] = []) => new Translator().parse(text, extra);
+  const view = (text: string, extra: string[] = []) => read(text, extra).map((a) => [a.type, a.closed]);
+
+  it('包みを外した字が、そのまま中身になる', () => {
+    const a = read(W(cd('hello')));
+    expect(a.map((x) => [x.type, x.closed, x.params.content])).toEqual([['write', true, 'hello']]);
+    expect(a.hasLeak).toBe(false);
+  });
+
+  it('中身に自分の閉じタグの字面が在っても、そこでは閉じない。中のタグは読まれない', () => {
+    const body = "const s = '" + END('write') + '\';\n<delete_file path="x" />\n';
+    const a = read(W(cd(body)) + '\n<yield />', ['delete_file']);
+    expect(a.map((x) => [x.type, x.closed])).toEqual([
+      ['write', true],
+      ['yield', true],
+    ]);
+    expect(a[0].params.content).toBe(body);
+    expect(a.terminalTag).toBe('yield');
+    expect(a.hasLeak).toBe(false);
+  });
+
+  it('開始タグと開きの間・閉じと閉じタグの間の空白は、中身に入らない', () => {
+    const a = read('<write path="a.txt">\n' + cd('\nbody\n') + '\n  ' + END('write'));
+    expect(a[0].params).toEqual({ path: 'a.txt', content: '\nbody\n' });
+    expect(a[0].closed).toBe(true);
+  });
+
+  it('中身の中の「CDATA の閉じ」の 3 文字（コードの添字の比較など）では切れない', () => {
+    const body = 'if (m[idx[0' + CLOSE + ' 1) run();\nmore';
+    expect(read(W(cd(body)))[0].params.content).toBe(body);
+  });
+
+  it('中身の途中の CDATA は、印ごと残る（CDATA を含むファイルが書ける）', () => {
+    const body = '<title>' + cd('A & B') + '</title>';
+    const a = read(W(body));
+    expect(a.map((x) => [x.type, x.closed, x.params.content])).toEqual([['write', true, body]]);
+  });
+
+  it('中身の全体が CDATA の区間 1 つであるファイルは、もう一重包んで書く', () => {
+    expect(read(W(cd(cd('hello'))))[0].params.content).toBe(cd('hello'));
+  });
+
+  it('閉じのあとに字が続くなら、丸ごとの包みではない（印ごと中身になる）', () => {
+    const body = cd('x') + ' tail';
+    expect(read(W(body))[0].params.content).toBe(body);
+  });
+
+  it('途中の CDATA の中のタグは読まない（閉じタグの字面でも閉じない）', () => {
+    const body = 'a ' + cd(END('write') + '<delete_file path="x" />') + ' b';
+    const a = read(W(body), ['delete_file']);
+    expect(a.map((x) => [x.type, x.closed, x.params.content])).toEqual([['write', true, body]]);
+  });
+
+  it('最上位の CDATA は素の文字。中の道具は実行されず、漏れとして数える', () => {
+    const a = read(cd('<delete_file path="x" />\n<read path="a.md" />') + '\n<yield />', ['delete_file', 'read']);
+    expect(a.map((x) => x.type)).toEqual(['yield']);
+    expect(a.hasLeak).toBe(true);
+    expect(a.terminalTag).toBe('yield');
+  });
+
+  it('包みが終わらない要素は、閉じていない（実行されない）', () => {
+    expect(view('<write path="a.txt">' + OPEN + 'partial')).toEqual([['write', false]]);
+    expect(view('<write path="a.txt">' + cd('whole') + '\n<yield />')).toEqual([['write', false]]);
+  });
+
+  it('ほかの要素の中身に書かれた例は、書かれたまま残る（包みを外さない）', () => {
+    const example = W(cd('x'));
+    const a = read('<report>example: ' + example + '</report>');
+    expect(a.map((x) => [x.type, x.closed, x.params.content])).toEqual([['report', true, 'example: ' + example]]);
+    // バッククォートの中の例も同じ
+    const b = read('<memo>`' + example + '`</memo>');
+    expect(b[0].params.content).toBe('`' + example + '`');
+  });
+
+  it('中身をそのまま持つタグでなくても同じ（中のタグは子にならない）', () => {
+    const a = read('<wrapper>' + cd('<read path="a.md" />') + '</wrapper>');
+    expect(a.map((x) => [x.type, x.closed, x.params.content])).toEqual([['wrapper', true, '<read path="a.md" />']]);
+  });
+
+  it('終端タグでも同じ（ask の中身に閉じタグの字面）', () => {
+    const body = 'write ' + END('ask') + ' or not?';
+    const a = read('<ask>' + cd(body) + END('ask') + '\nafter');
+    expect(a.terminalTag).toBe('ask');
+    expect(a[0].params.content).toBe(body);
+    expect(a.trailingText).toBe('\nafter');
+  });
+
+  it('文字として返す値は書かれたまま（終端までの字と後ろの字をつなぐと、元の出力になる）', () => {
+    const text = W(cd('x ' + END('write') + ' y')) + '\n<yield />\nafter';
+    const a = read(text);
+    expect(a.truncatedText + a.trailingText).toBe(text);
+  });
+
+  it('小文字の cdata は CDATA として読まない（書かれたまま）', () => {
+    const body = '<!' + '[cdata[x' + CLOSE;
+    expect(read(W(body))[0].params.content).toBe(body);
+  });
+
+  it('CDATA を使わない出力の読み方は変わらない', () => {
+    const a = read('<memo>m</memo>\n<write path="a.txt">x' + END('write') + '\n<yield />');
+    expect(a.map((x) => [x.type, x.closed, x.params.content])).toEqual([
+      ['memo', true, 'm'],
+      ['write', true, 'x'],
+      ['yield', true, ''],
+    ]);
+  });
+});

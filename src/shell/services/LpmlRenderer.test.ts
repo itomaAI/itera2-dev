@@ -95,3 +95,44 @@ describe('LpmlRenderer: system tools have their own icons (the same as the SYSTE
     expect(summaryOf(r.formatStream('<loom_list status="mine" />'))).toBe('⚙️ loom_list');
   });
 });
+describe('LpmlRenderer: 中身を丸ごと CDATA で包んだ要素（T-0881）', () => {
+  // 箱の切り方を Translator の読み方に合わせる。合わせないと、中身に自分の閉じタグの字面を持つ要素が
+  // そこで箱を閉じ、後ろが別の箱や素の文字として描かれる。
+  // CDATA の印と閉じタグの字面は、部品から組み立てる。
+  const r = new LpmlRenderer();
+  const OPEN = '<!' + '[CDATA[';
+  const CLOSE = ']]' + '>';
+  const END = (tag: string) => '</' + tag + '>';
+  const dom = (html: string) => {
+    const div = document.createElement('div');
+    div.innerHTML = html;
+    return div;
+  };
+
+  it('箱は 1 つ。中身は包みを外した字で、閉じタグの字面も中に入る', () => {
+    const body = "const s = '" + END('write') + '\';\n<delete_file path="x" />';
+    const d = dom(r.formatStream('<write path="s.js">' + OPEN + body + CLOSE + END('write') + '\n<yield />'));
+    expect(d.querySelectorAll('details')).toHaveLength(1);
+    expect(summaryOf(d.innerHTML)).toBe('📝 write: s.js');
+    const shown = d.querySelector('details > div:last-child')!.textContent!;
+    expect(shown).toContain(body);
+    expect(shown).not.toContain(OPEN);
+    expect(shown).not.toContain(CLOSE);
+    // 後ろの yield は別の（中身の無い）箱。素の文字は残らない
+    expect(d.textContent).toContain('yield');
+    expect(d.querySelector('span.text-text-muted')).toBeNull();
+  });
+
+  it('開始タグと開きの間・閉じと閉じタグの間の空白を許す', () => {
+    const d = dom(r.formatStream('<write path="a.txt">\n' + OPEN + 'hello' + CLOSE + '\n' + END('write')));
+    expect(d.querySelectorAll('details')).toHaveLength(1);
+    expect(d.querySelector('details > div:last-child')!.textContent).toContain('hello');
+  });
+
+  it('包みでない要素の描き方は変わらない（途中の CDATA は印ごと見せる）', () => {
+    const body = '<title>' + OPEN + 'A' + CLOSE + '</title>';
+    const d = dom(r.formatStream('<write path="feed.xml">' + body + END('write')));
+    expect(d.querySelectorAll('details')).toHaveLength(1);
+    expect(d.querySelector('details > div:last-child')!.textContent).toContain(body);
+  });
+});

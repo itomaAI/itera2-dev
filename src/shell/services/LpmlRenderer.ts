@@ -32,10 +32,14 @@ export class LpmlRenderer {
     const ATTR_PART = '\\s+[^"\'/=\\s]+(?:=(?:"(?:[^"\\\\]|\\\\.)*"|\'(?:[^\'\\\\]|\\\\.)*\'|[^\\s&]+))?';
     const ATTRS_PATTERN = `((?:${ATTR_PART})*\\s*)`;
 
-    // キャプチャ位置は従来どおり: 1=タグ名 2=属性 3=内容 / 4=タグ名 5=属性
+    // 3 つの形。上から順に当てる:
+    //   1. 中身を丸ごと CDATA で包んだ要素（T-0881。Translator と同じ読み方: 終わりは「CDATA の閉じ＋自分の閉じタグ」）
+    //   2. 開始タグ 〜 最初の同名の閉じタグ
+    //   3. 空タグ
     const TAG_REGEX = new RegExp(
-      `&lt;(${TAG_NAME_PATTERN})${ATTRS_PATTERN}&gt;([\\s\\S]*?)&lt;\\/\\1&gt;|` +
-        `&lt;(${TAG_NAME_PATTERN})${ATTRS_PATTERN}\\/&gt;`,
+      `&lt;(?<wName>${TAG_NAME_PATTERN})(?<wAttrs>${ATTRS_PATTERN})&gt;\\s*&lt;!\\[CDATA\\[(?<wBody>[\\s\\S]*?)\\]\\]&gt;\\s*&lt;\\/\\k<wName>&gt;|` +
+        `&lt;(?<name>${TAG_NAME_PATTERN})(?<attrs>${ATTRS_PATTERN})&gt;(?<body>[\\s\\S]*?)&lt;\\/\\k<name>&gt;|` +
+        `&lt;(?<eName>${TAG_NAME_PATTERN})(?<eAttrs>${ATTRS_PATTERN})\\/&gt;`,
       'g',
     );
 
@@ -51,9 +55,11 @@ export class LpmlRenderer {
         parts.push(`<span class="text-text-muted whitespace-pre-wrap">${gap}</span>`);
       }
 
-      const tagName = match[1] || match[4];
-      const attributes = match[2] || match[5] || '';
-      const content = match[3] || '';
+      const g = match.groups ?? {};
+      const tagName = g.wName ?? g.name ?? g.eName;
+      const attributes = g.wAttrs ?? g.attrs ?? g.eAttrs ?? '';
+      // 丸ごとの包みは、包みを外した中身を見せる
+      const content = g.wBody ?? g.body ?? '';
 
       parts.push(this._createTagHTML(tagName, attributes, content, opts.streaming === true));
       lastIndex = TAG_REGEX.lastIndex;

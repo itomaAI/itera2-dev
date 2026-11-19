@@ -83,7 +83,44 @@ export class Translator {
     `(${Translator.PATTERN_TAG_START})|(${Translator.PATTERN_TAG_END})|(${Translator.PATTERN_TAG_EMPTY})`,
     'g',
   );
-  static PATTERN_PROTECT = /(^ *```[^\n]*\n[\s\S]*?\n *```|`[^`\n]*`|<!--[\s\S]*?-->|<![\s\S]*?>)/gm;
+  /** CDATA の区間の開きと閉じ（<![CDATA[ … ]]>）。大文字の CDATA だけを読む（XML と同じ） */
+  static CDATA_OPEN = '<!\\[CDATA\\[';
+  static CDATA_CLOSE = '\\]\\]>';
+  /**
+   * 中身を丸ごと CDATA で包んだ要素（T-0881）: `<x …><![CDATA[中身]]></x>`。
+   * 開始タグと開きの間・閉じと閉じタグの間に置けるのは空白だけ。
+   *
+   * 終わりは「CDATA の閉じ ＋ その要素自身の閉じタグ」。だから中身には、自分の閉じタグの字面も、
+   * 閉じの 3 文字（]]>。コードの添字の比較など）も、そのまま書ける。
+   */
+  static PATTERN_CDATA_ELEMENT =
+    '(?<cdStart><(?<cdName>[^/>\\s\\n]+)(?:' +
+    Translator.ATTR_PART_NO_CAPTURE +
+    ')*\\s*>)' +
+    '(?<cdLead>\\s*' +
+    Translator.CDATA_OPEN +
+    ')(?<cdBody>[\\s\\S]*?)(?<cdTail>' +
+    Translator.CDATA_CLOSE +
+    '\\s*)' +
+    '(?<cdEnd></\\k<cdName>\\s*>)';
+  /**
+   * タグとして読まない区間（書かれたままの字として残す）。左から読んで、最初に当たったものが勝つ:
+   *   コードブロック／同じ行のバッククォートの対／丸ごと CDATA で包んだ要素の中身／HTML コメント／
+   *   それ以外の場所の CDATA（印ごと残す）／`<!…>`。
+   */
+  static PATTERN_PROTECT = new RegExp(
+    [
+      '^ *```[^\\n]*\\n[\\s\\S]*?\\n *```',
+      '`[^`\\n]*`',
+      Translator.PATTERN_CDATA_ELEMENT,
+      '<!--[\\s\\S]*?-->',
+      Translator.CDATA_OPEN + '[\\s\\S]*?' + Translator.CDATA_CLOSE,
+      '<![\\s\\S]*?>',
+    ].join('|'),
+    'gm',
+  );
+  /** 保護した区間の代わりに置く印（の先頭に当てる型） */
+  static PATTERN_PLACEHOLDER_AT_START = /^__PROTECTED_[a-z0-9]*__/;
 
   private defaultExcludeTags: string[];
 
@@ -114,13 +151,9 @@ export class Translator {
    * @param additionalExcludeTags - 動的に追加する保護対象タグのリスト
    */
   parse(text: string, additionalExcludeTags: string[] = []): ParseResult {
-    // フェールセーフ: LLMが指示を無視してCDATAでエスケープした場合、
-    // 独自のパースロジックと衝突しないようにガワ(タグ)だけを剥がして中身を展開する
-    const cleanedText = text.replace(/<!\[CDATA\[([\s\S]*?)\]\]>/gi, '$1');
-
     const exclude = [...this.defaultExcludeTags, ...additionalExcludeTags];
     const { tree, truncatedText, isTruncated, terminalTag, trailingText, trailingTags } = this._parseToTree(
-      cleanedText,
+      text,
       exclude,
     );
 
@@ -231,11 +264,25 @@ export class Translator {
     trailingText: string;
     trailingTags: string[];
   } {
+    /** 保護した区間: 印 → 書かれたままの字 */
     const protectedContent: Record<string, string> = {};
-    const protectedText = text.replace(Translator.PATTERN_PROTECT, (match) => {
+    /** 丸ごとの包み（T-0881）: 印 → 包みを外した中身 */
+    const cdataBodies: Record<string, string> = {};
+    /** 要素の中身として読まれた包み。木の復元では、書かれたままの字ではなく、包みを外した中身を使う */
+    const unwrapped: Record<string, string> = {};
+    const protectedText = text.replace(Translator.PATTERN_PROTECT, (match: string, ...rest: unknown[]) => {
+      const groups = rest[rest.length - 1] as Record<string, string | undefined>;
       const placeholder = `__PROTECTED_${Math.random().toString(36).substring(2, 15)}__`;
-      protectedContent[placeholder] = match;
-      return placeholder;
+      const { cdStart, cdLead, cdBody, cdTail, cdEnd } = groups;
+      if (cdStart === undefined || cdLead === undefined || cdBody === undefined || cdTail === undefined) {
+        protectedContent[placeholder] = match;
+        return placeholder;
+      }
+      // 丸ごとの包み: タグは残し、間（包みごと）だけを退避する。包みを外すかどうかは、
+      // 下の走査がこの開始タグを要素として受け取ったかで決まる（ほかの要素の中身に書かれた例は、書かれたまま残る）
+      protectedContent[placeholder] = cdLead + cdBody + cdTail;
+      cdataBodies[placeholder] = cdBody;
+      return cdStart + placeholder + (cdEnd ?? '');
     });
 
     const tree: LpmlNode[] = [];
@@ -293,6 +340,9 @@ export class Translator {
         };
         sink().push(el);
         open.push(el);
+        // 中身が丸ごとの包みなら、包みを外した字をそのまま中身にする（T-0881）
+        const next = Translator.PATTERN_PLACEHOLDER_AT_START.exec(protectedText.substring(indTagEnd, indTagEnd + 40));
+        if (next && next[0] in cdataBodies) unwrapped[next[0]] = cdataBodies[next[0]];
       } else if (matchTagEmpty) {
         // 空タグは、書いた時点で閉じている
         const name = matchTagEmpty[1];
@@ -333,7 +383,8 @@ export class Translator {
       if (remaining.length > 0) sink().push(remaining);
     }
 
-    const restoredTree = this._restoreTree(tree, protectedContent);
+    // 木には包みを外した中身を、文字として返す値（下の 2 つ）には書かれたままの字を戻す
+    const restoredTree = this._restoreTree(tree, { ...protectedContent, ...unwrapped });
     const finalText = this._restoreString(finalProtectedText, protectedContent);
 
     // 終端タグより後ろに現れたタグの名前（保護した部分＝コードブロック等の中は数えない）
