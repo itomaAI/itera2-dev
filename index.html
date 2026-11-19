@@ -576,11 +576,8 @@
 
         <!-- 入力欄の高さのつまみ（PC のみ）。ドラッグで #chat-input の --chat-input-h を書き、ダブルクリックで既定に戻す（ChatPanel._initInputResizer・T-0884・T-0885） -->
         <div id="chat-input-resizer" class="resizer-h hidden md:block"></div>
-        <div id="chat-composer" class="p-3 bg-panel border-t border-border-main md:border-t-0 pb-20 md:pb-3">
+        <div id="chat-composer" class="p-3 md:p-2 bg-panel border-t border-border-main md:border-t-0 pb-20 md:pb-2">
           <div id="file-preview-area" class="mb-2 hidden flex flex-wrap gap-2"></div>
-          <div id="ai-typing" class="text-xs text-primary mb-2 hidden flex items-center gap-1">
-            <span class="animate-pulse">●</span> <span id="ai-typing-label">Thinking...</span>
-          </div>
           <div
             class="relative bg-app border border-border-main rounded-lg focus-within:border-primary focus-within:ring-1 focus-within:ring-primary transition shadow-inner"
           >
@@ -608,6 +605,26 @@
                 <input type="file" id="chat-file-upload" class="hidden" multiple />
               </label>
               <div class="flex items-center gap-1">
+                <!-- 待機の表示。箱の下の帯（もとから高さを取ってある）に出すので、出ても消えても境界・履歴・入力欄は動かない。
+                     並びは 表示・停止・送信: 増えるものは空いている左へ伸び、送信ボタンは動かない（T-0886） -->
+                <div
+                  id="ai-typing"
+                  class="text-xs text-primary mr-1 hidden flex items-center gap-1 whitespace-nowrap select-none"
+                >
+                  <span class="animate-pulse">●</span> <span id="ai-typing-label">Thinking...</span>
+                </div>
+                <button
+                  id="btn-stop"
+                  class="p-1.5 flex items-center justify-center bg-error hover:bg-error/80 text-white rounded transition hidden shadow-sm"
+                >
+                  <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                    <path
+                      fill-rule="evenodd"
+                      d="M10 18a8 8 0 100-16 8 8 0 000 16zM8 7a1 1 0 00-1 1v4a1 1 0 001 1h4a1 1 0 001-1V8a1 1 0 00-1-1H8z"
+                      clip-rule="evenodd"
+                    ></path>
+                  </svg>
+                </button>
                 <button
                   id="btn-send"
                   class="p-1.5 flex items-center justify-center bg-primary hover:bg-primary/80 text-white rounded transition disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
@@ -618,18 +635,6 @@
                       stroke-linejoin="round"
                       stroke-width="2"
                       d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3"
-                    ></path>
-                  </svg>
-                </button>
-                <button
-                  id="btn-stop"
-                  class="p-1.5 flex items-center justify-center bg-error hover:bg-error/80 text-white rounded transition hidden shadow-sm"
-                >
-                  <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                    <path
-                      fill-rule="evenodd"
-                      d="M10 18a8 8 0 100-16 8 8 0 000 16zM8 7a1 1 0 00-1 1v4a1 1 0 001 1h4a1 1 0 001-1V8a1 1 0 00-1-1H8z"
-                      clip-rule="evenodd"
                     ></path>
                   </svg>
                 </button>
