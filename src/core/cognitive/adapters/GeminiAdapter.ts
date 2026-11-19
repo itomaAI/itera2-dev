@@ -12,38 +12,8 @@ import {
   type LlmResult,
   type RelayTransport,
 } from './BaseAdapter';
-import { Translator } from '../Translator';
+import { addYieldStop, yieldRestoration } from './GeminiYieldStop';
 import type { SystemLogger } from '../../state/SystemLogger';
-
-/**
- * 応急の手当て（T-0877・2026-11-19）—— OS のチャットで、行頭の `<yield` を API の停止文字列にする。
- *
- * Gemini 4 Hydrogen は、終端タグ `<yield />` を書いたあとも思考を挟んで書き続ける（T-0851）。プロンプトでは止まらない
- * （T-0854・T-0858）。そこで Gemini に限り、API が用意している仕組み（`stopSequences`）で生成を終わらせる。
- *
- *   - 掛けるのは OS のチャット（`origin.caller` が `root`）だけ。`MetaOS.llm.generate` の出力は LPML ではない。
- *   - Gemini は停止文字列を出力に含めない。止まったあとに `\n<yield />` を流して、モデルが書いた形に戻す
- *     （履歴のモデルのターンが終端タグを欠かないようにするため。実行には要らない）。
- *     ただし頭の改行だけは出力に残ることがある（Hydrogen の実測で 15 回中 9 回）。そのときは改行を重ねない。
- *   - Gemini は、停止文字列で止まったのか自然に終わったのかを返さない（どちらも `STOP`）。戻すのは、
- *     `STOP` で、かつ出力に最上位の終端タグが無いときだけ（`</ask>` や `<finish />` で終わったターンには足さない）。
- *     終端タグの有無は Translator に訊く（終端タグの定義をここに写さない）。
- *
- * 🔴 分かっていて残している制約: API の停止文字列は場所を見ない。`<write>` などの中身に `<yield` で始まる行があると
- *    そこで切れる（T-0859 の実測）。切れた道具は閉じていないので実行されず、「閉じていない」という失敗が返る（T-0878）。
- *    つまり Gemini は、その行を含む中身を書けない。行頭に限ってあるので、文中での言及では切れない。
- *
- * 外す条件: 終端タグでの打ち切りを全アダプタ共通の受け口に置いたとき（T-0859 の B 案）、または Hydrogen が直ったとき。
- * Interactions の経路（GeminiInteractionsAdapter）には掛けていない。
- */
-export const GEMINI_YIELD_STOP = '\n<yield';
-const GEMINI_YIELD_TAG = '<yield />';
-/** 停止文字列で削られた分として流す文字（出力が改行で終わっているときは、タグだけを流す） */
-export const GEMINI_YIELD_RESTORED = '\n' + GEMINI_YIELD_TAG;
-/** Gemini が受け付ける停止文字列の本数（6 本で 400。T-0859 の実測） */
-const GEMINI_MAX_STOP_SEQUENCES = 5;
-
-const terminalReader = new Translator();
 
 export class GeminiAdapter extends BaseLLMAdapter {
   private apiKey: string;
@@ -111,19 +81,13 @@ export class GeminiAdapter extends BaseLLMAdapter {
 
     if (generationConfig.maxOutputTokens === undefined) generationConfig.maxOutputTokens = 65536;
 
-    // 行頭の `<yield` で止める（OS のチャットだけ。上の GEMINI_YIELD_STOP の説明）。
+    // 行頭の `<yield` で止める（OS のチャットだけ。GeminiYieldStop.ts の説明）。
     // 設定の停止文字列が上限まで埋まっていたら足さず、戻すこともしない。
     let yieldStop = false;
     if (origin?.caller === LLM_CALLER_ROOT) {
-      const own: string[] = Array.isArray(generationConfig.stopSequences)
-        ? generationConfig.stopSequences.filter((s: unknown): s is string => typeof s === 'string')
-        : [];
-      if (own.includes(GEMINI_YIELD_STOP)) {
-        yieldStop = true;
-      } else if (own.length < GEMINI_MAX_STOP_SEQUENCES) {
-        generationConfig.stopSequences = [...own, GEMINI_YIELD_STOP];
-        yieldStop = true;
-      }
+      const added = addYieldStop(generationConfig.stopSequences);
+      if (added.stops) generationConfig.stopSequences = added.stops;
+      yieldStop = added.on;
     }
     let written = '';
 
@@ -172,9 +136,8 @@ export class GeminiAdapter extends BaseLLMAdapter {
       }
 
       // 停止文字列で削られた分を戻す。終端タグの在るターン（自然に終わった）と、ほかの理由で止まったターンには足さない
-      if (yieldStop && stopReason === 'STOP' && terminalReader.parse(written).terminalTag === null) {
-        onChunk(written.endsWith('\n') ? GEMINI_YIELD_TAG : GEMINI_YIELD_RESTORED);
-      }
+      const restored = yieldStop && stopReason === 'STOP' ? yieldRestoration(written) : null;
+      if (restored) onChunk(restored);
 
       const result: LlmResult = { provider: 'google', model: this.modelName, usage: null, stopReason };
       if (finalUsageMetadata) {

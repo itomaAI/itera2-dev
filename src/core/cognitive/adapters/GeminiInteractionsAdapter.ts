@@ -2,8 +2,8 @@
  * src/core/cognitive/adapters/GeminiInteractionsAdapter.ts
  * Itera OS v2: Google Gemini を Interactions API（`POST /v1beta/interactions`）で呼ぶアダプタ（T-0853）
  *
- * `llm.json` の `geminiApi: "interactions"` のときだけ、**利用者の鍵で直接叩く経路**で使う。
- * 中継の経路と既定（`geminiApi` が無い）は従来の GeminiAdapter（streamGenerateContent）のまま。
+ * **利用者の鍵で直接叩く経路**の既定（T-0896・2026-11-19〜）。`llm.json` の `geminiApi: "generateContent"` で、
+ * 従来の GeminiAdapter（streamGenerateContent）に戻せる。中継の経路は従来の GeminiAdapter のまま。
  *
  * 受け取る本文は GeminiRenderer が作る contents（generateContent の形）そのもの。ここで Interactions の
  * steps（`user_input` / `model_output`）に詰め替える。Projector・Renderer には手を入れない。
@@ -20,15 +20,27 @@
  * 引き継いだ会話も入力として数えられる（2026-11-14 の実測: 鎖でも全部でも total_input_tokens と
  * total_cached_tokens はほぼ同じ。鎖は前のターンの思考の分だけ多い）。費用を下げる仕組みではない。
  * 生の思考は返らない（要約だけ。ここでは要約も求めない）。
+ *
+ * OS のチャットでは、従来の口と同じく行頭の yield タグを停止文字列にし、止まったあとにタグを戻す（GeminiYieldStop.ts）。
  */
 
-import { BaseLLMAdapter, filterNestedObject, type LlmConfig, type LlmResult } from './BaseAdapter';
+import {
+  BaseLLMAdapter,
+  filterNestedObject,
+  LLM_CALLER_ROOT,
+  type LlmCallOrigin,
+  type LlmConfig,
+  type LlmResult,
+} from './BaseAdapter';
+import { addYieldStop, yieldRestoration } from './GeminiYieldStop';
 import type { SystemLogger } from '../../state/SystemLogger';
 
 export const GEMINI_INTERACTIONS_URL = 'https://generativelanguage.googleapis.com/v1beta/interactions';
 
-/** `llm.json` でこのアダプタを選ぶ値（`geminiApi`） */
+/** `llm.json` の `geminiApi` の値: このアダプタ（既定。値が無い・知らない値のときもこちら） */
 export const GEMINI_API_INTERACTIONS = 'interactions';
+/** `llm.json` の `geminiApi` の値: 従来の口（GeminiAdapter・streamGenerateContent）に戻す */
+export const GEMINI_API_GENERATE_CONTENT = 'generateContent';
 
 export interface InteractionsStep {
   type: 'user_input' | 'model_output';
@@ -222,7 +234,12 @@ export class GeminiInteractionsAdapter extends BaseLLMAdapter {
     this.endpoint = endpoint;
   }
 
-  protected async stream(messages: any, onChunk: (text: string) => void, signal?: AbortSignal): Promise<LlmResult> {
+  protected async stream(
+    messages: any,
+    onChunk: (text: string) => void,
+    signal?: AbortSignal,
+    origin?: LlmCallOrigin,
+  ): Promise<LlmResult> {
     if (!this.apiKey) throw new Error('API Key is missing.');
     const contents: any[] = Array.isArray(messages) ? messages : [];
 
@@ -232,6 +249,14 @@ export class GeminiInteractionsAdapter extends BaseLLMAdapter {
     const link = this.chains.find(scope, digests);
 
     const { generation_config, response_format } = toInteractionsGenerationConfig(this.config);
+    // 行頭の `<yield` で止める（OS のチャットだけ。GeminiYieldStop.ts の説明）。従来の口（GeminiAdapter）と同じ規則。
+    // 設定の停止文字列が上限まで埋まっていたら足さず、戻すこともしない。
+    let yieldStop = false;
+    if (origin?.caller === LLM_CALLER_ROOT) {
+      const added = addYieldStop(generation_config.stop_sequences);
+      if (added.stops) generation_config.stop_sequences = added.stops;
+      yieldStop = added.on;
+    }
     const base: Record<string, any> = {
       model: this.modelName,
       generation_config,
@@ -335,6 +360,17 @@ export class GeminiInteractionsAdapter extends BaseLLMAdapter {
     // Engine は流れた文字を読んでいた。それに揃え、文字が流れていれば返す（止まった理由に failed を置く）。何も流れていなければ投げる。
     if (status === 'cancelled' || (status === 'failed' && text === '')) {
       throw new Error(`Gemini API Error (interaction ${status}).`);
+    }
+
+    // 停止文字列で削られた分を戻す（completed で、最上位の終端タグが無いときだけ。incomplete・failed には足さない）。
+    // 上流が保存する応答は停止文字列の手前までで、タグは入っていない（2026-11-19 実測）。履歴にはここで戻した形が
+    // 入るので、下の鎖の指紋も戻した形で作る（そうしないと、次の要求の先頭が一致せず毎回全部を送ることになる）
+    if (yieldStop && status === 'completed') {
+      const restored = yieldRestoration(text);
+      if (restored) {
+        text += restored;
+        onChunk(restored);
+      }
     }
 
     // 送った会話＋この応答を覚える。履歴にはこの応答がそのまま 1 つのモデルのターンとして入る（GeminiRenderer の形）。

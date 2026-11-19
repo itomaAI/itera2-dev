@@ -6,6 +6,8 @@
  *   2. 本文として流すのは model_output の文字だけ。usage・止まった理由を従来の形に寄せる
  *   3. 鎖: 前回の会話＋応答に続く要求だけ、残りを previous_interaction_id 付きで送る。それ以外は全部を送る
  *   4. 覚えた id が無い（404）なら全部を送り直す。途中で途切れた・中断した生成は覚えない
+ *   5. OS のチャットでは行頭の yield タグを停止文字列にし、止まったあとにタグを戻す（従来の口と同じ規則・T-0896）。
+ *      鎖の指紋は戻した形で作る
  * 応答の形は 2026-11-14 の実測（data/01_projects/Itera/OS/LLM基盤/probes/result6.json・result7.json）に合わせた。
  */
 
@@ -17,6 +19,9 @@ import {
   toInteractionsGenerationConfig,
   toInteractionsSteps,
 } from './GeminiInteractionsAdapter';
+import { LLM_CALLER_ROOT, type LlmCallOrigin, type LlmConfig } from './BaseAdapter';
+import { GEMINI_YIELD_RESTORED, GEMINI_YIELD_STOP } from './GeminiYieldStop';
+import { Translator } from '../Translator';
 
 type Call = { url: string; body: any };
 let calls: Call[] = [];
@@ -441,5 +446,114 @@ describe('会話の鎖', () => {
     expect(chains.size).toBe(2);
     expect(chains.find('s', ['a', 'x'])).toBeNull();
     expect(chains.find('s', ['c', 'x'])?.interactionId).toBe('3');
+  });
+});
+
+describe('行頭の yield の停止語（OS のチャットだけ。従来の口と同じ規則 — GeminiYieldStop.ts・T-0896）', () => {
+  const ROOT: LlmCallOrigin = { caller: LLM_CALLER_ROOT, tag: 'session-1' };
+  const GUEST: LlmCallOrigin = { caller: 'app_notes', tag: null };
+  const YIELD_TAG = '<yield />';
+  const CUT = ['<memo>read it</memo>\n', '<read path="a.md" />'];
+  const translator = new Translator();
+  const fresh = (config: LlmConfig = {}) =>
+    new GeminiInteractionsAdapter(KEY, 'g', config, null, new InteractionChains());
+
+  async function runAs(adapter: GeminiInteractionsAdapter, contents: any[], reply: string, origin?: LlmCallOrigin) {
+    replies.push(() => streamResponse(reply));
+    let out = '';
+    const chunks: string[] = [];
+    const result = await adapter.generateStream(
+      contents,
+      (c) => {
+        out += c;
+        chunks.push(c);
+      },
+      undefined,
+      origin,
+    );
+    return { out, chunks, result };
+  }
+  const stopsSent = (i = 0) => calls[i].body.generation_config.stop_sequences;
+
+  it('root の生成にだけ stop_sequences を足す。設定のものは残し、同じ文字列は重ねない', async () => {
+    await runAs(fresh(), [SYS, u('a')], interaction('i1', ['x']), ROOT);
+    expect(stopsSent(0)).toEqual([GEMINI_YIELD_STOP]);
+
+    await runAs(fresh({ stopSequences: ['END'] }), [SYS, u('a')], interaction('i2', ['x']), ROOT);
+    expect(stopsSent(1)).toEqual(['END', GEMINI_YIELD_STOP]);
+
+    await runAs(fresh({ stopSequences: [GEMINI_YIELD_STOP, 'END'] }), [SYS, u('a')], interaction('i3', ['x']), ROOT);
+    expect(stopsSent(2)).toEqual([GEMINI_YIELD_STOP, 'END']);
+
+    await runAs(fresh({ stopSequences: ['END'] }), [SYS, u('a')], interaction('i4', ['x']), GUEST);
+    expect(stopsSent(3)).toEqual(['END']);
+
+    await runAs(fresh(), [SYS, u('a')], interaction('i5', ['x']));
+    expect(stopsSent(4)).toBeUndefined();
+  });
+
+  it('設定が上限の 5 本まで埋まっていたら足さず、タグも戻さない', async () => {
+    // 6 本は 400（2026-11-19 実測: the number of stop_sequences must not exceed 5）
+    const five = ['A', 'B', 'C', 'D', 'E'];
+    const { out } = await runAs(fresh({ stopSequences: five }), [SYS, u('a')], interaction('i1', CUT), ROOT);
+    expect(stopsSent()).toEqual(five);
+    expect(out).toBe(CUT.join(''));
+  });
+
+  it('completed・終端タグなし → 最後の塊としてタグが流れ、Engine の読み方で終端は yield になる。結果は変えない', async () => {
+    const { out, chunks, result } = await runAs(fresh(), [SYS, u('a')], interaction('i1', CUT), ROOT);
+    expect(chunks[chunks.length - 1]).toBe(GEMINI_YIELD_RESTORED);
+    expect(out).toBe(CUT.join('') + '\n' + YIELD_TAG);
+
+    const actions = translator.parse(out);
+    expect(actions.terminalTag).toBe('yield');
+    expect(actions.trailingText).toBe('');
+
+    expect(result.stopReason).toBe('STOP');
+    expect(result.usage).toEqual({ input: 60, cached: 40, cacheWrite: 0, output: 15, total: 120 });
+  });
+
+  it('停止文字列の頭の改行が出力に残っていたら、改行を重ねずにタグだけを流す', async () => {
+    // Hydrogen の実測（T-0896 の probe24）: 10 回のうち 7 回、返った文字は改行で終わっていた
+    const { out, chunks } = await runAs(fresh(), [SYS, u('a')], interaction('i1', [...CUT, '\n']), ROOT);
+    expect(chunks[chunks.length - 1]).toBe(YIELD_TAG);
+    expect(out).toBe(CUT.join('') + '\n' + YIELD_TAG);
+    expect(translator.parse(out).terminalTag).toBe('yield');
+  });
+
+  it.each([
+    ['finish', '<report>done</report>\n<finish />'],
+    ['ask', '<ask>which one?</ask>'],
+    ['同じ行に書かれた yield', '<read path="a.md" />' + YIELD_TAG],
+  ])('終端タグの在る出力には足さない（%s）', async (_label, output) => {
+    const { out } = await runAs(fresh(), [SYS, u('a')], interaction('i1', [output]), ROOT);
+    expect(out).toBe(output);
+  });
+
+  it.each([['incomplete'], ['failed']])('completed 以外で終わったら足さない（%s）', async (status) => {
+    const { out } = await runAs(fresh(), [SYS, u('a')], interaction('i1', CUT, { status }), ROOT);
+    expect(out).toBe(CUT.join(''));
+  });
+
+  it('ゲストの生成・呼び手の無い生成には足さない', async () => {
+    expect((await runAs(fresh(), [SYS, u('a')], interaction('i1', CUT), GUEST)).out).toBe(CUT.join(''));
+    expect((await runAs(fresh(), [SYS, u('a')], interaction('i2', CUT))).out).toBe(CUT.join(''));
+  });
+
+  it('鎖の指紋は戻した形で作る: 履歴に戻した形のモデルのターンが入った次の要求は、続きだけを送る', async () => {
+    const adapter = fresh();
+    const first = await runAs(adapter, [SYS, u('one')], interaction('int_1', CUT), ROOT);
+    // 履歴には、流れた文字（戻したタグを含む）がそのままモデルのターンとして入る
+    await runAs(adapter, [SYS, u('one'), m(first.out), u('tool result')], interaction('int_2', ['r2']), ROOT);
+    expect(calls[1].body.previous_interaction_id).toBe('int_1');
+    expect(calls[1].body.input).toEqual([{ type: 'user_input', content: [{ type: 'text', text: 'tool result' }] }]);
+    // 鎖の続きにも停止語は毎回付く（generation_config は上流が引き継がない）
+    expect(stopsSent(1)).toEqual([GEMINI_YIELD_STOP]);
+
+    // 裏: 上流が保存する形（タグなし）のモデルのターンでは一致しない ＝ 覚えているのは戻した形
+    const other = fresh();
+    await runAs(other, [SYS, u('one')], interaction('int_3', CUT), ROOT);
+    await runAs(other, [SYS, u('one'), m(CUT.join('')), u('tool result')], interaction('int_4', ['r']), ROOT);
+    expect(calls[3].body.previous_interaction_id).toBeUndefined();
   });
 });

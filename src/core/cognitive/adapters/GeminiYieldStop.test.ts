@@ -13,7 +13,8 @@
  */
 
 import { describe, it, expect, vi } from 'vitest';
-import { GeminiAdapter, GEMINI_YIELD_RESTORED, GEMINI_YIELD_STOP } from './GeminiAdapter';
+import { GeminiAdapter } from './GeminiAdapter';
+import { GEMINI_YIELD_RESTORED, GEMINI_YIELD_STOP } from './GeminiYieldStop';
 import {
   LLM_CALLER_ROOT,
   type LlmCallOrigin,

@@ -17,7 +17,7 @@ import { Projector } from '../../core/cognitive/Projector';
 import { GeminiRenderer, OpenAIRenderer, AnthropicRenderer, type BaseRenderer } from '../../core/cognitive/Renderer';
 import { GeminiAdapter } from '../../core/cognitive/adapters/GeminiAdapter';
 import {
-  GEMINI_API_INTERACTIONS,
+  GEMINI_API_GENERATE_CONTENT,
   GeminiInteractionsAdapter,
 } from '../../core/cognitive/adapters/GeminiInteractionsAdapter';
 import { OpenAIAdapter } from '../../core/cognitive/adapters/OpenAIAdapter';
@@ -406,11 +406,12 @@ export class CognitiveManager {
           provider,
           modelName,
           renderer: new GeminiRenderer(capabilities, apiKey),
-          // llm.json の geminiApi: "interactions" のときだけ Interactions API（T-0853）。既定は従来どおり
+          // 自分の鍵の経路は Interactions API が既定（T-0853・T-0896）。
+          // llm.json の geminiApi: "generateContent" のときだけ従来の口（streamGenerateContent）
           adapter:
-            llmConfig.geminiApi === GEMINI_API_INTERACTIONS
-              ? new GeminiInteractionsAdapter(apiKey, modelName, llmConfig, this.logger)
-              : new GeminiAdapter(apiKey, modelName, llmConfig, this.logger),
+            llmConfig.geminiApi === GEMINI_API_GENERATE_CONTENT
+              ? new GeminiAdapter(apiKey, modelName, llmConfig, this.logger)
+              : new GeminiInteractionsAdapter(apiKey, modelName, llmConfig, this.logger),
         };
     }
   }
