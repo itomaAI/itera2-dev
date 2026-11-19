@@ -243,13 +243,21 @@ export abstract class BaseLLMAdapter {
     signal?: AbortSignal,
     origin?: LlmCallOrigin,
   ): Promise<LlmResult> {
-    const result = await this.stream(messages, onChunk, signal);
+    const result = await this.stream(messages, onChunk, signal, origin);
     this.recordUsage(result, origin);
     return result;
   }
 
-  /** 各社の送信と流れの読み取り。ログは書かない */
-  protected abstract stream(messages: any, onChunk: (text: string) => void, signal?: AbortSignal): Promise<LlmResult>;
+  /**
+   * 各社の送信と流れの読み取り。ログは書かない。
+   * `origin`（誰の生成か）は入口からそのまま渡る。読むのは、呼び手によって送り方を分けるアダプタだけ（T-0877 の Gemini）。
+   */
+  protected abstract stream(
+    messages: any,
+    onChunk: (text: string) => void,
+    signal?: AbortSignal,
+    origin?: LlmCallOrigin,
+  ): Promise<LlmResult>;
 
   /**
    * 台帳に 1 行書く。usage が拾えたときだけ（拾えなかった生成を 0 として数えない）。

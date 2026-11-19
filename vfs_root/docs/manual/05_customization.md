@@ -38,6 +38,13 @@ This directory holds the dynamic configuration of your OS environment.
     continues the last reply (the conversation was compressed, cleared or edited, or the model changed, or the page
     was reloaded), the whole history is sent again. Input tokens are counted the same way as before: the carried-over
     history is billed as input. Without the key, or through the Itera Cloud relay, Gemini is called as before.
+
+    In the OS chat, Gemini models (`streamGenerateContent`, with your own key or through the relay) are called with
+    the stop sequence `"\n<yield"` — a line that starts with the yield tag — and the tag is put back after the model
+    stops. This is a stopgap for models that keep writing after `<yield />` (Gemini 4 Hydrogen). Side effect: with
+    Gemini the agent cannot write content that has a line starting with `<yield` (LPML examples, prompts); the
+    output is cut at that line and the tool runs with what was written so far. `MetaOS.llm.generate` and the
+    Interactions API path are not affected.
 *   **`appearance.json`**: Controls the visual layout, the active theme path and the interface language (`locale`, e.g. `"ja"`).
     The interface language is separate from `preferences.language`, which is the language the AI answers in.
 *   **`network.json`**: Configures the CORS proxy URL.
