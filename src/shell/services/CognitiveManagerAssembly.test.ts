@@ -135,6 +135,17 @@ describe('組み立ての金型: 利用者の鍵で直接', () => {
   const cases: Array<[string, any, Record<string, string>]> = [
     ['llm.json が無い（既定）', undefined, { google: 'GK' }],
     ['前置きなし → Google', { model: 'gemini-3.8-flash', temperature: 0.5 }, { google: 'GK' }],
+    // Google の組は Interactions API が既定。geminiApi: "generateContent" のときだけ従来の口（T-0896）
+    [
+      'Google・geminiApi: generateContent → 従来の口',
+      { model: 'gemini-3.8-flash', geminiApi: 'generateContent' },
+      { google: 'GK' },
+    ],
+    [
+      'Google・geminiApi: interactions（明示しても既定と同じ）',
+      { model: 'gemini-3.8-flash', geminiApi: 'interactions' },
+      { google: 'GK' },
+    ],
     ['google/…・鍵なし', { model: 'google/gemini-x' }, {}],
     ['openai/…', { model: 'openai/gpt-x', reasoning_effort: 'high' }, { openai: 'OK' }],
     ['openrouter/…（モデル名に / が入る）', { model: 'openrouter/vendor/model-y' }, { openrouter: 'RK' }],
