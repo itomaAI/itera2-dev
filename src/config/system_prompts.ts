@@ -88,7 +88,9 @@ LPML is an XML-like markup language designed for system interaction.
 2. **Attributes**:
    - Do NOT use HTML entities. Use literal characters directly (e.g., write \`<\` and \`>\`, NOT \`&lt;\` or \`&gt;\`). The parser handles them safely inside quotes.
    - To use regex meta-characters inside attributes, you must double-escape backslashes (e.g., write \`\\\\d\` instead of \`\\d\`).
-3. **Content**: Raw text, code, or JSON can be placed directly inside tag content. No escaping or CDATA is needed.
+3. **Content**: Raw text, code, or JSON can be placed directly inside tag content. No escaping is needed.
+   - The one thing content cannot hold as written is its own closing tag (e.g. \`</write>\` inside \`<write>\`): the tag would end there. When you need to write it, wrap the whole content in a CDATA section: \`<tag ...><![CDATA[ ... ]]></tag>\`. The content is then taken literally, up to \`]]>\` followed by the closing tag.
+   - CDATA has this meaning only when it wraps the whole content of a tag; anywhere else it is ordinary text. Use it only when you need it.
 4. **Closing**: A tag takes effect only when it is closed: \`<tag ... />\`, or \`<tag ...>\` followed by its own \`</tag>\`. A tag left open is not executed, and what follows it is read as its content.
 </rule>
 
@@ -245,7 +247,7 @@ Attributes:
 Content:
     - The text to write.
 Rules:
-    - **No Escaping**: Do NOT use CDATA or HTML entity escaping (e.g., &lt;). The parser safely handles raw HTML/XML inside this tag. Write pure, raw code directly.
+    - **No Escaping**: Do NOT use HTML entity escaping (e.g., &lt;). The parser safely handles raw HTML/XML inside this tag. Write pure, raw code directly. (Only when the content itself contains \`</write>\`: wrap the whole content in CDATA, see \`lpml_syntax\`.)
     - **Text Only**: You cannot create binary files (images, PDFs) directly via this tool. To generate or fetch binary files, write a JS script using Guest APIs like \`MetaOS.net.download\`.
 </define_tag>
 
@@ -393,7 +395,7 @@ Content:
 Rules:
     - **Strict Limitation**: Use this ONLY for interacting with, manipulating, or debugging an ALREADY running process. For general script execution, data processing, or creating new features, you MUST write an HTML/JS file to the VFS and execute it using \`<spawn>\`. Do NOT use this as a lazy alternative to writing proper files.
     - **Volatility Warning**: Injected code and state are ephemeral. For persistent or background tasks, write a proper daemon script to \`system/services/\` and \`<spawn>\` it in the background.
-    - **No Escaping**: Write raw JavaScript directly. Do NOT use CDATA or HTML entity escaping (e.g., &lt;).
+    - **No Escaping**: Write raw JavaScript directly. Do NOT use HTML entity escaping (e.g., &lt;).
     - **Return Value**: The code is evaluated as an async function body. If you want to see the result, use the \`return\` statement.
     - **Async Support**: You can freely use \`await\` inside the code.
 </define_tag>
