@@ -61,6 +61,26 @@ export function unknownToolResult(actionType: string): ToolResult {
   };
 }
 
+/**
+ * 閉じていない要素を呼んだときの結果（T-0878）。
+ *
+ * LPML で効力を持つのは閉じた要素だけ（`<x />` か、`<x>` と自分の `</x>`）。閉じていない要素は実行しない ——
+ * 出力が途中で切れた、閉じタグを書き忘れた、のどちらでも、書き手の意図した中身かどうかが分からないため。
+ * 未登録のタグと同じく、失敗した 1 本の結果として返す（モデルは次のターンで、どのタグが実行されなかったかを読める）。
+ * 文言は英語（LLM に読ませる文。itera2 系とミャク楽で共通）。
+ */
+export function unclosedTagResult(actionType: string): ToolResult {
+  return {
+    log: [
+      `[LPML Syntax] <${actionType}> was not closed, so it was not executed.`,
+      `A tag takes effect only when it is closed: with \`</${actionType}>\`, or written as \`<${actionType} ... />\` when it has no content. What followed the opening tag was read as its content, so no tag in there was executed either.`,
+      `Nothing else is affected. If you still need it, write the tag again and close it (if your output was cut off, in smaller parts).`,
+    ].join('\n'),
+    ui: `❌ Error: <${actionType}> was not closed`,
+    error: true,
+  };
+}
+
 function errorMessage(err: unknown): string {
   if (err instanceof Error) return err.message;
   if (typeof err === 'object' && err !== null && 'message' in err) return String((err as { message: unknown }).message);
@@ -285,10 +305,19 @@ export class ToolRegistry {
    * アクションを検索して実行する
    */
   async execute(
-    action: { type: string; params: ToolParams },
+    action: { type: string; params: ToolParams; closed?: boolean },
     context: { shell: any; engine: any } & Record<string, any>,
   ): Promise<ToolResult | null> {
     const startedAt = Date.now();
+
+    // 0. 閉じていない要素は実行しない（T-0878）。登録の有無より先に見る ——
+    //    書き終えられていない要素は、どの道具としても扱えない。
+    //    `closed` を持たない呼び出し（パーサーを通らないもの）は、閉じているものとして扱う
+    if (action.closed === false) {
+      const result = unclosedTagResult(action.type);
+      this._recordExecution(action, null, startedAt, result);
+      return result;
+    }
 
     // 1. 全Toolsetから対象のツールを検索する
     let foundTool: ToolDef | null = null;

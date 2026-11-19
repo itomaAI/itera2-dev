@@ -89,6 +89,7 @@ LPML is an XML-like markup language designed for system interaction.
    - Do NOT use HTML entities. Use literal characters directly (e.g., write \`<\` and \`>\`, NOT \`&lt;\` or \`&gt;\`). The parser handles them safely inside quotes.
    - To use regex meta-characters inside attributes, you must double-escape backslashes (e.g., write \`\\\\d\` instead of \`\\d\`).
 3. **Content**: Raw text, code, or JSON can be placed directly inside tag content. No escaping or CDATA is needed.
+4. **Closing**: A tag takes effect only when it is closed: \`<tag ... />\`, or \`<tag ...>\` followed by its own \`</tag>\`. A tag left open is not executed, and what follows it is read as its content.
 </rule>
 
 <rule name="turn_lifecycle">

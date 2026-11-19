@@ -280,3 +280,50 @@ describe('ToolRegistry: 失敗のログの出し分け（T-0677）', () => {
     expect(h.records[0].status).toBe('error');
   });
 });
+describe('ToolRegistry: 閉じていない要素は実行しない（T-0878）', () => {
+  // LPML で実行されるのは閉じた要素だけ。閉じていないアクションは、道具を呼ばずに失敗の結果として返す
+  // （未登録のタグと同じ経路。モデルは次のターンで、どのタグが実行されなかったかを読める）。
+  function harness() {
+    const records: any[] = [];
+    const r = new ToolRegistry(undefined, { record: (e: any) => records.push(e) } as any);
+    const impl = vi.fn(async () => ({ log: 'done' }));
+    r.registerSystemTool('system:test', 'Test', { name: 'write', description: 'w', impl });
+    return { r, impl, records };
+  }
+  const ctx = { shell: {}, engine: {} };
+
+  it('closed: false のアクションは道具を呼ばず、失敗の結果を返す', async () => {
+    const h = harness();
+    const res = await h.r.execute({ type: 'write', params: { path: 'a.txt', content: 'partial' }, closed: false }, ctx);
+    expect(h.impl).not.toHaveBeenCalled();
+    expect(res?.error).toBe(true);
+    expect(res?.ui).toBe('❌ Error: <write> was not closed');
+    expect(res?.log).toContain('<write> was not closed, so it was not executed');
+    expect(res?.log).toContain('</' + 'write>');
+    expect(res?.log).toContain('<write ... />');
+  });
+
+  it('閉じているアクションと、closed を持たない呼び出しは従来どおり実行する', async () => {
+    const h = harness();
+    expect((await h.r.execute({ type: 'write', params: { path: 'a.txt' }, closed: true }, ctx))?.log).toBe('done');
+    expect((await h.r.execute({ type: 'write', params: { path: 'a.txt' } }, ctx))?.log).toBe('done');
+    expect(h.impl).toHaveBeenCalledTimes(2);
+  });
+
+  it('登録の有無より先に見る（未登録・システム専用のタグでも「閉じていない」と答える）', async () => {
+    const h = harness();
+    for (const type of ['no_such_tool', 'tool_output', 'memo']) {
+      const res = await h.r.execute({ type, params: {}, closed: false }, ctx);
+      expect(res?.error).toBe(true);
+      expect(res?.ui).toBe(`❌ Error: <${type}> was not closed`);
+    }
+  });
+
+  it('実行の記録（tool_events）には失敗として残る', async () => {
+    const h = harness();
+    await h.r.execute({ type: 'write', params: { path: 'a.txt' }, closed: false }, ctx);
+    expect(h.impl).not.toHaveBeenCalled();
+    expect(h.records).toHaveLength(1);
+    expect(h.records[0].status).toBe('error');
+  });
+});

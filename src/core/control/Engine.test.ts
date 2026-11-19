@@ -515,6 +515,7 @@ function createLoopHarness(policy: 'realtime' | 'batch', toolCount: number) {
       const actions: any = Array.from({ length: n }, (_, i) => ({
         type: 'tool',
         params: { i },
+        closed: true,
         originalIndex: i,
       }));
       actions.isTruncated = false;

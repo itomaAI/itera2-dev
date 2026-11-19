@@ -138,3 +138,89 @@ describe('Translator: write / edit（T-0683 の改名）', () => {
     expect(starts).toEqual(['a.md:9', 'a.md:5', 'a.md:2', 'b.md:1']);
   });
 });
+describe('Translator: 実行されるのは閉じた要素だけ（T-0878）', () => {
+  // 閉じた要素 = 空タグ（<x />）か、自分の閉じタグで終わった要素。
+  // 閉じていない要素は、どこで終わるはずだったかが分からない。要素そのものはアクションに残す
+  // （実行する側が「閉じていないので実行しなかった」と伝えるため）が、closed: false で、中は辿らない。
+  const END = (tag: string) => '</' + tag + '>';
+  const view = (text: string, extra: string[] = []) =>
+    new Translator().parse(text, extra).map((a) => [a.type, a.closed]);
+
+  it('空タグと、自分の閉じタグで終わった要素は閉じている', () => {
+    expect(view('<read path="a.md" />\n<memo>m</memo>\n<write path="a.txt">x' + END('write'))).toEqual([
+      ['read', true],
+      ['memo', true],
+      ['write', true],
+    ]);
+  });
+
+  it('文字の終わりまで開いたままの要素は閉じていない（途中で切れた write）', () => {
+    const a = new Translator().parse('<memo>m</memo>\n<write path="a.txt">line1\nline2');
+    expect(a.map((x) => [x.type, x.closed])).toEqual([
+      ['memo', true],
+      ['write', false],
+    ]);
+    // 中身は読んだところまで持っている（何が書かれていたかは失わない）
+    expect(a[1].params).toEqual({ path: 'a.txt', content: 'line1\nline2' });
+    expect(a.terminalTag).toBeNull();
+  });
+
+  it('閉じ忘れた要素は後ろを中身として飲み込む。飲み込まれたタグは実行も終端もされない', () => {
+    const a = new Translator().parse('<memo>note\n<read path="a.md" />\n<yield />');
+    expect(a.map((x) => [x.type, x.closed])).toEqual([['memo', false]]);
+    expect(a[0].params.content).toBe('note\n<read path="a.md" />\n<yield />');
+    expect(a.terminalTag).toBeNull();
+  });
+
+  it('開始タグのまま書かれた道具（/ の書き忘れ）も同じ', () => {
+    expect(view('<read path="a.md">\n<list_files />\n<yield />', ['read', 'list_files'])).toEqual([['read', false]]);
+  });
+
+  it('閉じていない要素の中は辿らない（中身をそのまま持つタグでなくても）', () => {
+    expect(view('<wrapper>\n<read path="a.md" />\n<yield />')).toEqual([['wrapper', false]]);
+  });
+
+  it('閉じた要素の中は従来どおり辿る', () => {
+    expect(view('<wrapper><read path="a.md" /></wrapper>')).toEqual([
+      ['wrapper', true],
+      ['read', true],
+    ]);
+  });
+
+  it('外側の閉じタグに巻き取られた要素は閉じていない。外側は閉じている', () => {
+    expect(view('<outer><inner>text</outer>\n<yield />')).toEqual([
+      ['outer', true],
+      ['inner', false],
+      ['yield', true],
+    ]);
+    // 巻き取られた要素の中は辿らない
+    expect(view('<outer><inner><read path="a.md" /></outer>\n<yield />')).toEqual([
+      ['outer', true],
+      ['inner', false],
+      ['yield', true],
+    ]);
+  });
+
+  it('相手の無い閉じタグは要素を作らない（文字として残る）', () => {
+    const a = new Translator().parse('<memo>m</memo>\n' + END('write') + '\n<yield />');
+    expect(a.map((x) => [x.type, x.closed])).toEqual([
+      ['memo', true],
+      ['yield', true],
+    ]);
+    expect(a.hasLeak).toBe(true);
+    expect(a.terminalTag).toBe('yield');
+  });
+
+  it('終端タグの読み方は変えていない（相手の無い閉じタグの ask も、最上位なら終端）', () => {
+    const a = new Translator().parse('which one?' + END('ask') + '\nmore');
+    expect(a.terminalTag).toBe('ask');
+    expect(a.trailingText).toBe('\nmore');
+    expect(a.map((x) => x.type)).toEqual([]);
+  });
+
+  it('閉じていない要素の中の終端タグは終端にならない', () => {
+    const a = new Translator().parse('<wrapper>\n<ask>q</ask>');
+    expect(a.terminalTag).toBeNull();
+    expect(a.map((x) => [x.type, x.closed])).toEqual([['wrapper', false]]);
+  });
+});
