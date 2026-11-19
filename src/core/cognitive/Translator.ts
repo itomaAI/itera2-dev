@@ -28,10 +28,32 @@ export const RESERVED_SYSTEM_TAGS = new Set([
   'user_attachment',
 ]);
 
+/**
+ * LPML の要素（T-0878）。
+ *
+ * `closed` は、その要素が書き終えられたかどうか: 空タグ（`<x />`）か、自分の閉じタグ（`</x>`）で終わったときだけ true。
+ * 文字の終わりまで開いたままの要素と、外側の閉じタグに巻き取られた要素は false のまま残る。
+ *
+ * **実行されるのは閉じた要素だけ**。閉じていない要素は、どこで終わるはずだったかが
+ * 分からない —— 中身も、その中に見えるタグの位置も、書き手の意図したものとは限らない。
+ */
+export interface LpmlElement {
+  tag: string;
+  attributes: Record<string, string>;
+  /** 空タグは null */
+  content: LpmlNode[] | null;
+  closed: boolean;
+}
+export type LpmlNode = string | LpmlElement;
+/** 開始タグで始まった要素（中身を持つ） */
+type OpenElement = LpmlElement & { content: LpmlNode[] };
+
 export interface ParsedAction {
   type: string;
   params: ToolParams;
-  raw: any;
+  raw: LpmlElement;
+  /** 要素が閉じていたか。false のものは実行されない（ToolRegistry が「閉じていない」という失敗の結果を返す） */
+  closed: boolean;
   originalIndex: number;
 }
 
@@ -114,24 +136,17 @@ export class Translator {
     const cleanLeak = leakedText.replace(/\s+/g, '');
     const hasLeak = cleanLeak.length >= 3;
 
-    // 2. ツリーのルートだけでなく、再帰的にすべてのタグノードを抽出する
-    let rawActions = this._extractAllNodes(tree);
-
-    const actions: ParsedAction[] = [];
-    for (let i = 0; i < rawActions.length; i++) {
-      const item = rawActions[i];
-      const contentText = this._extractContent(item.content);
-      const action: ParsedAction = {
-        type: item.tag,
-        params: {
-          ...item.attributes,
-          content: contentText,
-        },
-        raw: item,
-        originalIndex: i, // ★ 元のテキスト内での出現順序を記録
-      };
-      actions.push(action);
-    }
+    // 2. 要素をアクションにする（閉じた要素の中は再帰的に辿る。閉じていない要素の中は辿らない）
+    const actions: ParsedAction[] = this._collectElements(tree).map((item, i) => ({
+      type: item.tag,
+      params: {
+        ...item.attributes,
+        content: this._extractContent(item.content),
+      },
+      raw: item,
+      closed: item.closed,
+      originalIndex: i, // ★ 元のテキスト内での出現順序を記録
+    }));
 
     const sortedActions = this._sortActions(actions);
 
@@ -148,21 +163,19 @@ export class Translator {
   }
 
   /**
-   * ASTを再帰的に走査し、すべてのタグオブジェクトをフラットな配列として抽出する
+   * 木を出現順に辿って、要素を平らに並べる。
+   *
+   * 閉じた要素は中も辿る。閉じていない要素は、要素そのものだけを並べて中は辿らない ——
+   * どこで終わるはずだったかが分からないので、中に見えるタグは「その要素の中身」としてしか読めない。
+   * 要素そのものを残すのは、実行する側が「閉じていないので実行しなかった」と伝えられるようにするため
+   * （黙って捨てると、書き手は何が起きたかを知れない）。
    */
-  private _extractAllNodes(nodes: any[]): any[] {
-    let result: any[] = [];
-    if (!Array.isArray(nodes)) return result;
-
+  private _collectElements(nodes: LpmlNode[]): LpmlElement[] {
+    const result: LpmlElement[] = [];
     for (const node of nodes) {
-      if (typeof node === 'object' && node !== null) {
-        // タグオブジェクト自身をリストに追加
-        result.push(node);
-        // 子要素（content）がある場合は再帰的に走査して結果を結合
-        if (Array.isArray(node.content)) {
-          result = result.concat(this._extractAllNodes(node.content));
-        }
-      }
+      if (typeof node === 'string') continue;
+      result.push(node);
+      if (node.closed && node.content) result.push(...this._collectElements(node.content));
     }
     return result;
   }
@@ -192,7 +205,7 @@ export class Translator {
     return result;
   }
 
-  private _restoreTree(tree: any[], protectedMap: Record<string, string>): any[] {
+  private _restoreTree(tree: LpmlNode[], protectedMap: Record<string, string>): LpmlNode[] {
     return tree.map((item) => {
       if (typeof item === 'string') return this._restoreString(item, protectedMap);
       if (item.attributes) {
@@ -211,7 +224,7 @@ export class Translator {
     text: string,
     exclude: string[] = [],
   ): {
-    tree: any[];
+    tree: LpmlNode[];
     truncatedText: string;
     isTruncated: boolean;
     terminalTag: string | null;
@@ -225,15 +238,14 @@ export class Translator {
       return placeholder;
     });
 
-    const tree: any[] = [];
-    let cursor = 0;
+    const tree: LpmlNode[] = [];
+    /** 開いたままの要素（外側から順）。空なら最上位にいる */
+    let open: OpenElement[] = [];
+    /** いま文字や要素を足す先: いちばん内側の開いた要素の中身。開いた要素が無ければ最上位 */
+    const sink = (): LpmlNode[] => (open.length > 0 ? open[open.length - 1].content : tree);
+    /** 中身をそのまま持つ要素の中にいる間、その名前。自分の閉じタグが来るまで、ほかのタグは文字として読む */
     let tagExclude: string | null = null;
-    let stack: any[] = [
-      {
-        tag: 'root',
-        content: tree,
-      },
-    ];
+    let cursor = 0;
 
     const regexTag = new RegExp(Translator.PATTERN_TAG);
     let match;
@@ -243,6 +255,11 @@ export class Translator {
 
     let terminalIndex = -1;
     let terminalTag: string | null = null;
+    /**
+     * いま読んだ空タグ・閉じタグが、最上位の終端タグか。
+     * 相手の無い閉じタグ（開始タグなしの `</ask>`）も、最上位に在れば従来どおり終端として読む
+     */
+    const endsTurn = (name: string): boolean => open.length === 0 && PARSE_TERMINAL_TAGS.has(name);
 
     while ((match = regexTag.exec(protectedText)) !== null) {
       const tagStr = match[0];
@@ -261,43 +278,43 @@ export class Translator {
       }
 
       const contentStr = protectedText.substring(cursor, indTagStart);
-      if (contentStr.length > 0) stack[stack.length - 1].content.push(contentStr);
+      if (contentStr.length > 0) sink().push(contentStr);
       cursor = indTagEnd;
 
       if (matchTagStart) {
+        // 開いた時点では閉じていない。閉じるのは、自分の閉じタグが来たときだけ
         const name = matchTagStart[1];
         if (exclude.includes(name)) tagExclude = name;
-        const el = {
+        const el: OpenElement = {
           tag: name,
           attributes: this._parseAttributes(matchTagStart[2]),
-          content: [] as any[],
+          content: [],
+          closed: false,
         };
-        stack[stack.length - 1].content.push(el);
-        stack.push(el);
+        sink().push(el);
+        open.push(el);
       } else if (matchTagEmpty) {
+        // 空タグは、書いた時点で閉じている
         const name = matchTagEmpty[1];
-        const el = {
-          tag: name,
-          attributes: this._parseAttributes(matchTagEmpty[2]),
-          content: null,
-        };
-        stack[stack.length - 1].content.push(el);
-
-        // ★ Terminal Tag Detection (Empty Tag)
-        if (PARSE_TERMINAL_TAGS.has(name) && tagExclude === null && stack.length === 1) {
+        sink().push({ tag: name, attributes: this._parseAttributes(matchTagEmpty[2]), content: null, closed: true });
+        if (endsTurn(name)) {
           terminalIndex = indTagEnd;
           terminalTag = name;
           break;
         }
       } else if (matchTagEnd) {
+        // 同じ名前の、いちばん内側の開いた要素を閉じる。
+        // その内側で開いたままだった要素は、ここで巻き取られて終わる（閉じないまま）
         const name = matchTagEnd[1];
-        let idx = stack.length - 1;
-        while (idx > 0 && stack[idx].tag !== name) idx--;
-        if (idx > 0) stack = stack.slice(0, idx);
-        else stack[stack.length - 1].content.push(tagStr);
-
-        // ★ Terminal Tag Detection (End Tag)
-        if (PARSE_TERMINAL_TAGS.has(name) && tagExclude === null && stack.length === 1) {
+        const idx = open.map((el) => el.tag).lastIndexOf(name);
+        if (idx >= 0) {
+          open[idx].closed = true;
+          open = open.slice(0, idx);
+        } else {
+          // 相手の無い閉じタグは要素を作らない。文字として残す
+          sink().push(tagStr);
+        }
+        if (endsTurn(name)) {
           terminalIndex = indTagEnd;
           terminalTag = name;
           break;
@@ -311,8 +328,9 @@ export class Translator {
       finalProtectedText = protectedText.substring(0, terminalIndex);
       trailingProtected = protectedText.substring(terminalIndex);
     } else {
+      // 文字の終わり。まだ開いている要素は、残りを中身として持ったまま、閉じないで終わる
       const remaining = protectedText.substring(cursor);
-      if (remaining.length > 0) stack[stack.length - 1].content.push(remaining);
+      if (remaining.length > 0) sink().push(remaining);
     }
 
     const restoredTree = this._restoreTree(tree, protectedContent);
@@ -336,8 +354,7 @@ export class Translator {
       trailingTags,
     };
   }
-
-  private _extractContent(content: any): string {
+  private _extractContent(content: LpmlNode[] | null): string {
     if (!content) return '';
     if (Array.isArray(content)) return content.map((c) => (typeof c === 'string' ? c : '')).join('');
     return String(content);

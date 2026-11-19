@@ -256,8 +256,8 @@ describe('止まったあとにタグを戻す', () => {
   });
 });
 
-describe('分かっていて残している危険（特別な扱いをしない）', () => {
-  it('道具の中身の行頭で切れたときも同じ規則で足す。切れた道具はそのまま読まれる', async () => {
+describe('分かっていて残している制約（特別な扱いをしない）', () => {
+  it('道具の中身の行頭で切れたときも同じ規則で足す。切れた道具は閉じていない要素として読まれ、実行されない（T-0878）', async () => {
     // モデルは write の中身に yield タグで始まる行を書こうとし、API がその直前で止めた
     const cut = '<write path="doc.md">\n# Turn\nEnd each turn with:';
     respond([cut]);
@@ -266,7 +266,6 @@ describe('分かっていて残している危険（特別な扱いをしない�
 
     const actions = new Translator().parse(text);
     expect(actions.terminalTag).toBeNull();
-    expect(actions.map((a) => a.type)).toEqual(['write']);
-    expect(actions[0].params.content).toBe('\n# Turn\nEnd each turn with:\n' + YIELD_TAG);
+    expect(actions.map((a) => [a.type, a.closed])).toEqual([['write', false]]);
   });
 });

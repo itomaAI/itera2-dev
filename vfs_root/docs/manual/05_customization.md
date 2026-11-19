@@ -43,7 +43,8 @@ This directory holds the dynamic configuration of your OS environment.
     the stop sequence `"\n<yield"` — a line that starts with the yield tag — and the tag is put back after the model
     stops. This is a stopgap for models that keep writing after `<yield />` (Gemini 4 Hydrogen). Side effect: with
     Gemini the agent cannot write content that has a line starting with `<yield` (LPML examples, prompts); the
-    output is cut at that line and the tool runs with what was written so far. `MetaOS.llm.generate` and the
+    output is cut at that line, and the cut tool is not executed because it was never closed (the agent gets an
+    error for it). `MetaOS.llm.generate` and the
     Interactions API path are not affected.
 *   **`appearance.json`**: Controls the visual layout, the active theme path and the interface language (`locale`, e.g. `"ja"`).
     The interface language is separate from `preferences.language`, which is the language the AI answers in.

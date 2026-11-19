@@ -35,6 +35,9 @@ export interface EngineState {
  */
 export const PENDING_LOG = '[Pending] Still running. The result will come in a later turn.';
 
+/** 書き留めるだけの要素。道具としては投げない（結果も返らない） */
+const NOTE_TAGS = new Set(['thinking', 'memo', 'plan']);
+
 export class Engine {
   public state: EngineState;
   public projector: Projector | null;
@@ -449,7 +452,10 @@ export class Engine {
         this._emit('turn_end', { role: 'system', turn: warningTurn });
       }
 
-      const validActions = actions.filter((a) => a.type !== 'thinking' && a.type !== 'memo' && a.type !== 'plan');
+      // 書き留めるだけの要素は投げない。ただし閉じていない要素は、種類を問わず投げる（T-0878）:
+      // 実行はされず、ToolRegistry が「閉じていない」という失敗の結果を返す。ここで黙って落とすと、
+      // 閉じ忘れた memo が後ろのタグを中身として飲み込んだことが、モデルに伝わらない
+      const validActions = actions.filter((a) => !a.closed || !NOTE_TAGS.has(a.type));
 
       if (validActions.length > 0) {
         this.continuousToolCount++;
