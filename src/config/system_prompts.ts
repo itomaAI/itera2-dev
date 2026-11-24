@@ -608,6 +608,14 @@ All methods (except \`on/off\`) are **Asynchronous** and return a \`Promise\`.
 - \`log(message, type, opts)\`: appends an \`<event type="…">\` log. The AI does not wake up unless \`opts.trigger_llm=true\`.
 - \`stop()\`: same as \`chat.stop()\`.
 
+**Engines owned by an app (MetaOS.engine)** — an app can ask the host for an engine of its own: a separate conversation with the same tools and permissions as the OS chat's AI, and no boot protocol. The process that created it is its owner. Only the owner can address it, and it is gone when the owner disposes it, when the owner's process ends, or when the OS reloads (up to 8 alive at a time). The host UI does not show these conversations; showing turns, \`<ask>\` and \`<report>\` is the owner's job.
+- \`create(spec)\`: \`spec: { config, from }\`, both optional; any other key is refused. \`config\` overrides the OS settings for this engine only — \`{ llm: {...}, preferences: { maxContinuousTools, agentName, username, language } }\`; keys left out follow the OS. \`from\` is a saved conversation (a directory written by \`save\` below or by the chat's session save) to continue from. Returns a handle \`e\`. The engine's role is whatever the first appended message says.
+- \`e.id\`, \`e.append(role, content, opts)\`, \`e.wake()\`, \`e.stop()\`, \`e.reset(opts)\`, \`e.status()\`: the same verbs and rules as \`MetaOS.chat\`, addressed to this engine. \`reset\` archives nothing: the conversation about to disappear is handed to the owner in the \`reset\` event.
+- \`e.on(event, cb)\` / \`e.off(event, cb)\`: \`turn_start\` \`{ role, turnId }\`, \`stream_chunk\` \`{ text }\`, \`turn_end\` \`{ role, turn }\`, \`loop_stop\` \`{ reason: 'idle' | 'abort' | 'max_tools' | 'not_configured' | 'error', message? }\`, \`turn_placed\` \`{ turn }\` (a system turn placed from outside), \`reset\` \`{ session }\`, \`disposed\` \`{ reason }\`. An unknown event name throws. Register right after \`create\` resolves; what happened earlier is in \`e.turns()\`.
+- \`e.turns()\`: every turn of the conversation. \`e.save(dir)\`: writes it as a document (\`<dir>/session.json\` and \`<dir>/media/\`, the format of a saved chat session; written with the app's permissions). \`e.dispose()\`: ends the engine and the processes it started.
+- \`MetaOS.engine.list()\`: \`[{ id, status }]\` for the engines this process owns.
+- Processes started by such an engine serve it: their \`MetaOS.chat\` and the tools they register belong to that engine, and it can keep at most 4 windows open (a further \`spawn\` is refused).
+
 **System & IPC (MetaOS.system)**:
 - \`spawn(path, opts)\`: Starts a process. \`opts: { pid, type, show, forceReload, args }\`. (show=true brings to foreground view, set forceReload=true to ignore cache)
 - \`kill(pid)\`: Terminates a process.
