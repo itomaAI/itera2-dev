@@ -43,6 +43,9 @@ export class ProcessEventRecorder {
     const payload = {
       action,
       pid: proc.pid,
+      // 何のアプリの個体か・どのエンジンに仕えていたか（pid から読み取らなくて済むように。T-0903）
+      app: proc.app,
+      engine: proc.engine,
       type: proc.type,
       path: proc.path,
       state: proc.state,

@@ -9,9 +9,13 @@ vi.mock('../../config/guest_origin_policy', () => ({ GUEST_SAME_ORIGIN_SWITCH: f
 import { ProcessManager } from './ProcessManager';
 import { GUEST_SANDBOX } from './guestSandbox';
 
+// 何のアプリかは登録簿から決まる（T-0903）。ここでは登録簿に無いパスを起こす
+const REGISTRY = { getAllApps: () => [], getAllServices: () => [] };
+const CONFIG = { homePath: () => 'system/apps/home.html' };
+
 describe('ProcessManager — 配布物がスイッチを持たないとき（T-0838）', () => {
   it('外そうとすると断り、起動は opaque のまま', async () => {
-    const pm = new ProcessManager({ releaseContent: async () => {} } as any, {} as any, {} as any);
+    const pm = new ProcessManager({ releaseContent: async () => {} } as any, REGISTRY as any, CONFIG as any);
     (pm as any).compiler = { compile: () => new Promise(() => {}) };
     await expect(pm.setGuestSameOrigin(true)).rejects.toThrow(/not available/);
     expect(pm.isGuestSameOrigin()).toBe(false);
@@ -20,7 +24,7 @@ describe('ProcessManager — 配布物がスイッチを持たないとき（T-0
   });
 
   it('内部の状態が true にされても、旗は opaque（配布物の可否が最後に効く）', () => {
-    const pm = new ProcessManager({ releaseContent: async () => {} } as any, {} as any, {} as any);
+    const pm = new ProcessManager({ releaseContent: async () => {} } as any, REGISTRY as any, CONFIG as any);
     (pm as any).compiler = { compile: () => new Promise(() => {}) };
     (pm as any).guestSameOrigin = true;
     void pm.spawn({ pid: 'd', path: 'system/services/d.html', type: 'daemon' });

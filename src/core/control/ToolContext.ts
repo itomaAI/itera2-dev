@@ -20,6 +20,8 @@ import type { ToolDefinitionInfo, ToolSetSummary } from './ToolRegistry';
 
 /** 道具から見える、自分を呼んだエンジン */
 export interface ToolEngine {
+  /** このエンジンの id。道具が起こすプロセスは、このエンジンに仕える（spawn・open） */
+  readonly id: string;
   /** あとから自分に知らせる（set_timer）。タイマーはエンジンが預かり、エンジンを畳むと消える */
   scheduleSystemEvent(delayMs: number, actionType: string, message: string): void;
 }

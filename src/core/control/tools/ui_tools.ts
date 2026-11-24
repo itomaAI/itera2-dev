@@ -34,6 +34,7 @@ export function registerUITools(registry: ToolRegistry): void {
       if (context.shell?.processManager) {
         await context.shell.processManager.spawn({
           pid,
+          engine: context.engine.id,
           path,
           type,
           show,
@@ -90,6 +91,7 @@ export function registerUITools(registry: ToolRegistry): void {
           } else if (resolvedApp.appId === 'HostRunner') {
             const fullUri = `metaos://run/${path}`;
             await context.shell.processManager.spawn({
+              engine: context.engine.id,
               path,
               show: true,
               currentUri: fullUri,
@@ -103,6 +105,7 @@ export function registerUITools(registry: ToolRegistry): void {
             const fullUri = `metaos://open/${path}`;
             await context.shell.processManager.spawn({
               pid: resolvedApp.appId,
+              engine: context.engine.id,
               path: resolvedApp.appPath,
               show: true,
               args,

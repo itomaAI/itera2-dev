@@ -508,10 +508,13 @@ export class HostApiRouter {
     // ==========================================
     // 3. System & Process (sys)
     // ==========================================
-    t.registerHandler('sys:spawn', async ({ path, opts }) => {
+    t.registerHandler('sys:spawn', async ({ path, opts }, sourcePid) => {
       if (!d.processManager) return false;
 
       const spawnOptions: any = { path };
+      // 起こしたプロセスが仕えるエンジンを引き継ぐ（T-0903。いまはどのプロセスもルートに仕える）
+      const callerEngine = d.processManager.processes.get(sourcePid)?.engine;
+      if (callerEngine) spawnOptions.engine = callerEngine;
       if (opts?.pid) spawnOptions.pid = opts.pid;
       if (opts?.type) spawnOptions.type = opts.type;
       if (opts?.show !== undefined) spawnOptions.show = opts.show;
