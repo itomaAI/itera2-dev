@@ -36,12 +36,13 @@ function ctx(kind: 'file' | 'directory', revealResult: boolean | undefined, cont
       return revealResult;
     };
   }
-  const vfs: any = {
-    stat: (_p: any, path: string) => ({ name: path, kind, path }),
+  // 利用者に見せるための読みは、shell が渡す利用者の取っ手で（T-0903）
+  shell.userFs = {
+    stat: (path: string) => ({ name: path, kind, path }),
     readFile: async () => '',
     readBlob: async () => new Blob([content as unknown as BlobPart]),
   };
-  return { context: { shell, vfs }, revealed, edited, viewed };
+  return { context: { shell }, revealed, edited, viewed };
 }
 
 describe('open: ディレクトリ', () => {
@@ -104,10 +105,12 @@ function shotCtx(procs: Array<{ pid: string; type: string; state: string }>) {
         },
       },
     },
-    vfs: {
-      writeFile: async (_pr: unknown, path: string) => {
+    // 置き場と書く権限は会話の側（T-0903）。道具は名前と中身を渡すだけ
+    conversation: {
+      putAttachment: async (name: string) => {
+        const path = `system/temp/sessions/s1/${name}`;
         written.push(path);
-        return 'ok';
+        return path;
       },
     },
   };

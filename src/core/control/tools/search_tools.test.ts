@@ -15,12 +15,12 @@ import { registerSearchTools } from './search_tools';
 function run(files: Record<string, string>, params: Record<string, string>, stubs: string[] = []) {
   const defs: Record<string, any> = {};
   registerSearchTools({ registerSystemTool: (_a: string, _b: string, def: any) => (defs[def.name] = def) } as any);
-  const vfs: any = {
+  const fs: any = {
     listFiles: () => Object.keys(files),
-    stat: (_p: unknown, path: string) => ({ syncState: stubs.includes(path) ? 'stub' : 'local' }),
-    readFile: async (_p: unknown, path: string) => files[path],
+    stat: (path: string) => ({ syncState: stubs.includes(path) ? 'stub' : 'local' }),
+    readFile: async (path: string) => files[path],
   };
-  return defs.search.impl({ query: 'hit', ...params }, { vfs }) as Promise<{ log: string; ui: string }>;
+  return defs.search.impl({ query: 'hit', ...params }, { fs }) as Promise<{ log: string; ui: string }>;
 }
 
 const many = (n: number) => Array.from({ length: n }, (_, i) => `hit ${i + 1}`).join('\n');

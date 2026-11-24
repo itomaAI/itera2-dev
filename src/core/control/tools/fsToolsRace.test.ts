@@ -58,13 +58,16 @@ function slowVfs(initial: Record<string, string>, readDelayMs = 20) {
   return { vfs, text, writes };
 }
 
+/** 道具には取っ手で渡す（T-0903）。取っ手は本物（VfsService.as）なので、主体が VFS まで届くこともここで通る */
+const TEST_ACTOR = { principal: { type: 'agent', id: 'test' }, origin: 'test' };
+
 const block = (from: string, to: string) => `<<<<<SEARCH\n${from}\n=====\n${to}\n>>>>>`;
 
 describe('同じパスへの書き換えは全部入る（T-0714 / T-0715 版の照合）', () => {
   it('edit × 4 を同時に出しても 4 つとも入る', async () => {
     const { vfs, text } = slowVfs({ 'a.md': 'one\ntwo\nthree\nfour' });
     const t = tools();
-    const ctx = { vfs } as any;
+    const ctx = { fs: vfs.as(TEST_ACTOR) } as any;
     const results = await Promise.all([
       t.edit.impl({ path: 'a.md', content: block('one', 'ONE') }, ctx),
       t.edit.impl({ path: 'a.md', content: block('two', 'TWO') }, ctx),
@@ -78,7 +81,7 @@ describe('同じパスへの書き換えは全部入る（T-0714 / T-0715 版の
   it('edit と write append が混ざっても順に入る', async () => {
     const { vfs, text } = slowVfs({ 'b.md': 'head' });
     const t = tools();
-    const ctx = { vfs } as any;
+    const ctx = { fs: vfs.as(TEST_ACTOR) } as any;
     await Promise.all([
       t.edit.impl({ path: 'b.md', content: block('head', 'HEAD') }, ctx),
       t.write.impl({ path: 'b.md', append: 'true', content: 'tail' }, ctx),
@@ -89,7 +92,7 @@ describe('同じパスへの書き換えは全部入る（T-0714 / T-0715 版の
   it('1 つが失敗しても鎖は切れず、後の 1 つは入る', async () => {
     const { vfs, text } = slowVfs({ 'c.md': 'x' });
     const t = tools();
-    const ctx = { vfs } as any;
+    const ctx = { fs: vfs.as(TEST_ACTOR) } as any;
     const [bad, good] = await Promise.allSettled([
       t.edit.impl({ path: 'c.md', content: block('missing', 'M') }, ctx),
       t.edit.impl({ path: 'c.md', content: block('x', 'X') }, ctx),
@@ -102,7 +105,7 @@ describe('同じパスへの書き換えは全部入る（T-0714 / T-0715 版の
   it('別のパスどうしは待たない', async () => {
     const { vfs, text } = slowVfs({ 'd.md': 'd', 'e.md': 'e' }, 30);
     const t = tools();
-    const ctx = { vfs } as any;
+    const ctx = { fs: vfs.as(TEST_ACTOR) } as any;
     const t0 = Date.now();
     await Promise.all([
       t.edit.impl({ path: 'd.md', content: block('d', 'D') }, ctx),

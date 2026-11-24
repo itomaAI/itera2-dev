@@ -158,6 +158,16 @@ export class SessionManager {
     return this.currentMeta ? sessionMediaDir(this.currentMeta.id) : LEGACY_MEDIA_DIR;
   }
 
+  /**
+   * いまの会話の添付の置き場にファイルを置き、置いたパスを返す（道具の画面写真など。T-0903）。
+   * 置き場はシステムの一時領域なので、書くのは OS（道具の主体ではない）。同名があれば置き換える。
+   */
+  public async putAttachment(name: string, blob: Blob): Promise<string> {
+    const path = `${this.currentMediaDir()}/${name}`;
+    await this.vfs.writeFile(SYSTEM_PRINCIPAL, path, blob, { overwrite: true, system: true });
+    return path;
+  }
+
   /** いまの会話の id（同期）。`init()` の前は null */
   public currentId(): string | null {
     return this.currentMeta ? this.currentMeta.id : null;

@@ -10,6 +10,8 @@ import { PathResolver } from '../../core/vfs/PathResolver';
 import { VfsEventBus } from '../../core/vfs/VfsEventBus';
 import { VfsService } from '../../core/vfs/VfsService';
 import { VfsInitializer } from '../../core/vfs/VfsInitializer';
+import { AGENT_PRINCIPAL } from '../../core/vfs/types';
+import { USER_ACTOR } from '../../core/vfs/VfsHandle';
 import { configLayersOf, localeLayersOf, registryLayersOf } from '../../core/sys/GuestPaths';
 import { rootIconsFor } from '../panels/nodeOrder';
 
@@ -24,7 +26,7 @@ import { SystemLogger } from '../../core/state/SystemLogger';
 // Control & Cognitive
 import { ToolRegistry } from '../../core/control/ToolRegistry';
 import { ToolExecutionRecorder } from '../../core/control/ToolExecutionRecorder';
-import { Engine } from '../../core/control/Engine';
+import { Engine, ROOT_ENGINE_ID } from '../../core/control/Engine';
 import { Translator } from '../../core/cognitive/Translator';
 import { registerBasicTools } from '../../core/control/tools/basic_tools';
 import { registerFSTools } from '../../core/control/tools/fs_tools';
@@ -273,15 +275,22 @@ export class SystemBootstrapper {
       navHistory: navHistory,
       resolver: resolver,
       transport: transport,
-      clearSession: (opts: any) => sessionManager.clearSession(opts),
-      // いまの会話の添付の置き場（take_screenshot が書く先。T-0613）
-      currentMediaDir: () => sessionManager.currentMediaDir(),
+      // 利用者の取っ手（files・open が、利用者に見せるために読む。T-0903）
+      userFs: vfs.as(USER_ACTOR),
     };
 
     desktop.bindNavHistory(navHistory);
 
     // EngineコンテキストにもFacadeを注入
     engine.extraContext.shell = shellFacade;
+    // 道具に渡す取っ手（T-0903。ToolContext.ts）。ルートのエンジンは AI の役割で書く。
+    // 会話に結び付いたもの（空にする・添付を置く）は shell ではなく会話の口から渡す ——
+    // 知っているのは SessionManager なので、ここは配線するだけ
+    engine.extraContext.fs = vfs.as({ principal: AGENT_PRINCIPAL, origin: ROOT_ENGINE_ID });
+    engine.extraContext.conversation = {
+      reset: (options) => sessionManager.clearSession(options),
+      putAttachment: (name, blob) => sessionManager.putAttachment(name, blob),
+    };
 
     new HostApiRouter(transport, {
       vfs,

@@ -4,8 +4,7 @@
  */
 
 import type { ToolRegistry } from '../ToolRegistry';
-import type { VfsService } from '../../vfs/VfsService';
-import { AGENT_PRINCIPAL } from '../../vfs/types';
+import type { ToolContext } from '../ToolContext';
 import { ToolError } from '../ToolError';
 
 const yieldToMain = () => new Promise((resolve) => setTimeout(resolve, 0));
@@ -70,7 +69,7 @@ export function registerSearchTools(registry: ToolRegistry): void {
   registry.registerSystemTool(setId, setName, {
     name: 'search',
     description: 'Search text inside files.',
-    impl: async (params: any, context: { vfs: VfsService }) => {
+    impl: async (params: any, context: ToolContext) => {
       const query = params.query;
       if (!query) throw new ToolError("Attribute 'query' is required.");
 
@@ -100,7 +99,7 @@ export function registerSearchTools(registry: ToolRegistry): void {
         };
       }
 
-      const allFiles = context.vfs.listFiles(AGENT_PRINCIPAL, {
+      const allFiles = context.fs.listFiles({
         recursive: true,
         ignoreHidden,
       }) as string[];
@@ -147,7 +146,7 @@ export function registerSearchTools(registry: ToolRegistry): void {
 
         let isStub = false;
         try {
-          const stat = context.vfs.stat(AGENT_PRINCIPAL, filePath);
+          const stat = context.fs.stat(filePath);
           isStub = stat.syncState === 'stub';
         } catch (e) {}
 
@@ -158,7 +157,7 @@ export function registerSearchTools(registry: ToolRegistry): void {
 
         let content: string;
         try {
-          content = await context.vfs.readFile(AGENT_PRINCIPAL, filePath, { bypassFetch: true });
+          content = await context.fs.readFile(filePath, { bypassFetch: true });
         } catch (e) {
           // 読み込みエラーはスキップ
           continue;

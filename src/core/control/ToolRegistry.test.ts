@@ -18,6 +18,10 @@ import { registerFSTools } from './tools/fs_tools';
 import { ToolError } from './ToolError';
 import { VfsError } from '../vfs/VfsError';
 import { SessionManager } from '../../shell/services/SessionManager';
+import type { ToolContext } from './ToolContext';
+
+/** 道具が文脈を使わない場面のための、空の文脈（型だけ合わせる） */
+const NO_CTX = { shell: {}, engine: {} } as unknown as ToolContext;
 
 function registryWithTools() {
   const r = new ToolRegistry();
@@ -67,12 +71,12 @@ describe('ToolRegistry: 一覧と定義', () => {
 describe('tool_catalog（システムツール）', () => {
   it('list は一覧と、define の使い方を返す。戻りは次のターンを起こす（trigger_llm を false にしない）', async () => {
     const r = registryWithTools();
-    const res = await r.execute({ type: 'tool_catalog', params: {} }, { shell: {}, engine: {} });
+    const res = await r.execute({ type: 'tool_catalog', params: {} }, NO_CTX);
     // 2026-08-26: trigger_llm: false を付けていて、実行結果のあと AI が起きなかった（山内さんが踏んだ）
     expect(res!.trigger_llm).not.toBe(false);
     const def = await r.execute(
       { type: 'tool_catalog', params: { action: 'define', name: 'autoexcel_write_cell' } },
-      { shell: {}, engine: {} },
+      NO_CTX,
     );
     expect(def!.trigger_llm).not.toBe(false);
     expect(res!.log).toContain('autoexcel_write_cell');
@@ -85,19 +89,13 @@ describe('tool_catalog（システムツール）', () => {
     const r = registryWithTools();
     const ok = await r.execute(
       { type: 'tool_catalog', params: { action: 'define', name: 'autoexcel_write_cell' } },
-      { shell: {}, engine: {} },
+      NO_CTX,
     );
     expect(ok!.log).toContain('<toolset name=');
     expect(ok!.log).toContain('<define_tag name="autoexcel_write_cell">');
-    const ng = await r.execute(
-      { type: 'tool_catalog', params: { action: 'define', name: 'nope' } },
-      { shell: {}, engine: {} },
-    );
+    const ng = await r.execute({ type: 'tool_catalog', params: { action: 'define', name: 'nope' } }, NO_CTX);
     expect(ng!.log).toContain('[Error]');
-    const sys = await r.execute(
-      { type: 'tool_catalog', params: { action: 'define', name: 'finish' } },
-      { shell: {}, engine: {} },
-    );
+    const sys = await r.execute({ type: 'tool_catalog', params: { action: 'define', name: 'finish' } }, NO_CTX);
     expect(sys!.log).toContain('system prompt');
   });
 });
@@ -149,7 +147,7 @@ describe('ToolRegistry: 登録されていないタグ（T-0593）', () => {
   // 以前は UnknownToolError を投げていた。いまは他の失敗と同じく、失敗の結果を返す。
   it('未登録のタグは投げずに失敗の結果を返す', async () => {
     const r = registryWithTools();
-    const res = await r.execute({ type: 'no_such_tool', params: {} }, { shell: {}, engine: {} });
+    const res = await r.execute({ type: 'no_such_tool', params: {} }, NO_CTX);
     expect(res?.error).toBe(true);
     expect(res?.ui).toBe('❌ Error: Unknown tool <no_such_tool>');
     expect(res?.log).toContain('[LPML Syntax Violation]');
@@ -159,7 +157,7 @@ describe('ToolRegistry: 登録されていないタグ（T-0593）', () => {
   it('OS しか出さないタグは、システム専用で機能しないと伝える', async () => {
     const r = registryWithTools();
     for (const tag of ['tool_output', 'event', 'system', 'toolset', 'user_input', 'user_attachment']) {
-      const res = await r.execute({ type: tag, params: {} }, { shell: {}, engine: {} });
+      const res = await r.execute({ type: tag, params: {} }, NO_CTX);
       expect(res?.error).toBe(true);
       expect(res?.ui).toBe(`❌ Error: <${tag}> is reserved for the OS`);
       expect(res?.log).toContain('[LPML Protocol Violation]');
@@ -178,7 +176,7 @@ describe('ToolRegistry: 失敗のログの出し分け（T-0677）', () => {
     vi.spyOn(console, 'debug').mockImplementation(() => {});
     const impl = (fn: () => Promise<any>) =>
       r.registerSystemTool('system:test', 'Test', { name: 't', description: '', impl: fn });
-    const run = () => r.execute({ type: 't', params: { path: 'x' } }, { shell: {}, engine: {} });
+    const run = () => r.execute({ type: 't', params: { path: 'x' } }, NO_CTX);
     return { r, records, errors, impl, run };
   }
   afterEach(() => vi.restoreAllMocks());
@@ -226,18 +224,18 @@ describe('ToolRegistry: 失敗のログの出し分け（T-0677）', () => {
     vi.spyOn(console, 'debug').mockImplementation(() => {});
     const r = new ToolRegistry();
     registerFSTools(r);
-    const vfs: any = {
-      exists: (_p: any, path: string) => path === 'a.txt',
+    const fs: any = {
+      exists: (path: string) => path === 'a.txt',
       stat: () => ({ kind: 'file', size: 5 }),
       readFile: async () => 'hello',
       writeFile: async () => 'ok',
       // edit は版の照合の輪（updateFile）を通る（T-0715）。fn の例外（一致しない）はそのまま出る
-      updateFile: async (_p: any, _path: string, fn: (c: string, v: number) => string | null) => {
+      updateFile: async (_path: string, fn: (c: string, v: number) => string | null) => {
         await fn('hello', 1);
         return { message: 'ok', version: 2, attempts: 1 };
       },
     };
-    const ctx = { shell: {}, engine: {}, vfs };
+    const ctx = { ...NO_CTX, fs } as ToolContext;
     const missing = await r.execute({ type: 'read_file', params: { path: 'nope.txt' } }, ctx);
     expect(missing?.error).toBe(true);
     expect(missing?.log).toContain('File not found');
@@ -255,7 +253,7 @@ describe('ToolRegistry: 失敗のログの出し分け（T-0677）', () => {
     h.r.registerDynamicTool('g', 'guest_pid', { description: 'g' });
     const guestSaid = new ToolError('Tool handler not found: g');
     h.r.setGuestToolInvoker({ invokeTool: async () => Promise.reject(guestSaid) });
-    const quiet = await h.r.execute({ type: 'g', params: {} }, { shell: {}, engine: {} });
+    const quiet = await h.r.execute({ type: 'g', params: {} }, NO_CTX);
     expect(quiet?.error).toBe(true);
     expect(quiet?.log).toBe('Error executing dynamic tool <g>: Tool handler not found: g');
     expect(h.errors).not.toHaveBeenCalled();
@@ -263,7 +261,7 @@ describe('ToolRegistry: 失敗のログの出し分け（T-0677）', () => {
     h.r.setGuestToolInvoker({
       invokeTool: async () => Promise.reject(new Error('RPC Timeout: Request x exceeded 150000ms')),
     });
-    const loud = await h.r.execute({ type: 'g', params: {} }, { shell: {}, engine: {} });
+    const loud = await h.r.execute({ type: 'g', params: {} }, NO_CTX);
     expect(loud?.error).toBe(true);
     expect(loud?.log).toContain('RPC Timeout');
     expect(h.errors).toHaveBeenCalledTimes(1);
@@ -273,7 +271,7 @@ describe('ToolRegistry: 失敗のログの出し分け（T-0677）', () => {
     const h = harness();
     h.r.registerDynamicTool('g', 'guest_pid', { description: 'g' });
     h.r.setGuestToolInvoker({ invokeTool: async () => ({ log: '[Error] bad arg', error: true }) });
-    const res = await h.r.execute({ type: 'g', params: {} }, { shell: {}, engine: {} });
+    const res = await h.r.execute({ type: 'g', params: {} }, NO_CTX);
     expect(res?.error).toBe(true);
     expect(res?.log).toBe('[Error] bad arg');
     expect(h.errors).not.toHaveBeenCalled();
@@ -290,7 +288,7 @@ describe('ToolRegistry: 閉じていない要素は実行しない（T-0878）',
     r.registerSystemTool('system:test', 'Test', { name: 'write', description: 'w', impl });
     return { r, impl, records };
   }
-  const ctx = { shell: {}, engine: {} };
+  const ctx = NO_CTX;
 
   it('closed: false のアクションは道具を呼ばず、失敗の結果を返す', async () => {
     const h = harness();
