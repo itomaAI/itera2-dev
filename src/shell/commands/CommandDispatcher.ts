@@ -8,6 +8,7 @@
  * ゲストにコマンド文字列を解釈する口は出さない（ゲストは MetaOS.chat を直接呼ぶ）。
  */
 
+import { ROLE_PARTS } from '../../config/system_prompts';
 import type { Turn, TurnContent, TurnMeta } from '../../core/state/HistoryManager';
 import {
   buildChatStatus,
@@ -158,7 +159,8 @@ export class CommandDispatcher {
         usage: '/reset [note]',
         summary: T.summary.reset,
         run: async (c) => {
-          const plan = buildResetPlan({ summary: c.rest }, 'user command');
+          // /reset は OS のチャット（ルート）の命令
+          const plan = buildResetPlan({ summary: c.rest }, 'user command', ROLE_PARTS.root.afterReset);
           // 起こさない（chat:reset と同じ。次の発言で AI が起きて申し送りを読む）
           d.engine.stop();
           await d.sessionManager.clearSession({

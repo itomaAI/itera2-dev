@@ -121,14 +121,14 @@ describe('chat.append の計画', () => {
 
 describe('chat.reset の計画', () => {
   it('既定は道具を積み直す。summary の頭に呼び手と起動手順の促し（起こす旗は無い —— reset は起こさない）', () => {
-    const p = buildResetPlan(undefined, 'telegram_daemon');
+    const p = buildResetPlan(undefined, 'telegram_daemon', 'Please run the Initialization Protocol first.');
     expect(p).not.toHaveProperty('wake');
     expect(p.restoreTools).toBe(true);
     expect(p.summary).toBe('[System: Session reset by telegram_daemon]\nPlease run the Initialization Protocol first.');
   });
   it('申し送りは Carried Over Information として続く。restoreTools は false にできる', () => {
-    const p = buildResetPlan({ summary: '  T-0633 を見張る  ', restoreTools: false }, 'x');
-    expect(p.summary.endsWith('\n\n[Carried Over Information]\nT-0633 を見張る')).toBe(true);
+    const p = buildResetPlan({ summary: '  T-0633 を見張る  ', restoreTools: false }, 'x', 'NEXT.');
+    expect(p.summary).toBe('[System: Session reset by x]\nNEXT.\n\n[Carried Over Information]\nT-0633 を見張る');
     expect(p.restoreTools).toBe(false);
   });
 });

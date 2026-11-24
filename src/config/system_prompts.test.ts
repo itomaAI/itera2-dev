@@ -90,3 +90,11 @@ describe('buildSystemPrompt の役割（T-0908）— 共通の部分に、役割
     }
   });
 });
+
+describe('リセットのあとの 1 行（役割ごと。プロンプトの外で使う）', () => {
+  it('root は起動手順を促し、sub は促さない', () => {
+    expect(ROLE_PARTS.root.afterReset).toBe('Please run the Initialization Protocol first.');
+    expect(ROLE_PARTS.sub.afterReset).not.toMatch(/Initialization Protocol/);
+    expect(ROLE_PARTS.sub.afterReset).toMatch(/no initialization/i);
+  });
+});

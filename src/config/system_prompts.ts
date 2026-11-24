@@ -83,6 +83,11 @@ export interface RoleParts {
   resetKeeps: string;
   /** reset_session: what happens right after the reset */
   resetThen: string;
+  /**
+   * Not part of the prompt: the line under the headline of the notice that opens a conversation after a reset
+   * (what an engine of this role does next). It is the runtime counterpart of resetThen.
+   */
+  afterReset: string;
   /** Whether guest_layout names the boot document (only an engine that boots from it is pointed at it) */
   namesBootDocument: boolean;
   /** The closing rule: how this engine starts */
@@ -100,6 +105,7 @@ You reside in the **Host Environment** (Control Layer) and manipulate the **Gues
 </rule>`,
     resetKeeps: `The cleared conversation is kept in the session history (the user can switch back to it from the chat header's history button); attachments it refers to are kept with it.`,
     resetThen: `    - After resetting, the system will prompt you to run the Initialization Protocol.`,
+    afterReset: 'Please run the Initialization Protocol first.',
     namesBootDocument: true,
     start: buildBootProtocolSection,
   },
@@ -114,6 +120,7 @@ You exist only while that application runs. Processes you start with \`<spawn>\`
 </rule>`,
     resetKeeps: `The cleared conversation is handed to the application that started you; keeping it is that application's decision.`,
     resetThen: `    - After resetting there is no initialization to run: continue from the summary you carried over.`,
+    afterReset: 'There is no initialization to run. Continue from what was carried over.',
     namesBootDocument: false,
     start: () => `<rule name="start">
 You have no boot sequence. The root engine's initialization (its boot document, its journals, its greeting) is not yours to run.

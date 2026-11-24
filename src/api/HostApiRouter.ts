@@ -85,6 +85,8 @@ export interface IToolRegistry {
  * 描くのは束の知らせ（turn_placed・wake_requested）を聞く側。
  */
 export interface IEngineBundle {
+  /** リセットのあと、この役割のエンジンがすること（申し送りの頭に置く 1 行） */
+  readonly afterReset: string;
   post(role: 'user' | 'system', content: TurnContent, meta?: TurnMeta): Promise<Turn>;
   wake(): void;
   stop(): void;
@@ -455,7 +457,7 @@ export class HostApiRouter {
 
     t.registerHandler('chat:reset', async ({ opts }, sourcePid) => {
       const bundle = bundleOf(sourcePid);
-      const plan = buildResetPlan(opts, sourcePid);
+      const plan = buildResetPlan(opts, sourcePid, bundle.afterReset);
       // LLM が応答できない状態（文脈の溢れ）でも効くように、busy は見ない。走っている束は見捨てる（会話は退避される）。
       // 起こさない: 止めたあとは利用者が次に発言するまで起きない（Engine の設計）。申し送りは置くだけで、次の発言で読まれる
       return await bundle.reset({ summary: plan.summary, restoreTools: plan.restoreTools });
