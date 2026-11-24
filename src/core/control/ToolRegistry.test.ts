@@ -408,6 +408,8 @@ describe('ToolRegistry: エンジンごとの台帳（T-0903）', () => {
       'A system tool named "finish" already exists.',
     );
     expect(() => h.sub.registerDynamicTool('finish', 'faker_2', { description: 'x' })).toThrow(ToolNameTakenError);
+    // システムの組の id（system:core）と同じ pid を名乗っても、自分の組とは見なさない
+    expect(() => h.root.registerDynamicTool('finish', 'system:core', { description: 'x' })).toThrow(ToolNameTakenError);
     // 断られた登録は何も残さない（空の組も作らない）
     expect(h.root.listToolSets().map((s) => s.id)).toEqual(['web_daemon']);
     expect(h.sub.listToolSets().map((s) => s.id)).toEqual(['canvas_2', 'web_daemon']);
