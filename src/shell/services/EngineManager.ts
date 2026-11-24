@@ -60,8 +60,16 @@ export type EngineDisposeReason = 'owner_request' | 'owner_exit' | 'create_faile
  *   reset    … 会話を空にした（`{ session }`: 消える前の会話。保存と同じ形）
  *   disposed … 畳んだ（`{ reason }`）
  */
-export type EngineOwnerEvent =
-  'turn_start' | 'stream_chunk' | 'turn_end' | 'loop_stop' | 'turn_placed' | 'reset' | 'disposed';
+export const ENGINE_OWNER_EVENTS = [
+  'turn_start',
+  'stream_chunk',
+  'turn_end',
+  'loop_stop',
+  'turn_placed',
+  'reset',
+  'disposed',
+] as const;
+export type EngineOwnerEvent = (typeof ENGINE_OWNER_EVENTS)[number];
 
 export interface EngineOwnerNotice {
   ownerPid: string;

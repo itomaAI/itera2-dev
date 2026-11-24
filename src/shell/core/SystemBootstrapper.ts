@@ -317,8 +317,7 @@ export class SystemBootstrapper {
     });
     root.engine.extraContext.shell = toolShellFor(ROOT_ENGINE_ID);
 
-    // 束の表（EngineManager.ts。T-0908）: ルートと、ゲストのプロセスが頼んで作らせる束。
-    // 作らせる口（engine:*）はまだ無いので、いま表に載るのはルートだけ。
+    // 束の表（EngineManager.ts。T-0908）: ルートと、ゲストのプロセスが頼んで作らせる束（頼む口は HostApiRouter の engine:*）。
     // エンジンは揮発なので、前の起動が残した添付の置き場はここで掃く
     const engineManager = new EngineManager({
       root,
@@ -344,6 +343,8 @@ export class SystemBootstrapper {
       navHistory,
       // そのプロセスが仕えるエンジンの束（プロセスの記録の engine から引く）
       engineFor: (pid) => engineManager.bundleFor(pid),
+      // 呼んだプロセスが持っているエンジン（MetaOS.engine）
+      engines: engineManager,
       sessionManager,
       vendorCatalog: new VendorCatalog(vendorHrefOf(import.meta.env.BASE_URL, document.baseURI)),
       shell: shellFacade as any,

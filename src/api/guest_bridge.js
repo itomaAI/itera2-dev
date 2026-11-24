@@ -261,6 +261,60 @@
     call.reject(err);
   });
 
+  // アプリが作ったエンジンの取っ手（MetaOS.engine。T-0908）。動詞は MetaOS.chat と同じで、相手が「自分が作ったエンジン」になる。
+  // 知らせ（engine:event）はこのプロセス宛てに届き、id で取っ手の聞き手へ振り分ける。知らない id の知らせは捨てる
+  // （畳んだあとに届いたもの）。聞き始める前に起きたことは turns() で読む。
+  // 🔴 知らせの名前の 2 つ目の置き場（正は EngineManager.ts の ENGINE_OWNER_EVENTS。ゲストは TS を import できない）。
+  //    guest_bridge.engine.test.ts が 2 つを突き合わせる。
+  const ENGINE_EVENTS = ['turn_start', 'stream_chunk', 'turn_end', 'loop_stop', 'turn_placed', 'reset', 'disposed'];
+  const engineListeners = new Map(); // エンジンの id → Map(知らせの名前 → [聞き手])
+  const engineHandle = (id) => {
+    const listeners = new Map();
+    engineListeners.set(id, listeners);
+    const call = (action, payload) => transport.requestHost('engine:' + action, { id, ...(payload || {}) });
+    return {
+      id,
+      append: async (role, content, opts = {}) => call('append', { role, content, opts }),
+      wake: async () => call('wake'),
+      stop: async () => call('stop'),
+      reset: async (opts = {}) => call('reset', { opts }),
+      status: async () => call('status'),
+      turns: async () => call('turns'),
+      save: async (path) => call('save', { path }),
+      dispose: async () => call('dispose'),
+      // 名前の綴り違いを黙って受けると、呼ばれない聞き手が残る。知らない名前は断る
+      on: (event, callback) => {
+        if (!ENGINE_EVENTS.includes(event)) {
+          throw new TypeError('MetaOS.engine: unknown event "' + event + '" (' + ENGINE_EVENTS.join(', ') + ')');
+        }
+        if (typeof callback !== 'function') throw new TypeError('MetaOS.engine: the listener must be a function');
+        if (!listeners.has(event)) listeners.set(event, []);
+        listeners.get(event).push(callback);
+      },
+      off: (event, callback) => {
+        const list = listeners.get(event);
+        if (list)
+          listeners.set(
+            event,
+            list.filter((cb) => cb !== callback),
+          );
+      },
+    };
+  };
+  transport.on('engine:event', (p) => {
+    const listeners = p && engineListeners.get(p.id);
+    if (!listeners) return;
+    // 畳まれたら、この取っ手にはもう何も届かない（表から外してから、聞き手に知らせる）
+    if (p.event === 'disposed') engineListeners.delete(p.id);
+    for (const callback of (listeners.get(p.event) || []).slice()) {
+      try {
+        callback(p.data);
+      } catch (e) {
+        console.error('[MetaOS.engine] A listener failed (' + p.event + ')', e);
+      }
+    }
+  });
+
   const localToolHandlers = new Map();
   const mountHandlers = new Map();
   // マウントごとの onMove（T-0689）。持つマウントだけ入る。提示（capabilities.move）はこの有無から導く
@@ -456,6 +510,23 @@
     llm: {
       generate: (request, opts = {}) => llmGenerate(request, opts),
       models: async () => transport.requestHost('llm:models', {}),
+    },
+    // アプリが自分のエンジンを作って動かす（T-0908）。OS のチャットとは別の会話で、道具と権限は同じ。起動手順は無い ——
+    // 役割は最初の発言で渡す。持ち主は作ったプロセスで、畳むか、このプロセスが終わるか、OS が読み込み直されると消える。
+    //   create({ config, from }) → 取っ手 e（どちらも省ける）
+    //     config … このエンジンだけの設定の上書き { llm: {…}, preferences: { maxContinuousTools, agentName, username, language } }
+    //     from   … 保存してあった会話（e.save か、チャットの会話の保存が書いたディレクトリ）から始める
+    //   e.id / e.append / e.wake / e.stop / e.reset / e.status … MetaOS.chat と同じ動詞・同じ規則（相手がこのエンジン）
+    //   e.on(event, cb) / e.off … turn_start {role, turnId}・stream_chunk {text}・turn_end {role, turn}・
+    //                             loop_stop {reason, message?}・turn_placed {turn}・reset {session}・disposed {reason}
+    //   e.turns() … 会話の全文   e.save(dir) … 文書として書く（<dir>/session.json と <dir>/media/）   e.dispose() … 畳む
+    //   list() … 自分が持っているエンジン [{ id, status }]
+    engine: {
+      create: async (spec = {}) => {
+        const created = await transport.requestHost('engine:create', { spec });
+        return engineHandle(created.id);
+      },
+      list: async () => transport.requestHost('engine:list', {}),
     },
     // 従来の ai.* は chat.append / chat.stop の薄皮（ホストには chat:* しか無い）。
     // ask: 利用者の発言として置いて起こす（silent なら置くだけ）。task: system_task として起こす。log: 記録（trigger_llm で起こす）
