@@ -31,16 +31,9 @@ export function registerUITools(registry: ToolRegistry): void {
         }
       }
 
-      if (context.shell?.processManager) {
-        await context.shell.processManager.spawn({
-          pid,
-          engine: context.engine.id,
-          path,
-          type,
-          show,
-          forceReload,
-          args,
-        });
+      if (context.shell?.processes) {
+        // 起こしたプロセスが仕える先は、取っ手が決める（このエンジン）
+        await context.shell.processes.spawn({ pid, path, type, show, forceReload, args });
         return { log: `Process spawn requested for ${path}.`, ui: `🚀 Spawned process` };
       }
       return { log: 'ProcessManager not available.', error: true };
@@ -90,12 +83,7 @@ export function registerUITools(registry: ToolRegistry): void {
             };
           } else if (resolvedApp.appId === 'HostRunner') {
             const fullUri = `metaos://run/${path}`;
-            await context.shell.processManager.spawn({
-              engine: context.engine.id,
-              path,
-              show: true,
-              currentUri: fullUri,
-            });
+            await context.shell.processes.spawn({ path, show: true, currentUri: fullUri });
             return {
               log: `Ran ${path}`,
               ui: `🚀 Ran [${path}]`,
@@ -103,9 +91,8 @@ export function registerUITools(registry: ToolRegistry): void {
           } else {
             const args = { file: path };
             const fullUri = `metaos://open/${path}`;
-            await context.shell.processManager.spawn({
-              pid: resolvedApp.appId,
-              engine: context.engine.id,
+            // pid を名指ししない: 個体の決め方が、このエンジンから見た「そのアプリ」の個体（無ければ新しい個体）にする
+            await context.shell.processes.spawn({
               path: resolvedApp.appPath,
               show: true,
               args,
@@ -136,8 +123,8 @@ export function registerUITools(registry: ToolRegistry): void {
       const pid = params.pid;
       if (!pid) throw new ToolError("Attribute 'pid' is required.");
 
-      if (context.shell?.processManager) {
-        const success = context.shell.processManager.kill(pid);
+      if (context.shell?.processes) {
+        const success = context.shell.processes.kill(pid);
         if (success) return { log: `Process terminated.`, ui: `🛑 Killed [${pid}]` };
         return { log: `Process not found or already stopped.`, error: true };
       }
@@ -149,14 +136,16 @@ export function registerUITools(registry: ToolRegistry): void {
     name: 'ps',
     description: 'List processes.',
     impl: async (_params: any, context: ToolContext) => {
-      if (context.shell?.processManager) {
-        const list = context.shell.processManager.list();
+      if (context.shell?.processes) {
+        const list = context.shell.processes.list();
         if (list.length === 0) return { log: 'No processes running.', ui: `📊 Process List (0)` };
 
+        // このエンジンに仕えていないプロセスには、仕える先を添える（動かせるのは、自分に仕えるものだけ）
         const logStr = list
           .map(
-            (p: any) =>
-              `PID: ${p.pid.padEnd(15)} | Type: ${p.type.padEnd(6)} | State: ${p.state.padEnd(10)} | Path: ${p.path}`,
+            (p) =>
+              `PID: ${p.pid.padEnd(15)} | Type: ${p.type.padEnd(6)} | State: ${p.state.padEnd(10)} | Path: ${p.path}` +
+              (p.mine ? '' : ` | Engine: ${p.engine}`),
           )
           .join('\n');
 
@@ -170,18 +159,16 @@ export function registerUITools(registry: ToolRegistry): void {
     name: 'take_screenshot',
     description: 'Capture screenshot.',
     impl: async (params: any, context: ToolContext) => {
-      const pm = context.shell?.processManager;
-      if (pm) {
+      const processes = context.shell?.processes;
+      if (processes) {
         // pid を省略すれば従来どおり前面のアプリ（T-0350）
         const wanted = String(params?.pid || '').trim();
-        const procs: Map<string, any> = pm.processes instanceof Map ? pm.processes : new Map();
+        const procs = processes.list();
 
         if (wanted) {
-          const proc = procs.get(wanted);
+          const proc = procs.find((p) => p.pid === wanted);
           if (!proc) {
-            const capturable = Array.from(procs.values())
-              .filter((p: any) => p.type !== 'daemon')
-              .map((p: any) => p.pid);
+            const capturable = procs.filter((p) => p.type !== 'daemon').map((p) => p.pid);
             throw new ToolError(`Process not found: ${wanted}. Capturable apps: ${capturable.join(', ') || '(none)'}`);
           }
           if (proc.type === 'daemon') {
@@ -193,14 +180,14 @@ export function registerUITools(registry: ToolRegistry): void {
         const sec = Number(params?.timeout);
         const timeoutMs = Number.isFinite(sec) && sec > 0 ? Math.min(sec, 60) * 1000 : undefined;
 
-        const foreground = Array.from(procs.values()).find((p: any) => p.state === 'foreground') as any;
+        const foreground = procs.find((p) => p.state === 'foreground');
         const target = wanted || foreground?.pid || 'foreground';
 
         await new Promise((r) => setTimeout(r, 1000)); // Render wait
 
         try {
           // captureScreenshot はプレーンな Base64 文字列を返す
-          const base64 = await pm.captureScreenshot(wanted || undefined, timeoutMs);
+          const base64 = await processes.capture(wanted || undefined, timeoutMs);
 
           const timestamp = Date.now();
           const safe = String(target).replace(/[^\w.-]+/g, '_');
@@ -240,51 +227,41 @@ export function registerUITools(registry: ToolRegistry): void {
 
       if (!code.trim()) throw new ToolError('No code provided.');
 
+      const processes = context.shell?.processes;
+      if (!processes) return { log: 'ProcessManager not available.', error: true };
+
       // pid を省略すれば前面のアプリ。前面が無いときに、居ない pid を当てずっぽうで指さない（T-0903）
       if (!pid || pid === 'main') {
-        if (context.shell?.processManager) {
-          const fg = Array.from(context.shell.processManager.processes.values()).find(
-            (p: any) => p.state === 'foreground',
-          );
-          if (!fg) throw new ToolError('No app is in the foreground. Specify pid.');
-          pid = (fg as any).pid;
-        }
+        const fg = processes.list().find((p) => p.state === 'foreground');
+        if (!fg) throw new ToolError('No app is in the foreground. Specify pid.');
+        pid = fg.pid;
       }
 
-      if (context.shell?.processManager) {
-        const pm = context.shell.processManager;
-        const proc = pm.processes.get(pid);
+      try {
+        const result = await processes.evalJs(pid, code);
 
-        if (!proc || !proc.iframe || !proc.iframe.contentWindow) {
-          throw new ToolError(`Target process '${pid}' is not running.`);
-        }
+        let logResult = result;
+        if (typeof result === 'object' && result !== null) {
+          try {
+            logResult = JSON.stringify(result, null, 2);
+          } catch (e) {
+            logResult = String(result);
+          }
+        } else if (result === undefined) logResult = 'undefined';
 
-        try {
-          const transport = context.shell['transport'];
-          let result = await transport.invokeGuest(pid, 'eval_js', { code }, proc.iframe.contentWindow);
-
-          let logResult = result;
-          if (typeof result === 'object' && result !== null) {
-            try {
-              logResult = JSON.stringify(result, null, 2);
-            } catch (e) {
-              logResult = String(result);
-            }
-          } else if (result === undefined) logResult = 'undefined';
-
-          return {
-            log: `Execution result:\n${logResult}`,
-            ui: `💉 Injected JS into [${pid}]`,
-          };
-        } catch (err: any) {
-          return {
-            log: `Execution error in [${pid}]: ${err.message}`,
-            ui: `⚠️ JS Injection Failed`,
-            error: true,
-          };
-        }
+        return {
+          log: `Execution result:\n${logResult}`,
+          ui: `💉 Injected JS into [${pid}]`,
+        };
+      } catch (err: any) {
+        // 相手が居ない・このエンジンからは動かせない（取っ手が断った）は、期待される失敗としてそのまま返す
+        if (isToolError(err)) throw err;
+        return {
+          log: `Execution error in [${pid}]: ${err.message}`,
+          ui: `⚠️ JS Injection Failed`,
+          error: true,
+        };
       }
-      return { log: 'ProcessManager not available.', error: true };
     },
   });
 }

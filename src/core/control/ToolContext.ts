@@ -10,7 +10,7 @@
  *   engine       … このエンジン自身（道具から見える口だけ）
  *   conversation … このエンジンの会話（空にする・添付を置く）
  *   tools        … このエンジンに見える道具の一覧（tool_catalog が読む）
- *   shell        … OS の画面とプロセス。エンジンのものではない
+ *   shell        … OS の画面と、プロセスの口（このエンジンの取っ手。動かせるのは自分に仕えるプロセスだけ）
  *
  * ゲストの道具（アプリ・デーモンが登録したもの）には渡らない。あちらは登録したプロセスの権限で動く。
  */
@@ -20,8 +20,6 @@ import type { ToolDefinitionInfo, ToolSetSummary } from './ToolRegistry';
 
 /** 道具から見える、自分を呼んだエンジン */
 export interface ToolEngine {
-  /** このエンジンの id。道具が起こすプロセスは、このエンジンに仕える（spawn・open） */
-  readonly id: string;
   /** あとから自分に知らせる（set_timer）。タイマーはエンジンが預かり、エンジンを畳むと消える */
   scheduleSystemEvent(delayMs: number, actionType: string, message: string): void;
 }
@@ -42,16 +40,60 @@ export interface ToolCatalog {
   getToolDefinition(toolName: string): ToolDefinitionInfo | null;
 }
 
+/** 道具から見えるプロセス 1 つ */
+export interface ToolProcessInfo {
+  pid: string;
+  path: string;
+  type: 'app' | 'daemon';
+  state: 'foreground' | 'background' | 'running';
+  /** 仕えるエンジンの id */
+  engine: string;
+  /** このエンジンに仕えているか */
+  mine: boolean;
+}
+
+/** 道具がプロセスを起こすときに渡すもの。仕える先は渡さない（取っ手が、このエンジンにする） */
+export interface ToolSpawnOptions {
+  /**
+   * 名指しの pid。居れば、そこへの再開か起こし直しになる。ほかのエンジンに仕えるプロセスの名前なら断られる。
+   * 省けば、個体の決め方（shell/windowing/processIdentity.ts）が、このエンジンから見た「そのアプリ」の個体を選ぶ
+   */
+  pid?: string;
+  path: string;
+  type?: 'app' | 'daemon';
+  show?: boolean;
+  forceReload?: boolean;
+  args?: Record<string, string>;
+  currentUri?: string;
+}
+
+/**
+ * 道具から見える、プロセスの口（T-0908）。エンジンごとの取っ手（実体は shell/windowing/engineProcesses.ts）。
+ * 動かせる（終わらせる・コードを差す・名指しで再開／起こし直す）のは、このエンジンに仕えるプロセスだけ
+ * （OS のチャットのエンジンは全部）。見る（一覧・画面写真）のは全部。断るときは ToolError。
+ */
+export interface ToolProcesses {
+  /** 起こす。起こしたプロセスは、このエンジンに仕える。窓の上限に当たれば断られる */
+  spawn(options: ToolSpawnOptions): Promise<void>;
+  /** 終わらせる。居なければ false */
+  kill(pid: string): boolean;
+  list(): ToolProcessInfo[];
+  /** 画面写真（Base64）。pid を省けば前面のアプリ */
+  capture(pid?: string, timeoutMs?: number): Promise<string>;
+  /** プロセスの中でコードを走らせ、戻り値を返す。居なければ断る */
+  evalJs(pid: string, code: string): Promise<unknown>;
+}
+
 /* eslint-disable @typescript-eslint/no-explicit-any */
 /** 道具から見える shell */
 export interface ToolShell {
   /** 利用者の取っ手。利用者に見せるために読むときだけ使う（files・open） */
   userFs: VfsHandle;
-  // プロセスと画面。いまは shell の実体をそのまま渡している（プロセスの持ち主を入れる段で取っ手に絞る）
-  processManager?: any;
+  /** プロセスの口（このエンジンの取っ手） */
+  processes: ToolProcesses;
+  // 画面（関連付けの解決・エディタとビューワー・エクスプローラ）
   resolver?: any;
   modals?: any;
-  transport?: any;
   _revealInExplorer?: (path: string) => boolean;
 }
 /* eslint-enable @typescript-eslint/no-explicit-any */

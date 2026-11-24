@@ -17,6 +17,7 @@ import { t } from '../../i18n/i18n';
 import { declaredRoute } from './declaredRoute';
 import { choosePid, resolveApp } from './processIdentity';
 import { ROOT_ENGINE_ID } from '../../core/control/Engine';
+import { MAX_APPS_ROOT, MAX_APPS_SUB } from '../../config/engine_limits';
 
 export interface Process {
   /** どの個体か。名前空間は OS に 1 つ（IPC の宛先・道具の組・変更の個体の印） */
@@ -96,6 +97,14 @@ export function moveQueryToArgs(
   return { path: beforeHash.slice(0, qIdx) + hash, args: { ...(args || {}), ...fromQuery } };
 }
 
+/** 起こすのを断った（窓の上限）。起こす前に投げるので、何も変わっていない */
+export class SpawnRefusedError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'SpawnRefusedError';
+  }
+}
+
 export class ProcessManager {
   private vfs: VfsService;
   private compiler: GuestCompiler;
@@ -103,7 +112,6 @@ export class ProcessManager {
   private configManager: ConfigManager;
   public processes: Map<string, Process> = new Map();
   public currentRoute: CurrentRoute | null = null;
-  private MAX_APPS = 10;
   /**
    * ゲストをホストと同一オリジンで起動するか（T-0838）。人がホストの画面で切り替える。
    * メモリにだけ持つ —— ホストを読み直せば必ず false（opaque）に戻る。保存しないのは、同一オリジンのゲストが
@@ -229,6 +237,18 @@ export class ProcessManager {
       }
     }
 
+    // 窓の上限（engine_limits.ts）。ルート以外のエンジンは押し出さず、越えるなら起こす前に断る（ルートは下で、古いものを閉じる）。
+    // 同じ pid の、同じエンジンに仕える窓を起こし直すだけなら増えないので数えない
+    if (type === 'app' && engine !== ROOT_ENGINE_ID) {
+      const replaces = existingProc?.type === 'app' && existingProc.engine === engine;
+      const windows = this._appsServing(engine).length;
+      if (!replaces && windows >= MAX_APPS_SUB) {
+        throw new SpawnRefusedError(
+          `Engine "${engine}" already has ${windows} app windows (limit ${MAX_APPS_SUB}). Close one first.`,
+        );
+      }
+    }
+
     // 新規起動または強制リロード。表示するなら前面は新しい起動が取るので、kill に前面を渡させない
     // （渡させると、前面のホームを起動し直すときに kill がホームを別に起こし、iframe が 2 つになる。T-0838 で見つけた）
     this.kill(pid, { refocus: !show });
@@ -332,9 +352,15 @@ export class ProcessManager {
     }
   }
 
+  /** そのエンジンに仕える窓（type が app のプロセス） */
+  private _appsServing(engine: string): Process[] {
+    return Array.from(this.processes.values()).filter((p) => p.type === 'app' && p.engine === engine);
+  }
+
+  /** ルートに仕える窓が上限を越えたら、背景の古いものから閉じる（ほかのエンジンに仕える窓は、数えも閉じもしない） */
   private _enforceLRU(): void {
-    const apps = Array.from(this.processes.values()).filter((p) => p.type === 'app');
-    if (apps.length > this.MAX_APPS) {
+    const apps = this._appsServing(ROOT_ENGINE_ID);
+    if (apps.length > MAX_APPS_ROOT) {
       const bgApps = apps.filter((p) => p.state === 'background');
       if (bgApps.length > 0) {
         bgApps.sort((a, b) => a.lastActiveTime - b.lastActiveTime);
@@ -418,6 +444,12 @@ export class ProcessManager {
 
   /** 走っているゲストを全部起動し直す。前面のアプリは最後に（先に消すと別のアプリかホームへ前面が移るため） */
   async restartAll(): Promise<void> {
+    // ルート以外のエンジンに仕えるプロセスは、起こし直さずに終わらせる。そのエンジンは、持ち主（辿ればルートに仕える
+    // プロセス）が起こし直された時点で畳まれる（EngineManager）ので、起こし直すと、畳まれたエンジンに仕えるものが出来る。
+    // 先に終わらせるのは、前面がそれだったときに、前面を残るアプリへ渡しておくため
+    for (const p of Array.from(this.processes.values())) {
+      if (p.engine !== ROOT_ENGINE_ID) this.kill(p.pid);
+    }
     const procs = Array.from(this.processes.values());
     const front = procs.find((p) => p.state === 'foreground');
     const order = [...procs.filter((p) => p !== front), ...(front ? [front] : [])];

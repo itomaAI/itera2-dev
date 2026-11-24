@@ -23,6 +23,7 @@ function mk() {
 function proc(pid: string, state: string, extra: Record<string, unknown> = {}) {
   return {
     pid,
+    engine: 'root',
     path: `system/apps/${pid}.html`,
     type: state === 'running' ? 'daemon' : 'app',
     state,

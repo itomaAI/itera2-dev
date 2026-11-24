@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { registerUITools } from './ui_tools';
+import { ToolError } from '../ToolError';
 
 /**
  * open 道具: ディレクトリ（T-0251）
@@ -94,12 +95,12 @@ describe('open: ディレクトリ', () => {
 function shotCtx(procs: Array<{ pid: string; type: string; state: string }>) {
   const calls: Array<{ pid: string | undefined; timeoutMs: number | undefined }> = [];
   const written: string[] = [];
-  const processes = new Map(procs.map((p) => [p.pid, p]));
   const context: any = {
     shell: {
-      processManager: {
-        processes,
-        captureScreenshot: async (pid?: string, timeoutMs?: number) => {
+      // プロセスの口は、エンジンごとの取っ手（T-0908）。この道具が使うのは、一覧と撮る口
+      processes: {
+        list: () => procs,
+        capture: async (pid?: string, timeoutMs?: number) => {
           calls.push({ pid, timeoutMs });
           return 'QUJD'; // "ABC"
         },
@@ -185,19 +186,24 @@ describe('take_screenshot: pid 指定', () => {
  */
 function injectCtx(procs: Array<{ pid: string; type: string; state: string }>) {
   const calls: Array<{ pid: string; code: string }> = [];
-  const processes = new Map(procs.map((p) => [p.pid, { ...p, iframe: { contentWindow: {} } }]));
+  /** 取っ手が断る理由（在れば、その ToolError を投げる）と、中のコードの失敗（在れば、ふつうの例外を投げる） */
+  const fail: { refuse: string | null; crash: string | null } = { refuse: null, crash: null };
   const context: any = {
     shell: {
-      processManager: { processes },
-      transport: {
-        invokeGuest: async (pid: string, _method: string, payload: { code: string }) => {
-          calls.push({ pid, code: payload.code });
+      // 相手が居るか・このエンジンから動かせるかを決めるのは取っ手（engineProcesses.ts。T-0908）。ここは、居なければ断る偽物
+      processes: {
+        list: () => procs,
+        evalJs: async (pid: string, code: string) => {
+          if (!procs.some((p) => p.pid === pid)) throw new ToolError(`Target process '${pid}' is not running.`);
+          if (fail.refuse) throw new ToolError(fail.refuse);
+          if (fail.crash) throw new Error(fail.crash);
+          calls.push({ pid, code });
           return 42;
         },
       },
     },
   };
-  return { context, calls };
+  return { context, calls, fail };
 }
 
 const INJECT_PROCS = [
@@ -251,5 +257,167 @@ describe('inject_js: 相手の決め方', () => {
   it('中身が空なら、相手を探す前に断る（前面が無くても同じ答え）', async () => {
     const { context } = injectCtx(NO_FOREGROUND);
     await expect(tools().inject_js.impl({ content: '  ' }, context)).rejects.toThrow('No code provided.');
+  });
+
+  it('取っ手が断ったら（このエンジンからは動かせない）、そのまま期待される失敗として返す', async () => {
+    const { context, calls, fail } = injectCtx(INJECT_PROCS);
+    fail.refuse = 'Process "home" serves another engine ("root"). This engine cannot run code in it.';
+    const err = await tools()
+      .inject_js.impl({ pid: 'home', content: 'return 1' }, context)
+      .catch((e: Error) => e);
+    expect((err as Error).name).toBe('ToolError');
+    expect((err as Error).message).toBe(fail.refuse);
+    expect(calls).toEqual([]);
+  });
+
+  it('中で走らせたコードの失敗は、失敗の結果として返す（例外にしない）', async () => {
+    const { context, fail } = injectCtx(INJECT_PROCS);
+    fail.crash = 'boom';
+    const res = await tools().inject_js.impl({ pid: 'home', content: 'throw 1' }, context);
+    expect(res).toEqual({ log: 'Execution error in [home]: boom', ui: '⚠️ JS Injection Failed', error: true });
+  });
+});
+
+/**
+ * spawn・open・kill・ps: プロセスの口は、エンジンごとの取っ手（T-0908）
+ *
+ * 守りたいこと:
+ *   - 道具は仕える先を渡さない（取っ手が、呼んだエンジンにする）
+ *   - open は pid を名指ししない（どの個体かは、個体の決め方が決める）
+ *   - 取っ手が断ったら、そのまま期待される失敗になる
+ *   - ps は、このエンジンに仕えていないプロセスにだけ、仕える先を添える
+ */
+function procCtx(list: any[] = []) {
+  const spawned: any[] = [];
+  const killed: string[] = [];
+  const fail: { refuse: string | null } = { refuse: null };
+  const context: any = {
+    shell: {
+      processes: {
+        spawn: async (options: any) => {
+          if (fail.refuse) throw new ToolError(fail.refuse);
+          spawned.push(options);
+        },
+        kill: (pid: string) => {
+          if (fail.refuse) throw new ToolError(fail.refuse);
+          killed.push(pid);
+          return list.some((p) => p.pid === pid);
+        },
+        list: () => list,
+      },
+      resolver: {
+        resolveDefault: (stat: any) =>
+          stat.name.endsWith('.html')
+            ? { appId: 'HostRunner', appName: 'Runner' }
+            : { appId: 'notes', appName: 'Notes', appPath: 'system/apps/notes.html' },
+      },
+      userFs: { stat: (path: string) => ({ name: path, kind: 'file', path }) },
+    },
+  };
+  return { context, spawned, killed, fail };
+}
+
+const toolError = async (p: Promise<unknown>) => {
+  const e = (await p.then(
+    () => null,
+    (err: Error) => err,
+  )) as Error | null;
+  return e && { name: e.name, message: e.message };
+};
+
+describe('spawn・open・kill・ps: プロセスの口は取っ手', () => {
+  it('spawn は名指しの pid・種類・引数を渡す。仕える先は渡さない', async () => {
+    const { context, spawned } = procCtx();
+    const res = await tools().spawn.impl(
+      { path: 'data/x.html', pid: 'x', type: 'daemon', show: 'false', force: 'true', file: 'a.md', content: 'ignored' },
+      context,
+    );
+    expect(spawned).toEqual([
+      { pid: 'x', path: 'data/x.html', type: 'daemon', show: false, forceReload: true, args: { file: 'a.md' } },
+    ]);
+    expect(res).toEqual({ log: 'Process spawn requested for data/x.html.', ui: '🚀 Spawned process' });
+  });
+
+  it('spawn の既定: 名前なし・表示する・起こし直さない', async () => {
+    const { context, spawned } = procCtx();
+    await tools().spawn.impl({ path: 'data/x.html' }, context);
+    expect(spawned).toEqual([
+      { pid: undefined, path: 'data/x.html', type: undefined, show: true, forceReload: false, args: {} },
+    ]);
+  });
+
+  it('取っ手が断った spawn（ほかのエンジンのプロセスの名指し・窓の上限）は、期待される失敗', async () => {
+    const { context, fail } = procCtx();
+    fail.refuse = 'Engine "eng-a" already has 4 app windows (limit 4). Close one first.';
+    expect(await toolError(tools().spawn.impl({ path: 'data/x.html' }, context))).toEqual({
+      name: 'ToolError',
+      message: fail.refuse,
+    });
+  });
+
+  it('open は、関連付けで決まったアプリのパスを渡す。pid は名指ししない', async () => {
+    const { context, spawned } = procCtx();
+    const res = await tools().open.impl({ path: 'data/a.md' }, context);
+    expect(spawned).toEqual([
+      {
+        path: 'system/apps/notes.html',
+        show: true,
+        args: { file: 'data/a.md' },
+        currentUri: 'metaos://open/data/a.md',
+      },
+    ]);
+    expect(res.log).toBe('Opened data/a.md in Notes');
+  });
+
+  it('open で HTML を走らせるときは、名前を渡さない', async () => {
+    const { context, spawned } = procCtx();
+    await tools().open.impl({ path: 'data/t.html' }, context);
+    expect(spawned).toEqual([{ path: 'data/t.html', show: true, currentUri: 'metaos://run/data/t.html' }]);
+  });
+
+  it('open を取っ手が断ったら、「開けなかった」理由として返す', async () => {
+    const { context, fail } = procCtx();
+    fail.refuse = 'Engine "eng-a" already has 4 app windows (limit 4). Close one first.';
+    expect(await toolError(tools().open.impl({ path: 'data/a.md' }, context))).toEqual({
+      name: 'ToolError',
+      message: `Failed to open: ${fail.refuse}`,
+    });
+  });
+
+  it('kill: 終われば成功・居なければ失敗の結果・取っ手が断ればそのまま', async () => {
+    const { context, killed, fail } = procCtx([{ pid: 'a' }]);
+    expect(await tools().kill.impl({ pid: 'a' }, context)).toEqual({ log: 'Process terminated.', ui: '🛑 Killed [a]' });
+    expect(await tools().kill.impl({ pid: 'zz' }, context)).toEqual({
+      log: 'Process not found or already stopped.',
+      error: true,
+    });
+    expect(killed).toEqual(['a', 'zz']);
+
+    fail.refuse = 'Process "a" serves another engine ("root"). This engine cannot kill it.';
+    expect(await toolError(tools().kill.impl({ pid: 'a' }, context))).toEqual({
+      name: 'ToolError',
+      message: fail.refuse,
+    });
+  });
+
+  it('ps: このエンジンに仕えていないプロセスにだけ、仕える先を添える', async () => {
+    const line = (pid: string, type: string, state: string, path: string) =>
+      `PID: ${pid.padEnd(15)} | Type: ${type.padEnd(6)} | State: ${state.padEnd(10)} | Path: ${path}`;
+    const { context } = procCtx([
+      { pid: 'home', type: 'app', state: 'foreground', path: 'system/apps/home.html', engine: 'eng-a', mine: true },
+      { pid: 'notes', type: 'app', state: 'background', path: 'system/apps/notes.html', engine: 'root', mine: false },
+    ]);
+    expect(await tools().ps.impl({}, context)).toEqual({
+      log:
+        line('home', 'app', 'foreground', 'system/apps/home.html') +
+        '\n' +
+        line('notes', 'app', 'background', 'system/apps/notes.html') +
+        ' | Engine: root',
+      ui: '📊 Process List (2)',
+    });
+    expect(await tools().ps.impl({}, procCtx().context)).toEqual({
+      log: 'No processes running.',
+      ui: '📊 Process List (0)',
+    });
   });
 });
