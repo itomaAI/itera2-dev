@@ -262,7 +262,7 @@ export class ToolRegistry {
     sourcePid: string,
     payload: DynamicToolDefinition,
   ): void {
-    // 同じ名前の道具がこのエンジンからもう見えていれば断る（何も作る前に見る。断った登録は空の組も残さない）。
+    // 同じ名前の道具がこのエンジンからもう見えていれば断る（何も作る前に見る）。
     // 組の id は pid で、pid は OS 全体で 1 つなので、「自分の組」は id で分かる
     const holder = visible.find((set) => set.tools.has(toolName) && !(set.kind === 'dynamic' && set.id === sourcePid));
     if (holder) throw new ToolNameTakenError(toolName, holder);
