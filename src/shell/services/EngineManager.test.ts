@@ -5,6 +5,7 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { EngineManager, type EngineOwnerNotice } from './EngineManager';
+import { EngineCalls } from '../../api/EngineCalls';
 import { MAX_SUB_ENGINES } from '../../config/engine_limits';
 import { createEngineBundle } from '../../core/control/EngineBundle';
 import { ROOT_ENGINE_ID } from '../../core/control/Engine';
@@ -616,5 +617,140 @@ describe('EngineManager: 添付の置き場の掃除', () => {
     const w = world();
     await w.manager.sweepLeftovers();
     expect(w.vfs.deletes).toEqual([]);
+  });
+});
+describe('EngineManager × EngineCalls: 持ち主の口を通す（MetaOS.engine のホストの側）', () => {
+  const OTHER = { pid: 'other', principal: { type: 'app', id: 'other' } as Principal };
+  /** 束の表は本物。ゲストへ送る所だけ、記録に替える */
+  const callsOf = (w: ReturnType<typeof world>) => {
+    const sent: Array<{ pid: string; action: string; payload: any }> = [];
+    const calls = new EngineCalls({
+      engines: w.manager,
+      vfs: w.vfs as any,
+      send: (pid, action, payload) => sent.push({ pid, action, payload }),
+    });
+    return { calls, sent };
+  };
+
+  it('作る → 置いて起こす → 文字・ターン・止まった理由が、持ち主にだけ届く', async () => {
+    const w = world();
+    w.spawn('other');
+    const { calls, sent } = callsOf(w);
+
+    const { id } = await calls.create(OWNER, {});
+    w.equips[0].generateStream.mockImplementationOnce(async (_m: any, onChunk: (c: string) => void) => {
+      // 書き留めるだけの出力（道具を投げずに終わる）。2 つの塊で届く
+      onChunk('<memo>he');
+      onChunk('llo</memo>');
+    });
+    await calls.append(OWNER, id, { role: 'user', content: 'hi', opts: { wake: true } });
+    await settle();
+
+    expect(sent.every((s) => s.pid === 'viewer' && s.action === 'engine:event' && s.payload.id === id)).toBe(true);
+    const of = (event: string) => sent.filter((s) => s.payload.event === event).map((s) => s.payload.data);
+    expect(of('stream_chunk')).toEqual([{ text: '<memo>he' }, { text: 'llo</memo>' }]);
+    expect(of('turn_end').map((d) => [d.role, d.turn.role])).toEqual([
+      ['user', 'user'],
+      ['model', 'model'],
+    ]);
+    expect(of('turn_end')[1].turn.content).toBe('<memo>hello</memo>');
+    expect(of('turn_start')).toHaveLength(1);
+    expect(sent.at(-1)!.payload).toEqual({ id, event: 'loop_stop', data: { reason: 'idle' } });
+    // 窓をまたいで運べる形（JSON で往復して同じ）
+    for (const s of sent) expect(JSON.parse(JSON.stringify(s.payload))).toEqual(s.payload);
+
+    // 状態・全文・一覧は、持ち主にだけ見える
+    expect(await calls.status(OWNER, id)).toMatchObject({ running: false, busy: false, turns: 2 });
+    expect((await calls.turns(OWNER, id)).map((t) => t.role)).toEqual(['user', 'model']);
+    expect((await calls.list(OWNER)).map((e) => [e.id, e.status.turns])).toEqual([[id, 2]]);
+    expect(await calls.list(OTHER)).toEqual([]);
+    // ルートの会話には何も置かれない
+    expect(w.rootHistory.get()).toEqual([]);
+  });
+
+  it('持ち主でない者は、置けない・読めない・畳めない', async () => {
+    const w = world();
+    w.spawn('other');
+    const { calls, sent } = callsOf(w);
+    const { id } = await calls.create(OWNER, {});
+
+    await expect(calls.append(OTHER, id, { role: 'user', content: 'x', opts: { wake: true } })).rejects.toThrow(
+      'not found',
+    );
+    await expect(calls.turns(OTHER, id)).rejects.toThrow('not found');
+    await expect(calls.save(OTHER, id, 'data/steal')).rejects.toThrow('not found');
+    await expect(calls.dispose(OTHER, id)).rejects.toThrow('not found');
+    await settle();
+
+    expect(await calls.turns(OWNER, id)).toEqual([]);
+    expect(w.vfs.writes).toEqual([]);
+    expect(w.equips[0].generateStream).not.toHaveBeenCalled();
+    expect(sent).toEqual([]);
+  });
+
+  it('受け付けない spec は、束の表の理由のまま断る', async () => {
+    const w = world();
+    const { calls } = callsOf(w);
+
+    await expect(calls.create(OWNER, { init: 'data/role.md' })).rejects.toThrow('init is not supported');
+    await expect(calls.create(OWNER, null)).rejects.toThrow('Invalid engine spec: must be an object');
+    await expect(calls.create({ pid: 'ghost', principal: APP }, {})).rejects.toThrow('is not running');
+    expect(await calls.list(OWNER)).toEqual([]);
+  });
+
+  it('reset: 消える前の会話が知らせで届き、申し送りの頭に呼び手とサブの役割の 1 行が付く', async () => {
+    const w = world();
+    const { calls, sent } = callsOf(w);
+    const { id } = await calls.create(OWNER, {});
+    await calls.append(OWNER, id, { role: 'user', content: 'hi' });
+
+    const result = await calls.reset(OWNER, id, { summary: 'carry' });
+
+    expect(result).toMatchObject({ archived: false });
+    const resets = sent.filter((s) => s.payload.event === 'reset');
+    expect(resets).toHaveLength(1);
+    expect(resets[0].payload.data.session).toMatchObject({ format: 'itera-session/1', turnCount: 1 });
+    const turns = await calls.turns(OWNER, id);
+    expect(turns).toHaveLength(1);
+    expect(turns[0].content).toContain('[System: Session reset by viewer]');
+    expect(turns[0].content).toContain('[Carried Over Information]\ncarry');
+    // サブに起動手順は無い（ルートの 1 行は付かない）
+    expect(turns[0].content).not.toContain('Initialization Protocol');
+  });
+
+  it('save → create({ from }): 書くのは持ち主の主体。書いた会話から、別のエンジンを始められる', async () => {
+    const w = world();
+    const { calls } = callsOf(w);
+    const { id } = await calls.create(OWNER, {});
+    await calls.append(OWNER, id, { role: 'user', content: 'hi', opts: { wake: true } });
+    await settle();
+
+    expect(await calls.save(OWNER, id, 'data/out/')).toEqual({ path: 'data/out', media: 0 });
+    expect(w.vfs.writes).toEqual([{ by: 'app:viewer', path: 'data/out/session.json', system: false }]);
+
+    const second = await calls.create(OWNER, { from: 'data/out' });
+    const turns = await calls.turns(OWNER, second.id);
+    expect(turns.slice(0, 2).map((t) => t.role)).toEqual(['user', 'model']);
+    expect((await calls.status(OWNER, second.id)).session).toEqual((await calls.status(OWNER, id)).session);
+    expect(second.id).not.toBe(id);
+  });
+
+  it('dispose: 畳んだ知らせが届き、そのあとは「無い」', async () => {
+    const w = world();
+    const { calls, sent } = callsOf(w);
+    const { id } = await calls.create(OWNER, {});
+    w.spawn('helper', id);
+
+    expect(await calls.dispose(OWNER, id)).toBe(true);
+
+    expect(sent.at(-1)).toEqual({
+      pid: 'viewer',
+      action: 'engine:event',
+      payload: { id, event: 'disposed', data: { reason: 'owner_request' } },
+    });
+    expect(w.killed).toEqual(['helper']);
+    await expect(calls.status(OWNER, id)).rejects.toThrow('not found');
+    await expect(calls.dispose(OWNER, id)).rejects.toThrow('not found');
+    expect(await calls.list(OWNER)).toEqual([]);
   });
 });

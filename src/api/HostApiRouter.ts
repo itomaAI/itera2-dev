@@ -16,14 +16,9 @@ import { GuestLocalStore } from '../core/sys/GuestLocalStore';
 import type { SpawnOptions } from '../shell/windowing/ProcessManager';
 import type { CompiledGuest } from '../shell/windowing/GuestCompiler';
 import { USER_PRINCIPAL } from '../core/vfs/types';
-import {
-  attachmentPathsOf,
-  buildAppendPlan,
-  buildChatStatus,
-  buildResetPlan,
-  resolveAttachments,
-  type ChatStatusInput,
-} from './chatApi';
+import { buildChatStatus, buildResetPlan, type ChatStatusInput } from './chatApi';
+import { postToBundle, type Caller } from './chatPost';
+import { EngineCalls, type EngineTable } from './EngineCalls';
 import { LlmCalls, type LlmEndpointLike } from './LlmCalls';
 import { VfsEventFormatter } from '../core/vfs/VfsEventFormatter';
 import { buildGuestThemeCss } from '../shell/windowing/guestThemeCss';
@@ -125,6 +120,11 @@ export interface RouterDeps {
    * 無い（null）なら chat:* は「Chat is not available.」。
    */
   engineFor?: (pid: string) => IEngineBundle | null;
+  /**
+   * 束の表（MetaOS.engine。T-0908）: 呼んだプロセスが持っているエンジンを作る・引く・畳む。
+   * 無ければ engine:* は「Engines are not available.」。
+   */
+  engines?: EngineTable | null;
   shell?: IShell;
   /** 会話の一覧・切り替え・保存・読み込み（退避はルートの会話だけが持つ） */
   sessionManager?: ISessionManager;
@@ -193,6 +193,8 @@ export class HostApiRouter {
     // 書き込みは「誰として」で触る（T-0903）: 主体（何として。ACL が見る）＋ 個体の印（どの個体が ＝ pid。
     // 同期のエコー止めと vfs_events が見る）。読みは変更を起こさないので主体だけ
     const getActor = (sourcePid: string): Actor => ({ principal: getPrincipal(sourcePid), origin: sourcePid });
+    // 呼んだプロセスと、その主体（会話に置く口・エンジンの口が使う）
+    const callerOf = (sourcePid: string): Caller => ({ pid: sourcePid, principal: getPrincipal(sourcePid) });
 
     t.registerHandler('fs:read', async ({ path, opts }, sourcePid) => {
       const principal = getPrincipal(sourcePid);
@@ -426,22 +428,8 @@ export class HostApiRouter {
     };
 
     t.registerHandler('chat:append', async ({ role, content, opts }, sourcePid) => {
-      const bundle = bundleOf(sourcePid);
-      // 添付は門を通す（T-0672）。文字は呼び手の権限で読み、先頭だけ本文に展開する。読めなければ注記だけ
-      const principal = getPrincipal(sourcePid);
-      const resolved = await resolveAttachments(attachmentPathsOf(opts), async (path) => {
-        const stat = d.vfs.stat(principal, path);
-        if (stat.kind !== 'file') return null;
-        return {
-          size: stat.size,
-          bytes: () => d.vfs.withBlob(principal, path, async (blob) => new Uint8Array(await blob.arrayBuffer())),
-        };
-      });
-      const plan = buildAppendPlan({ role, content, opts }, sourcePid, resolved);
-      if (!plan.ok) throw new Error(`chat.append: ${plan.reason}`);
-      // 置く・知らせる・起こす は束の口が 1 つで行う。起こすか（wake）と描くか（visible）は plan.meta に入っている
-      const turn = await bundle.post(plan.role, plan.content, plan.meta);
-      return { id: turn.id };
+      // 添付の門 → 計画 → 束に置く、は chatPost.ts（MetaOS.engine の取っ手の append と同じ手順）
+      return postToBundle(d.vfs, bundleOf(sourcePid), callerOf(sourcePid), { role, content, opts });
     });
 
     t.registerHandler('chat:wake', async (_payload, sourcePid) => {
@@ -467,6 +455,13 @@ export class HostApiRouter {
       return buildChatStatus(await bundleOf(sourcePid).statusInput());
     });
 
+    // そのプロセスにだけ通知する（返事を RPC で待たせないものの道: MetaOS.llm の文字・MetaOS.engine の知らせ）。
+    // 相手がもう居なければ何もしない
+    const sendTo = (pid: string, action: string, payload: unknown): void => {
+      const target = d.processManager?.processes.get(pid)?.iframe?.contentWindow;
+      if (target) t.sendEvent(pid, action, payload, target);
+    };
+
     // LLM を 1 回呼ぶ口（MetaOS.llm。T-0807）。会話もエンジンも通らない。
     // 開始はすぐ返し、文字・終了・失敗は呼んだプロセスにだけ通知する（ゲストの RPC は 150 秒で切れるため）。
     const llmCalls = new LlmCalls({
@@ -475,10 +470,7 @@ export class HostApiRouter {
         return d.shell.resolveLlm(config);
       },
       vfs: d.vfs,
-      send: (pid, action, payload) => {
-        const target = d.processManager?.processes.get(pid)?.iframe?.contentWindow;
-        if (target) t.sendEvent(pid, action, payload, target);
-      },
+      send: sendTo,
     });
     // プロセスが終わったら、その呼び出しを止める（上流への接続を残さない）
     d.processManager?.on?.('process_killed', (pid: string) => llmCalls.abortAll(pid));
@@ -488,6 +480,31 @@ export class HostApiRouter {
     });
     t.registerHandler('llm:abort', async ({ id }, sourcePid) => ({ aborted: llmCalls.abort(sourcePid, id) }));
     t.registerHandler('llm:models', async () => (d.shell?.listLlmModels ? await d.shell.listLlmModels() : []));
+
+    // アプリが自分のエンジンを作って動かす口（MetaOS.engine。T-0908）。実体は EngineCalls.ts。
+    //   動詞と規則は chat:* と同じ。相手は「呼んだプロセスが持っているエンジン」（id で指す。持ち主でなければ、無いのと同じ答え）。
+    //   文字・ターンの終わり・止まった理由などは、持ち主のプロセスにだけ engine:event で通知する。
+    const engineCalls = d.engines ? new EngineCalls({ engines: d.engines, vfs: d.vfs, send: sendTo }) : null;
+    const engineApi = (): EngineCalls => {
+      if (!engineCalls) throw new Error('Engines are not available.');
+      return engineCalls;
+    };
+    t.registerHandler('engine:create', async ({ spec }, sourcePid) => engineApi().create(callerOf(sourcePid), spec));
+    t.registerHandler('engine:append', async ({ id, role, content, opts }, sourcePid) =>
+      engineApi().append(callerOf(sourcePid), id, { role, content, opts }),
+    );
+    t.registerHandler('engine:wake', async ({ id }, sourcePid) => engineApi().wake(callerOf(sourcePid), id));
+    t.registerHandler('engine:stop', async ({ id }, sourcePid) => engineApi().stop(callerOf(sourcePid), id));
+    t.registerHandler('engine:reset', async ({ id, opts }, sourcePid) =>
+      engineApi().reset(callerOf(sourcePid), id, opts),
+    );
+    t.registerHandler('engine:status', async ({ id }, sourcePid) => engineApi().status(callerOf(sourcePid), id));
+    t.registerHandler('engine:turns', async ({ id }, sourcePid) => engineApi().turns(callerOf(sourcePid), id));
+    t.registerHandler('engine:save', async ({ id, path }, sourcePid) =>
+      engineApi().save(callerOf(sourcePid), id, path),
+    );
+    t.registerHandler('engine:dispose', async ({ id }, sourcePid) => engineApi().dispose(callerOf(sourcePid), id));
+    t.registerHandler('engine:list', async (_payload, sourcePid) => engineApi().list(callerOf(sourcePid)));
 
     t.registerHandler('chat:sessions', async () => {
       if (!d.sessionManager) throw new Error('Chat is not available.');
