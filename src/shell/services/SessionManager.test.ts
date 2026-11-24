@@ -3,7 +3,7 @@ import type { Turn } from '../../core/state/HistoryManager';
 import type { SessionMeta, CurrentSessionMeta } from '../../core/state/sessionArchive';
 import { SessionManager } from './SessionManager';
 
-/** 実物の HistoryManager は IndexedDB を開くので、同じ口を持つ偽物を使う（IDB の読み書きは実機で確かめる） */
+/** 会話（HistoryManager）と保存（HistoryStore）の口を 1 つの偽物で持つ（IDB の読み書きは HistoryStore.test.ts と実機で確かめる） */
 class FakeHistory {
   turns: Turn[] = [];
   store = new Map<string, unknown>();
@@ -146,7 +146,7 @@ function setup(keep = 10, sessionsDir: string | null = 'data/sessions') {
   const history = new FakeHistory();
   const vfs = new FakeVfs();
   let now = 5000;
-  const sm = new SessionManager(vfs as any, history as any, logger, toolRegistry, {
+  const sm = new SessionManager(vfs as any, history as any, history as any, logger, toolRegistry, {
     keep: () => keep,
     sessionsDir: () => sessionsDir,
     now: () => now++,

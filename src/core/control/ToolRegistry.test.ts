@@ -128,7 +128,7 @@ describe('SessionManager: 履歴の消去でも道具の定義を積み直す', 
 
   it('restoreTools: true で「Restored Dynamic Tools」が積まれ、AI は起こさない', async () => {
     const h = harness();
-    const sm = new SessionManager(h.vfs, h.history, h.logger, v(registryWithTools()));
+    const sm = new SessionManager(h.vfs, h.history, h.history, h.logger, v(registryWithTools()));
     await sm.clearSession({ triggerLlm: false, restoreTools: true });
     expect(h.clearedCount()).toBe(1);
     const restored = h.appended.find((a) => a.content.includes('[System: Restored Dynamic Tools]'))!;
@@ -142,7 +142,7 @@ describe('SessionManager: 履歴の消去でも道具の定義を積み直す', 
     const h = harness();
     const r = new ToolRegistry();
     registerSysTools(r);
-    const sm = new SessionManager(h.vfs, h.history, h.logger, v(r));
+    const sm = new SessionManager(h.vfs, h.history, h.history, h.logger, v(r));
     await sm.clearSession({ restoreTools: true });
     expect(h.appended.length).toBe(0);
   });

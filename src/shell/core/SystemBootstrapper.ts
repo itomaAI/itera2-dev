@@ -21,6 +21,7 @@ import { VendorCatalog, vendorHrefOf } from '../../core/sys/VendorCatalog';
 import { AppRegistry } from '../../core/sys/AppRegistry';
 import { FileAssociationResolver } from '../../core/sys/FileAssociationResolver';
 import { HistoryManager } from '../../core/state/HistoryManager';
+import { HistoryStore } from '../../core/state/HistoryStore';
 import { SystemLogger } from '../../core/state/SystemLogger';
 
 // Control & Cognitive
@@ -145,8 +146,10 @@ export class SystemBootstrapper {
     const resolver = new FileAssociationResolver(vfs, appRegistry, eventBus, registryLayers);
     await resolver.loadAssociations();
 
+    // OS のチャットの会話（メモリ）と、その保存（IndexedDB）。保存を読み戻してから、以後の変更を書く（T-0903）
     const history = new HistoryManager();
-    await history.loadFromDB();
+    const historyStore = new HistoryStore();
+    await historyStore.attach(history);
 
     const logger = new SystemLogger(vfs);
 
@@ -182,7 +185,7 @@ export class SystemBootstrapper {
     // 別のタブが「Use this tab」を押したら、全プロセスを止めて鍵を渡し、読み込み直して待機中のタブになる（T-0384）。
     instanceGuard.onHandover(haltAllProcesses);
     nodeStore.setStorageLossHandler((reason) => void StorageLossGuard.trip(`vfs ${reason}`));
-    history.setStorageLossHandler((reason) => void StorageLossGuard.trip(`history ${reason}`));
+    historyStore.setStorageLossHandler((reason) => void StorageLossGuard.trip(`history ${reason}`));
     const uriRouter = new UriRouter('open');
 
     // アプリをまたぐ「戻る／進む」（T-0453）。OS（ProcessManager）が持つ「現在の場所」の変化を購読して積む。
@@ -212,7 +215,7 @@ export class SystemBootstrapper {
     const engine = new Engine({ history, vfs, configManager }, null, null, translator, rootTools, {});
 
     const cognitiveManager = new CognitiveManager(configManager, engine, logger, vfs, registryLayers);
-    const sessionManager = new SessionManager(vfs, history, logger, rootTools, {
+    const sessionManager = new SessionManager(vfs, history, historyStore, logger, rootTools, {
       keep: () => configManager.get('preferences')?.sessionHistoryKeep,
       // VFS の保存先は paths.json の user.sessions（T-0614）。ここから自動で決まり、利用者に場所を訊かない
       sessionsDir: () => configManager.paths().user.sessions,

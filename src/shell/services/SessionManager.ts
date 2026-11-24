@@ -10,6 +10,7 @@
 
 import type { VfsService } from '../../core/vfs/VfsService';
 import type { HistoryManager, Turn } from '../../core/state/HistoryManager';
+import type { HistoryStore } from '../../core/state/HistoryStore';
 import type { SystemLogger } from '../../core/state/SystemLogger';
 import type { ToolView } from '../../core/control/ToolRegistry';
 import type { Principal, VfsStat } from '../../core/vfs/types';
@@ -69,7 +70,10 @@ export interface SessionManagerDeps {
 
 export class SessionManager {
   private vfs: VfsService;
+  /** いまの会話（OS のチャットの会話） */
   private history: HistoryManager;
+  /** その保存と、退避した会話の置き場 */
+  private store: HistoryStore;
   private logger: SystemLogger;
   /** この会話のエンジンに見える道具（会話を空にした・差し替えたあと、定義を積み直すために読む） */
   private tools: Pick<ToolView, 'getActiveDynamicToolDefinitions'>;
@@ -86,12 +90,14 @@ export class SessionManager {
   constructor(
     vfs: VfsService,
     history: HistoryManager,
+    store: HistoryStore,
     logger: SystemLogger,
     tools: Pick<ToolView, 'getActiveDynamicToolDefinitions'>,
     deps: SessionManagerDeps = {},
   ) {
     this.vfs = vfs;
     this.history = history;
+    this.store = store;
     this.logger = logger;
     this.tools = tools;
     this.keep = deps.keep ?? (() => undefined);
@@ -123,7 +129,7 @@ export class SessionManager {
     if (this.currentMeta) return this.currentMeta;
     let meta: CurrentSessionMeta | undefined;
     try {
-      meta = await this.history.getCurrentMeta();
+      meta = await this.store.getCurrentMeta();
     } catch (e) {
       console.warn('[SessionManager] Failed to read current session meta:', e);
     }
@@ -140,7 +146,7 @@ export class SessionManager {
   private async _setCurrentMeta(meta: CurrentSessionMeta): Promise<void> {
     this.currentMeta = meta;
     try {
-      await this.history.setCurrentMeta(meta);
+      await this.store.setCurrentMeta(meta);
     } catch (e) {
       console.warn('[SessionManager] Failed to write current session meta:', e);
     }
@@ -192,11 +198,11 @@ export class SessionManager {
         await this._setCurrentMeta({ ...meta, title: t });
         return true;
       }
-      const index = await this.history.getSessionsIndex();
+      const index = await this.store.getSessionsIndex();
       const i = index.findIndex((m) => m.id === id);
       if (i < 0) return false;
       index[i] = { ...index[i], title: t };
-      await this.history.setSessionsIndex(index);
+      await this.store.setSessionsIndex(index);
       return true;
     });
   }
@@ -219,8 +225,8 @@ export class SessionManager {
     if (isEmptySession(turns)) return false;
 
     const entry = buildSessionMeta(meta.id, meta.createdAt, turns, meta.title);
-    await this.history.putSession(entry.id, turns);
-    const index = (await this.history.getSessionsIndex()).filter((m) => m.id !== entry.id);
+    await this.store.putSession(entry.id, turns);
+    const index = (await this.store.getSessionsIndex()).filter((m) => m.id !== entry.id);
     index.push(entry);
     await this._writeIndexPruned(index);
     return true;
@@ -229,10 +235,10 @@ export class SessionManager {
   /** 索引を剪定して書き、剪定した会話の本体を消す */
   private async _writeIndexPruned(index: SessionMeta[]): Promise<void> {
     const { kept, pruned } = pruneSessions(index, this._keep());
-    await this.history.setSessionsIndex(kept);
+    await this.store.setSessionsIndex(kept);
     for (const m of pruned) {
       try {
-        await this.history.deleteSession(m.id);
+        await this.store.deleteSession(m.id);
       } catch (e) {
         console.warn('[SessionManager] Failed to delete pruned session', m.id, e);
       }
@@ -252,7 +258,7 @@ export class SessionManager {
   private async _cleanupSessionDirs(): Promise<void> {
     try {
       if (!this.vfs.exists(SYSTEM_PRINCIPAL, SESSIONS_TEMP_DIR)) return;
-      const keep = new Set((await this.history.getSessionsIndex()).map((m) => m.id));
+      const keep = new Set((await this.store.getSessionsIndex()).map((m) => m.id));
       if (this.currentMeta) keep.add(this.currentMeta.id);
       const entries = this.vfs.listFiles(SYSTEM_PRINCIPAL, { path: SESSIONS_TEMP_DIR, detail: true }) as VfsStat[];
       let n = 0;
@@ -280,7 +286,7 @@ export class SessionManager {
       )
         .filter((s) => s.kind === 'file')
         .map((s) => s.path);
-      const index = await this.history.getSessionsIndex();
+      const index = await this.store.getSessionsIndex();
       const referenced = referencedMediaPaths(index, this.history.get());
       const targets = unreferencedMedia(files, referenced);
       for (const p of targets) {
@@ -366,7 +372,7 @@ export class SessionManager {
 
   /** 退避した会話（新しい順） */
   public async listSessions(): Promise<SessionMeta[]> {
-    return sortSessions(await this.history.getSessionsIndex());
+    return sortSessions(await this.store.getSessionsIndex());
   }
 
   /**
@@ -376,9 +382,9 @@ export class SessionManager {
   public switchSession(id: string): Promise<SessionSwitchResult> {
     return this._serialize(async () => {
       if (this.isBusy()) return { ok: false, reason: 'busy' };
-      const index = await this.history.getSessionsIndex();
+      const index = await this.store.getSessionsIndex();
       const meta = index.find((m) => m.id === id);
-      const turns = meta ? await this.history.getSession(id) : undefined;
+      const turns = meta ? await this.store.getSession(id) : undefined;
       if (!meta || !turns) return { ok: false, reason: 'missing' };
       await this._activate(
         { id: meta.id, createdAt: meta.createdAt, title: meta.title },
@@ -393,10 +399,10 @@ export class SessionManager {
   /** 退避した会話を消す（本体と索引。参照されなくなった添付も） */
   public deleteSession(id: string): Promise<void> {
     return this._serialize(async () => {
-      const index = (await this.history.getSessionsIndex()).filter((m) => m.id !== id);
-      await this.history.setSessionsIndex(index);
+      const index = (await this.store.getSessionsIndex()).filter((m) => m.id !== id);
+      await this.store.setSessionsIndex(index);
       try {
-        await this.history.deleteSession(id);
+        await this.store.deleteSession(id);
       } catch (e) {
         console.warn('[SessionManager] Failed to delete session', id, e);
       }
@@ -415,17 +421,17 @@ export class SessionManager {
     lastActivity: number,
   ): Promise<void> {
     await this._archiveCurrent();
-    const index = (await this.history.getSessionsIndex()).filter((m) => m.id !== meta.id);
-    await this.history.setSessionsIndex(index);
+    const index = (await this.store.getSessionsIndex()).filter((m) => m.id !== meta.id);
+    await this.store.setSessionsIndex(index);
     try {
-      await this.history.deleteSession(meta.id);
+      await this.store.deleteSession(meta.id);
     } catch {
       /* 索引に無ければ本体も無い */
     }
 
     this.history.load(turns);
     await this._setCurrentMeta(meta);
-    await this.history.persist();
+    await this.store.persist();
 
     if (this.logger) {
       this.logger.log('system', { action: `session_${how}`, sessionId: meta.id, turns: turns.length });
@@ -464,8 +470,8 @@ export class SessionManager {
       meta = await this._ensureCurrentMeta();
       turns = this.history.get();
     } else {
-      const found = (await this.history.getSessionsIndex()).find((m) => m.id === id);
-      const stored = found ? await this.history.getSession(id) : undefined;
+      const found = (await this.store.getSessionsIndex()).find((m) => m.id === id);
+      const stored = found ? await this.store.getSession(id) : undefined;
       if (!found || !stored) return null;
       meta = { id: found.id, createdAt: found.createdAt, title: found.title };
       turns = stored;
@@ -497,9 +503,9 @@ export class SessionManager {
     const dir = this.savedSessionsDir();
     if (!dir) return null;
     const meta =
-      id === 'current' ? await this.currentSession() : (await this.history.getSessionsIndex()).find((m) => m.id === id);
+      id === 'current' ? await this.currentSession() : (await this.store.getSessionsIndex()).find((m) => m.id === id);
     if (!meta) return null;
-    const turns = id === 'current' ? this.history.get() : await this.history.getSession(id);
+    const turns = id === 'current' ? this.history.get() : await this.store.getSession(id);
     if (!turns) return null;
     const target = `${dir}/${exportDirName(meta)}`;
     const mediaDir = `${target}/${EXPORT_MEDIA_DIR}`;
@@ -593,7 +599,7 @@ export class SessionManager {
       if (!parsed.ok) return { ok: false, reason: 'invalid', detail: parsed.reason };
 
       const current = await this._ensureCurrentMeta();
-      const index = await this.history.getSessionsIndex();
+      const index = await this.store.getSessionsIndex();
       const taken = new Set([current.id, ...index.map((m) => m.id)]);
       const id = parsed.id && !taken.has(parsed.id) ? parsed.id : generateId();
 
