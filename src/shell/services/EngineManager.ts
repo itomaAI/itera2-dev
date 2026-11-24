@@ -24,10 +24,8 @@ import type { Translator } from '../../core/cognitive/Translator';
 import { normalizeEngineOverrides, overlayEngineConfig, type EngineConfigReader } from '../../core/sys/engineConfig';
 import { ENGINES_TEMP_DIR, EngineConversation } from '../../core/state/EngineConversation';
 import type { PromptRole } from '../../config/system_prompts';
+import { MAX_SUB_ENGINES } from '../../config/engine_limits';
 import { generateId } from '../../utils/id';
-
-/** 同時に生きていられるサブの数（定数から始める。設定にはしない） */
-export const MAX_SUB_ENGINES = 8;
 
 /** 作るときに渡せるもの。どちらも省ける */
 export interface EngineSpec {
@@ -91,8 +89,8 @@ export interface EngineManagerDeps {
   registry: ToolRegistry;
   /** そのエンジンの VFS の取っ手（役割と個体の印を焼き込むのは組み立て） */
   fsFor: (engineId: string) => VfsHandle;
-  /** 道具に渡す画面とプロセス */
-  shell: ToolShell;
+  /** 道具に渡す画面とプロセスの口（プロセスの口は、そのエンジンの取っ手） */
+  shellFor: (engineId: string) => ToolShell;
   processes: {
     processes: ReadonlyMap<string, ServingProcess>;
     kill(pid: string): boolean;
@@ -211,7 +209,7 @@ export class EngineManager {
         conversation,
         contextLimit: () => deps.cognitive.contextLimit(config),
       });
-      bundle.engine.extraContext.shell = deps.shell;
+      bundle.engine.extraContext.shell = deps.shellFor(id);
       entry = { id, ownerPid: owner.pid, ownerApp: ownerProc.app, bundle, conversation, unequip: null };
       this.subs.set(id, entry);
     } catch (e) {

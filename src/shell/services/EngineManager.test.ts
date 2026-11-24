@@ -4,7 +4,8 @@
  * 束とエンジンと道具の台帳は本物。偽物は、VFS・プロセスの表・プロンプトと上流を差す側。
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { EngineManager, MAX_SUB_ENGINES, type EngineOwnerNotice } from './EngineManager';
+import { EngineManager, type EngineOwnerNotice } from './EngineManager';
+import { MAX_SUB_ENGINES } from '../../config/engine_limits';
 import { createEngineBundle } from '../../core/control/EngineBundle';
 import { ROOT_ENGINE_ID } from '../../core/control/Engine';
 import { ToolRegistry } from '../../core/control/ToolRegistry';
@@ -102,7 +103,7 @@ function world() {
     }),
     contextLimit: vi.fn(async (config?: any) => (config?.get('llm').model === 'google/small' ? 100 : 1000)),
   };
-  const shell = { tag: 'shell' } as any;
+  const shellFor = vi.fn((engineId: string) => ({ tag: `shell-${engineId}` }) as any);
   const fsFor = vi.fn((engineId: string) => ({ tag: `fs-${engineId}` }) as any);
 
   const manager = new EngineManager({
@@ -112,7 +113,7 @@ function world() {
     translator: new Translator(),
     registry,
     fsFor,
-    shell,
+    shellFor,
     processes,
     cognitive,
     logger: { log: (category: string, payload: any) => logs.push([category, payload]) },
@@ -139,7 +140,7 @@ function world() {
     equips,
     gate,
     cognitive,
-    shell,
+    shellFor,
     fsFor,
     notices,
     rows,
@@ -220,7 +221,7 @@ describe('EngineManager: 作る', () => {
     expect(e.bundle.role).toBe('sub');
     expect(e.bundle.history).toBe(e.conversation.history);
     expect(e.bundle.engine.extraContext.fs).toEqual({ tag: `fs-${e.id}` });
-    expect(e.bundle.engine.extraContext.shell).toBe(w.shell);
+    expect(e.bundle.engine.extraContext.shell).toEqual({ tag: `shell-${e.id}` });
     expect(e.conversation.mediaDir).toBe(`system/temp/engines/${e.id}`);
 
     // プロンプトと上流は、このエンジンの設定と役割で差される

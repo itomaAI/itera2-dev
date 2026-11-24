@@ -31,6 +31,8 @@ import { ToolExecutionRecorder } from '../../core/control/ToolExecutionRecorder'
 import { ROOT_ENGINE_ID } from '../../core/control/Engine';
 import { createEngineBundle } from '../../core/control/EngineBundle';
 import { EngineManager } from '../services/EngineManager';
+import { createEngineProcesses } from '../windowing/engineProcesses';
+import type { ToolShell } from '../../core/control/ToolContext';
 import { Translator } from '../../core/cognitive/Translator';
 import { registerBasicTools } from '../../core/control/tools/basic_tools';
 import { registerFSTools } from '../../core/control/tools/fs_tools';
@@ -285,7 +287,7 @@ export class SystemBootstrapper {
       return proc.iframe.contentWindow === sourceWindow;
     });
 
-    // HostApiRouterや各種Toolが要求するインターフェースをエミュレートするFacade
+    // HostApiRouter が要求するインターフェースをエミュレートする Facade（道具に見せる shell は下の toolShellFor）
     const shellFacade = {
       panels: desktop.panels,
       modals: desktop.modals,
@@ -298,18 +300,22 @@ export class SystemBootstrapper {
       getContextLimit: () => cognitiveManager.contextLimit(),
       resolveLlm: (config: any) => cognitiveManager.resolveLlm(config),
       listLlmModels: () => cognitiveManager.listModels(),
-      processManager: processManager,
       navHistory: navHistory,
-      resolver: resolver,
-      transport: transport,
-      // 利用者の取っ手（files・open が、利用者に見せるために読む。T-0903）
-      userFs: vfs.as(USER_ACTOR),
     };
 
     desktop.bindNavHistory(navHistory);
 
-    // 画面とプロセスはエンジンのものではないので、束の外から差す（道具の文脈の shell。ToolContext.ts）
-    root.engine.extraContext.shell = shellFacade;
+    // 道具に見せる画面とプロセス（道具の文脈の shell。ToolContext.ts）。エンジンのものではないので、束の外から差す。
+    // プロセスの口は、エンジンごとの取っ手（engineProcesses.ts。動かせるのは自分に仕えるプロセスだけ・ルートは全部）
+    const toolShellFor = (engineId: string): ToolShell => ({
+      // 利用者の取っ手（files・open が、利用者に見せるために読む。T-0903）
+      userFs: vfs.as(USER_ACTOR),
+      processes: createEngineProcesses({ processManager, transport }, engineId),
+      resolver,
+      modals: desktop.modals,
+      _revealInExplorer: (path: string) => desktop.revealInExplorer(path),
+    });
+    root.engine.extraContext.shell = toolShellFor(ROOT_ENGINE_ID);
 
     // 束の表（EngineManager.ts。T-0908）: ルートと、ゲストのプロセスが頼んで作らせる束。
     // 作らせる口（engine:*）はまだ無いので、いま表に載るのはルートだけ。
@@ -321,7 +327,7 @@ export class SystemBootstrapper {
       translator,
       registry: toolRegistry,
       fsFor: agentFs,
-      shell: shellFacade,
+      shellFor: toolShellFor,
       processes: processManager,
       cognitive: cognitiveManager,
       logger,

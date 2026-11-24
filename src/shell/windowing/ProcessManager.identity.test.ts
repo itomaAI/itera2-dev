@@ -87,7 +87,7 @@ describe('ProcessManager — 何のアプリか・仕えるエンジン・個体
     expect(rows()).toEqual(['my_tool app=my_tool engine=e1 type=daemon']);
   });
 
-  it('全部起動し直しても、アプリ・仕える先・pid は同じ', () => {
+  it('全部起動し直しても、ルートに仕えるプロセスのアプリ・仕える先・pid は同じ。ほかのエンジンに仕えるものは終わる（T-0908）', () => {
     const { pm, rows } = mk();
     void pm.spawn({ path: NOTES, show: false });
     void pm.spawn({ path: NOTES, engine: 'e1', show: false });
@@ -98,7 +98,9 @@ describe('ProcessManager — 何のアプリか・仕えるエンジン・個体
 
     void pm.restartAll();
 
-    expect(rows()).toEqual(before);
+    // ほかのエンジンは、持ち主が起こし直された時点で畳まれる。仕えていたプロセスを起こし直すと、仕える先が無い
+    expect(rows()).toEqual(before.filter((row) => row.includes(' engine=root ')));
+    expect(rows()).toHaveLength(2);
     // 起動し直している（iframe は作り直されている）
     expect(Array.from(pm.processes.values()).every((p) => !frames.includes(p.iframe))).toBe(true);
   });
