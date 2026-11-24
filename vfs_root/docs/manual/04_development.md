@@ -232,6 +232,8 @@ MetaOS.tools.register({
 ```
 When the app is closed (killed), tools registered by its PID are automatically removed by the OS.
 
+Tool names are unique per engine: `register()` rejects when a tool of that name already exists (a system tool such as `read`, or a tool registered by another process), so a tool never ends up silently shadowed. Registering your own tool again replaces it. Pick names with an app prefix (`sheet_edit_cell`) to stay clear of other apps.
+
 ## 5. Network & Hardware Access
 
 Browser iframes are usually restricted by CORS and permission policies. MetaOS provides high-level APIs to bypass these safely via the Host OS.

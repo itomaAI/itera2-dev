@@ -112,6 +112,21 @@ export interface ToolDefinitionInfo {
   definition: string | null;
 }
 
+/** 登録を断る理由: 同じ名前の道具が、登録先のエンジンからもう見えている（T-0908） */
+export class ToolNameTakenError extends Error {
+  readonly toolName: string;
+
+  constructor(toolName: string, holder: { kind: 'system' | 'dynamic'; id: string }) {
+    super(
+      holder.kind === 'system'
+        ? `A system tool named "${toolName}" already exists.`
+        : `A tool named "${toolName}" is already registered by process "${holder.id}".`,
+    );
+    this.name = 'ToolNameTakenError';
+    this.toolName = toolName;
+  }
+}
+
 /**
  * エンジンから見える道具（T-0903）。
  *
@@ -119,6 +134,12 @@ export interface ToolDefinitionInfo {
  * 登録したプロセスが仕えるエンジンの台帳に入る。エンジンに見えるのは「システムの道具 → 自分の台帳 → 口を作るときに並べた
  * ほかの台帳」の順で、同じ名前が複数あれば最初に当たったものが動く。どの台帳を並べるかは口を作る側が決める
  * （束を作る関数は、ルートでないエンジンにルートの台帳を並べる —— ルートに仕えるデーモンの道具は、どのエンジンからも使える）。
+ *
+ * 登録は、同じ名前の道具がそのエンジンからもう見えていれば断る（T-0908。ToolNameTakenError）。先に当たったものだけが動くので、
+ * 登録できてしまうと、後から来た道具は黙って隠れる（登録は成功し、定義も会話に並ぶのに、呼ばれない）。
+ * 同じプロセスが自分の道具を登録し直すのは上書き。
+ * 同じ名前が複数見えるのは、ほかのエンジンの台帳が先に持っていた名前を、あとからルートの台帳に登録したときだけ
+ * （ほかのエンジンに仕えるプロセスの道具で、ルートへの登録は止めない。そのエンジンからは自分のものが動く）。
  *
  * どの台帳か（エンジンの id）はこの口に焼き込んである。使う側（エンジン・会話の積み直し・ゲストの登録の口）は id を書かない。
  */
@@ -134,7 +155,10 @@ export interface ToolView {
   getToolDefinition(toolName: string): ToolDefinitionInfo | null;
   /** 見えている動的な道具の定義を、組ごとの <toolset> にして返す（会話を空にしたあとの積み直し） */
   getActiveDynamicToolDefinitions(): string[];
-  /** このエンジンの台帳に登録する（sourcePid は登録したプロセス） */
+  /**
+   * このエンジンの台帳に登録する（sourcePid は登録したプロセス）。同じ名前の道具がもう見えていれば、
+   * 何も変えずに ToolNameTakenError を投げる（自分の道具の登録し直しは上書き）
+   */
   registerDynamicTool(toolName: string, sourcePid: string, payload: DynamicToolDefinition): void;
   unregisterDynamicTool(toolName: string, sourcePid: string): void;
   /** このエンジンの台帳を捨てる（エンジンを畳むとき） */
@@ -177,7 +201,7 @@ export class ToolRegistry {
       getToolDefinition: (toolName) => this._getToolDefinition(visible(), toolName),
       getActiveDynamicToolDefinitions: () => this._activeDynamicToolDefinitions(visible()),
       registerDynamicTool: (toolName, sourcePid, payload) =>
-        this._registerDynamicTool(engineId, toolName, sourcePid, payload),
+        this._registerDynamicTool(engineId, visible(), toolName, sourcePid, payload),
       unregisterDynamicTool: (toolName, sourcePid) => this._unregisterDynamicTool(engineId, toolName, sourcePid),
       dispose: () => {
         this.ledgers.delete(engineId);
@@ -233,10 +257,16 @@ export class ToolRegistry {
    */
   private _registerDynamicTool(
     engineId: string,
+    visible: ToolSet[],
     toolName: string,
     sourcePid: string,
     payload: DynamicToolDefinition,
   ): void {
+    // 同じ名前の道具がこのエンジンからもう見えていれば断る（何も作る前に見る。断った登録は空の組も残さない）。
+    // 組の id は pid で、pid は OS 全体で 1 つなので、「自分の組」は id で分かる
+    const holder = visible.find((set) => set.tools.has(toolName) && !(set.kind === 'dynamic' && set.id === sourcePid));
+    if (holder) throw new ToolNameTakenError(toolName, holder);
+
     let ledger = this.ledgers.get(engineId);
     if (!ledger) {
       ledger = new Map();

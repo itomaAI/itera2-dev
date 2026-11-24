@@ -12,7 +12,7 @@
  */
 
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { ToolRegistry } from './ToolRegistry';
+import { ToolRegistry, ToolNameTakenError } from './ToolRegistry';
 import { ROOT_ENGINE_ID } from './Engine';
 import { registerSysTools } from './tools/sys_tools';
 import { registerFSTools } from './tools/fs_tools';
@@ -391,17 +391,78 @@ describe('ToolRegistry: エンジンごとの台帳（T-0903）', () => {
     expect(systemOf(h.root).length).toBeGreaterThan(0);
   });
 
-  it('同じ名前が両方に在れば、自分の台帳のものが動く。ルートからはルートのものが動く', async () => {
+  it('ルートの台帳には、ほかのエンジンの台帳が先に持っていた名前も登録できる。そのエンジンからは自分のものが、ルートからはルートのものが動く', async () => {
     const h = harness();
-    h.sub.registerDynamicTool('search', 'my_search', { description: 'mine' });
-    expect((await h.sub.execute({ type: 'search', params: {} }, NO_CTX))?.log).toBe('my_search:search');
-    expect((await h.root.execute({ type: 'search', params: {} }, NO_CTX))?.log).toBe('web_daemon:search');
+    h.root.registerDynamicTool('draw', 'painter', { description: 'root draw' });
+    expect((await h.sub.execute({ type: 'draw', params: {} }, NO_CTX))?.log).toBe('canvas_2:draw');
+    expect((await h.root.execute({ type: 'draw', params: {} }, NO_CTX))?.log).toBe('painter:draw');
     expect(h.calls).toEqual([
-      { pid: 'my_search', name: 'search' },
-      { pid: 'web_daemon', name: 'search' },
+      { pid: 'canvas_2', name: 'draw' },
+      { pid: 'painter', name: 'draw' },
     ]);
   });
 
+  it('同じ名前の道具がもう見えていれば、登録を断る: システムの道具', () => {
+    const h = harness();
+    expect(() => h.root.registerDynamicTool('finish', 'faker', { description: 'x' })).toThrow(
+      'A system tool named "finish" already exists.',
+    );
+    expect(() => h.sub.registerDynamicTool('finish', 'faker_2', { description: 'x' })).toThrow(ToolNameTakenError);
+    // 断られた登録は何も残さない（空の組も作らない）
+    expect(h.root.listToolSets().map((s) => s.id)).toEqual(['web_daemon']);
+    expect(h.sub.listToolSets().map((s) => s.id)).toEqual(['canvas_2', 'web_daemon']);
+  });
+
+  it('断る: 同じ台帳で、別のプロセスが持っている名前（先に登録した者の道具が動き続ける）', async () => {
+    const h = harness();
+    expect(() => h.root.registerDynamicTool('search', 'another', { description: 'late' })).toThrow(
+      'A tool named "search" is already registered by process "web_daemon".',
+    );
+    expect((await h.root.execute({ type: 'search', params: {} }, NO_CTX))?.log).toBe('web_daemon:search');
+    expect(h.root.listToolSets().map((s) => s.id)).toEqual(['web_daemon']);
+  });
+
+  it('断る: 後ろに並べた台帳（ルート）に在る名前を、自分の台帳に登録する。並べていない口には関係ない', async () => {
+    const h = harness();
+    expect(() => h.sub.registerDynamicTool('search', 'my_search', { description: 'mine' })).toThrow(
+      'A tool named "search" is already registered by process "web_daemon".',
+    );
+    expect((await h.sub.execute({ type: 'search', params: {} }, NO_CTX))?.log).toBe('web_daemon:search');
+    expect(h.sub.listToolSets().map((s) => s.id)).toEqual(['canvas_2', 'web_daemon']);
+
+    const alone = h.r.viewFor('e2');
+    expect(() => alone.registerDynamicTool('search', 'lonely', { description: 'own' })).not.toThrow();
+    expect((await alone.execute({ type: 'search', params: {} }, NO_CTX))?.log).toBe('lonely:search');
+  });
+
+  it('同じプロセスが自分の道具を登録し直すのは、上書き', () => {
+    const h = harness();
+    h.root.registerDynamicTool('search', 'web_daemon', {
+      description: 's2',
+      definition: '<define_tag name="search">v2</define_tag>',
+    });
+    expect(h.root.getToolDefinition('search')?.definition).toBe('<define_tag name="search">v2</define_tag>');
+    expect(h.root.listToolSets()).toHaveLength(1);
+    expect(h.root.listToolSets()[0].tools).toHaveLength(1);
+  });
+
+  it('1 つ断られても、同じプロセスのほかの道具はそのまま', () => {
+    const h = harness();
+    expect(() => h.sub.registerDynamicTool('search', 'canvas_2', { description: 'x' })).toThrow(ToolNameTakenError);
+    expect(h.sub.getToolDefinition('draw')?.setId).toBe('canvas_2');
+    expect(h.sub.getToolDefinition('search')?.setId).toBe('web_daemon');
+  });
+
+  it('解除されるか、持っていたプロセスが終われば、その名前は空く', async () => {
+    const h = harness();
+    h.root.unregisterDynamicTool('search', 'web_daemon');
+    expect(() => h.root.registerDynamicTool('search', 'another', { description: 'now mine' })).not.toThrow();
+    expect((await h.root.execute({ type: 'search', params: {} }, NO_CTX))?.log).toBe('another:search');
+
+    h.r.removeToolsByPid('another');
+    expect(() => h.sub.registerDynamicTool('search', 'my_search', { description: 'mine' })).not.toThrow();
+    expect((await h.sub.execute({ type: 'search', params: {} }, NO_CTX))?.log).toBe('my_search:search');
+  });
   it('実行の記録には、呼んだエンジンの id が付く（道具の持ち主が別のエンジンに仕えていても）', async () => {
     const h = harness();
     await h.sub.execute({ type: 'search', params: {} }, NO_CTX);

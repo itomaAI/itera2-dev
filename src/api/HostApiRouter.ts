@@ -914,7 +914,8 @@ export class HostApiRouter {
     // 7. Dynamic Tools (tools)
     // ==========================================
     t.registerHandler('tools:register', async (payload, sourcePid) => {
-      // 道具は、登録したプロセスが仕えるエンジンの台帳に入る
+      // 道具は、登録したプロセスが仕えるエンジンの台帳に入る。同じ名前の道具がそのエンジンからもう見えていれば、
+      // 台帳が断る（ToolNameTakenError。ゲストの MetaOS.tools.register が失敗する）
       d.engineFor?.(sourcePid)?.tools.registerDynamicTool(payload.name, sourcePid, payload);
       return true;
     });

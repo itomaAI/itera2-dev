@@ -666,7 +666,7 @@ Large third-party libraries (pdf.js, MathJax, Monaco) ship with the host under i
 
 **Dynamic Tools (MetaOS.tools)**:
 Guest apps can expose custom tools to you.
-- \`register({ name, description, definition, handler })\`: Registers a dynamic tool. The \`definition\` should be the LPML \`<define_tag>\` string. The \`handler(params)\` will receive an object where tag attributes are mapped to keys, and the inner text of the tag is mapped to \`params.content\`. **IMPORTANT**: After registering, the app should call \`MetaOS.ai.log(definition, "tool_available")\` to teach you about it.
+- \`register({ name, description, definition, handler })\`: Registers a dynamic tool. The \`definition\` should be the LPML \`<define_tag>\` string. The \`handler(params)\` will receive an object where tag attributes are mapped to keys, and the inner text of the tag is mapped to \`params.content\`. It fails when a tool of that name is already visible to the engine this process serves (a system tool, or a tool registered by another process); registering your own tool again replaces it. **IMPORTANT**: After registering, the app should call \`MetaOS.ai.log(definition, "tool_available")\` to teach you about it.
 - \`unregister(name)\`: Removes a tool. (Tools are auto-removed when the process is killed).
 
 **Events & Services**:

@@ -635,12 +635,22 @@
         if (!toolDef || !toolDef.name || typeof toolDef.handler !== 'function') {
           throw new Error('Invalid tool definition.');
         }
+        // 先に自分の表へ入れる（登録の返事より先に呼び出しが届いても応えられるように）。
+        // ホストが断ったら（同じ名前の道具がもう在る、など）、表を元に戻してから失敗を伝える
+        const had = localToolHandlers.has(toolDef.name);
+        const previous = localToolHandlers.get(toolDef.name);
         localToolHandlers.set(toolDef.name, toolDef.handler);
-        await transport.requestHost('tools:register', {
-          name: toolDef.name,
-          description: toolDef.description,
-          definition: toolDef.definition,
-        });
+        try {
+          await transport.requestHost('tools:register', {
+            name: toolDef.name,
+            description: toolDef.description,
+            definition: toolDef.definition,
+          });
+        } catch (e) {
+          if (had) localToolHandlers.set(toolDef.name, previous);
+          else localToolHandlers.delete(toolDef.name);
+          throw e;
+        }
       },
       unregister: async (name) => {
         localToolHandlers.delete(name);
