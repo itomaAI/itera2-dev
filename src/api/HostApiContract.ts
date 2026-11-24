@@ -105,7 +105,7 @@ export interface HostApiContract {
     response: any;
   };
   /**
-   * 端末ローカルの小さな状態（MetaOS.storage.local。T-0771）。ホストの localStorage に pid ごとに 1 件の JSON。
+   * 端末ローカルの小さな状態（MetaOS.storage.local。T-0771）。ホストの localStorage にアプリごとに 1 件の JSON。
    * 設定の層（同期される）とは別の口。pid は送信元から取るので引数に無い
    */
   'storage:local_get': {

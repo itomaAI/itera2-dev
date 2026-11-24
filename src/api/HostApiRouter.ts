@@ -589,18 +589,20 @@ export class HostApiRouter {
     // 端末ローカルの小さな状態の口（T-0771）。ホストは「利用者の設定（層・同期される）」と
     // 「端末ごとの見え方（localStorage・同期されない）」を分けて持っている。ゲストには前者の口しか無く、
     // アプリが後者を localStorage で直接持っていた（同一オリジンに頼る書き方。別オリジンでは SecurityError）。
-    // 置き場は pid ごとに 1 件の JSON。pid は送信元のもの（引数で受けると他のアプリの袋が見える）。
+    // 置き場はアプリごとに 1 件の JSON。どのアプリかは送信元のプロセスの記録から（引数で受けると他のアプリの袋が見える）。
+    // 同じアプリの個体（名前を付けて起こしたもの・枝番のもの）は同じ袋を見る（T-0903）。
     const localStore = d.guestLocalStore ?? new GuestLocalStore();
-    t.registerHandler('storage:local_get', async ({ key }, sourcePid) => localStore.get(sourcePid, key));
+    const bagOf = (pid: string): string => d.processManager?.processes.get(pid)?.app ?? pid;
+    t.registerHandler('storage:local_get', async ({ key }, sourcePid) => localStore.get(bagOf(sourcePid), key));
     t.registerHandler('storage:local_set', async ({ key, value }, sourcePid) => {
-      localStore.set(sourcePid, key, value);
+      localStore.set(bagOf(sourcePid), key, value);
       return true;
     });
     t.registerHandler('storage:local_remove', async ({ key }, sourcePid) => {
-      localStore.remove(sourcePid, key);
+      localStore.remove(bagOf(sourcePid), key);
       return true;
     });
-    t.registerHandler('storage:local_keys', async (_, sourcePid) => localStore.keys(sourcePid));
+    t.registerHandler('storage:local_keys', async (_, sourcePid) => localStore.keys(bagOf(sourcePid)));
 
     // 起動中のアプリがテーマを取り直す口（T-0539）。theme_changed を受けたブリッジが呼ぶ。
     // 起動時の焼き込み（GuestCompiler）と同じ関数で作る。

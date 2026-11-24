@@ -146,7 +146,7 @@ export class ProcessMonitorModal {
 
       // レジストリからリッチなメタデータを取得
       if (isDaemon) {
-        const svc = this.appRegistry.getService(proc.pid);
+        const svc = this.appRegistry.getService(proc.app);
         if (svc) {
           displayName = svc.name;
           icon = svc.icon || icon;

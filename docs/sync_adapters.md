@@ -238,7 +238,7 @@ fileId が無いため失敗する。実際に 104 件は 4 日間アンカー�
 「保存 → 自分の `onMutate` が発火 → 再同期 → 保存」が無限に回りうる。
 
 これは OS 側で止まっている。`ProviderManager._bindEventBus()` のエコーキャンセルが
-**`mutation.sourcePrincipal.id === info.pid` の一致のみ**で判定しており、
+**`mutation.origin === info.pid` の一致のみ**（変更を起こした個体の印が、そのプロバイダの pid か）で判定しており、
 `type` を条件に含めていないため、`systemPrivilege: true` のデーモン
 （Principal が `{ type: 'system' }` になる）でも自分の書き込みは自分に届かない。
 
