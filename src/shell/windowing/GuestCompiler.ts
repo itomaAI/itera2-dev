@@ -303,40 +303,48 @@ class Compilation {
   }
 }
 
+/**
+ * 拡張子から決める MIME。ゲストに渡す VFS のファイルの種別はここ 1 か所から出る
+ * （アプリの資産・`MetaOS.fs.resolveUrl`・`MetaOS.fs.read` の `encoding: 'dataurl'`）。
+ */
+export function guestMimeOf(filename: string): string {
+  const ext = filename.split('.').pop()?.toLowerCase() || '';
+  const map: Record<string, string> = {
+    js: 'application/javascript',
+    mjs: 'application/javascript',
+    ts: 'application/javascript',
+    css: 'text/css',
+    html: 'text/html',
+    json: 'application/json',
+    xml: 'application/xml',
+    txt: 'text/plain',
+    md: 'text/markdown',
+    csv: 'text/csv',
+    svg: 'image/svg+xml',
+    png: 'image/png',
+    jpg: 'image/jpeg',
+    jpeg: 'image/jpeg',
+    gif: 'image/gif',
+    webp: 'image/webp',
+    ico: 'image/x-icon',
+    woff: 'font/woff',
+    woff2: 'font/woff2',
+    ttf: 'font/ttf',
+    otf: 'font/otf',
+    wasm: 'application/wasm',
+    pdf: 'application/pdf',
+    mp3: 'audio/mpeg',
+    mp4: 'video/mp4',
+    webm: 'video/webm',
+    glb: 'model/gltf-binary',
+    gltf: 'model/gltf+json',
+  };
+  return map[ext] || 'application/octet-stream';
+}
+
 export class GuestCompiler {
   getMimeType(filename: string): string {
-    const ext = filename.split('.').pop()?.toLowerCase() || '';
-    const map: Record<string, string> = {
-      js: 'application/javascript',
-      mjs: 'application/javascript',
-      ts: 'application/javascript',
-      css: 'text/css',
-      html: 'text/html',
-      json: 'application/json',
-      xml: 'application/xml',
-      txt: 'text/plain',
-      md: 'text/markdown',
-      csv: 'text/csv',
-      svg: 'image/svg+xml',
-      png: 'image/png',
-      jpg: 'image/jpeg',
-      jpeg: 'image/jpeg',
-      gif: 'image/gif',
-      webp: 'image/webp',
-      ico: 'image/x-icon',
-      woff: 'font/woff',
-      woff2: 'font/woff2',
-      ttf: 'font/ttf',
-      otf: 'font/otf',
-      wasm: 'application/wasm',
-      pdf: 'application/pdf',
-      mp3: 'audio/mpeg',
-      mp4: 'video/mp4',
-      webm: 'video/webm',
-      glb: 'model/gltf-binary',
-      gltf: 'model/gltf+json',
-    };
-    return map[ext] || 'application/octet-stream';
+    return guestMimeOf(filename);
   }
 
   /**
