@@ -2,6 +2,7 @@
  * src/core/control/EngineBundle.test.ts
  * 束を作る関数（T-0903）。束を 2 つ作って、互いに独立であること・口の規則を見る。
  */
+import { ROLE_PARTS } from '../../config/system_prompts';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { createEngineBundle } from './EngineBundle';
 import { ROOT_ENGINE_ID, TurnType } from './Engine';
@@ -35,6 +36,7 @@ function world() {
     const fs = { tag: `fs-${id}` } as any;
     const b = createEngineBundle({
       id,
+      role: id === ROOT_ENGINE_ID ? 'root' : 'sub',
       history,
       vfs: {} as any,
       configManager: { get: () => ({}) } as any,
@@ -150,7 +152,10 @@ describe('createEngineBundle: 束は互いに独立（T-0903）', () => {
       expect(context.fs).toBe(h.fs);
       expect(context.tools).toBe(h.b.tools);
       // 会話の口は、道具に見せる 2 つだけ（いまの会話を訊く口は渡らない）
-      expect(Object.keys(context.conversation).sort()).toEqual(['putAttachment', 'reset']);
+      expect(Object.keys(context.conversation).sort()).toEqual(['afterReset', 'putAttachment', 'reset']);
+      // リセットのあとの 1 行は、束の役割から（道具にも、外からリセットする口にも同じ文）
+      expect(context.conversation.afterReset).toBe(ROLE_PARTS[h.b.role].afterReset);
+      expect(h.b.afterReset).toBe(ROLE_PARTS[h.b.role].afterReset);
       await context.conversation.reset({ summary: 'x', triggerLlm: true });
       expect(h.conversation.reset).toHaveBeenCalledWith({ summary: 'x', triggerLlm: true });
       // 画面とプロセスは束のものではない（組み立てが後から差す）

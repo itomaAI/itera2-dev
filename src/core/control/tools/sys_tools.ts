@@ -133,8 +133,8 @@ export function registerSysTools(registry: ToolRegistry): void {
     impl: async (params: any, context: ToolContext) => {
       const summary = params.content || '';
 
-      let nextSessionMsg =
-        '[System: Session Reset & Context Compressed]\nPlease run the Initialization Protocol first.';
+      // 2 行目（リセットのあとにすること）は役割ごとに違うので、会話の口から引く（T-0908）
+      let nextSessionMsg = `[System: Session Reset & Context Compressed]\n${context.conversation.afterReset}`;
       if (summary) nextSessionMsg += `\n\n[Carried Over Information]\n${summary}`;
 
       // 空にするのは、この道具を呼んだエンジンの会話（T-0903）

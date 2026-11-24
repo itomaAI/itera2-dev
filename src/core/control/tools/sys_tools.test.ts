@@ -74,6 +74,7 @@ describe('reset_session', () => {
     const calls: any[] = [];
     const context: any = {
       conversation: {
+        afterReset: 'DO THIS NEXT.',
         reset: async (options: any) => {
           calls.push(options);
         },
@@ -81,7 +82,10 @@ describe('reset_session', () => {
     };
     const res = await tools().reset_session.impl({ content: 'carry this' }, context);
     expect(calls).toHaveLength(1);
-    expect(calls[0].summary).toContain('[Carried Over Information]\ncarry this');
+    // 2 行目（リセットのあとにすること）は会話の口から来る。道具は文を持たない（T-0908）
+    expect(calls[0].summary).toBe(
+      '[System: Session Reset & Context Compressed]\nDO THIS NEXT.\n\n[Carried Over Information]\ncarry this',
+    );
     expect(calls[0]).toMatchObject({ triggerLlm: true, restoreTools: true });
     expect(res.halt_loop).toBe(true);
   });

@@ -24,6 +24,7 @@ import type { VfsHandle } from '../vfs/VfsHandle';
 import type { EngineConfigReader } from '../sys/engineConfig';
 import type { Translator } from '../cognitive/Translator';
 import type { WakePolicy } from '../../config/wake_policy';
+import { ROLE_PARTS, type PromptRole } from '../../config/system_prompts';
 import { Engine, ROOT_ENGINE_ID } from './Engine';
 import type { ToolRegistry, ToolView } from './ToolRegistry';
 import type { ToolConversation } from './ToolContext';
@@ -35,8 +36,11 @@ export interface ConversationSummary {
   createdAt: number;
 }
 
-/** 束が握る、このエンジンの会話の口。道具に見せるのは ToolConversation の分だけ */
-export interface BundleConversation extends ToolConversation {
+/**
+ * 束が握る、このエンジンの会話の口。道具に見せるのは ToolConversation の分だけ。
+ * リセットのあとの 1 行（afterReset）は会話のものではなく役割のものなので、束が足す
+ */
+export interface BundleConversation extends Omit<ToolConversation, 'afterReset'> {
   /** いまの会話。無ければ null */
   current(): Promise<ConversationSummary | null>;
   /** いまの会話の id（同期。生成の台帳の行に添える）。無ければ null */
@@ -46,6 +50,8 @@ export interface BundleConversation extends ToolConversation {
 export interface EngineBundleSpec {
   /** エンジンの id。振るのはホスト（ルートは ROOT_ENGINE_ID） */
   id: string;
+  /** 役割: OS のチャットのエンジン（root）か、アプリが作ったエンジン（sub）か。プロンプトの役割ごとの部分と同じ語 */
+  role: PromptRole;
   /** このエンジンの会話 */
   history: HistoryManager;
   vfs: VfsService;
@@ -85,6 +91,9 @@ export type EngineBundleEvent =
 /* eslint-disable @typescript-eslint/no-explicit-any */
 export interface EngineBundle {
   readonly id: string;
+  readonly role: PromptRole;
+  /** リセットのあと、この役割のエンジンがすること（外からリセットする口が、申し送りの頭に置く 1 行） */
+  readonly afterReset: string;
   readonly engine: Engine;
   readonly history: HistoryManager;
   /** このエンジンに見える道具（ゲストの道具の登録もここへ） */
@@ -107,7 +116,8 @@ export interface EngineBundle {
 }
 
 export function createEngineBundle(spec: EngineBundleSpec): EngineBundle {
-  const { id, history, conversation } = spec;
+  const { id, role, history, conversation } = spec;
+  const afterReset = ROLE_PARTS[role].afterReset;
 
   // ルートでないエンジンには、自分の台帳の後ろにルートの台帳が見える（同名なら自分のものが動く）
   const tools = spec.registry.viewFor(id, id === ROOT_ENGINE_ID ? [] : [ROOT_ENGINE_ID]);
@@ -120,8 +130,9 @@ export function createEngineBundle(spec: EngineBundleSpec): EngineBundle {
     tools,
     {
       fs: spec.fs,
-      // 道具に見せるのは、空にする・添付を置く の 2 つだけ
+      // 道具に見せるのは、空にする・添付を置く の 2 つと、リセットのあとの 1 行だけ
       conversation: {
+        afterReset,
         reset: (options) => conversation.reset(options),
         putAttachment: (name, blob) => conversation.putAttachment(name, blob),
       },
@@ -144,6 +155,8 @@ export function createEngineBundle(spec: EngineBundleSpec): EngineBundle {
 
   return {
     id,
+    role,
+    afterReset,
     engine,
     history,
     tools,

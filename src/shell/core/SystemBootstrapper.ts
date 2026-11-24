@@ -220,6 +220,7 @@ export class SystemBootstrapper {
     // SessionManager なので、ここは配線するだけ
     const root = createEngineBundle({
       id: ROOT_ENGINE_ID,
+      role: 'root',
       history,
       vfs,
       configManager,

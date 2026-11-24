@@ -215,11 +215,18 @@ export function buildAppendPlan(
   return { ok: true, role, content, meta, wake, visible };
 }
 
-/** chat.reset の要求を正規化する。summary の頭に呼び手を付ける（`<reset_session>` 道具と同じ形で起動手順を促す） */
-export function buildResetPlan(opts: ChatResetOpts | null | undefined, source: string): ChatResetPlan {
+/**
+ * chat.reset の要求を正規化する。summary の頭に呼び手と、リセットのあとにすること（`afterReset`。相手のエンジンの
+ * 役割ごとの 1 行）を付ける。`<reset_session>` 道具と同じ形。
+ */
+export function buildResetPlan(
+  opts: ChatResetOpts | null | undefined,
+  source: string,
+  afterReset: string,
+): ChatResetPlan {
   const o = isPlainObject(opts) ? (opts as ChatResetOpts) : {};
   const carried = typeof o.summary === 'string' ? o.summary.trim() : '';
-  let summary = `[System: Session reset by ${source}]\nPlease run the Initialization Protocol first.`;
+  let summary = `[System: Session reset by ${source}]\n${afterReset}`;
   if (carried) summary += `\n\n[Carried Over Information]\n${carried}`;
   return {
     summary,

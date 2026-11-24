@@ -28,6 +28,8 @@ export interface ToolEngine {
 
 /** 道具から見える、このエンジンの会話 */
 export interface ToolConversation {
+  /** リセットのあと、この役割のエンジンがすること（申し送りの見出しの下に置く 1 行。文は system_prompts.ts の役割ごとの部分） */
+  readonly afterReset: string;
   /** 会話を空にして始め直す（reset_session） */
   reset(options: { summary?: string; triggerLlm?: boolean; restoreTools?: boolean }): Promise<unknown>;
   /** 会話の添付の置き場にファイルを置き、置いた VFS のパスを返す（take_screenshot）。置き場と書く権限は会話の側が持つ */

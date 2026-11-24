@@ -415,6 +415,16 @@ describe('SessionManager: 既定の保存先（paths.user.sessions）', () => {
     expect(history.turns[0].content).toBe('legacy');
   });
 
+  it('保存は、いまの会話の置き場に在るファイルを、会話から参照されていなくても同梱する', async () => {
+    const { history, vfs, sm } = setup();
+    await sm.init();
+    const dir = sm.currentMediaDir();
+    vfs.files.set(`${dir}/9_orphan.bin`, 'U');
+    history.append('user', 'no attachments here');
+    const saved = await sm.exportSessionToDefaultDir('current', principal);
+    expect(vfs.files.get(`${saved}/media/9_orphan.bin`)).toBe('U');
+  });
+
   it('保存先の宣言が無ければ null と空', async () => {
     const { history, sm } = setup(10, null);
     history.append('user', 'x');
