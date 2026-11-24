@@ -178,6 +178,13 @@ describe('SessionManager: 空にすると退避される', () => {
     expect(cur?.id).not.toBe(index[0].id);
   });
 
+  it('起こすと言われなければ、引き継ぎは置くだけ（MetaOS.chat.reset・/reset の道）。道具の定義も頼まれたときだけ', async () => {
+    const { history, sm } = setup();
+    history.append('user', 'q');
+    await sm.clearSession({ summary: 'carry' });
+    expect(history.turns.map((t) => [t.meta.type, t.meta.trigger_llm])).toEqual([['event_log', false]]);
+  });
+
   it('発言の無い会話は退避しない', async () => {
     const { history, sm } = setup();
     history.append('system', '<event type="tool_available">x</event>', { type: 'tool_available', trigger_llm: false });
