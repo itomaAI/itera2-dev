@@ -11,6 +11,7 @@ import type { VendorCatalog } from '../core/sys/VendorCatalog';
 import type { Turn, TurnContent, TurnMeta } from '../core/state/HistoryManager';
 import type { DynamicToolRegistration, ProcessInfo } from './HostApiContract';
 import { resolvePrincipal } from './principal';
+import { fileDataUrl } from './fileDataUrl';
 import { GuestLocalStore } from '../core/sys/GuestLocalStore';
 import type { SpawnOptions } from '../shell/windowing/ProcessManager';
 import type { CompiledGuest } from '../shell/windowing/GuestCompiler';
@@ -204,7 +205,8 @@ export class HostApiRouter {
         if (opts.encoding === 'binary') {
           return await d.vfs.withBlob(principal, path, async (blob) => new Uint8Array(await blob.arrayBuffer()), opts);
         } else if (opts.encoding === 'base64' || opts.encoding === 'dataurl') {
-          const dataUrl = await d.vfs.withBlob(principal, path, blobToDataUrl, opts);
+          // 実体は種別を持たない。種別は resolveUrl と同じ表（拡張子）から付ける（T-0906）
+          const dataUrl = await d.vfs.withBlob(principal, path, (blob) => fileDataUrl(blob, path), opts);
           if (opts.encoding === 'dataurl') return dataUrl;
           return dataUrl.split(',')[1] || '';
         }
