@@ -9,12 +9,14 @@
  *   fs           … VFS の取っ手。このエンジンの役割と個体の印が焼き込まれている（VfsHandle.ts）
  *   engine       … このエンジン自身（道具から見える口だけ）
  *   conversation … このエンジンの会話（空にする・添付を置く）
+ *   tools        … このエンジンに見える道具の一覧（tool_catalog が読む）
  *   shell        … OS の画面とプロセス。エンジンのものではない
  *
  * ゲストの道具（アプリ・デーモンが登録したもの）には渡らない。あちらは登録したプロセスの権限で動く。
  */
 
 import type { VfsHandle } from '../vfs/VfsHandle';
+import type { ToolDefinitionInfo, ToolSetSummary } from './ToolRegistry';
 
 /** 道具から見える、自分を呼んだエンジン */
 export interface ToolEngine {
@@ -28,6 +30,12 @@ export interface ToolConversation {
   reset(options: { summary?: string; triggerLlm?: boolean; restoreTools?: boolean }): Promise<unknown>;
   /** 会話の添付の置き場にファイルを置き、置いた VFS のパスを返す（take_screenshot）。置き場と書く権限は会話の側が持つ */
   putAttachment(name: string, blob: Blob): Promise<string>;
+}
+
+/** 道具から見える、このエンジンの道具の一覧（tool_catalog）。エンジンが実行に使っている口と同じものを読む */
+export interface ToolCatalog {
+  listToolSets(includeSystem?: boolean): ToolSetSummary[];
+  getToolDefinition(toolName: string): ToolDefinitionInfo | null;
 }
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -48,5 +56,6 @@ export interface ToolContext {
   fs: VfsHandle;
   engine: ToolEngine;
   conversation: ToolConversation;
+  tools: ToolCatalog;
   shell: ToolShell;
 }

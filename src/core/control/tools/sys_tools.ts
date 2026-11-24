@@ -162,12 +162,13 @@ export function registerSysTools(registry: ToolRegistry): void {
   registry.registerSystemTool(setId, setName, {
     name: 'tool_catalog',
     description: 'List active toolsets or fetch one tool definition.',
-    impl: async (params: any) => {
+    // 答えるのは、呼んだエンジンに見えている道具（登録時のレジストリではなく、文脈の口から。T-0903）
+    impl: async (params: any, context: ToolContext) => {
       const action = String(params.action || 'list');
       if (action === 'define') {
         const name = String(params.name || '').trim();
         if (!name) return { log: '[Error] name is required for action="define".', ui: '❌ tool_catalog' };
-        const found = registry.getToolDefinition(name);
+        const found = context.tools.getToolDefinition(name);
         if (!found) {
           return {
             log: `[Error] No tool named <${name}> is registered. Use <tool_catalog action="list" /> to see what is active.`,
@@ -188,7 +189,7 @@ ${found.definition}
         };
       }
       const includeSystem = params.include_system === 'true';
-      const sets = registry.listToolSets(includeSystem);
+      const sets = context.tools.listToolSets(includeSystem);
       if (sets.length === 0) {
         return {
           log: 'No dynamic tools are active (no app or daemon has registered any).',

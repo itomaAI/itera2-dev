@@ -11,7 +11,7 @@
 import type { VfsService } from '../../core/vfs/VfsService';
 import type { HistoryManager, Turn } from '../../core/state/HistoryManager';
 import type { SystemLogger } from '../../core/state/SystemLogger';
-import type { ToolRegistry } from '../../core/control/ToolRegistry';
+import type { ToolView } from '../../core/control/ToolRegistry';
 import type { Principal, VfsStat } from '../../core/vfs/types';
 import { SYSTEM_PRINCIPAL } from '../../core/vfs/types';
 import { generateId } from '../../utils/id';
@@ -71,7 +71,8 @@ export class SessionManager {
   private vfs: VfsService;
   private history: HistoryManager;
   private logger: SystemLogger;
-  private toolRegistry: ToolRegistry;
+  /** この会話のエンジンに見える道具（会話を空にした・差し替えたあと、定義を積み直すために読む） */
+  private tools: Pick<ToolView, 'getActiveDynamicToolDefinitions'>;
   private onSessionChanged: (() => void) | null = null;
   private isBusy: () => boolean = () => false;
   private readonly keep: () => unknown;
@@ -86,13 +87,13 @@ export class SessionManager {
     vfs: VfsService,
     history: HistoryManager,
     logger: SystemLogger,
-    toolRegistry: ToolRegistry,
+    tools: Pick<ToolView, 'getActiveDynamicToolDefinitions'>,
     deps: SessionManagerDeps = {},
   ) {
     this.vfs = vfs;
     this.history = history;
     this.logger = logger;
-    this.toolRegistry = toolRegistry;
+    this.tools = tools;
     this.keep = deps.keep ?? (() => undefined);
     this.sessionsDir = deps.sessionsDir ?? (() => null);
     this.now = deps.now ?? (() => Date.now());
@@ -297,8 +298,8 @@ export class SessionManager {
 
   /** 走っているアプリ・デーモンの道具の定義を積み直す（履歴ごと消えるので。T-0246） */
   private _restoreToolDefinitions(): void {
-    if (!this.toolRegistry) return;
-    const activeToolDefs = this.toolRegistry.getActiveDynamicToolDefinitions();
+    if (!this.tools) return;
+    const activeToolDefs = this.tools.getActiveDynamicToolDefinitions();
     if (activeToolDefs.length === 0) return;
     const defsText = activeToolDefs.join('\n');
     this.history.append(
@@ -431,7 +432,7 @@ export class SessionManager {
     }
 
     const stamp = (ms: number) => new Date(ms).toISOString();
-    const defs = this.toolRegistry ? this.toolRegistry.getActiveDynamicToolDefinitions() : [];
+    const defs = this.tools ? this.tools.getActiveDynamicToolDefinitions() : [];
     const lines = [
       how === 'switched'
         ? `[System: Switched to an earlier session (last activity ${stamp(lastActivity)}). Time now: ${stamp(this.now())}.]`

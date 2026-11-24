@@ -160,6 +160,8 @@ export class SystemBootstrapper {
     registerSearchTools(toolRegistry);
     registerSysTools(toolRegistry);
     registerUITools(toolRegistry);
+    // ルートのエンジンに見える道具（システムの道具 ＋ ルートの台帳。T-0903）
+    const rootTools = toolRegistry.viewFor(ROOT_ENGINE_ID);
 
     const translator = new Translator();
     const processManager = new ProcessManager(vfs, appRegistry, configManager);
@@ -207,10 +209,10 @@ export class SystemBootstrapper {
     // 4. Shell Services & UI Layer
     // ==========================================
     // Engineの初期化 (AdapterとProjectorはCognitiveManagerが後で注入)
-    const engine = new Engine({ history, vfs, configManager }, null, null, translator, toolRegistry, {});
+    const engine = new Engine({ history, vfs, configManager }, null, null, translator, rootTools, {});
 
     const cognitiveManager = new CognitiveManager(configManager, engine, logger, vfs, registryLayers);
-    const sessionManager = new SessionManager(vfs, history, logger, toolRegistry, {
+    const sessionManager = new SessionManager(vfs, history, logger, rootTools, {
       keep: () => configManager.get('preferences')?.sessionHistoryKeep,
       // VFS の保存先は paths.json の user.sessions（T-0614）。ここから自動で決まり、利用者に場所を訊かない
       sessionsDir: () => configManager.paths().user.sessions,
@@ -301,7 +303,7 @@ export class SystemBootstrapper {
       navHistory,
       history,
       engine,
-      toolRegistry,
+      toolRegistry: rootTools,
       sessionManager,
       vendorCatalog: new VendorCatalog(vendorHrefOf(import.meta.env.BASE_URL, document.baseURI)),
       shell: shellFacade as any,

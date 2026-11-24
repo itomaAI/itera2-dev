@@ -88,8 +88,64 @@ function errorMessage(err: unknown): string {
   return String(err);
 }
 
+/** 実行する 1 本（パーサーが切り出したもの） */
+export interface ToolAction {
+  type: string;
+  params: ToolParams;
+  closed?: boolean;
+}
+
+/** 道具の組の要約（一覧の 1 件） */
+export interface ToolSetSummary {
+  id: string;
+  kind: 'system' | 'dynamic';
+  name: string;
+  description?: string;
+  tools: Array<{ name: string; description: string; hasDefinition: boolean }>;
+}
+
+/** 1 つの道具の在り処と定義 */
+export interface ToolDefinitionInfo {
+  setId: string;
+  setName: string;
+  kind: 'system' | 'dynamic';
+  definition: string | null;
+}
+
+/**
+ * エンジンから見える道具（T-0903）。
+ *
+ * 道具は 2 種類ある。システムの道具は 1 組を全エンジンが共有する。動的な道具（アプリ・デーモンが登録したもの）は、
+ * 登録したプロセスが仕えるエンジンの台帳に入る。エンジンに見えるのは「システムの道具 → 自分の台帳 → 口を作るときに並べた
+ * ほかの台帳」の順で、同じ名前が複数あれば最初に当たったものが動く。どの台帳を並べるかは口を作る側が決める
+ * （束を作る関数は、ルートでないエンジンにルートの台帳を並べる —— ルートに仕えるデーモンの道具は、どのエンジンからも使える）。
+ *
+ * どの台帳か（エンジンの id）はこの口に焼き込んである。使う側（エンジン・会話の積み直し・ゲストの登録の口）は id を書かない。
+ */
+export interface ToolView {
+  readonly engineId: string;
+  /** 見えている道具の名前（パーサーの保護の対象） */
+  getRegisteredToolNames(): string[];
+  /** 名前で探して実行する。記録（tool_events）には、このエンジンの id が付く */
+  execute(action: ToolAction, context: ToolContext): Promise<ToolResult | null>;
+  /** 一覧（既定は動的な道具だけ） */
+  listToolSets(includeSystem?: boolean): ToolSetSummary[];
+  /** 1 つの道具の定義。見えていなければ null */
+  getToolDefinition(toolName: string): ToolDefinitionInfo | null;
+  /** 見えている動的な道具の定義を、組ごとの <toolset> にして返す（会話を空にしたあとの積み直し） */
+  getActiveDynamicToolDefinitions(): string[];
+  /** このエンジンの台帳に登録する（sourcePid は登録したプロセス） */
+  registerDynamicTool(toolName: string, sourcePid: string, payload: DynamicToolDefinition): void;
+  unregisterDynamicTool(toolName: string, sourcePid: string): void;
+  /** このエンジンの台帳を捨てる（エンジンを畳むとき） */
+  dispose(): void;
+}
+
 export class ToolRegistry {
-  private toolSets: Map<string, ToolSet> = new Map();
+  /** システムの道具の組（全エンジンで共有。作った順） */
+  private systemSets: Map<string, ToolSet> = new Map();
+  /** 動的な道具の台帳: エンジンの id → そのエンジンに仕えるプロセスの組（組の id は pid。作った順） */
+  private ledgers: Map<string, Map<string, ToolSet>> = new Map();
   private appRegistry: AppRegistry | null = null;
   private guestToolInvoker: GuestToolInvoker | null = null;
   private executionRecorder: ToolExecutionRecorder | null = null;
@@ -107,6 +163,38 @@ export class ToolRegistry {
     this.guestToolInvoker = invoker;
   }
 
+  /**
+   * あるエンジンから見える道具の口を作る。口は台帳を写さない（呼ぶたびに引く）ので、あとからの登録・解除もそのまま見える。
+   * `inherits` は、自分の台帳の後ろに見せるほかのエンジンの台帳（この順）。登録・解除は自分の台帳だけに効く。
+   */
+  viewFor(engineId: string, inherits: readonly string[] = []): ToolView {
+    const visible = () => this._visibleSets(engineId, inherits);
+    return {
+      engineId,
+      getRegisteredToolNames: () => this._names(visible()),
+      execute: (action, context) => this._execute(engineId, visible(), action, context),
+      listToolSets: (includeSystem = false) => this._listToolSets(visible(), includeSystem),
+      getToolDefinition: (toolName) => this._getToolDefinition(visible(), toolName),
+      getActiveDynamicToolDefinitions: () => this._activeDynamicToolDefinitions(visible()),
+      registerDynamicTool: (toolName, sourcePid, payload) =>
+        this._registerDynamicTool(engineId, toolName, sourcePid, payload),
+      unregisterDynamicTool: (toolName, sourcePid) => this._unregisterDynamicTool(engineId, toolName, sourcePid),
+      dispose: () => {
+        this.ledgers.delete(engineId);
+      },
+    };
+  }
+
+  /** あるエンジンに見える組: システムの道具 → 自分の台帳 → 並べたほかの台帳（探す順でもある） */
+  private _visibleSets(engineId: string, inherits: readonly string[]): ToolSet[] {
+    const sets = [...this.systemSets.values()];
+    for (const id of [engineId, ...inherits.filter((other) => other !== engineId)]) {
+      const ledger = this.ledgers.get(id);
+      if (ledger) sets.push(...ledger.values());
+    }
+    return sets;
+  }
+
   // ==========================================
   // System Tools Management
   // ==========================================
@@ -115,8 +203,8 @@ export class ToolRegistry {
    * システムツールセット（カテゴリ）を作成または取得する
    */
   private _getOrCreateSystemToolSet(setId: string, setName: string, description?: string): ToolSet {
-    if (!this.toolSets.has(setId)) {
-      this.toolSets.set(setId, {
+    if (!this.systemSets.has(setId)) {
+      this.systemSets.set(setId, {
         id: setId,
         kind: 'system',
         name: setName,
@@ -124,11 +212,11 @@ export class ToolRegistry {
         tools: new Map(),
       });
     }
-    return this.toolSets.get(setId)!;
+    return this.systemSets.get(setId)!;
   }
 
   /**
-   * システムツール（固定）を特定のカテゴリに登録する
+   * システムツール（固定）を特定のカテゴリに登録する。実体は全エンジンで 1 組（エンジンごとに違うのは、渡される文脈だけ）
    */
   registerSystemTool(setId: string, setName: string, toolDef: ToolDef): void {
     const toolSet = this._getOrCreateSystemToolSet(setId, setName);
@@ -140,12 +228,22 @@ export class ToolRegistry {
   // ==========================================
 
   /**
-   * ゲストアプリからの動的ツールを登録する
+   * ゲストアプリからの動的ツールを、エンジンの台帳に登録する
    * sourcePidからよしなにアプリ情報を解決し、Toolsetに自動分類する
    */
-  registerDynamicTool(toolName: string, sourcePid: string, payload: DynamicToolDefinition): void {
+  private _registerDynamicTool(
+    engineId: string,
+    toolName: string,
+    sourcePid: string,
+    payload: DynamicToolDefinition,
+  ): void {
+    let ledger = this.ledgers.get(engineId);
+    if (!ledger) {
+      ledger = new Map();
+      this.ledgers.set(engineId, ledger);
+    }
     const setId = sourcePid;
-    let toolSet = this.toolSets.get(setId);
+    let toolSet = ledger.get(setId);
 
     // 新規プロセスからの登録ならToolsetを作成
     if (!toolSet) {
@@ -169,7 +267,7 @@ export class ToolRegistry {
       }
 
       toolSet = { id: setId, kind: 'dynamic', name: setName, description, tools: new Map() };
-      this.toolSets.set(setId, toolSet);
+      ledger.set(setId, toolSet);
     }
 
     toolSet.tools.set(toolName, {
@@ -184,27 +282,30 @@ export class ToolRegistry {
   /**
    * 動的ツールを明示的に解除する
    */
-  unregisterDynamicTool(toolName: string, sourcePid: string): void {
-    const toolSet = this.toolSets.get(sourcePid);
-    if (toolSet && toolSet.tools.has(toolName)) {
+  private _unregisterDynamicTool(engineId: string, toolName: string, sourcePid: string): void {
+    const ledger = this.ledgers.get(engineId);
+    const toolSet = ledger?.get(sourcePid);
+    if (ledger && toolSet && toolSet.tools.has(toolName)) {
       toolSet.tools.delete(toolName);
       console.log(`[ToolRegistry] Unregistered dynamic tool: <${toolName}> from PID: ${sourcePid}`);
 
       // グループが空になったらToolsetごと消す
       if (toolSet.tools.size === 0) {
-        this.toolSets.delete(sourcePid);
+        ledger.delete(sourcePid);
       }
     }
   }
 
   /**
-   * 特定のPIDに紐づくすべての動的ツールを一括で削除する（プロセスキル時のクリーンアップ用）
+   * 特定のPIDに紐づくすべての動的ツールを一括で削除する（プロセスキル時のクリーンアップ用）。
+   * pid は OS 全体で 1 つなので、どのエンジンの台帳に在っても消す
    */
   removeToolsByPid(pid: string): void {
-    if (this.toolSets.has(pid)) {
-      const toolSet = this.toolSets.get(pid)!;
+    for (const ledger of this.ledgers.values()) {
+      const toolSet = ledger.get(pid);
+      if (!toolSet) continue;
       const count = toolSet.tools.size;
-      this.toolSets.delete(pid);
+      ledger.delete(pid);
       if (count > 0) {
         console.log(`[ToolRegistry] Removed ToolSet [${toolSet.name}] (${count} tools) due to process termination.`);
       }
@@ -216,13 +317,13 @@ export class ToolRegistry {
   // ==========================================
 
   /**
-   * 現在登録されているすべての動的ツールを <toolset> タグでグループ化して出力する
+   * 見えているすべての動的ツールを <toolset> タグでグループ化して出力する
    * セッションリセット時やシステムプロンプトの注入用
    */
-  getActiveDynamicToolDefinitions(): string[] {
+  private _activeDynamicToolDefinitions(visible: ToolSet[]): string[] {
     const output: string[] = [];
 
-    for (const toolSet of this.toolSets.values()) {
+    for (const toolSet of visible) {
       if (toolSet.kind === 'system') continue;
       if (toolSet.tools.size === 0) continue;
 
@@ -249,15 +350,9 @@ export class ToolRegistry {
    * 履歴が消えた・圧縮で定義の本文が落ちた・走っている間に定義が変わった、の 3 つの場面で
    * <tool_catalog action="list" /> から呼ばれる（T-0246）。既定では動的（アプリ・デーモン）だけ。
    */
-  listToolSets(includeSystem = false): Array<{
-    id: string;
-    kind: 'system' | 'dynamic';
-    name: string;
-    description?: string;
-    tools: Array<{ name: string; description: string; hasDefinition: boolean }>;
-  }> {
-    const out: ReturnType<ToolRegistry['listToolSets']> = [];
-    for (const toolSet of this.toolSets.values()) {
+  private _listToolSets(visible: ToolSet[], includeSystem: boolean): ToolSetSummary[] {
+    const out: ToolSetSummary[] = [];
+    for (const toolSet of visible) {
       if (toolSet.kind === 'system' && !includeSystem) continue;
       if (toolSet.tools.size === 0) continue;
       out.push({
@@ -279,10 +374,8 @@ export class ToolRegistry {
    * 1 つの道具の定義（LPML の <define_tag>）を返す。無ければ null。
    * システムツールはシステムプロンプトに定義があり、ここには持っていない（definition が空）。
    */
-  getToolDefinition(
-    toolName: string,
-  ): { setId: string; setName: string; kind: 'system' | 'dynamic'; definition: string | null } | null {
-    for (const toolSet of this.toolSets.values()) {
+  private _getToolDefinition(visible: ToolSet[], toolName: string): ToolDefinitionInfo | null {
+    for (const toolSet of visible) {
       const t = toolSet.tools.get(toolName);
       if (t) return { setId: toolSet.id, setName: toolSet.name, kind: toolSet.kind, definition: t.definition || null };
     }
@@ -290,11 +383,11 @@ export class ToolRegistry {
   }
 
   /**
-   * 登録されているすべてのツール名（タグ名）の配列を取得する（Parserの保護対象指定用）
+   * 見えているすべてのツール名（タグ名）の配列を取得する（Parserの保護対象指定用）
    */
-  getRegisteredToolNames(): string[] {
+  private _names(visible: ToolSet[]): string[] {
     const names: string[] = [];
-    for (const toolSet of this.toolSets.values()) {
+    for (const toolSet of visible) {
       for (const name of toolSet.tools.keys()) {
         names.push(name);
       }
@@ -305,8 +398,10 @@ export class ToolRegistry {
   /**
    * アクションを検索して実行する
    */
-  async execute(
-    action: { type: string; params: ToolParams; closed?: boolean },
+  private async _execute(
+    engineId: string,
+    visible: ToolSet[],
+    action: ToolAction,
     context: ToolContext,
   ): Promise<ToolResult | null> {
     const startedAt = Date.now();
@@ -316,15 +411,15 @@ export class ToolRegistry {
     //    `closed` を持たない呼び出し（パーサーを通らないもの）は、閉じているものとして扱う
     if (action.closed === false) {
       const result = unclosedTagResult(action.type);
-      this._recordExecution(action, null, startedAt, result);
+      this._recordExecution(engineId, action, null, startedAt, result);
       return result;
     }
 
-    // 1. 全Toolsetから対象のツールを検索する
+    // 1. 見えているToolsetから対象のツールを検索する（最初に当たったもの）
     let foundTool: ToolDef | null = null;
     let foundSet: ToolSet | null = null;
 
-    for (const toolSet of this.toolSets.values()) {
+    for (const toolSet of visible) {
       if (toolSet.tools.has(action.type)) {
         foundTool = toolSet.tools.get(action.type)!;
         foundSet = toolSet;
@@ -336,7 +431,7 @@ export class ToolRegistry {
     // 想定外の例外と区別が付かなくなる。
     if (!foundTool || !foundSet) {
       const result = unknownToolResult(action.type);
-      this._recordExecution(action, null, startedAt, result);
+      this._recordExecution(engineId, action, null, startedAt, result);
       return result;
     }
 
@@ -349,12 +444,12 @@ export class ToolRegistry {
           ui: `❌ Error: ${message}`,
           error: true,
         };
-        this._recordExecution(action, foundSet, startedAt, result);
+        this._recordExecution(engineId, action, foundSet, startedAt, result);
         return result;
       }
       try {
         const result = await foundTool.impl(action.params, context);
-        this._recordExecution(action, foundSet, startedAt, result);
+        this._recordExecution(engineId, action, foundSet, startedAt, result);
         return result;
       } catch (raw: unknown) {
         // 期待される失敗（ToolError。VFS の拒否もここで ToolError に揃う）は、結果と tool_events に残せば足りる。
@@ -366,7 +461,7 @@ export class ToolRegistry {
           ui: `❌ Error: ${errorMessage(err)}`,
           error: true,
         };
-        this._recordExecution(action, foundSet, startedAt, result, err);
+        this._recordExecution(engineId, action, foundSet, startedAt, result, err);
         return result;
       }
     }
@@ -381,7 +476,7 @@ export class ToolRegistry {
       const rawResult = await this.guestToolInvoker.invokeTool(pid, action.type, action.params);
       const rawResultSnapshot = structuredClone(rawResult);
       const result = normalizeDynamicToolResult(rawResult, action.type);
-      this._recordExecution(action, foundSet, startedAt, result, undefined, rawResultSnapshot);
+      this._recordExecution(engineId, action, foundSet, startedAt, result, undefined, rawResultSnapshot);
       return result;
     } catch (err: unknown) {
       // ゲストの handler が投げた／error を返した失敗は、invoker が ToolError にして渡す（ゲストの契約上の答え）。
@@ -392,7 +487,7 @@ export class ToolRegistry {
         ui: `❌ Error: ${errorMessage(err)}`,
         error: true,
       };
-      this._recordExecution(action, foundSet, startedAt, result, err);
+      this._recordExecution(engineId, action, foundSet, startedAt, result, err);
       return result;
     }
   }
@@ -411,6 +506,7 @@ export class ToolRegistry {
   }
 
   private _recordExecution(
+    engineId: string,
     action: { type: string; params: ToolParams },
     toolSet: ToolSet | null,
     startedAt: number,
@@ -437,6 +533,7 @@ export class ToolRegistry {
 
     this.executionRecorder.record({
       tool: action.type,
+      engine: engineId,
       kind: toolSet?.kind || 'unknown',
       toolSetId: toolSet?.id,
       sourcePid: toolSet?.kind === 'dynamic' ? toolSet.id : undefined,

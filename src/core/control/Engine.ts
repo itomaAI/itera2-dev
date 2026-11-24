@@ -11,7 +11,7 @@ import { DEFAULT_MAX_CONTINUOUS_TOOLS } from '../sys/ConfigManager';
 import type { Projector } from '../cognitive/Projector';
 import { LLM_CALLER_ROOT, type BaseLLMAdapter, type LlmResult } from '../cognitive/adapters/BaseAdapter';
 import type { Translator, ParsedAction } from '../cognitive/Translator';
-import type { ToolRegistry } from './ToolRegistry';
+import type { ToolView } from './ToolRegistry';
 import type { ToolContext } from './ToolContext';
 import { RESERVED_SYSTEM_TAGS } from '../cognitive/Translator';
 import { WAKE_POLICY, WAKE_DEBOUNCE_MS, type WakePolicy } from '../../config/wake_policy';
@@ -50,14 +50,15 @@ export class Engine {
   public projector: Projector | null;
   public llm: BaseLLMAdapter | null;
   public translator: Translator;
-  public registry: ToolRegistry;
+  /** このエンジンに見える道具（探す順と台帳は ToolRegistry.ts の ToolView が持つ） */
+  public tools: ToolView;
   /**
    * このエンジンの id（生きている間だけの名前。ホストが振る）。LLM の台帳に名乗り、道具の記録と VFS の個体の印に出る（T-0903）。
    * 省いたときはルート —— 作るのは束を作る関数（EngineBundle.ts）で、そこは必ず渡す。
    */
   public readonly id: string;
-  /** 道具に渡す取っ手のうち、自分自身（engine）以外。組み立て（SystemBootstrapper）が差す（ToolContext.ts） */
-  public extraContext: Partial<Omit<ToolContext, 'engine'>>;
+  /** 道具に渡す取っ手のうち、自分が持っているもの（engine・tools）以外。組み立てが差す（ToolContext.ts） */
+  public extraContext: Partial<Omit<ToolContext, 'engine' | 'tools'>>;
   /**
    * いまの会話（セッション）の id を答える口。台帳の行の `tag` に入る（T-0806）。
    * 知っているのは SessionManager なので、組み立て（SystemBootstrapper）が差す。無ければ tag は書かれない。
@@ -113,8 +114,8 @@ export class Engine {
     projector: Projector | null,
     llm: BaseLLMAdapter | null,
     translator: Translator,
-    registry: ToolRegistry,
-    extraContext: Partial<Omit<ToolContext, 'engine'>> = {},
+    tools: ToolView,
+    extraContext: Partial<Omit<ToolContext, 'engine' | 'tools'>> = {},
     wakePolicy: WakePolicy = WAKE_POLICY,
     wakeDebounceMs: number = WAKE_DEBOUNCE_MS,
     id: string = ROOT_ENGINE_ID,
@@ -124,7 +125,7 @@ export class Engine {
     this.projector = projector;
     this.llm = llm;
     this.translator = translator;
-    this.registry = registry;
+    this.tools = tools;
     this.extraContext = extraContext;
     this.wakePolicy = wakePolicy;
     this.wakeDebounceMs = wakeDebounceMs;
@@ -432,7 +433,7 @@ export class Engine {
       if (streamError) throw streamError;
 
       // ツール解釈とアクションの抽出
-      const registeredTools = this.registry.getRegisteredToolNames();
+      const registeredTools = this.tools.getRegisteredToolNames();
       const actions = this.translator.parse(rawResponse, registeredTools);
 
       // 終端タグより後ろの出力（T-0593）。
@@ -547,7 +548,7 @@ export class Engine {
     const signal = this.abortController?.signal;
 
     // 道具に渡すのは取っ手だけ（T-0903。ToolContext.ts）。VFS・設定・履歴そのものは渡さない
-    const context = { engine: this, ...this.extraContext } as ToolContext;
+    const context = { engine: this, tools: this.tools, ...this.extraContext } as ToolContext;
 
     const combinedResults: ToolExecutionEntry[] = actions.map((action) => {
       const { content, ...safeParams } = action.params || {};
@@ -673,7 +674,7 @@ export class Engine {
       }
 
       try {
-        const result = await this.registry.execute(action, context);
+        const result = await this.tools.execute(action, context);
 
         deliver(index, result ?? { log: '', trigger_llm: false });
       } catch (err: any) {

@@ -15,7 +15,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { Engine, TurnType } from './Engine';
+import { Engine, ROOT_ENGINE_ID, TurnType } from './Engine';
 import { ToolRegistry } from './ToolRegistry';
 import { registerSysTools } from './tools/sys_tools';
 import { Translator } from '../cognitive/Translator';
@@ -79,7 +79,7 @@ function run(output: string) {
     { createContext: async () => [] } as any,
     llm as any,
     new Translator(),
-    registry as any,
+    registry.viewFor(ROOT_ENGINE_ID) as any,
     {},
     'realtime',
     1500,
