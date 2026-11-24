@@ -3,7 +3,7 @@
  * 生成の結果（使ったトークン・止まった理由）を、その生成が作った model ターンに置く（T-0806）。
  *
  * 守りたいこと:
- *   1. エンジンは生成を呼ぶとき、台帳に書く名乗り（caller: 'root'・tag: いまの会話の id）を渡す
+ *   1. エンジンは生成を呼ぶとき、台帳に書く名乗り（caller: 自分の id（ルートは 'root'）・エンジンのターンである印・tag: いまの会話の id）を渡す
  *   2. 返ってきた結果は model ターンの meta（usage・model・stopReason）に入る
  *   3. 結果が無い（失敗・中断・古い偽物）ときは何も置かない。usage が null なら usage の欄を作らない
  */
@@ -14,7 +14,7 @@ import { Translator } from '../cognitive/Translator';
 
 const USAGE = { input: 10, cached: 900, cacheWrite: 100, output: 42, total: 1052 };
 
-function run(generate: (onChunk: (c: string) => void) => Promise<any>) {
+function run(generate: (onChunk: (c: string) => void) => Promise<any>, id?: string) {
   const turns: any[] = [];
   const subscribers: Function[] = [];
   const notify = (payload: any) => subscribers.forEach((cb) => cb(payload));
@@ -52,6 +52,7 @@ function run(generate: (onChunk: (c: string) => void) => Promise<any>) {
     {},
     'realtime',
     1500,
+    id,
   );
   return { engine, turns, llm };
 }
@@ -97,12 +98,20 @@ describe('Engine: 生成の結果を model ターンに置く（T-0806）', () =
     h.engine.sessionTag = () => session;
     await go(h);
     expect(h.llm.generateStream.mock.calls[0][0]).toEqual(['BODY']);
-    expect((h.llm.generateStream.mock.calls[0] as any[])[3]).toEqual({ caller: 'root', tag: 'session-1' });
+    expect((h.llm.generateStream.mock.calls[0] as any[])[3]).toEqual({
+      caller: 'root',
+      engineTurn: true,
+      tag: 'session-1',
+    });
 
     // id は呼ぶたびに訊く（会話を切り替えたら次の生成から新しい id）
     session = 'session-2';
     await go(h);
-    expect((h.llm.generateStream.mock.calls[1] as any[])[3]).toEqual({ caller: 'root', tag: 'session-2' });
+    expect((h.llm.generateStream.mock.calls[1] as any[])[3]).toEqual({
+      caller: 'root',
+      engineTurn: true,
+      tag: 'session-2',
+    });
   });
 
   it('会話の id の取り方が差されていなければ tag は null', async () => {
@@ -111,7 +120,17 @@ describe('Engine: 生成の結果を model ターンに置く（T-0806）', () =
       return { provider: 'google', model: 'm', usage: null, stopReason: null };
     });
     await go(h);
-    expect((h.llm.generateStream.mock.calls[0] as any[])[3]).toEqual({ caller: 'root', tag: null });
+    expect((h.llm.generateStream.mock.calls[0] as any[])[3]).toEqual({ caller: 'root', engineTurn: true, tag: null });
+  });
+
+  it('ルートでないエンジンは自分の id を名乗る。エンジンのターンであることは同じ（T-0903）', async () => {
+    const h = run(async (onChunk) => {
+      onChunk('<finish />');
+      return { provider: 'google', model: 'm', usage: null, stopReason: null };
+    }, 'e1');
+    await go(h);
+    expect(h.engine.id).toBe('e1');
+    expect((h.llm.generateStream.mock.calls[0] as any[])[3]).toEqual({ caller: 'e1', engineTurn: true, tag: null });
   });
 
   it('usage が null なら usage の欄を作らない（0 を置かない）。model と stopReason は置く', async () => {

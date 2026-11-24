@@ -450,7 +450,7 @@ describe('会話の鎖', () => {
 });
 
 describe('行頭の yield の停止語（OS のチャットだけ。従来の口と同じ規則 — GeminiYieldStop.ts・T-0896）', () => {
-  const ROOT: LlmCallOrigin = { caller: LLM_CALLER_ROOT, tag: 'session-1' };
+  const ROOT: LlmCallOrigin = { caller: LLM_CALLER_ROOT, engineTurn: true, tag: 'session-1' };
   const GUEST: LlmCallOrigin = { caller: 'app_notes', tag: null };
   const YIELD_TAG = '<yield />';
   const CUT = ['<memo>read it</memo>\n', '<read path="a.md" />'];
@@ -490,6 +490,13 @@ describe('行頭の yield の停止語（OS のチャットだけ。従来の口
 
     await runAs(fresh(), [SYS, u('a')], interaction('i5', ['x']));
     expect(stopsSent(4)).toBeUndefined();
+
+    // 見るのは「エンジンのターンか」で、名前ではない（T-0903）
+    await runAs(fresh(), [SYS, u('a')], interaction('i6', ['x']), { caller: 'e1', engineTurn: true, tag: null });
+    expect(stopsSent(5)).toEqual([GEMINI_YIELD_STOP]);
+
+    await runAs(fresh(), [SYS, u('a')], interaction('i7', ['x']), { caller: LLM_CALLER_ROOT, tag: null });
+    expect(stopsSent(6)).toBeUndefined();
   });
 
   it('設定が上限の 5 本まで埋まっていたら足さず、タグも戻さない', async () => {

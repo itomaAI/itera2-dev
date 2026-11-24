@@ -11,7 +11,8 @@ import { Translator } from '../Translator';
  * Gemini 4 Hydrogen は、終端タグ `<yield />` を書いたあとも思考を挟んで書き続ける（T-0851）。プロンプトでは止まらない
  * （T-0854・T-0858）。そこで Gemini に限り、API が用意している仕組み（`stopSequences`）で生成を終わらせる。
  *
- *   - 掛けるのは OS のチャット（`origin.caller` が `root`）だけ。`MetaOS.llm.generate` の出力は LPML ではない。
+ *   - 掛けるのはエンジンのターン（`origin.engineTurn`）だけ。`MetaOS.llm.generate` の出力は LPML ではない。
+ *     見るのは名前（`caller`）ではない —— ルートでないエンジンのターンにも掛かる（T-0903）。
  *   - Gemini は停止文字列を出力に含めない。止まったあとに `\n<yield />` を流して、モデルが書いた形に戻す
  *     （履歴のモデルのターンが終端タグを欠かないようにするため。実行には要らない）。
  *     ただし頭の改行だけは出力に残ることがある（Hydrogen の実測で 15 回中 9 回）。そのときは改行を重ねない。

@@ -38,7 +38,7 @@ export const PENDING_LOG = '[Pending] Still running. The result will come in a l
 
 /**
  * ルートのエンジン（OS のチャット）の id。個体の印として使う（T-0903）。
- * いまは台帳に名乗る名前（LLM_CALLER_ROOT）と同じ値を指す —— 文字はあちらに 1 つだけ置く。
+ * LLM の台帳に名乗る名前（LLM_CALLER_ROOT）と同じ値 —— エンジンは台帳に自分の id を名乗る。文字はあちらに 1 つだけ置く。
  */
 export const ROOT_ENGINE_ID = LLM_CALLER_ROOT;
 
@@ -51,6 +51,11 @@ export class Engine {
   public llm: BaseLLMAdapter | null;
   public translator: Translator;
   public registry: ToolRegistry;
+  /**
+   * このエンジンの id（生きている間だけの名前。ホストが振る）。LLM の台帳に名乗り、道具の記録と VFS の個体の印に出る（T-0903）。
+   * 省いたときはルート —— 作るのは束を作る関数（EngineBundle.ts）で、そこは必ず渡す。
+   */
+  public readonly id: string;
   /** 道具に渡す取っ手のうち、自分自身（engine）以外。組み立て（SystemBootstrapper）が差す（ToolContext.ts） */
   public extraContext: Partial<Omit<ToolContext, 'engine'>>;
   /**
@@ -112,7 +117,9 @@ export class Engine {
     extraContext: Partial<Omit<ToolContext, 'engine'>> = {},
     wakePolicy: WakePolicy = WAKE_POLICY,
     wakeDebounceMs: number = WAKE_DEBOUNCE_MS,
+    id: string = ROOT_ENGINE_ID,
   ) {
+    this.id = id;
     this.state = state;
     this.projector = projector;
     this.llm = llm;
@@ -402,7 +409,7 @@ export class Engine {
               this._emit('stream_chunk', chunk);
             },
             this.abortController.signal,
-            { caller: LLM_CALLER_ROOT, tag: this.sessionTag ? this.sessionTag() : null },
+            { caller: this.id, engineTurn: true, tag: this.sessionTag ? this.sessionTag() : null },
           )) || null;
       } catch (err) {
         streamError = err;

@@ -4,7 +4,8 @@
  * 応急の手当て（T-0877）: OS のチャットで、Gemini に行頭の yield タグを停止文字列として渡し、止まったあとにタグを戻す。
  *
  * 守りたいこと:
- *   1. 停止文字列を送るのは OS のチャット（caller が root）だけ。ゲストの `MetaOS.llm.generate` と、呼び手の無い生成には送らない
+ *   1. 停止文字列を送るのはエンジンのターン（OS のチャット）だけ。ゲストの `MetaOS.llm.generate` と、呼び手の無い生成には送らない。
+ *      見るのは「エンジンのターンか」で、呼び手の名前ではない（T-0903）
  *   2. 設定の `stopSequences` は残す（足すだけ）。上限（5 本）まで埋まっていたら足さない
  *   3. タグを戻すのは、止まった理由が STOP で、出力に最上位の終端タグが無いときだけ
  *      （Gemini は停止文字列で止まったのか自然に終わったのかを返さない）
@@ -24,7 +25,7 @@ import {
 } from './BaseAdapter';
 import { Translator } from '../Translator';
 
-const ROOT: LlmCallOrigin = { caller: LLM_CALLER_ROOT, tag: 'session-1' };
+const ROOT: LlmCallOrigin = { caller: LLM_CALLER_ROOT, engineTurn: true, tag: 'session-1' };
 const GUEST: LlmCallOrigin = { caller: 'app_notes', tag: null };
 const BODY = [{ role: 'user', parts: [{ text: 'hi' }] }];
 const YIELD_TAG = '<yield />';
@@ -143,6 +144,18 @@ describe('停止文字列を送るのは OS のチャットだけ', () => {
 
     respond(['{"a":1}']);
     await run(relayed(), GUEST);
+    expect(stopsSent()).toBeUndefined();
+  });
+
+  it('見るのは「エンジンのターンか」で、名前ではない（T-0903）', async () => {
+    // ルートでないエンジンのターンも LPML
+    respond(['<memo>m</memo>']);
+    await run(direct(), { caller: 'e1', engineTurn: true, tag: null });
+    expect(stopsSent()).toEqual([GEMINI_YIELD_STOP]);
+
+    // root という名前でも、エンジンのターンでなければ付かない
+    respond(['{"a":1}']);
+    await run(direct(), { caller: LLM_CALLER_ROOT, tag: null });
     expect(stopsSent()).toBeUndefined();
   });
 
