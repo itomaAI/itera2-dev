@@ -15,10 +15,8 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  deploy:
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
+  # 組み立てて、成果物を上げるまで
+  build:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -52,6 +50,16 @@ jobs:
         with:
           path: './dist' # Vite の出力先フォルダ
 
+  # 配信だけ。アップロードと同じジョブの中で続けて配信すると、上げた直後の成果物がまだ一覧に載っておらず、
+  # 「Found 0 artifact(s)」で落ちることがある（actions/deploy-pages#451）。ジョブを分けておけば、
+  # 落ちたときもこのジョブだけを流し直せる（成果物は 1 つのまま。消してから流し直す手順が要らない）。
+  deploy:
+    needs: build
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
