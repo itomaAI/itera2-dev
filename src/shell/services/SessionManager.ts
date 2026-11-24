@@ -43,6 +43,7 @@ import {
   readSessionBundle,
   restoreBundleMedia,
 } from '../../core/state/sessionBundleIo';
+import { sessionActivatedEvent, sessionResetEvent, toolsRestoredEvent } from '../../core/state/conversationEvents';
 
 export interface ClearSessionOptions {
   summary?: string;
@@ -308,18 +309,8 @@ export class SessionManager {
   /** 走っているアプリ・デーモンの道具の定義を積み直す（履歴ごと消えるので。T-0246） */
   private _restoreToolDefinitions(): void {
     if (!this.tools) return;
-    const activeToolDefs = this.tools.getActiveDynamicToolDefinitions();
-    if (activeToolDefs.length === 0) return;
-    const defsText = activeToolDefs.join('\n');
-    this.history.append(
-      'system',
-      `<event type="tool_available">\n[System: Restored Dynamic Tools]\nThe following tools are currently active from background processes:\n${defsText}\n</event>`,
-      {
-        type: 'tool_available',
-        eventType: 'tool_available',
-        trigger_llm: false,
-      },
-    );
+    const event = toolsRestoredEvent(this.tools.getActiveDynamicToolDefinitions());
+    if (event) this.history.append('system', event.content, event.meta);
   }
 
   // ==========================================
@@ -355,14 +346,8 @@ export class SessionManager {
     if (restoreTools) this._restoreToolDefinitions();
 
     if (summary) {
-      this.history.append(
-        'system',
-        `<event type="session_reset">\n[Session Restored & Context Compressed]\n\n${summary}\n</event>`,
-        {
-          type: 'event_log',
-          trigger_llm: triggerLlm,
-        },
-      );
+      const event = sessionResetEvent(summary, triggerLlm);
+      this.history.append('system', event.content, event.meta);
     }
 
     this.onSessionChanged?.();
@@ -440,22 +425,9 @@ export class SessionManager {
       this.logger.log('system', { action: `session_${how}`, sessionId: meta.id, turns: turns.length });
     }
 
-    const stamp = (ms: number) => new Date(ms).toISOString();
     const defs = this.tools ? this.tools.getActiveDynamicToolDefinitions() : [];
-    const lines = [
-      how === 'switched'
-        ? `[System: Switched to an earlier session (last activity ${stamp(lastActivity)}). Time now: ${stamp(this.now())}.]`
-        : `[System: Loaded a session from the VFS (last activity ${stamp(lastActivity)}). Time now: ${stamp(this.now())}.]`,
-      'Files, processes and tool definitions may have changed since. Re-check before acting.',
-    ];
-    if (defs.length > 0) {
-      lines.push('The following tools are currently active from background processes:', defs.join('\n'));
-    }
-    this.history.append('system', `<event type="session_${how}">\n${lines.join('\n')}\n</event>`, {
-      type: 'event_log',
-      eventType: `session_${how}`,
-      trigger_llm: false,
-    });
+    const event = sessionActivatedEvent(how, lastActivity, this.now(), defs);
+    this.history.append('system', event.content, event.meta);
 
     await this._cleanupMedia();
     this.onSessionChanged?.();
