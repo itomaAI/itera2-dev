@@ -13,15 +13,24 @@ export class VfsTransaction {
   private pathResolver: PathResolver;
   private eventBus: VfsEventBus;
   private principal: Principal;
+  /** この変更を起こした個体の印（VfsMutation.origin に載る） */
+  private origin: string;
 
   private puts: Map<string, VfsNode> = new Map();
   private deletes: Set<string> = new Set();
 
-  constructor(nodeStore: NodeStore, pathResolver: PathResolver, eventBus: VfsEventBus, principal: Principal) {
+  constructor(
+    nodeStore: NodeStore,
+    pathResolver: PathResolver,
+    eventBus: VfsEventBus,
+    principal: Principal,
+    origin: string = principal.id,
+  ) {
     this.nodeStore = nodeStore;
     this.pathResolver = pathResolver;
     this.eventBus = eventBus;
     this.principal = principal;
+    this.origin = origin;
   }
 
   /**
@@ -78,6 +87,7 @@ export class VfsTransaction {
           node: null,
           path: oldPath,
           sourcePrincipal: this.principal,
+          origin: this.origin,
         });
       }
     }
@@ -95,6 +105,7 @@ export class VfsTransaction {
           node: node,
           path: newPath,
           sourcePrincipal: this.principal,
+          origin: this.origin,
         });
       } else {
         const oldPath = oldPaths.get(node.id)!;
@@ -107,6 +118,7 @@ export class VfsTransaction {
             node: null,
             path: oldPath,
             sourcePrincipal: this.principal,
+            origin: this.origin,
           });
           mutations.push({
             type: 'ATTACH',
@@ -114,6 +126,7 @@ export class VfsTransaction {
             node: node,
             path: newPath,
             sourcePrincipal: this.principal,
+            origin: this.origin,
           });
         } else {
           // パスが同じならプロパティの差分を計算
@@ -134,6 +147,7 @@ export class VfsTransaction {
               path: newPath,
               changedProperties: changed,
               sourcePrincipal: this.principal,
+              origin: this.origin,
             });
           }
         }

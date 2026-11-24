@@ -43,13 +43,15 @@ function setup() {
 
   const manager = new ProviderManager(eventBus, transport as any, { processes } as any, pathResolver as any);
 
-  const publish = (path: string, sourcePrincipal: Principal) => {
+  // origin（個体の印）を省くと主体の id（主体だけで書く者の既定。T-0903）
+  const publish = (path: string, sourcePrincipal: Principal, origin: string = sourcePrincipal.id) => {
     eventBus.publish({
       type: 'MUTATE',
       nodeId: 'node_test',
       node: null,
       path,
       sourcePrincipal,
+      origin,
     });
   };
 
@@ -83,6 +85,35 @@ describe('ProviderManager echo cancellation', () => {
     ctx.eventBus.flushNow();
 
     expect(ctx.sent).toHaveLength(0);
+  });
+
+  it('judges by the individual (origin), not by the principal: own write under an app-derived principal is not echoed (T-0903)', () => {
+    const ctx = setup();
+    const pid = 'sync_daemon-2'; // 同じ同期デーモンの 2 つ目の個体。主体はアプリ（sync_daemon）から決まる
+    ctx.registerProcess(pid);
+    ctx.manager.registerProvider('drive', pid);
+    ctx.eventBus.clear();
+
+    ctx.publish('drive/notes.md', { type: 'system', id: 'sync_daemon' }, pid);
+    ctx.eventBus.flushNow();
+
+    expect(ctx.sent).toHaveLength(0);
+  });
+
+  it('notifies the provider of a write by another individual of the same app (same principal, different origin) (T-0903)', () => {
+    const ctx = setup();
+    const pid = 'sync_daemon-2';
+    ctx.registerProcess(pid);
+    ctx.manager.registerProvider('drive', pid);
+    ctx.eventBus.clear();
+
+    ctx.publish('drive/notes.md', { type: 'system', id: 'sync_daemon' }, 'sync_daemon');
+    // 主体の id が pid と同じ字面でも、起こした個体が別なら届く
+    ctx.publish('drive/other.md', { type: 'app', id: pid }, 'someone_else');
+    ctx.eventBus.flushNow();
+
+    expect(ctx.sent).toHaveLength(1);
+    expect(ctx.sent[0].payload.mutations.map((m) => m.path)).toEqual(['drive/notes.md', 'drive/other.md']);
   });
 
   it('still notifies the provider of changes made by other principals', () => {

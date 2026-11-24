@@ -101,7 +101,7 @@ export class RenameOp extends BaseOperation<{ oldPath: string; newPath: string; 
     if (!normNew) throw new VfsError('EINVAL', 'Invalid destination path.');
 
     // 改名・移動だけはプロバイダに任せられる（onMove を持つとき。T-0689）
-    await this.ctx.vfs._hydrateIfNeeded(principal, normOld, normNew, { delegateMove: true });
+    await this.ctx.vfs._hydrateIfNeeded(principal, normOld, normNew, { delegateMove: true, origin: this.origin });
 
     const parts = normNew.split('/');
     const newName = parts.pop()!;

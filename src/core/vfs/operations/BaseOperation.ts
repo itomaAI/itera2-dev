@@ -30,9 +30,12 @@ export interface VfsContext {
 
 export abstract class BaseOperation<TArgs, TReturn> {
   protected ctx: VfsContext;
+  /** この操作を起こした個体の印（T-0903）。省けば主体の id（個体が 1 つの者） */
+  protected origin: string | undefined;
 
-  constructor(ctx: VfsContext) {
+  constructor(ctx: VfsContext, origin?: string) {
     this.ctx = ctx;
+    this.origin = origin;
   }
 
   abstract execute(principal: Principal, args: TArgs): Promise<TReturn>;
@@ -88,7 +91,7 @@ export abstract class BaseOperation<TArgs, TReturn> {
   }
 
   protected createTransaction(principal: Principal): VfsTransaction {
-    return new VfsTransaction(this.ctx.nodeStore, this.ctx.pathResolver, this.ctx.eventBus, principal);
+    return new VfsTransaction(this.ctx.nodeStore, this.ctx.pathResolver, this.ctx.eventBus, principal, this.origin);
   }
 
   protected async ensureDir(principal: Principal, path: string): Promise<string | null> {

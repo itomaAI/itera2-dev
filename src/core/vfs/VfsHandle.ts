@@ -12,10 +12,12 @@
  *   system と user は個体が 1 つずつなので、2 つは一致して見える。エンジンとプロセスでは、
  *   1 つの役割を複数の個体が持つ（ルートとサブのエンジンは同じ agent）。
  *
- * ■ いまの範囲
- *   - 取っ手は origin を持っているだけで、VFS の中へ渡すのは principal だけ。
- *     変更（VfsMutation）に origin を載せ、同期のエコー止めと vfs_events がそれを見るようにするのは後の段
- *   - 口は、道具が使うものだけ。ゲストの口（HostApiRouter）が取っ手に乗るときに残りを足す
+ * ■ VFS の中へ
+ *   - 読む口には principal だけを渡す（読みは変更を起こさない）
+ *   - 書く口には Actor をそのまま渡す。origin は変更（VfsMutation）に載り、同期のエコー止めと vfs_events がそれを見る
+ *   - VfsService の書く口は Who（主体だけ、または Actor）を受ける。主体だけなら origin は主体の id ——
+ *     個体が 1 つの者（system・user）はそれで足りる
+ *   - 口は、道具が使うものだけ（ゲストの口は VfsService に Actor を直に渡している）
  *
  * 引数と戻り値の型は VfsService の同名の口から導く（ここに写しを持たない）。
  */
@@ -30,13 +32,18 @@ export interface Actor {
   origin: string;
 }
 
-/** 利用者（画面の前の人）。個体は 1 つ */
-export const USER_ACTOR: Actor = Object.freeze({ principal: USER_PRINCIPAL, origin: 'user' });
+/** VFS の書く口に渡す「誰として」。主体だけでもよい（origin は主体の id になる） */
+export type Who = Principal | Actor;
 
-/** VfsService の口 K から、先頭の principal を除いた引数 */
-type Rest<K extends keyof VfsService> = VfsService[K] extends (principal: Principal, ...rest: infer R) => unknown
-  ? R
-  : never;
+export function actorOf(who: Who): Actor {
+  return 'principal' in who ? who : { principal: who, origin: who.id };
+}
+
+/** 利用者（画面の前の人）。個体は 1 つなので、印は主体の id */
+export const USER_ACTOR: Actor = Object.freeze(actorOf(USER_PRINCIPAL));
+
+/** VfsService の口 K から、先頭の「誰として」を除いた引数 */
+type Rest<K extends keyof VfsService> = VfsService[K] extends (who: Principal, ...rest: infer R) => unknown ? R : never;
 
 export class VfsHandle {
   private readonly vfs: VfsService;
@@ -72,26 +79,26 @@ export class VfsHandle {
   }
 
   updateFile(...args: Rest<'updateFile'>) {
-    return this.vfs.updateFile(this.actor.principal, ...args);
+    return this.vfs.updateFile(this.actor, ...args);
   }
 
   writeFile(...args: Rest<'writeFile'>) {
-    return this.vfs.writeFile(this.actor.principal, ...args);
+    return this.vfs.writeFile(this.actor, ...args);
   }
 
   deleteFile(...args: Rest<'deleteFile'>) {
-    return this.vfs.deleteFile(this.actor.principal, ...args);
+    return this.vfs.deleteFile(this.actor, ...args);
   }
 
   restore(...args: Rest<'restore'>) {
-    return this.vfs.restore(this.actor.principal, ...args);
+    return this.vfs.restore(this.actor, ...args);
   }
 
   rename(...args: Rest<'rename'>) {
-    return this.vfs.rename(this.actor.principal, ...args);
+    return this.vfs.rename(this.actor, ...args);
   }
 
   copyFile(...args: Rest<'copyFile'>) {
-    return this.vfs.copyFile(this.actor.principal, ...args);
+    return this.vfs.copyFile(this.actor, ...args);
   }
 }

@@ -37,7 +37,7 @@ import { SetAclOp, SetAclRecursiveOp } from './operations/AclOps';
 import type { ProviderManager } from './ProviderManager';
 import { VFS_HARD_LIMITS } from '../../config/constants';
 import { VfsError, isVfsError } from './VfsError';
-import { VfsHandle, type Actor } from './VfsHandle';
+import { VfsHandle, actorOf, type Actor, type Who } from './VfsHandle';
 
 export class VfsService {
   private nodeStore: NodeStore;
@@ -97,12 +97,12 @@ export class VfsService {
     principal: Principal,
     srcPath: string,
     destPath: string,
-    opts: { delegateMove?: boolean } = {},
+    opts: { delegateMove?: boolean; origin?: string } = {},
   ): Promise<void> {
     const id = this.pathResolver.getIdByPath(srcPath);
     if (!id) return;
 
-    if (opts.delegateMove && (await this._delegateMove(principal, srcPath, destPath))) return;
+    if (opts.delegateMove && (await this._delegateMove(opts.origin ?? principal.id, srcPath, destPath))) return;
 
     const stubs: string[] = [];
     const collect = (nodeId: string, currentPath: string) => {
@@ -139,7 +139,7 @@ export class VfsService {
   }
 
   /** 改名・移動を担当プロバイダに任せられるか試す（T-0689）。条件が揃わなければ頼まずに false */
-  private async _delegateMove(principal: Principal, srcPath: string, destPath: string): Promise<boolean> {
+  private async _delegateMove(origin: string, srcPath: string, destPath: string): Promise<boolean> {
     if (!this.providerManager) return false;
     if (destPath === 'trash' || destPath.startsWith('trash/')) return false;
     if (this.pathResolver.getIdByPath(destPath) !== undefined) return false; // 行き先が在れば改名は失敗する。向こうを先に動かさない
@@ -149,7 +149,8 @@ export class VfsService {
     if (!srcInfo || !destInfo || srcInfo.pid !== destInfo.pid) return false;
     if (!srcInfo.capabilities.move) return false;
     // プロバイダ自身の改名（衝突の写し `(Conflicted Copy)` など）は手元だけの操作。向こうへ跳ね返さない（エコー）
-    if (principal.id === srcInfo.pid) return false;
+    // 見るのは個体の印（origin）。主体はアプリから決まるので、同じアプリの別の個体と見分けられない（T-0903）
+    if (origin === srcInfo.pid) return false;
 
     return await this.providerManager.moveContent(srcPath, destPath);
   }
@@ -524,7 +525,7 @@ export class VfsService {
    * ファイルが無ければ ENOENT（作るのは writeFile の仕事）。
    */
   async updateFile(
-    principal: Principal,
+    who: Who,
     path: string,
     updater: (current: string, version: number) => string | null | Promise<string | null>,
     opts: { maxAttempts?: number; system?: boolean } = {},
@@ -533,11 +534,11 @@ export class VfsService {
     let attempts = 0;
     for (;;) {
       attempts++;
-      const { content, version } = await this.readFileWithVersion(principal, path);
+      const { content, version } = await this.readFileWithVersion(actorOf(who).principal, path);
       const next = await updater(content, version);
       if (next === null) return { message: `Unchanged ${this.pathResolver.normalizePath(path)}`, version, attempts };
       try {
-        const message = await this.writeFile(principal, path, next, {
+        const message = await this.writeFile(who, path, next, {
           overwrite: true,
           ifVersion: version,
           system: opts.system,
@@ -553,54 +554,59 @@ export class VfsService {
   /** updateFile が ESTALE で読み直す上限。超えたら最後の ESTALE をそのまま投げる */
   static readonly UPDATE_MAX_ATTEMPTS = 8;
 
-  async createStub(
-    principal: Principal,
-    path: string,
-    meta: Partial<VfsNodeMeta>,
-    opts: StubOptions = {},
-  ): Promise<string> {
-    return new CreateStubOp(this.context).execute(principal, { path, meta, opts });
+  async createStub(who: Who, path: string, meta: Partial<VfsNodeMeta>, opts: StubOptions = {}): Promise<string> {
+    const { principal, origin } = actorOf(who);
+    return new CreateStubOp(this.context, origin).execute(principal, { path, meta, opts });
   }
 
-  async appendFile(principal: Principal, path: string, content: string, opts: WriteOptions = {}): Promise<string> {
-    return new AppendFileOp(this.context).execute(principal, { path, content, opts });
+  async appendFile(who: Who, path: string, content: string, opts: WriteOptions = {}): Promise<string> {
+    const { principal, origin } = actorOf(who);
+    return new AppendFileOp(this.context, origin).execute(principal, { path, content, opts });
   }
 
   async writeFile(
-    principal: Principal,
+    who: Who,
     path: string,
     content: string | Uint8Array | Blob,
     opts: WriteOptions = {},
   ): Promise<string> {
-    return new WriteFileOp(this.context).execute(principal, { path, content, opts });
+    const { principal, origin } = actorOf(who);
+    return new WriteFileOp(this.context, origin).execute(principal, { path, content, opts });
   }
 
-  async mkdir(principal: Principal, path: string, opts: MkdirOptions = {}): Promise<string> {
-    return new MkdirOp(this.context).execute(principal, { path, opts });
+  async mkdir(who: Who, path: string, opts: MkdirOptions = {}): Promise<string> {
+    const { principal, origin } = actorOf(who);
+    return new MkdirOp(this.context, origin).execute(principal, { path, opts });
   }
 
-  async deleteFile(principal: Principal, path: string, opts: DeleteOptions = {}): Promise<string> {
-    return new DeleteFileOp(this.context).execute(principal, { path, opts });
+  async deleteFile(who: Who, path: string, opts: DeleteOptions = {}): Promise<string> {
+    const { principal, origin } = actorOf(who);
+    return new DeleteFileOp(this.context, origin).execute(principal, { path, opts });
   }
 
   /** ゴミ箱から元の場所（か opts.to）へ戻す。戻した先のパスを返す（T-0470） */
-  async restore(principal: Principal, path: string, opts: RestoreOptions = {}): Promise<string> {
-    return new RestoreOp(this.context).execute(principal, { path, opts });
+  async restore(who: Who, path: string, opts: RestoreOptions = {}): Promise<string> {
+    const { principal, origin } = actorOf(who);
+    return new RestoreOp(this.context, origin).execute(principal, { path, opts });
   }
 
-  async rename(principal: Principal, oldPath: string, newPath: string, opts: RenameOptions = {}): Promise<string> {
-    return new RenameOp(this.context).execute(principal, { oldPath, newPath, opts });
+  async rename(who: Who, oldPath: string, newPath: string, opts: RenameOptions = {}): Promise<string> {
+    const { principal, origin } = actorOf(who);
+    return new RenameOp(this.context, origin).execute(principal, { oldPath, newPath, opts });
   }
 
-  async copyFile(principal: Principal, srcPath: string, destPath: string, opts: CopyOptions = {}): Promise<string> {
-    return new CopyOp(this.context).execute(principal, { srcPath, destPath, opts });
+  async copyFile(who: Who, srcPath: string, destPath: string, opts: CopyOptions = {}): Promise<string> {
+    const { principal, origin } = actorOf(who);
+    return new CopyOp(this.context, origin).execute(principal, { srcPath, destPath, opts });
   }
 
-  async setAcl(principal: Principal, path: string, acl: AccessControlList): Promise<void> {
-    return new SetAclOp(this.context).execute(principal, { path, acl });
+  async setAcl(who: Who, path: string, acl: AccessControlList): Promise<void> {
+    const { principal, origin } = actorOf(who);
+    return new SetAclOp(this.context, origin).execute(principal, { path, acl });
   }
 
-  async setAclRecursive(principal: Principal, path: string, acl: AccessControlList): Promise<void> {
-    return new SetAclRecursiveOp(this.context).execute(principal, { path, acl });
+  async setAclRecursive(who: Who, path: string, acl: AccessControlList): Promise<void> {
+    const { principal, origin } = actorOf(who);
+    return new SetAclRecursiveOp(this.context, origin).execute(principal, { path, acl });
   }
 }

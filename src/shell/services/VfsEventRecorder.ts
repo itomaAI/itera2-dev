@@ -33,6 +33,8 @@ export class VfsEventRecorder {
         action: m.type,
         path: m.path,
         source: `${m.sourcePrincipal.type}:${m.sourcePrincipal.id}`,
+        // どの個体が（エンジンの id・プロセスの pid）。source は「何として」（T-0903）
+        origin: m.origin,
         // MUTATE時の変更されたプロパティもログに残しておく
         ...(m.changedProperties ? { changed: m.changedProperties } : {}),
       });

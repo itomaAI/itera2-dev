@@ -128,9 +128,9 @@ Users can easily toggle the `autoStart` behavior from the System Settings app.
 
 ### System privilege (sync daemons only)
 
-Every guest process touches the VFS as `{ type: 'app', id: <pid> }`, and the area ACLs (`system/config/acl.json`) are evaluated for that principal. The agent's own area (`agent-only`) is readable by apps but writable only by the AI, so a sync daemon running as an app cannot write changes that arrived from another device into it — uploads succeed, downloads are silently skipped.
+Every guest process touches the VFS as `{ type: 'app', id: <app id> }`. The app is *what is running*, not which process: the registry id of the file being run, or — for a file that is not in the registry — the name given at spawn (or a name derived from the path). Several processes of the same app share one principal. The area ACLs (`system/config/acl.json`) are evaluated for that principal. The agent's own area (`agent-only`) is readable by apps but writable only by the AI, so a sync daemon running as an app cannot write changes that arrived from another device into it — uploads succeed, downloads are silently skipped.
 
-A daemon that mirrors another device (cloud sync) therefore needs `"systemPrivilege": true` in `services.json`. With it, the OS gives the daemon a `system` principal that bypasses the ACLs. Two conditions must both hold: the daemon's `path` is under `system/` (a distributed daemon, not a user-placed HTML), and the registry entry carries the flag. Do not set it on anything that is not a sync provider.
+A daemon that mirrors another device (cloud sync) therefore needs `"systemPrivilege": true` in `services.json`. With it, the OS gives the daemon a `system` principal that bypasses the ACLs. Three conditions must all hold: the daemon's `path` is under `system/` (a distributed daemon, not a user-placed HTML), the registry entry carries the flag, and that entry's `path` is the file being run (another file spawned under the daemon's name does not get the privilege). Do not set it on anything that is not a sync provider.
 
 ## 3. Inter-Process Communication (IPC)
 

@@ -230,6 +230,9 @@ export class SystemBootstrapper {
       contextLimit: () => cognitiveManager.contextLimit(),
     });
 
+    // 生きているエンジンの束（id → 束）。いまはルートだけ
+    const engines = new Map([[root.id, root]]);
+
     const cognitiveManager = new CognitiveManager(configManager, root.engine, logger, vfs, registryLayers);
     const sessionManager = new SessionManager(vfs, history, historyStore, logger, root.tools, {
       keep: () => configManager.get('preferences')?.sessionHistoryKeep,
@@ -310,8 +313,8 @@ export class SystemBootstrapper {
       associations: resolver,
       processManager,
       navHistory,
-      // どのプロセスもルートに仕える（プロセスの記録から引くのは、プロセスに「仕えるエンジン」を持たせる段で）
-      engineFor: () => root,
+      // そのプロセスが仕えるエンジンの束（プロセスの記録の engine から引く）
+      engineFor: (pid) => engines.get(processManager.processes.get(pid)?.engine ?? '') ?? null,
       sessionManager,
       vendorCatalog: new VendorCatalog(vendorHrefOf(import.meta.env.BASE_URL, document.baseURI)),
       shell: shellFacade as any,

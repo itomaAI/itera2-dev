@@ -15,9 +15,16 @@ import { GUEST_SAME_ORIGIN_SWITCH } from '../../config/guest_origin_policy';
 import { resolveRelativePath } from '../../utils/path';
 import { t } from '../../i18n/i18n';
 import { declaredRoute } from './declaredRoute';
+import { choosePid, resolveApp } from './processIdentity';
+import { ROOT_ENGINE_ID } from '../../core/control/Engine';
 
 export interface Process {
+  /** どの個体か。名前空間は OS に 1 つ（IPC の宛先・道具の組・変更の個体の印） */
   pid: string;
+  /** 何のアプリか（processIdentity.ts）。VFS の主体・特権・端末ごとの記録はここから決まる */
+  app: string;
+  /** 仕えるエンジンの id（既定はルート。起こした者から引き継ぐ）。言づてと道具の登録の行き先 */
+  engine: string;
   path: string;
   type: 'app' | 'daemon';
   state: 'foreground' | 'background' | 'running';
@@ -40,7 +47,10 @@ export interface CurrentRoute {
 }
 
 export interface SpawnOptions {
+  /** 個体に付ける名前。省けばホストが振る（アプリの id。埋まっていれば枝番） */
   pid?: string;
+  /** 仕えるエンジンの id。省けばルート */
+  engine?: string;
   path: string;
   type?: 'app' | 'daemon';
   show?: boolean;
@@ -135,6 +145,7 @@ export class ProcessManager {
         if (targetProc) {
           this.spawn({
             pid: targetProc.pid,
+            engine: targetProc.engine,
             path: targetProc.path,
             type: targetProc.type,
             show: true,
@@ -156,46 +167,18 @@ export class ProcessManager {
     }
   }
 
+  /** 何のアプリか・どのエンジンに仕えるか・どの個体か を決める（規則は processIdentity.ts） */
   private _resolveProcessInfo(options: SpawnOptions) {
     const basePath = options.path.split(/[?#]/)[0];
-    let pid = options.pid || '';
-    let type: 'app' | 'daemon' | undefined = options.type;
-
-    // レジストリ検索（指定がない場合）
-    if (!pid || !type) {
-      const apps = this.appRegistry.getAllApps();
-      const svcs = this.appRegistry.getAllServices();
-      const foundApp = apps.find((a) => a.path === basePath);
-      const foundSvc = svcs.find((s) => s.path === basePath);
-
-      if (foundApp) {
-        if (!pid) pid = foundApp.id;
-        if (!type) type = 'app';
-      } else if (foundSvc) {
-        if (!pid) pid = foundSvc.id;
-        if (!type) type = 'daemon';
-      } else {
-        const homePath = this.configManager.homePath();
-        if (basePath === homePath) {
-          if (!pid) pid = 'home';
-          if (!type) type = 'app';
-        }
-      }
-    }
-
-    // 野良アプリのフォールバック
-    if (!pid) {
-      const safeName = basePath.replace(/[^a-zA-Z0-9_-]/g, '_');
-      pid = `app_${safeName}`;
-    }
-    if (!type) {
-      type = 'app';
-    }
+    const identity = resolveApp(basePath, options.pid, this.appRegistry, () => this.configManager.homePath());
+    const type: 'app' | 'daemon' = options.type || identity.defaultType;
+    const engine = options.engine || ROOT_ENGINE_ID;
+    const pid = choosePid(options.pid, identity.app, engine, this.processes);
 
     // デーモンは強制的に非表示、アプリは未指定なら表示(true)
     const show = type === 'daemon' ? false : options.show !== false;
 
-    return { pid, type, show };
+    return { pid, app: identity.app, engine, type, show };
   }
 
   /**
@@ -203,7 +186,7 @@ export class ProcessManager {
    */
   async spawn(options: SpawnOptions): Promise<void> {
     const { path: rawPath, forceReload = false, args: rawArgs, currentUri } = options;
-    const { pid, type, show } = this._resolveProcessInfo(options);
+    const { pid, app, engine, type, show } = this._resolveProcessInfo(options);
 
     const uri = currentUri || `metaos://run/${rawPath}${queryFromArgs(rawPath, rawArgs)}`;
     // 起動に使う path には query を残さない（T-0542）
@@ -277,6 +260,8 @@ export class ProcessManager {
 
       this.processes.set(pid, {
         pid,
+        app,
+        engine,
         path,
         type,
         state: type === 'app' ? 'background' : 'running',
@@ -440,6 +425,7 @@ export class ProcessManager {
       order.map((p) =>
         this.spawn({
           pid: p.pid,
+          engine: p.engine,
           path: p.path,
           type: p.type,
           show: p === front,
