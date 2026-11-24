@@ -82,6 +82,8 @@ export interface ChatStatus {
   running: boolean;
   busy: boolean;
   outstandingTools: number;
+  /** 評価の予約が在る（起きるまでの待ちの間。running・busy が false でも、このあと生成が始まりうる。T-0910） */
+  scheduled: boolean;
   turns: number;
   lastTurnAt: number | null;
   session: { id: string; title: string; createdAt: number } | null;
@@ -260,7 +262,7 @@ export function contextFromHistory(turns: Turn[], limit: number | null): Context
 }
 
 export interface ChatStatusInput {
-  engine: { running: boolean; busy: boolean; outstandingTools: number };
+  engine: { running: boolean; busy: boolean; outstandingTools: number; scheduled: boolean };
   turns: Turn[];
   session: { id: string; title: string; createdAt: number } | null;
   /** いま選んでいるモデルの文脈の上限。分からなければ null */
@@ -273,6 +275,7 @@ export function buildChatStatus(input: ChatStatusInput): ChatStatus {
     running: input.engine.running,
     busy: input.engine.busy,
     outstandingTools: input.engine.outstandingTools,
+    scheduled: input.engine.scheduled,
     turns: input.turns.length,
     lastTurnAt: last ? last.timestamp : null,
     session: input.session,
@@ -286,6 +289,7 @@ export interface StatusLabels {
   running: string;
   idle: string;
   busy: string;
+  scheduled: string;
   toolsInFlight: string;
   session: string;
   untitled: string;
@@ -301,6 +305,7 @@ export const STATUS_LABELS_EN: StatusLabels = {
   running: 'running',
   idle: 'idle',
   busy: 'busy',
+  scheduled: 'scheduled',
   toolsInFlight: 'tools in flight',
   session: 'session',
   untitled: 'untitled',
@@ -321,7 +326,7 @@ export function formatChatStatus(s: ChatStatus, now: number = Date.now(), L: Sta
   const title = s.session ? (s.session.title ? `"${s.session.title}"` : L.untitled) : '-';
   const last = age === null ? '' : `, ${L.lastTurnMinAgo.replace('{n}', String(age))}`;
   return [
-    `${L.engine}: ${s.running ? L.running : L.idle}${s.busy ? ` / ${L.busy}` : ''} (${L.toolsInFlight}: ${s.outstandingTools})`,
+    `${L.engine}: ${s.running ? L.running : L.idle}${s.busy ? ` / ${L.busy}` : ''}${s.scheduled ? ` / ${L.scheduled}` : ''} (${L.toolsInFlight}: ${s.outstandingTools})`,
     `${L.session}: ${title}, ${s.turns} ${L.turns}${last}`,
     `${L.context}: ${ctx}`,
   ].join('\n');

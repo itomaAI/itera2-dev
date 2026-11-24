@@ -811,3 +811,77 @@ describe('Engine: 閉じた束の遅い結果は、枠を埋めずに新しい�
     expect(h.wakes()).toBe(1);
   });
 });
+
+describe('Engine.status().scheduled —— 評価の予約が在る間（T-0910）', () => {
+  // 背景:
+  //   status() は「生成中か（running）・結果待ちか（busy）」だけを答えていた。束の最後の結果が返ってから
+  //   次の生成が始まるまで（待ちの窓の間）は、どちらも false で、止まっているのと区別が付かなかった。
+  //   サブの持ち主は loop_stop で終わりを見られるが、ルートにはゲストへ届く終わりの知らせが無い。
+  beforeEach(() => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    vi.useFakeTimers();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('道具を待っている間は busy で、予約は無い', async () => {
+    const h = createLoopHarness('realtime', 1);
+    await h.startCycle();
+    expect(h.engine.status()).toEqual({ running: false, busy: true, outstandingTools: 1, scheduled: false });
+  });
+
+  it('最後の結果が返ってから次の生成が始まるまでは、busy でなく scheduled（本命）', async () => {
+    const h = createLoopHarness('realtime', 1);
+    await h.startCycle();
+    await h.resolveTool(0);
+    expect(h.engine.status()).toEqual({ running: false, busy: false, outstandingTools: 0, scheduled: true });
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(h.engine.status().scheduled).toBe(true);
+    expect(h.wakes()).toBe(1);
+
+    await vi.advanceTimersByTimeAsync(600);
+    expect(h.wakes()).toBe(2);
+    // 2 周目は道具を投げずに終わる。何も進んでいない
+    expect(h.stops.map((s: any) => s.reason)).toEqual(['idle']);
+    expect(h.engine.status()).toEqual({ running: false, busy: false, outstandingTools: 0, scheduled: false });
+  });
+
+  it('発言を置いてから生成が始まるまでの間も scheduled', async () => {
+    const h = createLoopHarness('realtime', 0);
+    await h.engine.injectUserTurn('go');
+    expect(h.engine.status()).toEqual({ running: false, busy: false, outstandingTools: 0, scheduled: true });
+    await vi.advanceTimersByTimeAsync(1600);
+    expect(h.wakes()).toBe(1);
+    expect(h.engine.status().scheduled).toBe(false);
+  });
+
+  it('halt した結果のあとは、評価が idle で終わるまで scheduled（loop_stop が出ると消える）', async () => {
+    const h = createLoopHarness('realtime', 1);
+    await h.startCycle();
+    await h.resolveTool(0, { log: 'done', trigger_llm: false, halt_loop: true });
+    expect(h.engine.status().scheduled).toBe(true);
+    expect(h.stops).toHaveLength(0);
+    await vi.advanceTimersByTimeAsync(1600);
+    expect(h.wakes()).toBe(1);
+    expect(h.stops.map((s: any) => s.reason)).toEqual(['idle']);
+    expect(h.engine.status()).toEqual({ running: false, busy: false, outstandingTools: 0, scheduled: false });
+  });
+
+  it('stop は予約を取り消す', async () => {
+    const h = createLoopHarness('realtime', 0);
+    await h.engine.injectUserTurn('go');
+    expect(h.engine.status().scheduled).toBe(true);
+    h.engine.stop();
+    expect(h.engine.status().scheduled).toBe(false);
+  });
+
+  it('isBusy（会話の差し替えを断る門）は、予約の間も false のまま（意味を変えない）', async () => {
+    const h = createLoopHarness('realtime', 1);
+    await h.startCycle();
+    expect(h.engine.isBusy()).toBe(true);
+    await h.resolveTool(0);
+    expect(h.engine.status().scheduled).toBe(true);
+    expect(h.engine.isBusy()).toBe(false);
+  });
+});

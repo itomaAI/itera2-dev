@@ -311,9 +311,19 @@ export class Engine {
     this._scheduleEvaluation();
   }
 
-  /** いまの状態（MetaOS.chat.status。T-0634）。busy はストリーミング中か結果待ちの束がある */
-  status(): { running: boolean; busy: boolean; outstandingTools: number } {
-    return { running: this.isRunning, busy: this.isBusy(), outstandingTools: this.outstandingTools };
+  /**
+   * いまの状態（MetaOS.chat.status。T-0634）。busy はストリーミング中か結果待ちの束がある。
+   * scheduled は評価の予約が在る（T-0910）: 発言や束の最後の結果のあと、起きるまでの待ち（wakeDebounceMs）の間。
+   * この間は running も busy も false なので、これが無いと「止まっている」と区別が付かない。評価は idle で終わることもある。
+   * 何も進んでいないのは busy も scheduled も false のとき。isBusy()（会話の差し替えを断る門）には入れない。
+   */
+  status(): { running: boolean; busy: boolean; outstandingTools: number; scheduled: boolean } {
+    return {
+      running: this.isRunning,
+      busy: this.isBusy(),
+      outstandingTools: this.outstandingTools,
+      scheduled: this.debounceTimer !== null,
+    };
   }
 
   /**

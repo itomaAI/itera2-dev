@@ -24,7 +24,7 @@ function fakeEngine(id: string) {
     stop: vi.fn(),
     reset: vi.fn(async (_options: any) => ({ archived: false, sessionId: 's2' })),
     statusInput: vi.fn(async () => ({
-      engine: { running: true, busy: false, outstandingTools: 0 },
+      engine: { running: true, busy: false, outstandingTools: 0, scheduled: false },
       turns,
       session: { id: 's1', title: '', createdAt: 5 },
       contextLimit: 1000,
@@ -194,6 +194,7 @@ describe('EngineCalls: MetaOS.chat と同じ動詞', () => {
       running: true,
       busy: false,
       outstandingTools: 0,
+      scheduled: false,
       turns: 1,
       lastTurnAt: 100,
       session: { id: 's1', title: '', createdAt: 5 },

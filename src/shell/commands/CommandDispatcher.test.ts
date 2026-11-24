@@ -7,7 +7,10 @@ function harness(opts: { reply?: { usage: any; model: string }; limit?: number |
   if (opts.reply) turns.push({ id: 'reply', timestamp: 1000, role: 'model', content: 'ok', meta: { ...opts.reply } });
   /** 束の口（post）を通って会話に置かれたターン */
   const posted: any[] = [];
-  const engine = { stop: vi.fn(), status: () => ({ running: false, busy: true, outstandingTools: 2 }) };
+  const engine = {
+    stop: vi.fn(),
+    status: () => ({ running: false, busy: true, outstandingTools: 2, scheduled: false }),
+  };
   const history = { get: () => turns };
   const post = async (content: any, meta: any) => {
     const t = { id: `t${turns.length}`, timestamp: 1000, role: 'system' as const, content, meta };

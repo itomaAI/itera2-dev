@@ -39,7 +39,7 @@ export interface Command extends CommandSpec {
 export interface CommandDeps {
   engine: {
     stop(): void;
-    status(): { running: boolean; busy: boolean; outstandingTools: number };
+    status(): { running: boolean; busy: boolean; outstandingTools: number; scheduled: boolean };
   };
   history: { get(): Turn[] };
   sessionManager: {
