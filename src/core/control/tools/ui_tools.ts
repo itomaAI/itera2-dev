@@ -235,16 +235,18 @@ export function registerUITools(registry: ToolRegistry): void {
       let pid = params.pid;
       const code = params.content || '';
 
+      if (!code.trim()) throw new ToolError('No code provided.');
+
+      // pid を省略すれば前面のアプリ。前面が無いときに、居ない pid を当てずっぽうで指さない（T-0903）
       if (!pid || pid === 'main') {
         if (context.shell?.processManager) {
           const fg = Array.from(context.shell.processManager.processes.values()).find(
             (p: any) => p.state === 'foreground',
           );
-          if (fg) pid = (fg as any).pid;
-          else pid = 'app_apps_home_html';
+          if (!fg) throw new ToolError('No app is in the foreground. Specify pid.');
+          pid = (fg as any).pid;
         }
       }
-      if (!code.trim()) throw new ToolError('No code provided.');
 
       if (context.shell?.processManager) {
         const pm = context.shell.processManager;

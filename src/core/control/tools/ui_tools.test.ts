@@ -173,3 +173,83 @@ describe('take_screenshot: pid 指定', () => {
     expect(c.calls[0].timeoutMs).toBeUndefined();
   });
 });
+
+/**
+ * inject_js: 相手の決め方（T-0903）
+ *
+ * 守りたいこと:
+ *   - pid を渡したらそのプロセス（デーモンでもよい）
+ *   - pid を省略（または 'main'）したら前面のアプリ
+ *   - 前面のアプリが無いときは、居ない pid を当てずっぽうで指さず、「pid を指定して」と返す
+ *   - 中身が空なら、相手を探す前に断る
+ */
+function injectCtx(procs: Array<{ pid: string; type: string; state: string }>) {
+  const calls: Array<{ pid: string; code: string }> = [];
+  const processes = new Map(procs.map((p) => [p.pid, { ...p, iframe: { contentWindow: {} } }]));
+  const context: any = {
+    shell: {
+      processManager: { processes },
+      transport: {
+        invokeGuest: async (pid: string, _method: string, payload: { code: string }) => {
+          calls.push({ pid, code: payload.code });
+          return 42;
+        },
+      },
+    },
+  };
+  return { context, calls };
+}
+
+const INJECT_PROCS = [
+  { pid: 'home', type: 'app', state: 'background' },
+  { pid: 'notes', type: 'app', state: 'foreground' },
+  { pid: 'loom_daemon', type: 'daemon', state: 'background' },
+];
+const NO_FOREGROUND = INJECT_PROCS.map((p) => ({ ...p, state: 'background' }));
+
+describe('inject_js: 相手の決め方', () => {
+  it('pid を渡すとそのプロセスへ（デーモンでもよい）', async () => {
+    const { context, calls } = injectCtx(INJECT_PROCS);
+    const res = await tools().inject_js.impl({ pid: 'loom_daemon', content: 'return 1' }, context);
+    expect(calls).toEqual([{ pid: 'loom_daemon', code: 'return 1' }]);
+    expect(res.log).toContain('42');
+    expect(res.ui).toContain('[loom_daemon]');
+  });
+
+  it("pid を省略（または 'main'）したら前面のアプリへ", async () => {
+    const { context, calls } = injectCtx(INJECT_PROCS);
+    await tools().inject_js.impl({ content: 'return 1' }, context);
+    await tools().inject_js.impl({ pid: 'main', content: 'return 2' }, context);
+    expect(calls.map((c) => c.pid)).toEqual(['notes', 'notes']);
+  });
+
+  it('前面のアプリが無ければ、居ない pid を指さずに「pid を指定して」と返す', async () => {
+    const { context, calls } = injectCtx(NO_FOREGROUND);
+    const err = await tools()
+      .inject_js.impl({ content: 'return 1' }, context)
+      .catch((e: Error) => e);
+    expect(err).toBeInstanceOf(Error);
+    expect((err as Error).name).toBe('ToolError');
+    expect((err as Error).message).toBe('No app is in the foreground. Specify pid.');
+    expect(calls).toEqual([]);
+  });
+
+  it('前面が無くても、pid を渡せば届く', async () => {
+    const { context, calls } = injectCtx(NO_FOREGROUND);
+    await tools().inject_js.impl({ pid: 'home', content: 'return 1' }, context);
+    expect(calls.map((c) => c.pid)).toEqual(['home']);
+  });
+
+  it('渡した pid が動いていなければ、その pid の名前で断る', async () => {
+    const { context, calls } = injectCtx(INJECT_PROCS);
+    await expect(tools().inject_js.impl({ pid: 'nope', content: 'return 1' }, context)).rejects.toThrow(
+      "Target process 'nope' is not running.",
+    );
+    expect(calls).toEqual([]);
+  });
+
+  it('中身が空なら、相手を探す前に断る（前面が無くても同じ答え）', async () => {
+    const { context } = injectCtx(NO_FOREGROUND);
+    await expect(tools().inject_js.impl({ content: '  ' }, context)).rejects.toThrow('No code provided.');
+  });
+});
