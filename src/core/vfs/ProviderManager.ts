@@ -93,6 +93,7 @@ export class ProviderManager {
       path: path,
       changedProperties: ['isMountPoint'],
       sourcePrincipal: { type: 'system', id: 'kernel' },
+      origin: 'kernel',
     });
   }
 
@@ -211,7 +212,12 @@ export class ProviderManager {
         // id 空間が衝突しないことは確認済み: OS 共通の Principal 定数は
         // 'kernel' / 'local_user' / 'Itera_AI' であり、プロバイダの pid は
         // プロセスIDであるため、id だけで判定しても他者の変更を取りこぼさない。
-        if (mutation.sourcePrincipal.id === info.pid) {
+        //
+        // ★ 見るのは主体の id ではなく、個体の印（origin）（T-0903）。
+        // 主体は「何として」（アプリ・役割）で、プロセスの主体はアプリから決まる。同じ同期デーモンの個体が 2 つ
+        // 居ると主体は同じになり、主体で比べると、もう片方の書き込みまで自分のものとして捨ててしまう。
+        // 印は、プロセスなら pid・エンジンなら id・system と user は主体の id（上の「衝突しない」はそのまま成り立つ）。
+        if (mutation.origin === info.pid) {
           continue;
         }
 

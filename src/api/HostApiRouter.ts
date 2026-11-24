@@ -5,6 +5,7 @@
 
 import type { HostTransport } from '../ipc/HostTransport';
 import type { VfsService } from '../core/vfs/VfsService';
+import type { Actor } from '../core/vfs/VfsHandle';
 import type { ConfigManager } from '../core/sys/ConfigManager';
 import type { VendorCatalog } from '../core/sys/VendorCatalog';
 import type { Turn, TurnContent, TurnMeta } from '../core/state/HistoryManager';
@@ -186,6 +187,9 @@ export class HostApiRouter {
     // ヘルパー: 送信元PIDからPrincipalを生成する（system 特権の判定は src/api/principal.ts。T-0617）
     const getPrincipal = (sourcePid: string): any =>
       resolvePrincipal(sourcePid, { processManager: d.processManager, appRegistry: d.appRegistry });
+    // 書き込みは「誰として」で触る（T-0903）: 主体（何として。ACL が見る）＋ 個体の印（どの個体が ＝ pid。
+    // 同期のエコー止めと vfs_events が見る）。読みは変更を起こさないので主体だけ
+    const getActor = (sourcePid: string): Actor => ({ principal: getPrincipal(sourcePid), origin: sourcePid });
 
     t.registerHandler('fs:read', async ({ path, opts }, sourcePid) => {
       const principal = getPrincipal(sourcePid);
@@ -209,9 +213,9 @@ export class HostApiRouter {
     });
 
     t.registerHandler('fs:write', async ({ path, content, opts }, sourcePid) => {
-      const principal = getPrincipal(sourcePid);
+      const who = getActor(sourcePid);
       const finalContent = prepareWriteContent(content, opts?.encoding);
-      const res = await d.vfs.writeFile(principal, path, finalContent, opts);
+      const res = await d.vfs.writeFile(who, path, finalContent, opts);
       const msg = VfsEventFormatter.format({
         actor: `App [${sourcePid}]`,
         action: 'edit',
@@ -222,8 +226,8 @@ export class HostApiRouter {
     });
 
     t.registerHandler('fs:append', async ({ path, content, opts }, sourcePid) => {
-      const principal = getPrincipal(sourcePid);
-      const res = await d.vfs.appendFile(principal, path, content, opts);
+      const who = getActor(sourcePid);
+      const res = await d.vfs.appendFile(who, path, content, opts);
       const msg = VfsEventFormatter.format({
         actor: `App [${sourcePid}]`,
         action: 'edit',
@@ -234,8 +238,8 @@ export class HostApiRouter {
     });
 
     t.registerHandler('fs:delete', async ({ path, opts }, sourcePid) => {
-      const principal = getPrincipal(sourcePid);
-      const res = await d.vfs.deleteFile(principal, path, opts);
+      const who = getActor(sourcePid);
+      const res = await d.vfs.deleteFile(who, path, opts);
       const msg = VfsEventFormatter.format({
         actor: `App [${sourcePid}]`,
         action: 'delete',
@@ -247,8 +251,8 @@ export class HostApiRouter {
 
     // ゴミ箱から元の場所（か opts.to）へ戻す（T-0470）。戻した先のパスを返す
     t.registerHandler('fs:restore', async ({ path, opts }, sourcePid) => {
-      const principal = getPrincipal(sourcePid);
-      const dest = await d.vfs.restore(principal, path, opts);
+      const who = getActor(sourcePid);
+      const dest = await d.vfs.restore(who, path, opts);
       const msg = VfsEventFormatter.format({
         actor: `App [${sourcePid}]`,
         action: 'move',
@@ -259,8 +263,8 @@ export class HostApiRouter {
     });
 
     t.registerHandler('fs:rename', async ({ oldPath, newPath, opts }, sourcePid) => {
-      const principal = getPrincipal(sourcePid);
-      const res = await d.vfs.rename(principal, oldPath, newPath, opts);
+      const who = getActor(sourcePid);
+      const res = await d.vfs.rename(who, oldPath, newPath, opts);
       const msg = VfsEventFormatter.format({
         actor: `App [${sourcePid}]`,
         action: 'move',
@@ -271,8 +275,8 @@ export class HostApiRouter {
     });
 
     t.registerHandler('fs:copy', async ({ srcPath, destPath, opts }, sourcePid) => {
-      const principal = getPrincipal(sourcePid);
-      const res = await d.vfs.copyFile(principal, srcPath, destPath, opts);
+      const who = getActor(sourcePid);
+      const res = await d.vfs.copyFile(who, srcPath, destPath, opts);
       const msg = VfsEventFormatter.format({
         actor: `App [${sourcePid}]`,
         action: 'copy',
@@ -283,8 +287,8 @@ export class HostApiRouter {
     });
 
     t.registerHandler('fs:mkdir', async ({ path, opts }, sourcePid) => {
-      const principal = getPrincipal(sourcePid);
-      const res = await d.vfs.mkdir(principal, path, opts);
+      const who = getActor(sourcePid);
+      const res = await d.vfs.mkdir(who, path, opts);
       this._checkAndEmitEvent(sourcePid, opts, 'folder_created', `App [${sourcePid}] created folder: ${path}`);
       return res;
     });
@@ -345,11 +349,11 @@ export class HostApiRouter {
     });
 
     t.registerHandler('fs:set_acl', async ({ path, acl, opts }, sourcePid) => {
-      const principal = getPrincipal(sourcePid);
+      const who = getActor(sourcePid);
       if (opts?.recursive) {
-        await d.vfs.setAclRecursive(principal, path, acl);
+        await d.vfs.setAclRecursive(who, path, acl);
       } else {
-        await d.vfs.setAcl(principal, path, acl);
+        await d.vfs.setAcl(who, path, acl);
       }
       this._checkAndEmitEvent(
         sourcePid,
@@ -361,7 +365,7 @@ export class HostApiRouter {
     });
 
     t.registerHandler('fs:create_stub', async ({ path, meta, opts }, sourcePid) => {
-      return await d.vfs.createStub(getPrincipal(sourcePid), path, meta, opts);
+      return await d.vfs.createStub(getActor(sourcePid), path, meta, opts);
     });
 
     // 新しいSync Provider API
@@ -807,7 +811,7 @@ export class HostApiRouter {
       // 書くのは呼び手の principal（T-0617）。以前は USER で書いていたため、同期デーモンが
       // スタブの中身をここで取り寄せると、AI の領域（agent-only）では USER に書く権限が無く
       // 「Failed to fetch missing content」で落ちた。system 特権のデーモンは system で書く。
-      await d.vfs.writeFile(getPrincipal(sourcePid), destPath, blob, {
+      await d.vfs.writeFile(getActor(sourcePid), destPath, blob, {
         overwrite: true,
         // 実体化のときに元の日付を保つための口（T-0351）
         meta: options?.meta,

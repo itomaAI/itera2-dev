@@ -192,6 +192,26 @@ describe('VfsService._hydrateIfNeeded: プロバイダが move を申し出て�
     expect(fetched).toEqual(['A/notes.md']);
   });
 
+  it('「プロバイダ自身か」は個体の印で見る（主体がアプリから決まっていても、自分の改名は跳ね返さない。T-0903）', async () => {
+    const { svc, fetched, moved } = makeService({ nodes: tree(), mounts: withMove });
+    await svc._hydrateIfNeeded({ type: 'system', id: 'sync_app' } as any, 'A/notes.md', 'A/notes (2).md', {
+      delegateMove: true,
+      origin: 'sync',
+    });
+    expect(moved).toEqual([]);
+    expect(fetched).toEqual(['A/notes.md']);
+  });
+
+  it('同じ主体でも、別の個体の改名は onMove に任せる（T-0903）', async () => {
+    const { svc, fetched, moved } = makeService({ nodes: tree(), mounts: withMove });
+    await svc._hydrateIfNeeded({ type: 'system', id: 'sync' } as any, 'A', 'B', {
+      delegateMove: true,
+      origin: 'sync-2',
+    });
+    expect(moved).toEqual(['A -> B']);
+    expect(fetched).toEqual([]);
+  });
+
   it('行き先が既に在るなら向こうを先に動かさない（改名は EEXIST で失敗する）', async () => {
     const { svc, moved } = makeService({ nodes: tree(), mounts: withMove });
     await svc._hydrateIfNeeded(P, 'A/notes.md', 'A/resources/run.js', { delegateMove: true });

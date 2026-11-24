@@ -129,6 +129,13 @@ export interface VfsMutation {
    * これにより OS レベルでのエコーキャンセル（自身が起こした変更は自身に通知しない）を実現する
    */
   sourcePrincipal: Principal;
+
+  /**
+   * どの個体が起こしたか（エンジンの id・プロセスの pid。system・user は主体の id）。揮発で、ノードには保存しない。
+   * エコーキャンセル（自分が起こした変更を自分に知らせない）は、主体ではなくこれを見る ——
+   * 主体は「何として」（役割・アプリ）で、同じアプリの 2 つの個体は主体が同じになる（T-0903）
+   */
+  origin: string;
 }
 
 export interface SyncProviderConfig {

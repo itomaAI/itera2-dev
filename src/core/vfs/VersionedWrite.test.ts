@@ -269,3 +269,40 @@ describe('updateFile', () => {
     expect(m.get().writes).toBe(3);
   });
 });
+
+describe('変更に載る個体の印（T-0903）', () => {
+  const collect = (ctx: VfsContext) => {
+    const seen: string[] = [];
+    ctx.eventBus.subscribe((ms) =>
+      seen.push(...ms.map((m) => `${m.type} ${m.path} ${m.sourcePrincipal.id} ${m.origin}`)),
+    );
+    return seen;
+  };
+
+  it('操作に渡した印が、変更（VfsMutation）の origin に載る。渡さなければ主体の id', async () => {
+    const { ctx } = makeCtx();
+    const seen = collect(ctx);
+    await new WriteFileOp(ctx, 'pid_7').execute(USER_PRINCIPAL, {
+      path: 'a.md',
+      content: 'x',
+      opts: { overwrite: true },
+    });
+    await new WriteFileOp(ctx).execute(USER_PRINCIPAL, { path: 'a.md', content: 'y', opts: { overwrite: true } });
+    ctx.eventBus.flushNow();
+    expect(seen).toEqual(['MUTATE a.md local_user pid_7', 'MUTATE a.md local_user local_user']);
+  });
+
+  it('VfsService の書く口は、主体だけでも「誰として」（主体 ＋ 印）でも受ける。印はノードには残らない', async () => {
+    const { ctx, nodeStore, text } = makeCtx();
+    const seen = collect(ctx);
+    const svc: any = Object.create(VfsService.prototype);
+    svc.context = ctx;
+    svc.pathResolver = ctx.pathResolver;
+    await svc.writeFile({ principal: USER_PRINCIPAL, origin: 'pid_9' }, 'a.md', 'z', { overwrite: true });
+    await svc.writeFile(USER_PRINCIPAL, 'b.md', 'new', {});
+    ctx.eventBus.flushNow();
+    expect(text()).toBe('z');
+    expect(seen).toEqual(['MUTATE a.md local_user pid_9', 'ATTACH b.md local_user local_user']);
+    expect(JSON.stringify([...nodeStore.getAllNodes()])).not.toContain('pid_9');
+  });
+});
