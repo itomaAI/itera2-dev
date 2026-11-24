@@ -19,13 +19,22 @@ export interface SystemPromptOptions {
    * Omitted / null entries mean "this distribution has no such place".
    */
   paths?: GuestPaths;
+  /**
+   * Which engine reads this prompt (T-0908). The prompt is one common body (LPML, tools, environment)
+   * with a few role-specific passages (ROLE_PARTS) set into it. Default: 'root'.
+   */
+  role?: PromptRole;
 }
 
+/** Whom the prompt is for: the OS's own chat engine, or an engine an application started (MetaOS.engine). */
+export type PromptRole = 'root' | 'sub';
+
 /** The <rule name="guest_layout"> block: only the places this distribution declares. Empty when nothing is declared. */
-export function buildGuestLayoutSection(paths: GuestPaths): string {
+export function buildGuestLayoutSection(paths: GuestPaths, role: PromptRole = 'root'): string {
   const lines: string[] = [];
   if (paths.agent.home) lines.push(`- Your own area (only you write here; others read): \`${paths.agent.home}/\``);
-  if (paths.agent.init) lines.push(`- Your boot document: \`${paths.agent.init}\``);
+  if (paths.agent.init && ROLE_PARTS[role].namesBootDocument)
+    lines.push(`- Your boot document: \`${paths.agent.init}\``);
   if (paths.agent.scratch)
     lines.push(`- Your scratch area (apps and the user may write here too): \`${paths.agent.scratch}/\``);
   if (paths.user.home) lines.push(`- The user's area: \`${paths.user.home}/\``);
@@ -63,6 +72,56 @@ Use \`<report>\` to greet the user with a brief status (what the VFS contains, w
 </rule>`;
 }
 
+/**
+ * The role-specific passages. Everything else in the prompt is common to every engine.
+ * A role fills exactly these slots: a new role is a new entry here, not a new condition in the body.
+ */
+export interface RoleParts {
+  /** The identity rule: who this engine is and whom it talks to */
+  identity: string;
+  /** reset_session: what becomes of the cleared conversation */
+  resetKeeps: string;
+  /** reset_session: what happens right after the reset */
+  resetThen: string;
+  /** Whether guest_layout names the boot document (only an engine that boots from it is pointed at it) */
+  namesBootDocument: boolean;
+  /** The closing rule: how this engine starts */
+  start(paths: GuestPaths): string;
+}
+
+export const ROLE_PARTS: Readonly<Record<PromptRole, RoleParts>> = {
+  // The OS's own engine: it owns the chat panel, keeps sessions, and boots from the boot document.
+  root: {
+    identity: `<rule name="identity">
+You are **Itera**, an Autonomous AI Operating System running in a browser environment.
+Your personal name is {{agentName}}. Your user's name is {{username}}.
+Your purpose is to autonomously build and maintain the optimal workflow environment for the user.
+You reside in the **Host Environment** (Control Layer) and manipulate the **Guest Environment** (VFS/Dashboard) via tools.
+</rule>`,
+    resetKeeps: `The cleared conversation is kept in the session history (the user can switch back to it from the chat header's history button); attachments it refers to are kept with it.`,
+    resetThen: `    - After resetting, the system will prompt you to run the Initialization Protocol.`,
+    namesBootDocument: true,
+    start: buildBootProtocolSection,
+  },
+  // An engine an application started (MetaOS.engine): same tools and file access, no chat panel,
+  // no boot sequence. Its role comes in the conversation, from the application that owns it.
+  sub: {
+    identity: `<rule name="identity">
+You are a **sub engine** of Itera OS, an AI operating system running in a browser environment. An application started you to work alongside the OS's main engine (the root engine, which owns the chat panel).
+Your personal name is {{agentName}}. The user's name is {{username}}.
+You have the same tools, the same file access and the same **Guest Environment** (VFS/Dashboard) as the root engine. What you do not have is the chat panel: everything you write goes to the application that started you, and that application decides what the user sees. Likewise, \`<user_input>\` is whatever that application sends you: the user's own words, or the application's request.
+You exist only while that application runs. Processes you start with \`<spawn>\` or \`<open>\` belong to you and end when you do; you cannot stop processes you did not start. What must outlive you goes into the VFS.
+</rule>`,
+    resetKeeps: `The cleared conversation is handed to the application that started you; keeping it is that application's decision.`,
+    resetThen: `    - After resetting there is no initialization to run: continue from the summary you carried over.`,
+    namesBootDocument: false,
+    start: () => `<rule name="start">
+You have no boot sequence. The root engine's initialization (its boot document, its journals, its greeting) is not yours to run.
+Your task is in the conversation: begin with it on your first turn.
+</rule>`,
+  },
+};
+
 const THINKING_TAG_SECTION = `
 <define_tag name="thinking">
 Use this space to process complex reasoning step-by-step (think out loud) before taking actions. (Note: This tag IS visible to the user).
@@ -70,7 +129,8 @@ Use this space to process complex reasoning step-by-step (think out loud) before
 `;
 
 export function buildSystemPrompt(options: SystemPromptOptions = {}): string {
-  const { thinkingTag = false, paths = EMPTY_GUEST_PATHS } = options;
+  const { thinkingTag = false, paths = EMPTY_GUEST_PATHS, role = 'root' } = options;
+  const part = ROLE_PARTS[role];
   return `
 <!-- ================================================================= -->
 <!-- 1. LPML DEFINITION & TURN LIFECYCLE                               -->
@@ -439,25 +499,20 @@ Rule:
 
 <define_tag name="reset_session">
 Clears the conversation history to free up context window, while optionally carrying over important information to the next session.
-The cleared conversation is kept in the session history (the user can switch back to it from the chat header's history button); attachments it refers to are kept with it.
+${part.resetKeeps}
 Content (optional):
     - Write a summary of the current state, ongoing tasks, or user preferences to carry over to the new session.
 Rule:
     - Use this when the user explicitly requests to clear the chat/context, or when the conversation history has become too long and cluttered.
     - Do not use it too casually for every small task, but do not hesitate to use it when a major task is finished and a clean slate is beneficial.
-    - After resetting, the system will prompt you to run the Initialization Protocol.
+${part.resetThen}
 </define_tag>
 
 <!-- ================================================================= -->
 <!-- 5. IDENTITY & PURPOSE                                             -->
 <!-- ================================================================= -->
 
-<rule name="identity">
-You are **Itera**, an Autonomous AI Operating System running in a browser environment.
-Your personal name is {{agentName}}. Your user's name is {{username}}.
-Your purpose is to autonomously build and maintain the optimal workflow environment for the user.
-You reside in the **Host Environment** (Control Layer) and manipulate the **Guest Environment** (VFS/Dashboard) via tools.
-</rule>
+${part.identity}
 
 <rule name="mindset">
 **1. Absolute Transparency**:
@@ -630,8 +685,8 @@ If you are unsure of what changes occurred in the system in the background, you 
 - App lifecycle (spawn/kill): \`system/logs/process_events/YYYY-MM-DD.jsonl\`
 </rule>
 
-${buildGuestLayoutSection(paths)}
-${buildBootProtocolSection(paths)}
+${buildGuestLayoutSection(paths, role)}
+${part.start(paths)}
 `.trim();
 }
 
