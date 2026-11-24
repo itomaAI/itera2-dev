@@ -283,7 +283,7 @@ describe('inject_js: 相手の決め方', () => {
  *
  * 守りたいこと:
  *   - 道具は仕える先を渡さない（取っ手が、呼んだエンジンにする）
- *   - open が渡すアプリの id は、名指しではなく既定の名前
+ *   - open は pid を名指ししない（どの個体かは、個体の決め方が決める）
  *   - 取っ手が断ったら、そのまま期待される失敗になる
  *   - ps は、このエンジンに仕えていないプロセスにだけ、仕える先を添える
  */
@@ -355,12 +355,11 @@ describe('spawn・open・kill・ps: プロセスの口は取っ手', () => {
     });
   });
 
-  it('open は、関連付けで決まったアプリの id を既定の名前として渡す（名指ししない）', async () => {
+  it('open は、関連付けで決まったアプリのパスを渡す。pid は名指ししない', async () => {
     const { context, spawned } = procCtx();
     const res = await tools().open.impl({ path: 'data/a.md' }, context);
     expect(spawned).toEqual([
       {
-        preferredPid: 'notes',
         path: 'system/apps/notes.html',
         show: true,
         args: { file: 'data/a.md' },

@@ -36,19 +36,13 @@ export function createEngineProcesses(deps: EngineProcessesDeps, engineId: strin
 
   return {
     async spawn(options) {
-      const { preferredPid, ...rest } = options;
-      let pid = options.pid;
-      if (pid) {
+      if (options.pid) {
         // 名指し: 居れば、そこへの再開か起こし直しになる
-        const holder = pm.processes.get(pid);
+        const holder = pm.processes.get(options.pid);
         if (holder && !movable(holder)) throw notYours(holder, 'resume or restart');
-      } else if (preferredPid) {
-        // 既定の名前: ほかのエンジンに仕える個体が使っていれば名指しせず、個体の決め方（processIdentity.ts）に任せる
-        const holder = pm.processes.get(preferredPid);
-        if (!holder || holder.engine === engineId) pid = preferredPid;
       }
       try {
-        await pm.spawn({ ...rest, pid, engine: engineId });
+        await pm.spawn({ ...options, engine: engineId });
       } catch (e) {
         if (e instanceof SpawnRefusedError) throw new ToolError(e.message, { cause: e });
         throw e;

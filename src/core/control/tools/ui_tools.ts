@@ -91,9 +91,8 @@ export function registerUITools(registry: ToolRegistry): void {
           } else {
             const args = { file: path };
             const fullUri = `metaos://open/${path}`;
-            // アプリの id は名指しではなく既定の名前: ほかのエンジンに仕える個体が使っていれば、別の個体になる
+            // pid を名指ししない: 個体の決め方が、このエンジンから見た「そのアプリ」の個体（無ければ新しい個体）にする
             await context.shell.processes.spawn({
-              preferredPid: resolvedApp.appId,
               path: resolvedApp.appPath,
               show: true,
               args,

@@ -54,13 +54,11 @@ export interface ToolProcessInfo {
 
 /** 道具がプロセスを起こすときに渡すもの。仕える先は渡さない（取っ手が、このエンジンにする） */
 export interface ToolSpawnOptions {
-  /** 名指しの pid。居れば、そこへの再開か起こし直しになる。ほかのエンジンに仕えるプロセスの名前なら断られる */
-  pid?: string;
   /**
-   * 既定の名前（open が、関連付けで決まったアプリの id を渡す）。空いているか、このエンジンに仕える個体のものなら使う。
-   * ほかのエンジンに仕える個体が使っていれば、別の個体になる
+   * 名指しの pid。居れば、そこへの再開か起こし直しになる。ほかのエンジンに仕えるプロセスの名前なら断られる。
+   * 省けば、個体の決め方（shell/windowing/processIdentity.ts）が、このエンジンから見た「そのアプリ」の個体を選ぶ
    */
-  preferredPid?: string;
+  pid?: string;
   path: string;
   type?: 'app' | 'daemon';
   show?: boolean;

@@ -110,45 +110,26 @@ describe('engineProcesses: 起こす', () => {
     expect(w.resumed).toEqual(['theirs']);
   });
 
-  it('既定の名前: 空いていれば使う。自分に仕える個体のものなら、そこを再開する', () => {
+  it('名前なし: このエンジンから見た「そのアプリ」の個体になる（居れば再開・ほかのエンジンの個体には触らない）', () => {
     const w = mk();
-    void w.a.spawn({ preferredPid: 'notes', path: NOTES, show: false });
-    void w.a.spawn({ preferredPid: 'notes', path: NOTES, show: false });
-    expect(w.rows()).toEqual(['notes app=notes engine=eng-a type=app']);
-    expect(w.resumed).toEqual(['notes']);
-  });
-
-  it('既定の名前: ほかのエンジンに仕える個体が使っていれば、断らずに別の個体にする（ルートも同じ）', () => {
-    const w = mk();
-    void w.root.spawn({ preferredPid: 'notes', path: NOTES, show: false });
-    void w.a.spawn({ preferredPid: 'notes', path: NOTES, show: false });
+    void w.root.spawn({ path: NOTES, show: false });
+    void w.a.spawn({ path: NOTES, show: false });
+    void w.a.spawn({ path: NOTES, show: false });
+    void w.root.spawn({ path: NOTES, show: false });
     expect(w.rows()).toEqual(['notes app=notes engine=root type=app', 'notes-2 app=notes engine=eng-a type=app']);
-
-    const v = mk();
-    void v.a.spawn({ preferredPid: 'notes', path: NOTES, show: false });
-    void v.root.spawn({ preferredPid: 'notes', path: NOTES, show: false });
-    expect(v.rows()).toEqual(['notes app=notes engine=eng-a type=app', 'notes-2 app=notes engine=root type=app']);
-    expect(v.resumed).toEqual([]);
-    expect(v.killed).toEqual([]);
+    expect(w.resumed).toEqual(['notes-2', 'notes']);
+    expect(w.killed).toEqual([]);
   });
 
-  it('既定の名前: 同じエンジンに仕える別のアプリが使っていれば、その名前で起こし直す（いままでどおり）', () => {
-    const w = mk();
-    void w.root.spawn({ pid: 'notes', path: 'data/other.html', show: false });
-    void w.root.spawn({ preferredPid: 'notes', path: NOTES, show: false });
-    expect(w.killed).toEqual(['notes']);
-    expect(w.pm.processes.get('notes')!.path).toBe(NOTES);
-    expect(w.pm.processes.size).toBe(1);
-  });
-
-  it('名指しと既定の名前の両方が在れば、名指しが勝つ。起こす口には既定の名前を渡さない', () => {
+  it('起こす口には、渡されたものに仕える先を足して渡す', () => {
     const w = mk();
     const spawn = vi.spyOn(w.pm, 'spawn');
     void w.a.spawn({
       pid: 'x',
-      preferredPid: 'notes',
       path: NOTES,
+      type: 'app',
       show: false,
+      forceReload: true,
       args: { file: 'a.md' },
       currentUri: 'u',
     });
@@ -156,7 +137,9 @@ describe('engineProcesses: 起こす', () => {
       pid: 'x',
       engine: 'eng-a',
       path: NOTES,
+      type: 'app',
       show: false,
+      forceReload: true,
       args: { file: 'a.md' },
       currentUri: 'u',
     });
