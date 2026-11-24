@@ -17,6 +17,7 @@ import type { SpawnOptions } from '../shell/windowing/ProcessManager';
 import type { CompiledGuest } from '../shell/windowing/GuestCompiler';
 import { USER_PRINCIPAL } from '../core/vfs/types';
 import { buildChatStatus, buildResetPlan, type ChatStatusInput } from './chatApi';
+import { OS_VERSION } from '../config/version';
 import { postToBundle, type Caller } from './chatPost';
 import { EngineCalls, type EngineTable } from './EngineCalls';
 import { LlmCalls, type LlmEndpointLike } from './LlmCalls';
@@ -556,7 +557,8 @@ export class HostApiRouter {
     t.registerHandler('sys:info', async (_, sourcePid) => {
       if (!d.processManager) return null;
       const p = d.processManager.processes.get(sourcePid);
-      return p ? { pid: p.pid, path: p.path, type: p.type, state: p.state } : null;
+      // osVersion: ゲストが OS の版を読む口（T-0910）。画面の下の帯と同じ値
+      return p ? { pid: p.pid, path: p.path, type: p.type, state: p.state, osVersion: OS_VERSION } : null;
     });
     t.registerHandler('sys:broadcast', async ({ eventName, payload }) => {
       if (d.processManager) d.processManager.broadcast(eventName, payload);

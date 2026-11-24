@@ -71,9 +71,10 @@ export interface HostApiContract {
     request: Record<string, never>;
     response: ProcessInfo[];
   };
+  /** 呼んだプロセス自身のこと。osVersion は OS の版（src/config/version.ts。T-0910） */
   'sys:info': {
     request: Record<string, never>;
-    response: ProcessInfo | null;
+    response: (ProcessInfo & { osVersion: string }) | null;
   };
   'sys:get_args': {
     request: Record<string, never>;
