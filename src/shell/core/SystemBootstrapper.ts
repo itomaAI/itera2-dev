@@ -19,6 +19,7 @@ import { rootIconsFor } from '../panels/nodeOrder';
 import { ConfigManager } from '../../core/sys/ConfigManager';
 import { VendorCatalog, vendorHrefOf } from '../../core/sys/VendorCatalog';
 import { AppRegistry } from '../../core/sys/AppRegistry';
+import { PrivilegeTable } from '../../core/sys/PrivilegeTable';
 import { FileAssociationResolver } from '../../core/sys/FileAssociationResolver';
 import { HistoryManager } from '../../core/state/HistoryManager';
 import { HistoryStore } from '../../core/state/HistoryStore';
@@ -143,6 +144,10 @@ export class SystemBootstrapper {
 
     const appRegistry = new AppRegistry(vfs, eventBus, registryLayers);
     await appRegistry.loadAll();
+
+    // 配信物の特権の表（system の主体で動いてよいファイル。T-0904）
+    const privileges = new PrivilegeTable(vfs, eventBus);
+    await privileges.load();
 
     const resolver = new FileAssociationResolver(vfs, appRegistry, eventBus, registryLayers);
     await resolver.loadAssociations();
@@ -310,6 +315,7 @@ export class SystemBootstrapper {
       vfs,
       configManager,
       appRegistry,
+      privileges,
       associations: resolver,
       processManager,
       navHistory,

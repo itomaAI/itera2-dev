@@ -31,6 +31,7 @@ import type { VfsService } from '../../core/vfs/VfsService';
 import type { ConfigManager } from '../../core/sys/ConfigManager';
 import type { ProcessManager } from '../windowing/ProcessManager';
 import { SYSTEM_PRINCIPAL } from '../../core/vfs/types';
+import { isDistributionFile } from '../../core/vfs/distribution';
 import { t } from '../../i18n/i18n';
 
 /** アダプタが報告する接続状態 */
@@ -46,7 +47,7 @@ export interface SyncAdapterStatus {
   accentClass?: string;
 }
 
-/** レジストリ (system/registry/adapters.json) の 1 エントリ */
+/** アダプタの一覧 (system/adapters/adapters.json) の 1 エントリ */
 export interface SyncAdapterManifest {
   id: string;
   name: string;
@@ -80,7 +81,11 @@ export interface LoadedAdapter {
 }
 
 const ADAPTER_API_VERSION = 1;
-const REGISTRY_PATH = 'system/registry/adapters.json';
+/**
+ * アダプタの一覧。本体と同じ readonly の領域に置く（T-0904）。アダプタはホストの窓で動くので、
+ * 一覧も本体も配信物（core/vfs/distribution.ts）であること。登録簿（system/registry/）は誰でも書けるので、そこからは読まない。
+ */
+const REGISTRY_PATH = 'system/adapters/adapters.json';
 
 export class SyncAdapterHost {
   private vfs: VfsService;
@@ -129,6 +134,16 @@ export class SyncAdapterHost {
     if (this.loaded) return;
     this.loaded = true;
 
+    if (!this.vfs.exists(SYSTEM_PRINCIPAL, REGISTRY_PATH)) {
+      this._emitStatus();
+      return;
+    }
+    if (!isDistributionFile(this.vfs, REGISTRY_PATH)) {
+      console.warn(`[SyncAdapterHost] ${REGISTRY_PATH} is not a distribution file. No adapter is loaded.`);
+      this._emitStatus();
+      return;
+    }
+
     let manifests: SyncAdapterManifest[] = [];
     try {
       const raw = await this.vfs.readFile(SYSTEM_PRINCIPAL, REGISTRY_PATH).catch(() => '');
@@ -154,6 +169,11 @@ export class SyncAdapterHost {
   }
 
   private async _loadOne(manifest: SyncAdapterManifest): Promise<void> {
+    if (!isDistributionFile(this.vfs, manifest.path)) {
+      console.warn(`[SyncAdapterHost] Skipping adapter '${manifest.id}': ${manifest.path} is not a distribution file.`);
+      return;
+    }
+
     let blobUrl = '';
     try {
       const code = await this.vfs.readFile(SYSTEM_PRINCIPAL, manifest.path);

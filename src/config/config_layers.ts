@@ -31,7 +31,8 @@ export const CONFIG_LAYERS: readonly string[] = [SYSTEM_CONFIG_DIR];
  * 🔴 **アダプタ（adapters.json）にはこの層を使わない。**
  * アダプタはホストの window へ `import()` される＝ホストの任意コード実行と等価であり、
  * かつ利用者の層は同期される。層を認めると、アカウントが奪われたときに
- * **すべての端末でホストのコードが走る**。アダプタは配信物だけから読む。
+ * **すべての端末でホストのコードが走る**。アダプタの一覧は登録簿に置かない ——
+ * 本体と同じ readonly の領域（`system/adapters/adapters.json`）から読む（T-0904）。
  */
 export const REGISTRY_LAYERS: readonly string[] = [SYSTEM_REGISTRY_DIR];
 

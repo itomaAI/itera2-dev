@@ -13,7 +13,7 @@ src/shell/services/SyncAdapterHost.ts   アダプタの読み込みと状態集�
 src/shell/modals/SyncModal.ts           モーダル UI（プロバイダ非依存）
 index.html                              ストレージパネルの雲アイコン (#btn-cloud-sync)
 
-vfs_root/system/registry/adapters.json  アダプタの登録簿
+vfs_root/system/adapters/adapters.json  アダプタの一覧（本体と同じ readonly の領域）
 vfs_root/system/adapters/*.js           アダプタ本体（ES module）
 ```
 
@@ -26,7 +26,7 @@ SystemBootstrapper
   │    └─ new SyncModal(adapterHost)
   │         └─ adapterHost.setContainerFactory(...)   ← 描画スロットの供給を登録
   └─ await syncAdapterHost.loadAll()                  ← 最後に読み込む
-       ├─ system/registry/adapters.json を読む
+       ├─ system/adapters/adapters.json を読む
        ├─ 各 .js を Blob URL 化して動的 import()
        └─ mod.init(ctx) を呼ぶ
 ```
@@ -93,9 +93,13 @@ export async function init(ctx) { /* ... */ }
 
 > **`system/adapters/` への書き込み権限 ≒ ホストの任意コード実行権限**
 
-`VfsInitializer` は `system/` を read-only とし、書き込みを許すのは
-`config` / `themes` / `registry` / `temp` / `upstream` に限っている。
-**`system/adapters` を `rwPaths` に追加してはならない。**
+`system/` は readonly の領域で、書き込みを許しているのは
+`config` / `themes` / `registry` / `temp` / `upstream` / `credentials` だけである（`src/core/vfs/areaAcl.ts`）。
+**`system/adapters` を書ける領域にしてはならない。**
+
+一覧（`adapters.json`）も本体と同じ `system/adapters/` に置く（T-0904）。一覧に載ったものはホストで動くので、
+一覧は書ける場所（登録簿など）に置かない。ホストは一覧と本体の両方について「配信物であること」
+（readonly の領域のファイル。`src/core/vfs/distribution.ts`）を確かめ、そうでないものは読み込まない。
 
 より弱い権限で十分なアダプタは、ゲストアプリ（`apps/*.html`）として
 実装し、アダプタからは spawn するだけにするほうが安全。
@@ -119,15 +123,15 @@ export async function init(ctx) { /* ... */ }
 ## 新しいアダプタを足す
 
 1. `vfs_root/system/adapters/<name>.js` を作り `init(ctx)` をエクスポート
-2. `vfs_root/system/registry/adapters.json` にエントリを追加
+2. `vfs_root/system/adapters/adapters.json` にエントリを追加
 3. `npm run dev` / `npm run build`（`build_defaults.js` が `vfs_root/` を自動で取り込む）
 
 ### 既存インストールへの反映について
 
-- `system/adapters/*.js` は**強制更新の対象**なので、起動時に最新へ更新される
-- `system/registry/adapters.json` は**config 領域**であり、
-  **一度作成されると以降は更新されない**（ユーザーの編集を尊重するため）。
-  既存インストールに新しいアダプタを配る場合は、マイグレーション処理が別途必要。
+- `system/adapters/` は、本体も一覧（`adapters.json`）も**強制更新の対象**なので、起動時に最新へ更新される
+  （一覧を登録簿に置いていたころは、一度作成されると更新されなかった）。
+- 利用者が自分のアダプタを足す・同梱のものを止めるには、Sudo にして `system/adapters/adapters.json` を書き換える
+  （`autoUpdateSystemFiles` が有効なら、次の起動で配信の内容に戻る）。
 
 ---
 
