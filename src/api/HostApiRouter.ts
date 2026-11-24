@@ -97,8 +97,6 @@ export interface IEngineBundle {
 export interface IRegistryReader {
   getAllApps(): any[];
   getAllServices(): any[];
-  /** services.json の 1 件（systemPrivilege の判定に使う。T-0617） */
-  getService(id: string): any | undefined;
   updateEntry(kind: 'apps' | 'services', id: string, updates: Record<string, unknown>): Promise<any>;
 }
 export interface IAssociationReader {
@@ -116,6 +114,8 @@ export interface RouterDeps {
   configManager: ConfigManager;
   navHistory?: INavHistory;
   appRegistry?: IRegistryReader;
+  /** 配信物の特権の表（core/sys/PrivilegeTable.ts。T-0904） */
+  privileges?: { grants(path: string): boolean } | null;
   associations?: IAssociationReader;
   processManager?: IProcessManager;
   /**
@@ -187,7 +187,7 @@ export class HostApiRouter {
 
     // ヘルパー: 送信元PIDからPrincipalを生成する（system 特権の判定は src/api/principal.ts。T-0617）
     const getPrincipal = (sourcePid: string): any =>
-      resolvePrincipal(sourcePid, { processManager: d.processManager, appRegistry: d.appRegistry });
+      resolvePrincipal(sourcePid, { processManager: d.processManager, privileges: d.privileges });
     // 書き込みは「誰として」で触る（T-0903）: 主体（何として。ACL が見る）＋ 個体の印（どの個体が ＝ pid。
     // 同期のエコー止めと vfs_events が見る）。読みは変更を起こさないので主体だけ
     const getActor = (sourcePid: string): Actor => ({ principal: getPrincipal(sourcePid), origin: sourcePid });

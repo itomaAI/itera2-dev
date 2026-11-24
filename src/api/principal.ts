@@ -15,13 +15,11 @@
  *   （2026-10-06 / T-0617。T-0614 で agent/ に ACL が付いた直後に起きた）。
  *   system 特権の principal（{ type: 'system' }）は VfsAuth が ACL を素通しさせる。
  *
- * ■ 鍵（ミャク楽の HostApiRouter と同じ形 ＋ 3 つ目）
- *   1. 実行パスが system/ の下にあること（配布物のデーモンであること。利用者の置いた HTML では取れない）
- *   2. 登録簿（services.json）のそのアプリの項目に systemPrivilege: true があること
- *   3. その項目が、このプロセスのファイルを指していること（T-0903）。
- *      特権は「何のファイルか」で決まる。起こすときに特権のあるデーモンの名前を付けただけの別のファイル
- *      （system/temp/ は誰でも書ける）には与えない
- *   全部を満たしたときだけ system になる。欠ければ 'app' のまま。
+ * ■ 特権は「何のファイルか」で決まる（T-0904）
+ *   そのプロセスのファイルが、配信物の特権の表（core/sys/PrivilegeTable.ts）に載っていること。それだけ。
+ *   表も、載っているファイルも、配信物（readonly の領域のファイル。core/vfs/distribution.ts）でなければならない。
+ *   起こすときに付けた名前・登録簿の項目・パスが `system/` で始まることは、どれも特権の根拠にならない
+ *   （登録簿と `system/temp/` は誰でも書ける）。
  */
 
 export interface Principal {
@@ -31,7 +29,8 @@ export interface Principal {
 
 export interface PrincipalDeps {
   processManager?: { processes: Map<string, any> } | null;
-  appRegistry?: { getService(id: string): any | undefined } | null;
+  /** 配信物の特権の表。そのファイルで動くプロセスに system の主体を与えるか */
+  privileges?: { grants(path: string): boolean } | null;
 }
 
 export function resolvePrincipal(sourcePid: string, deps: PrincipalDeps): Principal {
@@ -41,11 +40,7 @@ export function resolvePrincipal(sourcePid: string, deps: PrincipalDeps): Princi
   // 何のアプリか。記録が無い（プロセスが見つからない）ときは pid をそのまま使う
   const app: string = typeof proc?.app === 'string' && proc.app ? proc.app : sourcePid;
 
-  const isSystemPath = basePath.startsWith('system/');
-  const service = deps.appRegistry?.getService(app);
-  const isPrivilegedService = !!service && service.systemPrivilege === true && service.path === basePath;
-
-  if (isSystemPath && isPrivilegedService) {
+  if (basePath && deps.privileges?.grants(basePath) === true) {
     return { type: 'system', id: app };
   }
   return { type: 'app', id: app };
