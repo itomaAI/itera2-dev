@@ -25,7 +25,7 @@ function fakeBundle(turnId: string) {
     stop: vi.fn(),
     reset: vi.fn(async (_options: any) => ({ archived: false, sessionId: 's2' })),
     statusInput: vi.fn(async () => ({
-      engine: { running: false, busy: false, outstandingTools: 0 },
+      engine: { running: false, busy: false, outstandingTools: 0, scheduled: false },
       turns: [],
       session: null,
       contextLimit: null,

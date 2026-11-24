@@ -72,7 +72,7 @@ export interface EngineBundleSpec {
 
 /** 状態の材料（MetaOS.chat.status・/status が同じ形に整える） */
 export interface EngineStatusInput {
-  engine: { running: boolean; busy: boolean; outstandingTools: number };
+  engine: { running: boolean; busy: boolean; outstandingTools: number; scheduled: boolean };
   turns: Turn[];
   session: ConversationSummary | null;
   contextLimit: number | null;

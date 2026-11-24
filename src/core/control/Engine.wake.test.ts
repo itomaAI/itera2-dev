@@ -92,9 +92,9 @@ describe('Engine.requestEvaluation（chat.wake）', () => {
 });
 
 describe('Engine.status / injectUserTurn', () => {
-  it('status は走っていない・結果待ち 0 から始まる', () => {
+  it('status は走っていない・結果待ち 0・予約なし から始まる', () => {
     const h = createHarness();
-    expect(h.engine.status()).toEqual({ running: false, busy: false, outstandingTools: 0 });
+    expect(h.engine.status()).toEqual({ running: false, busy: false, outstandingTools: 0, scheduled: false });
   });
 
   it('injectUserTurn は積んだターンを返す（chat.append が id を返すため）', async () => {

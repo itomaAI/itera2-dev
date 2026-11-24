@@ -293,7 +293,8 @@ describe('createEngineBundle: 束の口（T-0903）', () => {
     await h.b.post('system', 'x', { trigger_llm: false });
 
     expect(await h.b.statusInput()).toEqual({
-      engine: { running: false, busy: false, outstandingTools: 0 },
+      // 置いた直後なので、評価の予約が在る（起こさない変更でも評価はする。T-0910）
+      engine: { running: false, busy: false, outstandingTools: 0, scheduled: true },
       turns: h.history.get(),
       session: { id: `s-${ROOT_ENGINE_ID}`, title: 'T', createdAt: 1 },
       contextLimit: 1000,

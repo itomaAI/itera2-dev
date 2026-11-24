@@ -213,7 +213,7 @@ describe('文脈の長さ（履歴から）', () => {
 describe('chat.status', () => {
   it('ターン数と最後の時刻を履歴から、残りはそのまま', () => {
     const s = buildChatStatus({
-      engine: { running: false, busy: true, outstandingTools: 2 },
+      engine: { running: false, busy: true, outstandingTools: 2, scheduled: false },
       turns: [
         { id: 'a', timestamp: 1, role: 'user', content: 'x', meta: {} },
         { id: 'b', timestamp: 9, role: 'model', content: 'y', meta: {} },
@@ -225,6 +225,7 @@ describe('chat.status', () => {
       running: false,
       busy: true,
       outstandingTools: 2,
+      scheduled: false,
       turns: 2,
       lastTurnAt: 9,
       session: { id: 's', title: '', createdAt: 0 },
@@ -232,7 +233,7 @@ describe('chat.status', () => {
     });
     expect(
       buildChatStatus({
-        engine: { running: false, busy: false, outstandingTools: 0 },
+        engine: { running: false, busy: false, outstandingTools: 0, scheduled: false },
         turns: [],
         session: null,
         contextLimit: null,
@@ -242,7 +243,7 @@ describe('chat.status', () => {
 
   it('context は履歴から（上限は渡された値）', () => {
     const s = buildChatStatus({
-      engine: { running: false, busy: false, outstandingTools: 0 },
+      engine: { running: false, busy: false, outstandingTools: 0, scheduled: false },
       turns: [
         { id: 'a', timestamp: 1, role: 'user', content: 'x', meta: {} },
         {
@@ -269,5 +270,19 @@ describe('chat.status', () => {
       'context: 1,500 tokens in (m, 1970-01-01T00:00:00.009Z)',
     );
     expect(formatChatStatus({ ...s, context: null }, 9)).toContain('context: unknown (no reply yet)');
+  });
+
+  it('formatChatStatus の 1 行目は 生成中か・結果待ちか・予約が在るか（T-0910）', () => {
+    const base = buildChatStatus({
+      engine: { running: false, busy: false, outstandingTools: 0, scheduled: false },
+      turns: [],
+      session: null,
+      contextLimit: null,
+    });
+    const line = (s: typeof base) => formatChatStatus(s, 9).split('\n')[0];
+    expect(line(base)).toBe('engine: idle (tools in flight: 0)');
+    expect(line({ ...base, scheduled: true })).toBe('engine: idle / scheduled (tools in flight: 0)');
+    expect(line({ ...base, busy: true, outstandingTools: 2 })).toBe('engine: idle / busy (tools in flight: 2)');
+    expect(line({ ...base, running: true, busy: true })).toBe('engine: running / busy (tools in flight: 0)');
   });
 });
