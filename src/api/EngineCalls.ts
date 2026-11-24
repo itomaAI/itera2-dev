@@ -115,12 +115,12 @@ export class EngineCalls {
     return this.deps.engines.of(caller.pid, id);
   }
 
-  /** 作る。受け付けない spec は、束の表が理由を付けて断る。保存された会話（from）は呼び手の権限で読む */
+  /**
+   * 作る。spec はゲストが渡したまま束の表へ（形の検査も、省いたときの既定も、束の表が持つ）。
+   * 受け付けない spec は、束の表が理由を付けて断る。保存された会話（from）は呼び手の権限で読む
+   */
   async create(caller: Caller, spec: unknown): Promise<{ id: string }> {
-    const engine = await this.deps.engines.create(
-      caller,
-      (spec === undefined ? {} : spec) as { config?: unknown; from?: unknown },
-    );
+    const engine = await this.deps.engines.create(caller, spec as { config?: unknown; from?: unknown } | undefined);
     return { id: engine.id };
   }
 

@@ -86,10 +86,10 @@ describe('EngineCalls: 作る', () => {
     expect(w.table.create).toHaveBeenCalledWith(CALLER, spec);
   });
 
-  it('spec を省けば空の spec。形の検査は束の表がする（ここでは直さない）', async () => {
+  it('spec の形の検査も、省いたときの既定も、束の表がする（ここでは直さない）', async () => {
     const w = world();
     await w.calls.create(CALLER, undefined);
-    expect(w.table.create).toHaveBeenLastCalledWith(CALLER, {});
+    expect(w.table.create).toHaveBeenLastCalledWith(CALLER, undefined);
     await w.calls.create(CALLER, null);
     expect(w.table.create).toHaveBeenLastCalledWith(CALLER, null);
   });
