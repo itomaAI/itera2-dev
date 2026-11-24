@@ -142,7 +142,9 @@ describe('EngineCalls: MetaOS.chat と同じ動詞', () => {
     const { id } = await w.calls.create(CALLER, {});
     const e = w.engineOf(id);
 
-    expect(await w.calls.append(CALLER, id, { role: 'user', content: 'hi', opts: { wake: true } })).toEqual({ id: 't1' });
+    expect(await w.calls.append(CALLER, id, { role: 'user', content: 'hi', opts: { wake: true } })).toEqual({
+      id: 't1',
+    });
     expect(e.bundle.post).toHaveBeenCalledWith('user', [{ text: 'hi' }], { trigger_llm: true, source: 'viewer' });
 
     await expect(w.calls.append(CALLER, id, { role: 'model', content: 'x' })).rejects.toThrow(
@@ -302,7 +304,10 @@ describe('ownerEventData', () => {
 
   it('loop_stop は { reason, message? }。Error でない失敗も文字にする', () => {
     expect(ownerEventData('loop_stop', { reason: 'abort' })).toEqual({ reason: 'abort' });
-    expect(ownerEventData('loop_stop', { reason: 'error', error: 'boom' })).toEqual({ reason: 'error', message: 'boom' });
+    expect(ownerEventData('loop_stop', { reason: 'error', error: 'boom' })).toEqual({
+      reason: 'error',
+      message: 'boom',
+    });
     expect(ownerEventData('loop_stop', { reason: 'error', error: { message: 'm' } })).toEqual({
       reason: 'error',
       message: 'm',

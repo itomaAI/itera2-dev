@@ -155,7 +155,10 @@ describe('HostApiRouter: engine:* の配線', () => {
     expect(await w.call('engine:append', { id, role: 'user', content: 'hi', opts: { wake: true } })).toEqual({
       id: 'sub-turn',
     });
-    expect(w.engine.bundle.post).toHaveBeenCalledWith('user', [{ text: 'hi' }], { trigger_llm: true, source: 'viewer' });
+    expect(w.engine.bundle.post).toHaveBeenCalledWith('user', [{ text: 'hi' }], {
+      trigger_llm: true,
+      source: 'viewer',
+    });
     expect(await w.call('engine:wake', { id })).toBe(true);
     expect(w.engine.bundle.wake).toHaveBeenCalledTimes(1);
     expect(await w.call('engine:stop', { id })).toBe(true);
