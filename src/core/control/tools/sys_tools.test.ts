@@ -14,14 +14,15 @@ function tools() {
 }
 
 function ctx(existing: Record<string, { kind: 'file' | 'directory'; size?: number }>) {
-  const vfs: any = {
-    stat: (_p: any, path: string) => {
+  // 利用者に見せるための読みは、shell が渡す利用者の取っ手で（T-0903）
+  const userFs: any = {
+    stat: (path: string) => {
       const s = existing[path];
       if (!s) throw new Error(`Not found: ${path}`);
       return { name: path.split('/').pop(), kind: s.kind, size: s.size, path };
     },
   };
-  return { vfs };
+  return { shell: { userFs } };
 }
 
 describe('parsePresentedPaths', () => {
@@ -65,5 +66,23 @@ describe('files', () => {
 
   it('パスが 1 つも無ければ失敗', async () => {
     await expect(tools().files.impl({ content: '\n  \n' }, ctx({}))).rejects.toThrow(/No file path/);
+  });
+});
+
+describe('reset_session', () => {
+  it('呼んだエンジンの会話を空にし、申し送りを添える（shell ではなく会話の口から。T-0903）', async () => {
+    const calls: any[] = [];
+    const context: any = {
+      conversation: {
+        reset: async (options: any) => {
+          calls.push(options);
+        },
+      },
+    };
+    const res = await tools().reset_session.impl({ content: 'carry this' }, context);
+    expect(calls).toHaveLength(1);
+    expect(calls[0].summary).toContain('[Carried Over Information]\ncarry this');
+    expect(calls[0]).toMatchObject({ triggerLlm: true, restoreTools: true });
+    expect(res.halt_loop).toBe(true);
   });
 });

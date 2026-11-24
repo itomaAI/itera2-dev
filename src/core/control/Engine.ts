@@ -12,6 +12,7 @@ import type { Projector } from '../cognitive/Projector';
 import { LLM_CALLER_ROOT, type BaseLLMAdapter, type LlmResult } from '../cognitive/adapters/BaseAdapter';
 import type { Translator, ParsedAction } from '../cognitive/Translator';
 import type { ToolRegistry } from './ToolRegistry';
+import type { ToolContext } from './ToolContext';
 import { RESERVED_SYSTEM_TAGS } from '../cognitive/Translator';
 import { WAKE_POLICY, WAKE_DEBOUNCE_MS, type WakePolicy } from '../../config/wake_policy';
 
@@ -35,6 +36,12 @@ export interface EngineState {
  */
 export const PENDING_LOG = '[Pending] Still running. The result will come in a later turn.';
 
+/**
+ * ルートのエンジン（OS のチャット）の id。個体の印として使う（T-0903）。
+ * いまは台帳に名乗る名前（LLM_CALLER_ROOT）と同じ値を指す —— 文字はあちらに 1 つだけ置く。
+ */
+export const ROOT_ENGINE_ID = LLM_CALLER_ROOT;
+
 /** 書き留めるだけの要素。道具としては投げない（結果も返らない） */
 const NOTE_TAGS = new Set(['thinking', 'memo', 'plan']);
 
@@ -44,7 +51,8 @@ export class Engine {
   public llm: BaseLLMAdapter | null;
   public translator: Translator;
   public registry: ToolRegistry;
-  public extraContext: Record<string, any>;
+  /** 道具に渡す取っ手のうち、自分自身（engine）以外。組み立て（SystemBootstrapper）が差す（ToolContext.ts） */
+  public extraContext: Partial<Omit<ToolContext, 'engine'>>;
   /**
    * いまの会話（セッション）の id を答える口。台帳の行の `tag` に入る（T-0806）。
    * 知っているのは SessionManager なので、組み立て（SystemBootstrapper）が差す。無ければ tag は書かれない。
@@ -101,7 +109,7 @@ export class Engine {
     llm: BaseLLMAdapter | null,
     translator: Translator,
     registry: ToolRegistry,
-    extraContext: Record<string, any> = {},
+    extraContext: Partial<Omit<ToolContext, 'engine'>> = {},
     wakePolicy: WakePolicy = WAKE_POLICY,
     wakeDebounceMs: number = WAKE_DEBOUNCE_MS,
   ) {
@@ -531,13 +539,8 @@ export class Engine {
     // 呼び出し時点（まだ非null）でシグナルをローカルに捕捉しておく。
     const signal = this.abortController?.signal;
 
-    const context = {
-      vfs: this.state.vfs,
-      config: this.state.configManager,
-      history: this.state.history,
-      engine: this,
-      ...this.extraContext,
-    };
+    // 道具に渡すのは取っ手だけ（T-0903。ToolContext.ts）。VFS・設定・履歴そのものは渡さない
+    const context = { engine: this, ...this.extraContext } as ToolContext;
 
     const combinedResults: ToolExecutionEntry[] = actions.map((action) => {
       const { content, ...safeParams } = action.params || {};
@@ -663,8 +666,7 @@ export class Engine {
       }
 
       try {
-        // extraContext 経由で shell 等が注入されているため、anyキャストで型検査を通過させる
-        const result = await this.registry.execute(action, context as any);
+        const result = await this.registry.execute(action, context);
 
         deliver(index, result ?? { log: '', trigger_llm: false });
       } catch (err: any) {

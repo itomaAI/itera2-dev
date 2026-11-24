@@ -5,7 +5,7 @@
 
 import type { ToolRegistry } from '../ToolRegistry';
 import type { PresentedFile } from '../../types/tools';
-import { USER_PRINCIPAL } from '../../vfs/types';
+import type { ToolContext } from '../ToolContext';
 import { ToolError } from '../ToolError';
 
 /**
@@ -76,14 +76,14 @@ export function registerSysTools(registry: ToolRegistry): void {
   registry.registerSystemTool(setId, setName, {
     name: 'files',
     description: 'Present files to user.',
-    impl: async (params: any, context: any) => {
+    impl: async (params: any, context: ToolContext) => {
       const paths = parsePresentedPaths(params.content || '');
       if (paths.length === 0) throw new ToolError('No file path given. Write one VFS path per line inside <files>.');
 
       const files: PresentedFile[] = paths.map((path) => {
         const name = path.split('/').pop() || path;
         try {
-          const stat = context.vfs.stat(USER_PRINCIPAL, path);
+          const stat = context.shell.userFs.stat(path);
           const kind = stat?.kind === 'directory' ? 'directory' : 'file';
           return { path, name, kind, size: typeof stat?.size === 'number' ? stat.size : undefined };
         } catch {
@@ -111,7 +111,7 @@ export function registerSysTools(registry: ToolRegistry): void {
   registry.registerSystemTool(setId, setName, {
     name: 'set_timer',
     description: 'Set async timer.',
-    impl: async (params: any, context: any) => {
+    impl: async (params: any, context: ToolContext) => {
       const delay = parseInt(params.delay, 10);
       if (isNaN(delay) || delay <= 0) throw new ToolError('Invalid delay.');
       const message = params.message || 'Timer expired.';
@@ -131,21 +131,19 @@ export function registerSysTools(registry: ToolRegistry): void {
   registry.registerSystemTool(setId, setName, {
     name: 'reset_session',
     description: 'Reset history session.',
-    impl: async (params: any, context: any) => {
+    impl: async (params: any, context: ToolContext) => {
       const summary = params.content || '';
 
       let nextSessionMsg =
         '[System: Session Reset & Context Compressed]\nPlease run the Initialization Protocol first.';
       if (summary) nextSessionMsg += `\n\n[Carried Over Information]\n${summary}`;
 
-      if (context.shell && context.shell.clearSession) {
-        // ※ ShellController 側に clearSession の実装が必要
-        await context.shell.clearSession({
-          summary: nextSessionMsg,
-          triggerLlm: true,
-          restoreTools: true,
-        });
-      }
+      // 空にするのは、この道具を呼んだエンジンの会話（T-0903）
+      await context.conversation.reset({
+        summary: nextSessionMsg,
+        triggerLlm: true,
+        restoreTools: true,
+      });
 
       return {
         log: `Session has been reset.`,

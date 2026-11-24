@@ -40,11 +40,11 @@ function statOf(over: Record<string, unknown> = {}) {
 }
 
 function ctxWithStat(stat: any) {
-  return { vfs: { stat: () => stat, getAcl: () => undefined } } as any;
+  return { fs: { stat: () => stat, getAcl: () => undefined } } as any;
 }
 
 function ctxWithList(files: any[]) {
-  return { vfs: { listFiles: () => files } } as any;
+  return { fs: { listFiles: () => files } } as any;
 }
 
 const PROVIDER = { mountPath: 'local/yachiyo/ws_itera', pid: 'local_bridge', alive: true };

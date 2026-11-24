@@ -28,22 +28,22 @@ function fakeVfs(files: Record<string, string>) {
   return {
     store,
     ctx: {
-      vfs: {
-        exists: (_p: unknown, path: string) => path in store,
-        stat: (_p: unknown, path: string) => ({
+      fs: {
+        exists: (path: string) => path in store,
+        stat: (path: string) => ({
           name: path.split('/').pop(),
           path,
           kind: 'file',
           size: store[path].length,
         }),
-        readFile: async (_p: unknown, path: string) => store[path],
-        writeFile: async (_p: unknown, path: string, content: string, opts: { overwrite?: boolean } = {}) => {
+        readFile: async (path: string) => store[path],
+        writeFile: async (path: string, content: string, opts: { overwrite?: boolean } = {}) => {
           if (path in store && !opts.overwrite) throw new ToolError(`File already exists: ${path}`);
           store[path] = content;
           return `Wrote ${path}`;
         },
         // 版の照合の輪（T-0715）。ここでは競合しないので、読んで→当てて→書く を 1 回
-        updateFile: async (_p: unknown, path: string, updater: (c: string, v: number) => string | null) => {
+        updateFile: async (path: string, updater: (c: string, v: number) => string | null) => {
           if (!(path in store)) throw new ToolError(`File not found: ${path}`);
           const next = await updater(store[path], 1);
           if (next !== null) store[path] = next;
@@ -203,7 +203,7 @@ describe('delete_file', () => {
   const vfsWith = () => {
     const calls: any[] = [];
     const ctx = {
-      vfs: { deleteFile: async (_p: unknown, path: string, opts: any) => (calls.push([path, opts]), `ok ${path}`) },
+      fs: { deleteFile: async (path: string, opts: any) => (calls.push([path, opts]), `ok ${path}`) },
     } as any;
     return { ctx, calls };
   };

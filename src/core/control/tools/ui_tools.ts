@@ -4,8 +4,7 @@
  */
 
 import type { ToolRegistry } from '../ToolRegistry';
-import type { VfsService } from '../../vfs/VfsService';
-import { SYSTEM_PRINCIPAL, USER_PRINCIPAL } from '../../vfs/types';
+import type { ToolContext } from '../ToolContext';
 import { isProbablyText, TEXT_SNIFF_BYTES } from '../../sys/textDetect';
 import { ToolError, asToolFailure, isToolError } from '../ToolError';
 
@@ -16,7 +15,7 @@ export function registerUITools(registry: ToolRegistry): void {
   registry.registerSystemTool(setId, setName, {
     name: 'spawn',
     description: 'Spawn process.',
-    impl: async (params: any, context: any) => {
+    impl: async (params: any, context: ToolContext) => {
       const path = params.path;
       if (!path) throw new ToolError("Attribute 'path' is required.");
 
@@ -50,13 +49,13 @@ export function registerUITools(registry: ToolRegistry): void {
   registry.registerSystemTool(setId, setName, {
     name: 'open',
     description: 'Open a file using default app.',
-    impl: async (params: any, context: any) => {
+    impl: async (params: any, context: ToolContext) => {
       const path = params.path;
       if (!path) throw new ToolError("Attribute 'path' is required.");
 
       if (context.shell?.resolver) {
         try {
-          const stat = context.vfs.stat(USER_PRINCIPAL, path);
+          const stat = context.shell.userFs.stat(path);
           const resolvedApp = context.shell.resolver.resolveDefault(stat);
 
           if (resolvedApp.appId === 'HostExplorer') {
@@ -67,7 +66,7 @@ export function registerUITools(registry: ToolRegistry): void {
             return { log: `Revealed folder ${path} in Explorer`, ui: `📂 Opened folder` };
           } else if (resolvedApp.appId === 'HostEditor') {
             // 関連付けの無いバイナリ（xlsm など）はエディタに出さず、ビューワー（ダウンロード）へ（T-0389）
-            const blob = await context.vfs.readBlob(USER_PRINCIPAL, path);
+            const blob = await context.shell.userFs.readBlob(path);
             const head = new Uint8Array(await blob.slice(0, TEXT_SNIFF_BYTES).arrayBuffer());
             if (!isProbablyText(head)) {
               context.shell.modals.media.open(path, blob);
@@ -82,7 +81,7 @@ export function registerUITools(registry: ToolRegistry): void {
               ui: `📝 Opened Editor`,
             };
           } else if (resolvedApp.appId === 'HostMediaViewer') {
-            const blob = await context.vfs.readBlob(USER_PRINCIPAL, path);
+            const blob = await context.shell.userFs.readBlob(path);
             context.shell.modals.media.open(path, blob);
             return {
               log: `Opened ${path} in Media Viewer`,
@@ -130,7 +129,7 @@ export function registerUITools(registry: ToolRegistry): void {
   registry.registerSystemTool(setId, setName, {
     name: 'kill',
     description: 'Kill process.',
-    impl: async (params: any, context: any) => {
+    impl: async (params: any, context: ToolContext) => {
       const pid = params.pid;
       if (!pid) throw new ToolError("Attribute 'pid' is required.");
 
@@ -146,7 +145,7 @@ export function registerUITools(registry: ToolRegistry): void {
   registry.registerSystemTool(setId, setName, {
     name: 'ps',
     description: 'List processes.',
-    impl: async (_params: any, context: any) => {
+    impl: async (_params: any, context: ToolContext) => {
       if (context.shell?.processManager) {
         const list = context.shell.processManager.list();
         if (list.length === 0) return { log: 'No processes running.', ui: `📊 Process List (0)` };
@@ -167,7 +166,7 @@ export function registerUITools(registry: ToolRegistry): void {
   registry.registerSystemTool(setId, setName, {
     name: 'take_screenshot',
     description: 'Capture screenshot.',
-    impl: async (params: any, context: { shell: any; vfs: VfsService }) => {
+    impl: async (params: any, context: ToolContext) => {
       const pm = context.shell?.processManager;
       if (pm) {
         // pid を省略すれば従来どおり前面のアプリ（T-0350）
@@ -202,12 +201,7 @@ export function registerUITools(registry: ToolRegistry): void {
 
           const timestamp = Date.now();
           const safe = String(target).replace(/[^\w.-]+/g, '_');
-          // いまの会話の添付の置き場（`system/temp/sessions/<id>/`。T-0613）。shell が無ければ旧い置き場
-          const mediaDir: string =
-            typeof context.shell?.currentMediaDir === 'function'
-              ? context.shell.currentMediaDir()
-              : 'system/temp/media';
-          const path = `${mediaDir}/screenshot_${safe}_${timestamp}.png`;
+          const name = `screenshot_${safe}_${timestamp}.png`;
 
           // ツールの責任として Blob に変換してから VFS に渡す
           const byteString = atob(base64);
@@ -218,11 +212,8 @@ export function registerUITools(registry: ToolRegistry): void {
           }
           const blob = new Blob([u8arr], { type: 'image/png' });
 
-          // システムのキャッシュディレクトリへの書き込みなので SYSTEM_PRINCIPAL を使用
-          await context.vfs.writeFile(SYSTEM_PRINCIPAL, path, blob, {
-            overwrite: true,
-            system: true,
-          });
+          // いまの会話の添付の置き場（`system/temp/sessions/<id>/`。T-0613）へ。置き場と書く権限は会話の側が持つ（T-0903）
+          const path = await context.conversation.putAttachment(name, blob);
 
           return {
             log: `Captured ${target} and saved to ${path}`,
@@ -240,7 +231,7 @@ export function registerUITools(registry: ToolRegistry): void {
   registry.registerSystemTool(setId, setName, {
     name: 'inject_js',
     description: 'Inject JS to process.',
-    impl: async (params: any, context: any) => {
+    impl: async (params: any, context: ToolContext) => {
       let pid = params.pid;
       const code = params.content || '';
 

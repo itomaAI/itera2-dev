@@ -4,8 +4,8 @@
  */
 
 import type { ToolRegistry } from '../ToolRegistry';
-import type { VfsService } from '../../vfs/VfsService';
-import { AGENT_PRINCIPAL } from '../../vfs/types';
+import type { VfsHandle } from '../../vfs/VfsHandle';
+import type { ToolContext } from '../ToolContext';
 import { parseEditBlocks, applyEditBlocks } from './editBlocks';
 import { ToolError } from '../ToolError';
 import { isVfsError } from '../../vfs/VfsError';
@@ -46,8 +46,8 @@ export function registerFSTools(registry: ToolRegistry): void {
    * 道具がするのは「履歴に media を積む」までで、**モデルに届くかは投影（プロバイダの対応 MIME・大きさ）が決める**。
    * だから文は「積んだ」とだけ言い、届かなかったときは投影の注記がその場に出る（道具の成否と添付の成否は別。T-0690 山内さん）。
    */
-  function attachResult(vfs: VfsService, path: string): ToolResult {
-    const stat = vfs.stat(AGENT_PRINCIPAL, path);
+  function attachResult(fs: VfsHandle, path: string): ToolResult {
+    const stat = fs.stat(path);
     if (stat.kind === 'directory') throw new ToolError(`${path} is a directory. attach_file takes a file.`);
     let mimeType = mimeOfPath(path);
     if (mimeType === 'application/octet-stream' && stat.mimeType) mimeType = stat.mimeType;
@@ -65,14 +65,10 @@ export function registerFSTools(registry: ToolRegistry): void {
   }
 
   /** テキストを行の範囲で読む（read の本体） */
-  async function readTextResult(
-    vfs: VfsService,
-    params: any,
-    opts: { legacyName?: boolean } = {},
-  ): Promise<ToolResult> {
+  async function readTextResult(fs: VfsHandle, params: any, opts: { legacyName?: boolean } = {}): Promise<ToolResult> {
     const path: string = params.path;
     if (!path) throw new ToolError("Attribute 'path' is required.");
-    if (!vfs.exists(AGENT_PRINCIPAL, path)) throw new ToolError(`File not found.`);
+    if (!fs.exists(path)) throw new ToolError(`File not found.`);
 
     const refuse = (why: string): never => {
       const mime = mimeOfPath(path);
@@ -87,13 +83,13 @@ export function registerFSTools(registry: ToolRegistry): void {
 
     let content = '';
     if (path.match(BINARY_EXTS)) {
-      if (opts.legacyName) return attachResult(vfs, path);
+      if (opts.legacyName) return attachResult(fs, path);
       refuse(mimeOfPath(path));
     }
-    content = await vfs.readFile(AGENT_PRINCIPAL, path);
+    content = await fs.readFile(path);
     // テキストとして読み込んだ結果、Nullバイトが含まれていればバイナリとみなす
     if (content.indexOf('\0') !== -1) {
-      if (opts.legacyName) return attachResult(vfs, path);
+      if (opts.legacyName) return attachResult(fs, path);
       refuse('binary content');
     }
 
@@ -148,7 +144,7 @@ export function registerFSTools(registry: ToolRegistry): void {
   }
 
   /** ファイルを書く（write の本体。create_file の旧挙動は append 無し） */
-  async function writeResult(vfs: VfsService, params: any): Promise<ToolResult> {
+  async function writeResult(fs: VfsHandle, params: any): Promise<ToolResult> {
     const path: string = params.path;
     if (!path) throw new ToolError("Attribute 'path' is required.");
     const isOverwrite = params.overwrite === 'true';
@@ -160,27 +156,27 @@ export function registerFSTools(registry: ToolRegistry): void {
 
     if (isAppend) {
       // 無ければ「まだ無いはず」（ifVersion: 0）で作る。その間に誰かが作っていれば ESTALE → 下の追記へ
-      if (!vfs.exists(AGENT_PRINCIPAL, path)) {
+      if (!fs.exists(path)) {
         try {
-          const msg = await vfs.writeFile(AGENT_PRINCIPAL, path, content, { overwrite: false, ifVersion: 0 });
+          const msg = await fs.writeFile(path, content, { overwrite: false, ifVersion: 0 });
           return { log: `${msg} (created; nothing to append to)`, ui: `📝 Created ${path}` };
         } catch (err) {
           if (!(isVfsError(err) && err.code === 'ESTALE')) throw err;
         }
       }
       // 読む→足す→書く を版の照合で（T-0715）。並んだ追記はどれも落ちず、順に積まれる
-      await vfs.updateFile(AGENT_PRINCIPAL, path, (current) =>
+      await fs.updateFile(path, (current) =>
         current.length && !current.endsWith('\n') ? current + '\n' + content : current + content,
       );
       return { log: `Appended to end of ${path}`, ui: `📝 Appended ${path}` };
     }
 
-    if (!isOverwrite && vfs.exists(AGENT_PRINCIPAL, path)) {
+    if (!isOverwrite && fs.exists(path)) {
       throw new ToolError(
         `File already exists at ${path}. Set overwrite="true" to replace it, append="true" to add to its end, or use <edit> to modify part of it.`,
       );
     }
-    const msg = await vfs.writeFile(AGENT_PRINCIPAL, path, content, { overwrite: isOverwrite });
+    const msg = await fs.writeFile(path, content, { overwrite: isOverwrite });
     return {
       log: msg,
       ui: `📝 ${isOverwrite ? 'Overwrote' : 'Created'} ${path}`,
@@ -188,7 +184,7 @@ export function registerFSTools(registry: ToolRegistry): void {
   }
 
   /** 一部を直す（edit の本体。append は write へ） */
-  async function editResult(vfs: VfsService, params: any, opts: { legacyName?: boolean } = {}): Promise<ToolResult> {
+  async function editResult(fs: VfsHandle, params: any, opts: { legacyName?: boolean } = {}): Promise<ToolResult> {
     const path: string = params.path;
     if (!path) throw new ToolError("Attribute 'path' is required.");
     const content: string = params.content || '';
@@ -199,7 +195,7 @@ export function registerFSTools(registry: ToolRegistry): void {
       if (params.mode === 'append' && !opts.legacyName) {
         throw new ToolError('mode="append" is not part of <edit>. Use <write path="..." append="true">.');
       }
-      if (!vfs.exists(AGENT_PRINCIPAL, path)) throw new ToolError(`File not found: ${path}`);
+      if (!fs.exists(path)) throw new ToolError(`File not found: ${path}`);
 
       let insertLines: string[] = [];
       if (content) {
@@ -242,7 +238,7 @@ export function registerFSTools(registry: ToolRegistry): void {
         return lines.join('\n');
       };
 
-      await vfs.updateFile(AGENT_PRINCIPAL, path, applyLines);
+      await fs.updateFile(path, applyLines);
       return { log, ui: `✏️ Edited ${path} (${params.mode})` };
     }
 
@@ -253,9 +249,7 @@ export function registerFSTools(registry: ToolRegistry): void {
     // 読み直して当て直す。当たらなくなっていれば、そのときだけ「一致しない」の失敗になる。
     if (/<{4,}SEARCH/.test(content)) {
       const blocks = parseEditBlocks(content);
-      await vfs.updateFile(AGENT_PRINCIPAL, path, (current) =>
-        applyEditBlocks(current, blocks, { regex: params.regex === 'true' }),
-      );
+      await fs.updateFile(path, (current) => applyEditBlocks(current, blocks, { regex: params.regex === 'true' }));
       const blockMsg = blocks.length > 1 ? `${blocks.length} blocks updated` : 'Content replaced';
       return { log: blockMsg, ui: `✏️ Replaced content in ${path}` };
     }
@@ -268,67 +262,67 @@ export function registerFSTools(registry: ToolRegistry): void {
   registry.registerSystemTool(setId, setName, {
     name: 'read',
     description: 'Reads a text file (line range) into the context. Refuses binary files.',
-    impl: async (params: any, context: { vfs: VfsService }) => readTextResult(context.vfs, params),
+    impl: async (params: any, context: ToolContext) => readTextResult(context.fs, params),
   });
 
   registry.registerSystemTool(setId, setName, {
     name: 'attach_file',
     description: 'Puts a whole file into the context as media (image / PDF / audio / text document). No range.',
-    impl: async (params: any, context: { vfs: VfsService }) => {
-      const vfs = context.vfs;
+    impl: async (params: any, context: ToolContext) => {
+      const fs = context.fs;
       if (!params.path) throw new ToolError("Attribute 'path' is required.");
       if (params.start !== undefined || params.end !== undefined || params.pages !== undefined) {
         throw new ToolError(
           'attach_file has no range: the whole file is attached. For a line range use <read>; for PDF pages use pdf_tool (pdf_info → pdf_extract → attach_file).',
         );
       }
-      if (!vfs.exists(AGENT_PRINCIPAL, params.path)) throw new ToolError(`File not found.`);
-      return attachResult(vfs, params.path);
+      if (!fs.exists(params.path)) throw new ToolError(`File not found.`);
+      return attachResult(fs, params.path);
     },
   });
 
   registry.registerSystemTool(setId, setName, {
     name: 'write',
     description: 'Writes a text file: create, overwrite="true", or append="true".',
-    impl: async (params: any, context: { vfs: VfsService }) => writeResult(context.vfs, params),
+    impl: async (params: any, context: ToolContext) => writeResult(context.fs, params),
   });
 
   registry.registerSystemTool(setId, setName, {
     name: 'edit',
     description: 'Edits part of a text file via SEARCH blocks or line mode (insert / replace / delete).',
-    impl: async (params: any, context: { vfs: VfsService }) => editResult(context.vfs, params),
+    impl: async (params: any, context: ToolContext) => editResult(context.fs, params),
   });
 
   // 旧名（別名）。挙動は旧のまま。結果の先頭で新名を教える
   registry.registerSystemTool(setId, setName, {
     name: 'read_file',
     description: 'Legacy alias: <read> for text, <attach_file> for binary.',
-    impl: async (params: any, context: { vfs: VfsService }) =>
-      withNote(LEGACY_READ, await readTextResult(context.vfs, params, { legacyName: true })),
+    impl: async (params: any, context: ToolContext) =>
+      withNote(LEGACY_READ, await readTextResult(context.fs, params, { legacyName: true })),
   });
   registry.registerSystemTool(setId, setName, {
     name: 'create_file',
     description: 'Legacy alias of <write>.',
-    impl: async (params: any, context: { vfs: VfsService }) =>
-      withNote(LEGACY_CREATE, await writeResult(context.vfs, { ...params, append: undefined })),
+    impl: async (params: any, context: ToolContext) =>
+      withNote(LEGACY_CREATE, await writeResult(context.fs, { ...params, append: undefined })),
   });
   registry.registerSystemTool(setId, setName, {
     name: 'edit_file',
     description: 'Legacy alias of <edit> (mode="append" included).',
-    impl: async (params: any, context: { vfs: VfsService }) =>
-      withNote(LEGACY_EDIT, await editResult(context.vfs, params, { legacyName: true })),
+    impl: async (params: any, context: ToolContext) =>
+      withNote(LEGACY_EDIT, await editResult(context.fs, params, { legacyName: true })),
   });
 
   registry.registerSystemTool(setId, setName, {
     name: 'file_info',
     description: 'Get detailed metadata of a file or directory.',
-    impl: async (params: any, context: { vfs: VfsService }) => {
+    impl: async (params: any, context: ToolContext) => {
       if (!params.path) throw new ToolError("Attribute 'path' is required.");
-      const stat = context.vfs.stat(AGENT_PRINCIPAL, params.path);
+      const stat = context.fs.stat(params.path);
 
       let acl;
       try {
-        acl = context.vfs.getAcl(AGENT_PRINCIPAL, params.path);
+        acl = context.fs.getAcl(params.path);
       } catch (e) {
         // 読み取り権限がない場合は無視
       }
@@ -387,13 +381,13 @@ export function registerFSTools(registry: ToolRegistry): void {
   registry.registerSystemTool(setId, setName, {
     name: 'list_files',
     description: 'Lists files in the VFS.',
-    impl: async (params: any, context: { vfs: VfsService }) => {
+    impl: async (params: any, context: ToolContext) => {
       const root = params.path || '';
       const recursive = params.recursive === 'true';
       const detail = params.detail === 'true';
       const ignoreHidden = params.show_hidden !== 'true';
 
-      const files = context.vfs.listFiles(AGENT_PRINCIPAL, {
+      const files = context.fs.listFiles({
         path: root,
         recursive,
         detail,
@@ -430,11 +424,11 @@ export function registerFSTools(registry: ToolRegistry): void {
   registry.registerSystemTool(setId, setName, {
     name: 'delete_file',
     description: 'Deletes a file.',
-    impl: async (params: any, context: { vfs: VfsService }) => {
+    impl: async (params: any, context: ToolContext) => {
       // permanent="true" はゴミ箱を経ずに消す（T-0689）。stub の中身を取りに行かないので、
       // プロバイダが応じないときの唯一の逃げ道でもある（向こうの実体は次の照合で消える）
       const permanent = String(params.permanent).toLowerCase() === 'true';
-      const msg = await context.vfs.deleteFile(AGENT_PRINCIPAL, params.path, permanent ? { permanent: true } : {});
+      const msg = await context.fs.deleteFile(params.path, permanent ? { permanent: true } : {});
       return { log: msg, ui: permanent ? `🗑️ Permanently deleted ${params.path}` : `🗑️ Deleted ${params.path}` };
     },
   });
@@ -443,12 +437,8 @@ export function registerFSTools(registry: ToolRegistry): void {
   registry.registerSystemTool(setId, setName, {
     name: 'restore_file',
     description: 'Restores a trashed entry to its original location.',
-    impl: async (params: any, context: { vfs: VfsService }) => {
-      const dest = await context.vfs.restore(
-        AGENT_PRINCIPAL,
-        params.path,
-        params.new_path ? { to: params.new_path } : {},
-      );
+    impl: async (params: any, context: ToolContext) => {
+      const dest = await context.fs.restore(params.path, params.new_path ? { to: params.new_path } : {});
       return { log: `Restored: ${params.path} -> ${dest}`, ui: `↩️ Restored ${dest}` };
     },
   });
@@ -456,11 +446,11 @@ export function registerFSTools(registry: ToolRegistry): void {
   registry.registerSystemTool(setId, setName, {
     name: 'move_file',
     description: 'Renames or moves a file.',
-    impl: async (params: any, context: { vfs: VfsService }) => {
-      if (params.overwrite === 'true' && context.vfs.exists(AGENT_PRINCIPAL, params.new_path)) {
-        await context.vfs.deleteFile(AGENT_PRINCIPAL, params.new_path, { permanent: true });
+    impl: async (params: any, context: ToolContext) => {
+      if (params.overwrite === 'true' && context.fs.exists(params.new_path)) {
+        await context.fs.deleteFile(params.new_path, { permanent: true });
       }
-      const msg = await context.vfs.rename(AGENT_PRINCIPAL, params.path, params.new_path);
+      const msg = await context.fs.rename(params.path, params.new_path);
       return { log: msg, ui: `🚚 Moved ${params.path}` };
     },
   });
@@ -468,11 +458,11 @@ export function registerFSTools(registry: ToolRegistry): void {
   registry.registerSystemTool(setId, setName, {
     name: 'copy_file',
     description: 'Copies a file.',
-    impl: async (params: any, context: { vfs: VfsService }) => {
-      if (params.overwrite === 'true' && context.vfs.exists(AGENT_PRINCIPAL, params.new_path)) {
-        await context.vfs.deleteFile(AGENT_PRINCIPAL, params.new_path, { permanent: true });
+    impl: async (params: any, context: ToolContext) => {
+      if (params.overwrite === 'true' && context.fs.exists(params.new_path)) {
+        await context.fs.deleteFile(params.new_path, { permanent: true });
       }
-      const msg = await context.vfs.copyFile(AGENT_PRINCIPAL, params.path, params.new_path);
+      const msg = await context.fs.copyFile(params.path, params.new_path);
       return { log: msg, ui: `📄 Copied ${params.path}` };
     },
   });

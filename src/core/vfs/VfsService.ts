@@ -37,6 +37,7 @@ import { SetAclOp, SetAclRecursiveOp } from './operations/AclOps';
 import type { ProviderManager } from './ProviderManager';
 import { VFS_HARD_LIMITS } from '../../config/constants';
 import { VfsError, isVfsError } from './VfsError';
+import { VfsHandle, type Actor } from './VfsHandle';
 
 export class VfsService {
   private nodeStore: NodeStore;
@@ -151,6 +152,11 @@ export class VfsService {
     if (principal.id === srcInfo.pid) return false;
 
     return await this.providerManager.moveContent(srcPath, destPath);
+  }
+
+  /** この者として触る取っ手を作る（T-0903。説明は VfsHandle.ts） */
+  as(actor: Actor): VfsHandle {
+    return new VfsHandle(this, actor);
   }
 
   exists(principal: Principal, path: string): boolean {

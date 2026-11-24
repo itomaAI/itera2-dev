@@ -8,6 +8,7 @@ import type { GuestToolInvoker } from './GuestToolInvoker';
 import type { ToolExecutionRecorder } from './ToolExecutionRecorder';
 import { normalizeDynamicToolResult } from './ToolResultNormalizer';
 import type { ToolParams, ToolResult } from '../types/tools';
+import type { ToolContext } from './ToolContext';
 import { RESERVED_SYSTEM_TAGS } from '../cognitive/Translator';
 import { asToolFailure, isToolError } from './ToolError';
 
@@ -15,7 +16,7 @@ export interface ToolDef {
   name: string;
   description: string;
   definition?: string;
-  impl?: (params: ToolParams, context: any) => Promise<ToolResult | null>;
+  impl?: (params: ToolParams, context: ToolContext) => Promise<ToolResult | null>;
 }
 
 export interface ToolSet {
@@ -306,7 +307,7 @@ export class ToolRegistry {
    */
   async execute(
     action: { type: string; params: ToolParams; closed?: boolean },
-    context: { shell: any; engine: any } & Record<string, any>,
+    context: ToolContext,
   ): Promise<ToolResult | null> {
     const startedAt = Date.now();
 
