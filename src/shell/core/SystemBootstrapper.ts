@@ -30,6 +30,7 @@ import { ToolRegistry } from '../../core/control/ToolRegistry';
 import { ToolExecutionRecorder } from '../../core/control/ToolExecutionRecorder';
 import { ROOT_ENGINE_ID } from '../../core/control/Engine';
 import { createEngineBundle } from '../../core/control/EngineBundle';
+import { EngineManager } from '../services/EngineManager';
 import { Translator } from '../../core/cognitive/Translator';
 import { registerBasicTools } from '../../core/control/tools/basic_tools';
 import { registerFSTools } from '../../core/control/tools/fs_tools';
@@ -218,6 +219,7 @@ export class SystemBootstrapper {
     // ルートの束（OS のチャットのエンジン。T-0903・EngineBundle.ts）。上流とプロンプトは CognitiveManager が後で差す。
     // ルートは AI の役割で書く。会話に結び付いたもの（空にする・添付を置く・いまの会話）を知っているのは
     // SessionManager なので、ここは配線するだけ
+    const agentFs = (engineId: string) => vfs.as({ principal: AGENT_PRINCIPAL, origin: engineId });
     const root = createEngineBundle({
       id: ROOT_ENGINE_ID,
       role: 'root',
@@ -226,7 +228,7 @@ export class SystemBootstrapper {
       configManager,
       translator,
       registry: toolRegistry,
-      fs: vfs.as({ principal: AGENT_PRINCIPAL, origin: ROOT_ENGINE_ID }),
+      fs: agentFs(ROOT_ENGINE_ID),
       conversation: {
         reset: (options) => sessionManager.clearSession(options),
         putAttachment: (name, blob) => sessionManager.putAttachment(name, blob),
@@ -235,9 +237,6 @@ export class SystemBootstrapper {
       },
       contextLimit: () => cognitiveManager.contextLimit(),
     });
-
-    // 生きているエンジンの束（id → 束）。いまはルートだけ
-    const engines = new Map([[root.id, root]]);
 
     const cognitiveManager = new CognitiveManager(configManager, root.engine, logger, vfs, registryLayers);
     const sessionManager = new SessionManager(vfs, history, historyStore, logger, root.tools, {
@@ -312,6 +311,23 @@ export class SystemBootstrapper {
     // 画面とプロセスはエンジンのものではないので、束の外から差す（道具の文脈の shell。ToolContext.ts）
     root.engine.extraContext.shell = shellFacade;
 
+    // 束の表（EngineManager.ts。T-0908）: ルートと、ゲストのプロセスが頼んで作らせる束。
+    // 作らせる口（engine:*）はまだ無いので、いま表に載るのはルートだけ。
+    // エンジンは揮発なので、前の起動が残した添付の置き場はここで掃く
+    const engineManager = new EngineManager({
+      root,
+      vfs,
+      configManager,
+      translator,
+      registry: toolRegistry,
+      fsFor: agentFs,
+      shell: shellFacade,
+      processes: processManager,
+      cognitive: cognitiveManager,
+      logger,
+    });
+    void engineManager.sweepLeftovers();
+
     new HostApiRouter(transport, {
       vfs,
       configManager,
@@ -321,7 +337,7 @@ export class SystemBootstrapper {
       processManager,
       navHistory,
       // そのプロセスが仕えるエンジンの束（プロセスの記録の engine から引く）
-      engineFor: (pid) => engines.get(processManager.processes.get(pid)?.engine ?? '') ?? null,
+      engineFor: (pid) => engineManager.bundleFor(pid),
       sessionManager,
       vendorCatalog: new VendorCatalog(vendorHrefOf(import.meta.env.BASE_URL, document.baseURI)),
       shell: shellFacade as any,
