@@ -674,9 +674,7 @@ describe('EngineManager × EngineCalls: 持ち主の口を通す（MetaOS.engine
     const { calls, sent } = callsOf(w);
     const { id } = await calls.create(OWNER, {});
 
-    await expect(calls.append(OTHER, id, { role: 'user', content: 'x', opts: { wake: true } })).rejects.toThrow(
-      'not found',
-    );
+    await expect(calls.append(OTHER, id, { role: 'user', content: 'x', opts: { wake: true } })).rejects.toThrow('not found');
     await expect(calls.turns(OTHER, id)).rejects.toThrow('not found');
     await expect(calls.save(OTHER, id, 'data/steal')).rejects.toThrow('not found');
     await expect(calls.dispose(OTHER, id)).rejects.toThrow('not found');

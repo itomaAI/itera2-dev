@@ -19,7 +19,8 @@ function world(files: Record<string, string | null> = {}) {
       stats.push([principal, path]);
       if (!(path in files)) throw new Error(`File not found: ${path}`);
       const body = files[path];
-      return body === null ? { kind: 'directory' } : { kind: 'file', size: body.length };
+      // ディレクトリの stat にも大きさが在る（小さいと、文字の候補として中身を読みに行ける大きさ）
+      return body === null ? { kind: 'directory', size: 4 } : { kind: 'file', size: body.length };
     },
     withBlob: async (principal: Principal, path: string, fn: (blob: Blob) => Promise<unknown>) => {
       blobs.push([principal, path]);
