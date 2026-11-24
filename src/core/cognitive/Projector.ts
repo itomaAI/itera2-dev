@@ -8,7 +8,7 @@
  */
 
 import type { VfsService } from '../vfs/VfsService';
-import type { ConfigManager } from '../sys/ConfigManager';
+import type { EngineConfigReader } from '../sys/engineConfig';
 import type { HistoryManager, Turn } from '../state/HistoryManager';
 import type { MediaRef } from '../types/content';
 import { SYSTEM_PRINCIPAL } from '../vfs/types';
@@ -21,7 +21,7 @@ import type { BaseRenderer, MediaAttachFailure } from './Renderer';
 export interface ProjectionState {
   history: HistoryManager;
   vfs: VfsService;
-  configManager: ConfigManager;
+  configManager: EngineConfigReader;
 }
 
 /**
@@ -73,7 +73,7 @@ export function agentMediaNotice(media: MediaRef, failure: MediaFailure): string
 }
 
 /** システムプロンプトの雛形に、利用者の設定とセッションの開始時刻を入れる。 */
-export function buildSessionSystemPrompt(template: string, configManager: ConfigManager, turns: Turn[]): string {
+export function buildSessionSystemPrompt(template: string, configManager: EngineConfigReader, turns: Turn[]): string {
   const prefs = configManager.get('preferences');
   const user = prefs?.username || 'User';
   const agent = prefs?.agentName || 'Itera';

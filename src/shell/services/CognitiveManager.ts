@@ -4,11 +4,12 @@
  */
 
 import type { ConfigManager } from '../../core/sys/ConfigManager';
+import type { EngineConfigReader } from '../../core/sys/engineConfig';
 import type { Engine } from '../../core/control/Engine';
 import type { SystemLogger } from '../../core/state/SystemLogger';
 import type { VfsService } from '../../core/vfs/VfsService';
 import { SYSTEM_PRINCIPAL } from '../../core/vfs/types';
-import { buildSystemPrompt } from '../../config/system_prompts';
+import { buildSystemPrompt, type PromptRole } from '../../config/system_prompts';
 import { PROVIDERS } from '../../config/providers';
 import { REGISTRY_LAYERS } from '../../config/config_layers';
 import { overlayProviders } from '../../core/sys/registryMerge';
@@ -101,9 +102,19 @@ export function splitModel(rawModel: string): { provider: string; modelName: str
   return { provider: rawModel.substring(0, slashIdx).toLowerCase(), modelName: rawModel.substring(slashIdx + 1) };
 }
 
+/** 装備の相手: エンジンと、それが読む設定・プロンプトの役割（T-0908） */
+interface Equipped {
+  engine: Engine;
+  config: EngineConfigReader;
+  role: PromptRole;
+  /** OS のチャットのエンジンか。画面に出すモデル名と、失敗を呼び手へ返すのは、これだけ */
+  root: boolean;
+}
+
 export class CognitiveManager {
   private configManager: ConfigManager;
-  private engine: Engine;
+  /** 装備しているエンジン（先頭がルート）。llm の設定・鍵が変わるたびに、全部を差し直す */
+  private equipped: Equipped[] = [];
   private logger: SystemLogger;
   private vfs: VfsService;
   private onStatusUpdate: ((modelString: string) => void) | null = null;
@@ -122,7 +133,7 @@ export class CognitiveManager {
   ) {
     this.registryDirs = layers.length > 0 ? [...layers] : [...REGISTRY_LAYERS];
     this.configManager = configManager;
-    this.engine = engine;
+    if (engine) this.equipped.push({ engine, config: configManager, role: 'root', root: true });
     this.logger = logger;
     this.vfs = vfs;
   }
@@ -250,8 +261,9 @@ export class CognitiveManager {
    * 選んでいるプロバイダの下を先に見て、無ければ同じ id のモデルを一覧の全体から探す
    * （`custom/…` で使っているモデルの上限を、本来のプロバイダの下に書いてある場合）。
    */
-  public async contextLimit(): Promise<number | null> {
-    const model = this.configManager.get('llm')?.model;
+  public async contextLimit(config: EngineConfigReader = this.configManager): Promise<number | null> {
+    // どのエンジンの上限か、は「そのエンジンが読む設定」で決まる（省けば OS の設定＝ルート）
+    const model = config.get('llm')?.model;
     if (typeof model !== 'string' || !model) return null;
     const { provider, modelName } = splitModel(model);
     const limitOf = (entry: any): number | null => {
@@ -316,26 +328,63 @@ export class CognitiveManager {
     return out;
   }
 
+  /**
+   * 装備しているエンジンの全部に、プロンプトと上流を差し直す（llm の設定・鍵が変わったとき）。
+   * ルートの失敗は呼び手へ返す（いままでどおり）。ほかのエンジンの失敗は、ルートと残りを止めない。
+   */
   public async refreshEngineConfig(): Promise<void> {
-    if (!this.engine) return;
+    for (const entry of [...this.equipped]) {
+      // 差し直している間に外されたものは飛ばす
+      if (!this.equipped.includes(entry)) continue;
+      if (entry.root) {
+        await this.equipOne(entry);
+        continue;
+      }
+      try {
+        await this.equipOne(entry);
+      } catch (e) {
+        console.warn(`[CognitiveManager] Failed to equip engine "${entry.engine.id}".`, e);
+      }
+    }
+  }
 
-    const llmConfig = this.configManager.get('llm') || {
+  /**
+   * エンジンにプロンプトと上流を差し、以後 llm の設定・鍵が変わるたびに差し直す（T-0908）。戻り値を呼ぶと外れる。
+   *
+   * `config` はそのエンジンが読む設定（OS の設定に上書きを重ねた読み口。`engineConfig.ts`）。上書きしていない鍵は
+   * OS の設定を読みに行くので、差し直しのたびに追随する。`role` はプロンプトの役割（`system_prompts.ts`）。
+   * OS のチャットのエンジン（ルート）は、作るときに渡されたものが最初から入っている。
+   */
+  public async equip(engine: Engine, config: EngineConfigReader, role: PromptRole): Promise<() => void> {
+    const entry: Equipped = { engine, config, role, root: false };
+    await this.equipOne(entry);
+    this.equipped.push(entry);
+    return () => {
+      const i = this.equipped.indexOf(entry);
+      if (i >= 0) this.equipped.splice(i, 1);
+    };
+  }
+
+  private async equipOne(entry: Equipped): Promise<void> {
+    const llmConfig = entry.config.get('llm') || {
       model: 'gemini-3.8-flash',
     };
     const systemPrompt = buildSystemPrompt({
       // 既定は使わない。llm.json に thinkingTag: true と書いたときだけ（T-0856）
       thinkingTag: llmConfig.thinkingTag === true,
       paths: this.configManager.paths(),
+      role: entry.role,
     });
 
     const { provider, modelName } = splitModel(llmConfig.model);
-    if (this.onStatusUpdate) {
+    // 画面に出すモデル名は、OS のチャット（ルート）のものだけ
+    if (entry.root && this.onStatusUpdate) {
       this.onStatusUpdate(`${provider}/${modelName}`);
     }
 
     const endpoint = await this.resolveLlm(llmConfig);
-    this.engine.projector = new Projector(systemPrompt, endpoint.renderer);
-    this.engine.llm = endpoint.adapter;
+    entry.engine.projector = new Projector(systemPrompt, endpoint.renderer);
+    entry.engine.llm = endpoint.adapter;
   }
 
   /**

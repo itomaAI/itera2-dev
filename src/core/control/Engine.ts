@@ -6,7 +6,7 @@
 import type { HistoryManager, Turn, TurnContent, TurnMeta } from '../state/HistoryManager';
 import type { ToolExecutionEntry, ToolResult } from '../types/tools';
 import type { VfsService } from '../vfs/VfsService';
-import type { ConfigManager } from '../sys/ConfigManager';
+import type { EngineConfigReader } from '../sys/engineConfig';
 import { DEFAULT_MAX_CONTINUOUS_TOOLS } from '../sys/ConfigManager';
 import type { Projector } from '../cognitive/Projector';
 import { LLM_CALLER_ROOT, type BaseLLMAdapter, type LlmResult } from '../cognitive/adapters/BaseAdapter';
@@ -26,7 +26,8 @@ export const TurnType = {
 export interface EngineState {
   history: HistoryManager;
   vfs: VfsService;
-  configManager: ConfigManager;
+  /** このエンジンが読む設定（OS の設定、またはそれに上書きを重ねたもの。engineConfig.ts） */
+  configManager: EngineConfigReader;
 }
 
 /**
