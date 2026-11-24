@@ -7,51 +7,12 @@
  */
 import { describe, expect, it } from 'vitest';
 import type { Turn } from './HistoryManager';
-import { SYSTEM_PRINCIPAL, type Principal } from '../vfs/types';
+import type { Principal } from '../vfs/types';
 import { buildSessionExport } from './sessionArchive';
 import { collectBundleMedia, copyBundleMedia, readSessionBundle, restoreBundleMedia } from './sessionBundleIo';
+import { FakeVfs } from './bundleTestKit';
 
 const APP: Principal = { type: 'app', id: 'viewer' };
-
-/** 中身は文字列で持つ。誰の主体で読み書きしたかを残す */
-class FakeVfs {
-  files = new Map<string, string>();
-  writes: Array<{ by: string; path: string; system: boolean }> = [];
-  reads: Array<{ by: string; path: string }> = [];
-  failOn = new Set<string>();
-  private isDir(path: string) {
-    return [...this.files.keys()].some((k) => k.startsWith(`${path}/`));
-  }
-  exists(_p: Principal, path: string) {
-    return this.files.has(path) || this.isDir(path);
-  }
-  stat(_p: Principal, path: string): any {
-    if (this.files.has(path)) {
-      return { kind: 'file', name: path.slice(path.lastIndexOf('/') + 1), path, hash: `h:${this.files.get(path)}` };
-    }
-    if (this.isDir(path)) return { kind: 'directory', name: path.slice(path.lastIndexOf('/') + 1), path };
-    throw new Error(`File not found: ${path}`);
-  }
-  listFiles(_p: Principal, options: { path: string }): any[] {
-    const prefix = `${options.path}/`;
-    const names = new Set<string>();
-    for (const k of this.files.keys()) if (k.startsWith(prefix)) names.add(k.slice(prefix.length).split('/')[0]);
-    return [...names].sort().map((n) => this.stat(SYSTEM_PRINCIPAL, `${prefix}${n}`));
-  }
-  async readFile(p: Principal, path: string) {
-    this.reads.push({ by: `${p.type}:${p.id}`, path });
-    if (!this.files.has(path)) throw new Error(`File not found: ${path}`);
-    return this.files.get(path)!;
-  }
-  async readBlob(p: Principal, path: string) {
-    if (this.failOn.has(path)) throw new Error('unreadable');
-    return new Blob([await this.readFile(p, path)]);
-  }
-  async writeFile(p: Principal, path: string, content: string | Blob, options: { system?: boolean }) {
-    this.writes.push({ by: `${p.type}:${p.id}`, path, system: options.system === true });
-    this.files.set(path, typeof content === 'string' ? content : await content.text());
-  }
-}
 
 const media = (path: string) => ({ media: { path, mimeType: 'image/png', metadata: {} } });
 const turn = (content: Turn['content']): Turn => ({ id: 't1', timestamp: 5, role: 'user', content, meta: {} });
