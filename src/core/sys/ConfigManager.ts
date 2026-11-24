@@ -369,24 +369,34 @@ export class ConfigManager {
    * ユーティリティ: オブジェクトのディープマージ
    */
   private _deepMerge(target: any, source: any): any {
-    const output = { ...target };
-    if (this._isObject(target) && this._isObject(source)) {
-      Object.keys(source).forEach((key) => {
-        if (this._isObject(source[key])) {
-          if (!(key in target)) {
-            Object.assign(output, { [key]: source[key] });
-          } else {
-            output[key] = this._deepMerge(target[key], source[key]);
-          }
-        } else {
-          Object.assign(output, { [key]: source[key] });
-        }
-      });
-    }
-    return output;
+    return mergeConfig(target, source);
   }
 
   private _isObject(item: any): boolean {
     return item && typeof item === 'object' && !Array.isArray(item);
   }
+}
+
+/**
+ * 設定を重ねる規則（深い併合）。`source` が持っている鍵だけ勝ち、入れ子のオブジェクトは中まで重ねる。
+ * 配列と値は置き換える。どちらも書き換えない。
+ * 設定の層（ConfigManager）と、エンジンごとの上書き（`engineConfig.ts`）が同じ規則を使う。
+ */
+export function mergeConfig(target: any, source: any): any {
+  const isObject = (item: any): boolean => item && typeof item === 'object' && !Array.isArray(item);
+  const output = { ...target };
+  if (isObject(target) && isObject(source)) {
+    Object.keys(source).forEach((key) => {
+      if (isObject(source[key])) {
+        if (!(key in target)) {
+          Object.assign(output, { [key]: source[key] });
+        } else {
+          output[key] = mergeConfig(target[key], source[key]);
+        }
+      } else {
+        Object.assign(output, { [key]: source[key] });
+      }
+    });
+  }
+  return output;
 }

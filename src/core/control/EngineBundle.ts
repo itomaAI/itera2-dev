@@ -21,7 +21,7 @@
 import type { HistoryManager, Turn, TurnContent, TurnMeta } from '../state/HistoryManager';
 import type { VfsService } from '../vfs/VfsService';
 import type { VfsHandle } from '../vfs/VfsHandle';
-import type { ConfigManager } from '../sys/ConfigManager';
+import type { EngineConfigReader } from '../sys/engineConfig';
 import type { Translator } from '../cognitive/Translator';
 import type { WakePolicy } from '../../config/wake_policy';
 import { Engine, ROOT_ENGINE_ID } from './Engine';
@@ -49,7 +49,8 @@ export interface EngineBundleSpec {
   /** このエンジンの会話 */
   history: HistoryManager;
   vfs: VfsService;
-  configManager: ConfigManager;
+  /** このエンジンが読む設定。ルートは OS の設定そのもの、ほかは上書きを重ねたもの（engineConfig.ts） */
+  configManager: EngineConfigReader;
   translator: Translator;
   /** 道具の台帳（全エンジンで 1 つ）。このエンジンの口は束が作る */
   registry: ToolRegistry;
