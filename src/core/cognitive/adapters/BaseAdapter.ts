@@ -68,15 +68,19 @@ export interface LlmResult {
 /**
  * 誰の生成か。台帳の行に書く（文脈の長さは台帳からは読まない —— 呼び手が結果を自分で持つ）。
  *
- *   - `caller` …… ホストが付ける。OS のチャットは `root`
- *   - `tag` …… 呼び手が付ける任意の文字列。`root` は会話（セッション）の id
+ *   - `caller` …… 誰か。ホストが付ける。エンジンの生成はそのエンジンの id（OS のチャットは `root`）、
+ *     `MetaOS.llm` の呼び出しは呼んだプロセスの pid
+ *   - `engineTurn` …… エンジンのターンか（出力が LPML で、終端タグで終わる生成）。`MetaOS.llm` の 1 回きりの呼び出しでは立てない。
+ *     「誰か」とは別のこと —— ルートでないエンジンのターンも LPML で、名前が何であれ 1 回きりの呼び出しは LPML ではない（T-0903）
+ *   - `tag` …… 呼び手が付ける任意の文字列。エンジンは会話（セッション）の id
  */
 export interface LlmCallOrigin {
   caller: string;
+  engineTurn?: boolean;
   tag?: string | null;
 }
 
-/** OS のチャット（ホストのエンジン）が台帳に名乗る名前 */
+/** OS のチャット（ルートのエンジン）が台帳に名乗る名前 */
 export const LLM_CALLER_ROOT = 'root';
 
 /**

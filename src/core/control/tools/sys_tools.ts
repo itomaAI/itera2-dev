@@ -116,9 +116,8 @@ export function registerSysTools(registry: ToolRegistry): void {
       if (isNaN(delay) || delay <= 0) throw new ToolError('Invalid delay.');
       const message = params.message || 'Timer expired.';
 
-      setTimeout(() => {
-        if (context.engine) context.engine.injectSystemEvent('timer_alert', message);
-      }, delay * 1000);
+      // タイマーは呼んだエンジンに預ける（道具は自分で setTimeout を持たない。T-0903）
+      context.engine.scheduleSystemEvent(delay * 1000, 'timer_alert', message);
 
       return {
         log: `Timer set for ${delay} seconds.`,
@@ -162,12 +161,13 @@ export function registerSysTools(registry: ToolRegistry): void {
   registry.registerSystemTool(setId, setName, {
     name: 'tool_catalog',
     description: 'List active toolsets or fetch one tool definition.',
-    impl: async (params: any) => {
+    // 答えるのは、呼んだエンジンに見えている道具（登録時のレジストリではなく、文脈の口から。T-0903）
+    impl: async (params: any, context: ToolContext) => {
       const action = String(params.action || 'list');
       if (action === 'define') {
         const name = String(params.name || '').trim();
         if (!name) return { log: '[Error] name is required for action="define".', ui: '❌ tool_catalog' };
-        const found = registry.getToolDefinition(name);
+        const found = context.tools.getToolDefinition(name);
         if (!found) {
           return {
             log: `[Error] No tool named <${name}> is registered. Use <tool_catalog action="list" /> to see what is active.`,
@@ -188,7 +188,7 @@ ${found.definition}
         };
       }
       const includeSystem = params.include_system === 'true';
-      const sets = registry.listToolSets(includeSystem);
+      const sets = context.tools.listToolSets(includeSystem);
       if (sets.length === 0) {
         return {
           log: 'No dynamic tools are active (no app or daemon has registered any).',

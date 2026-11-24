@@ -7,14 +7,21 @@ import type { HostTransport } from '../ipc/HostTransport';
 import type { VfsService } from '../core/vfs/VfsService';
 import type { ConfigManager } from '../core/sys/ConfigManager';
 import type { VendorCatalog } from '../core/sys/VendorCatalog';
-import type { Role, Turn, TurnContent, TurnMeta } from '../core/state/HistoryManager';
+import type { Turn, TurnContent, TurnMeta } from '../core/state/HistoryManager';
 import type { DynamicToolRegistration, ProcessInfo } from './HostApiContract';
 import { resolvePrincipal } from './principal';
 import { GuestLocalStore } from '../core/sys/GuestLocalStore';
 import type { SpawnOptions } from '../shell/windowing/ProcessManager';
 import type { CompiledGuest } from '../shell/windowing/GuestCompiler';
 import { USER_PRINCIPAL } from '../core/vfs/types';
-import { attachmentPathsOf, buildAppendPlan, buildChatStatus, buildResetPlan, resolveAttachments } from './chatApi';
+import {
+  attachmentPathsOf,
+  buildAppendPlan,
+  buildChatStatus,
+  buildResetPlan,
+  resolveAttachments,
+  type ChatStatusInput,
+} from './chatApi';
 import { LlmCalls, type LlmEndpointLike } from './LlmCalls';
 import { VfsEventFormatter } from '../core/vfs/VfsEventFormatter';
 import { buildGuestThemeCss } from '../shell/windowing/guestThemeCss';
@@ -23,10 +30,6 @@ import { base64ToBlob, blobToDataUrl, dataUrlToBlob } from '../utils/binary';
 import { t as tr } from '../i18n/i18n';
 
 // 依存モジュールのダックタイピング・インターフェース (未実装モジュール用)
-export interface IHistoryManager {
-  append(role: Role, content: TurnContent, meta?: TurnMeta): Turn;
-  get(): Turn[];
-}
 export interface IProcessManager {
   spawn(options: SpawnOptions): Promise<void>;
   kill(pid: string): boolean;
@@ -44,12 +47,6 @@ export interface IProcessManager {
   on?(event: string, callback: Function): void;
   _updateAddressBar(path: string): void;
   declareRoute(path: string, pid?: string): string | null;
-}
-export interface IEngine {
-  injectUserTurn(content: TurnContent, meta?: TurnMeta): Promise<Turn>;
-  requestEvaluation(): void;
-  stop(): void;
-  status(): { running: boolean; busy: boolean; outstandingTools: number };
 }
 /** 会話の空にする・切り替える・保存する（SessionManager が満たす。MetaOS.chat の実体。T-0634） */
 export interface ISessionManager {
@@ -74,12 +71,24 @@ export interface IShell {
   resolveLlm?(config: { model: string; [key: string]: unknown }): Promise<LlmEndpointLike>;
   /** 選べるモデルの一覧（鍵は含まない） */
   listLlmModels?(): Promise<unknown[]>;
-  panels: { chat: any };
   modals: { editor: any; camera: any; audio: any; filePicker?: any };
 }
 export interface IToolRegistry {
   registerDynamicTool(name: string, sourcePid: string, definition: DynamicToolRegistration): void;
   unregisterDynamicTool(name: string, sourcePid: string): void;
+}
+/**
+ * エンジンの束（core/control/EngineBundle.ts）のうち、ゲストの口が使う分（T-0903）。
+ * 会話に置く・起こす・止める・空にする・状態・道具の登録。画面（右の欄）はここからは見えない ——
+ * 描くのは束の知らせ（turn_placed・wake_requested）を聞く側。
+ */
+export interface IEngineBundle {
+  post(role: 'user' | 'system', content: TurnContent, meta?: TurnMeta): Promise<Turn>;
+  wake(): void;
+  stop(): void;
+  reset(options?: { summary?: string; restoreTools?: boolean }): Promise<unknown>;
+  statusInput(): Promise<ChatStatusInput>;
+  tools: IToolRegistry;
 }
 
 /** 登録簿（層を重ねた値）の口。AppRegistry / FileAssociationResolver が満たす。 */
@@ -106,11 +115,14 @@ export interface RouterDeps {
   navHistory?: INavHistory;
   appRegistry?: IRegistryReader;
   associations?: IAssociationReader;
-  history?: IHistoryManager;
   processManager?: IProcessManager;
-  engine?: IEngine;
+  /**
+   * そのプロセスが仕えるエンジンの束（T-0903）。chat:*・tools:*・ファイル操作の知らせ（silent: false）の相手。
+   * 無い（null）なら chat:* は「Chat is not available.」。
+   */
+  engineFor?: (pid: string) => IEngineBundle | null;
   shell?: IShell;
-  toolRegistry?: IToolRegistry;
+  /** 会話の一覧・切り替え・保存・読み込み（退避はルートの会話だけが持つ） */
   sessionManager?: ISessionManager;
   /** 同梱の vendor ライブラリの目録（MetaOS.vendor。T-0685） */
   vendorCatalog?: VendorCatalog;
@@ -128,19 +140,18 @@ export class HostApiRouter {
     this._registerHandlers();
   }
 
-  private _checkAndEmitEvent(options: any, type: string, desc: string) {
+  private _checkAndEmitEvent(sourcePid: string, options: any, type: string, desc: string) {
     // パフォーマンスとノイズ低減のため、デフォルトはログ出力なし(silent: true)とする
     // 明示的に { silent: false } が指定された場合のみイベントログを発行する
     const shouldEmit = options && options.silent === false;
+    if (!shouldEmit) return;
 
-    if (shouldEmit && this.deps.history && this.deps.shell) {
-      const lpml = `<event type="${type}">\n${desc}\n</event>`;
-      const turn = this.deps.history.append('system', lpml, {
-        type: 'event_log',
-        trigger_llm: false,
-      });
-      this.deps.shell.panels.chat.appendTurn(turn);
-    }
+    // 知らせる先は、操作したプロセスが仕えるエンジンの会話。置くだけで、起こさない
+    const bundle = this.deps.engineFor?.(sourcePid);
+    if (!bundle) return;
+    const lpml = `<event type="${type}">\n${desc}\n</event>`;
+    // 畳まれたエンジンには置けない（断られる）。ファイルの操作そのものは済んでいるので、黙って捨てる
+    void bundle.post('system', lpml, { type: 'event_log', trigger_llm: false }).catch(() => {});
   }
 
   private _registerHandlers() {
@@ -206,7 +217,7 @@ export class HostApiRouter {
         action: 'edit',
         items: [{ srcPath: path }],
       });
-      this._checkAndEmitEvent(opts, 'file_edited', msg);
+      this._checkAndEmitEvent(sourcePid, opts, 'file_edited', msg);
       return res;
     });
 
@@ -218,7 +229,7 @@ export class HostApiRouter {
         action: 'edit',
         items: [{ srcPath: path }],
       });
-      this._checkAndEmitEvent(opts, 'file_edited', msg);
+      this._checkAndEmitEvent(sourcePid, opts, 'file_edited', msg);
       return res;
     });
 
@@ -230,7 +241,7 @@ export class HostApiRouter {
         action: 'delete',
         items: [{ srcPath: path }],
       });
-      this._checkAndEmitEvent(opts, 'file_deleted', msg);
+      this._checkAndEmitEvent(sourcePid, opts, 'file_deleted', msg);
       return res;
     });
 
@@ -243,7 +254,7 @@ export class HostApiRouter {
         action: 'move',
         items: [{ srcPath: path, destPath: dest }],
       });
-      this._checkAndEmitEvent(opts, 'file_moved', msg);
+      this._checkAndEmitEvent(sourcePid, opts, 'file_moved', msg);
       return dest;
     });
 
@@ -255,7 +266,7 @@ export class HostApiRouter {
         action: 'move',
         items: [{ srcPath: oldPath, destPath: newPath }],
       });
-      this._checkAndEmitEvent(opts, 'file_moved', msg);
+      this._checkAndEmitEvent(sourcePid, opts, 'file_moved', msg);
       return res;
     });
 
@@ -267,14 +278,14 @@ export class HostApiRouter {
         action: 'copy',
         items: [{ srcPath, destPath }],
       });
-      this._checkAndEmitEvent(opts, 'file_copied', msg);
+      this._checkAndEmitEvent(sourcePid, opts, 'file_copied', msg);
       return res;
     });
 
     t.registerHandler('fs:mkdir', async ({ path, opts }, sourcePid) => {
       const principal = getPrincipal(sourcePid);
       const res = await d.vfs.mkdir(principal, path, opts);
-      this._checkAndEmitEvent(opts, 'folder_created', `App [${sourcePid}] created folder: ${path}`);
+      this._checkAndEmitEvent(sourcePid, opts, 'folder_created', `App [${sourcePid}] created folder: ${path}`);
       return res;
     });
 
@@ -340,7 +351,12 @@ export class HostApiRouter {
       } else {
         await d.vfs.setAcl(principal, path, acl);
       }
-      this._checkAndEmitEvent(opts, 'permission_changed', `App [${sourcePid}] changed permissions for: ${path}`);
+      this._checkAndEmitEvent(
+        sourcePid,
+        opts,
+        'permission_changed',
+        `App [${sourcePid}] changed permissions for: ${path}`,
+      );
       return true;
     });
 
@@ -392,11 +408,17 @@ export class HostApiRouter {
     //   ai.ask / ai.task / ai.log / ai.stop は guest_bridge.js の側で append / stop の薄皮として組む
     //   （ホストに `ai:*` を残して二重に実装しない）。規則は chatApi.ts（純関数）。
     //   権限は従来の ai:* と同じ（ゲストに閉じない）。遠隔の相手の認証は中継するデーモンの責任。
+    //   相手は、呼んだプロセスが仕えるエンジンの束（engineFor）。右の欄には触らない ——
+    //   描くのは束の知らせ（turn_placed・wake_requested）を聞く側（EventOrchestrator）。T-0903
     // ==========================================
-    const chatPanel = () => d.shell?.panels?.chat;
+    const bundleOf = (pid: string): IEngineBundle => {
+      const bundle = d.engineFor?.(pid);
+      if (!bundle) throw new Error('Chat is not available.');
+      return bundle;
+    };
 
     t.registerHandler('chat:append', async ({ role, content, opts }, sourcePid) => {
-      if (!d.engine || !d.history) throw new Error('Chat is not available.');
+      const bundle = bundleOf(sourcePid);
       // 添付は門を通す（T-0672）。文字は呼び手の権限で読み、先頭だけ本文に展開する。読めなければ注記だけ
       const principal = getPrincipal(sourcePid);
       const resolved = await resolveAttachments(attachmentPathsOf(opts), async (path) => {
@@ -409,68 +431,32 @@ export class HostApiRouter {
       });
       const plan = buildAppendPlan({ role, content, opts }, sourcePid, resolved);
       if (!plan.ok) throw new Error(`chat.append: ${plan.reason}`);
-      const chat = chatPanel();
-      if (plan.role === 'user') {
-        // injectUserTurn が turn_end を出すので画面には Engine 経由で載る
-        const turn = await d.engine.injectUserTurn(plan.content, plan.meta);
-        if (plan.wake) chat?.setProcessing(true);
-        return { id: turn.id };
-      }
-      const turn = d.history.append('system', plan.content, plan.meta);
-      if (plan.visible) chat?.appendTurn(turn);
-      if (plan.wake) {
-        // 積んだだけでは、停止（UI の停止・chat.reset が呼ぶ engine.stop）のあと予約が捨てられる（stopRequested）。
-        // 画面には Thinking... だけが残り、利用者がチャット欄から発言するまで動かない（ai.task で踏んだ。T-0638）。
-        // wake の契約は「起こす」なので停止要求を解いて評価を頼む。起きるかどうかは Engine が履歴で決める。
-        d.engine.requestEvaluation();
-        chat?.setProcessing(true);
-      }
+      // 置く・知らせる・起こす は束の口が 1 つで行う。起こすか（wake）と描くか（visible）は plan.meta に入っている
+      const turn = await bundle.post(plan.role, plan.content, plan.meta);
       return { id: turn.id };
     });
 
-    t.registerHandler('chat:wake', async () => {
-      if (!d.engine) throw new Error('Chat is not available.');
-      d.engine.requestEvaluation();
-      // 未読が無ければ評価が loop_stop(idle) を出して消す
-      chatPanel()?.setProcessing(true);
+    t.registerHandler('chat:wake', async (_payload, sourcePid) => {
+      // 未読が無ければ、評価が loop_stop(idle) を出して終わる
+      bundleOf(sourcePid).wake();
       return true;
     });
 
-    t.registerHandler('chat:stop', async () => {
-      if (d.engine) d.engine.stop();
+    t.registerHandler('chat:stop', async (_payload, sourcePid) => {
+      d.engineFor?.(sourcePid)?.stop();
       return true;
     });
 
     t.registerHandler('chat:reset', async ({ opts }, sourcePid) => {
-      if (!d.engine || !d.sessionManager) throw new Error('Chat is not available.');
+      const bundle = bundleOf(sourcePid);
       const plan = buildResetPlan(opts, sourcePid);
       // LLM が応答できない状態（文脈の溢れ）でも効くように、busy は見ない。走っている束は見捨てる（会話は退避される）。
-      // 起こさない: stop() のあとは利用者が次に発言するまで起きない（Engine の設計）。申し送りは置くだけで、次の発言で読まれる
-      d.engine.stop();
-      return await d.sessionManager.clearSession({
-        summary: plan.summary,
-        triggerLlm: false,
-        restoreTools: plan.restoreTools,
-      });
+      // 起こさない: 止めたあとは利用者が次に発言するまで起きない（Engine の設計）。申し送りは置くだけで、次の発言で読まれる
+      return await bundle.reset({ summary: plan.summary, restoreTools: plan.restoreTools });
     });
 
-    t.registerHandler('chat:status', async () => {
-      if (!d.engine || !d.history) throw new Error('Chat is not available.');
-      let session: { id: string; title: string; createdAt: number } | null = null;
-      if (d.sessionManager) {
-        try {
-          const m = await d.sessionManager.currentSession();
-          session = { id: m.id, title: m.title, createdAt: m.createdAt };
-        } catch {
-          session = null;
-        }
-      }
-      return buildChatStatus({
-        engine: d.engine.status(),
-        turns: d.history.get(),
-        session,
-        contextLimit: d.shell?.getContextLimit ? await d.shell.getContextLimit() : null,
-      });
+    t.registerHandler('chat:status', async (_payload, sourcePid) => {
+      return buildChatStatus(await bundleOf(sourcePid).statusInput());
     });
 
     // LLM を 1 回呼ぶ口（MetaOS.llm。T-0807）。会話もエンジンも通らない。
@@ -898,11 +884,12 @@ export class HostApiRouter {
     // 7. Dynamic Tools (tools)
     // ==========================================
     t.registerHandler('tools:register', async (payload, sourcePid) => {
-      if (d.toolRegistry) d.toolRegistry.registerDynamicTool(payload.name, sourcePid, payload);
+      // 道具は、登録したプロセスが仕えるエンジンの台帳に入る
+      d.engineFor?.(sourcePid)?.tools.registerDynamicTool(payload.name, sourcePid, payload);
       return true;
     });
     t.registerHandler('tools:unregister', async ({ name }, sourcePid) => {
-      if (d.toolRegistry) d.toolRegistry.unregisterDynamicTool(name, sourcePid);
+      d.engineFor?.(sourcePid)?.tools.unregisterDynamicTool(name, sourcePid);
       return true;
     });
   }

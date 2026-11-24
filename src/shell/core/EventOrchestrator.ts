@@ -8,6 +8,7 @@ import type { DesktopEnvironment } from './DesktopEnvironment';
 import type { VfsService } from '../../core/vfs/VfsService';
 import type { HistoryManager } from '../../core/state/HistoryManager';
 import type { Engine } from '../../core/control/Engine';
+import type { EngineBundle } from '../../core/control/EngineBundle';
 import type { ProcessManager } from '../windowing/ProcessManager';
 import type { UriRouter } from './UriRouter';
 import type { SessionManager } from '../services/SessionManager';
@@ -59,6 +60,8 @@ export class EventOrchestrator {
 
   private desktop: DesktopEnvironment;
   private vfs: VfsService;
+  /** ルートの束（OS のチャット）。会話に置く・止めるは束の口から。右の欄は束の知らせを聞いて描く（T-0903） */
+  private root: EngineBundle;
   private history: HistoryManager;
   private engine: Engine;
   private processManager: ProcessManager;
@@ -73,8 +76,7 @@ export class EventOrchestrator {
   constructor(
     desktop: DesktopEnvironment,
     vfs: VfsService,
-    history: HistoryManager,
-    engine: Engine,
+    root: EngineBundle,
     processManager: ProcessManager,
     uriRouter: UriRouter,
     sessionManager: SessionManager,
@@ -85,8 +87,9 @@ export class EventOrchestrator {
   ) {
     this.desktop = desktop;
     this.vfs = vfs;
-    this.history = history;
-    this.engine = engine;
+    this.root = root;
+    this.history = root.history;
+    this.engine = root.engine;
     this.processManager = processManager;
     this.uriRouter = uriRouter;
     this.sessionManager = sessionManager;
@@ -95,8 +98,8 @@ export class EventOrchestrator {
     this.eventBus = eventBus;
     this.configManager = configManager;
     this.commands = new CommandDispatcher({
-      engine,
-      history,
+      engine: root.engine,
+      history: root.history,
       sessionManager,
       processManager,
       config: configManager,
@@ -110,7 +113,7 @@ export class EventOrchestrator {
           }
         } else this.openPath(target);
       },
-      show: (turn) => desktop.panels.chat.appendTurn(turn),
+      post: (content, meta) => root.post('system', content, meta),
     });
   }
 
@@ -368,11 +371,8 @@ export class EventOrchestrator {
 
     explorer.on('history_event', (type: string, desc: string) => {
       const lpml = `<event type="${type}">\n${desc}\n</event>`;
-      const turn = this.history.append('system', lpml, {
-        type: 'event_log',
-        trigger_llm: false,
-      });
-      this.desktop.panels.chat.appendTurn(turn);
+      // 置くだけ（起こさない）。右の欄には turn_placed で載る
+      void this.root.post('system', lpml, { type: 'event_log', trigger_llm: false });
     });
 
     explorer.on('properties_request', (path: string) => {
@@ -407,7 +407,7 @@ export class EventOrchestrator {
       this._handleChatSend(text, attachments, vfsReferences, opts);
     });
 
-    chat.on('stop', () => this.engine.stop());
+    chat.on('stop', () => this.root.stop());
 
     chat.on('clear', async () => {
       const res = await window.AppUI?.showMessageBox({
@@ -468,7 +468,7 @@ export class EventOrchestrator {
   private _bindEngineEvents(): void {
     const chat = this.desktop.panels.chat;
 
-    this.engine.on('turn_start', (data: any) => {
+    this.root.on('turn_start', (data: any) => {
       if (data.role === 'model') {
         this.toolPhase = false;
         chat.setProcessing(true, 'thinking');
@@ -476,11 +476,11 @@ export class EventOrchestrator {
       }
     });
 
-    this.engine.on('stream_chunk', (chunk: string) => {
+    this.root.on('stream_chunk', (chunk: string) => {
       chat.updateStreaming(chunk);
     });
 
-    this.engine.on('turn_end', (data: any) => {
+    this.root.on('turn_end', (data: any) => {
       const role = data.role || (data.turn && data.turn.role);
       if (role === 'model') {
         chat.finalizeStreaming();
@@ -499,13 +499,24 @@ export class EventOrchestrator {
       }
     });
 
-    this.engine.on('loop_stop', (data: any) => {
+    this.root.on('loop_stop', (data: any) => {
       if (chat.currentStreamEl) chat.finalizeStreaming();
       this.toolPhase = false;
       chat.setProcessing(false);
       if (data && data.reason === 'error') {
         console.error('[EventOrchestrator] Loop stopped due to error:', data.error);
       }
+    });
+
+    // 外から置かれた system のターン（ゲストの chat.append・ファイル操作の知らせ・コマンドの結果）。
+    // turn_end とは別の知らせ —— 上の印の判定を通さず、描くだけ（T-0903）
+    this.root.on('turn_placed', (data: any) => {
+      chat.appendTurn(data.turn);
+    });
+
+    // 外から「起こす」と決めた（chat.append の wake・chat.wake）。未読が無ければ、評価が loop_stop(idle) を出して消す
+    this.root.on('wake_requested', () => {
+      chat.setProcessing(true);
     });
   }
 
@@ -530,11 +541,7 @@ export class EventOrchestrator {
           items: [{ srcPath: path }],
         });
         const lpml = `<event type="file_edited">\n${msg}\n</event>`;
-        const turn = this.history.append('system', lpml, {
-          type: 'event_log',
-          trigger_llm: false,
-        });
-        this.desktop.panels.chat.appendTurn(turn);
+        await this.root.post('system', lpml, { type: 'event_log', trigger_llm: false });
         return true;
       } catch (e: any) {
         if (window.AppUI) window.AppUI.notify(t('notify.saveFailed', { reason: e.message }), 'error');
@@ -628,6 +635,8 @@ export class EventOrchestrator {
       await this.engine.injectUserTurn(content, { trigger_llm: false });
       return;
     }
+    // 欄からの送信は、印を出してからエンジンに置く。束の post は置いてから wake_requested を出すので順が逆になり、
+    // 起床までの印の見え方が変わる。いまの見え方を保つため、ここはエンジンに直接置く（T-0903）
     this.desktop.panels.chat.setProcessing(true);
     await this.engine.injectUserTurn(content);
   }

@@ -6,7 +6,6 @@
 import {
   BaseLLMAdapter,
   filterNestedObject,
-  LLM_CALLER_ROOT,
   type LlmCallOrigin,
   type LlmConfig,
   type LlmResult,
@@ -81,10 +80,10 @@ export class GeminiAdapter extends BaseLLMAdapter {
 
     if (generationConfig.maxOutputTokens === undefined) generationConfig.maxOutputTokens = 65536;
 
-    // 行頭の `<yield` で止める（OS のチャットだけ。GeminiYieldStop.ts の説明）。
+    // 行頭の `<yield` で止める（エンジンのターンだけ。GeminiYieldStop.ts の説明）。
     // 設定の停止文字列が上限まで埋まっていたら足さず、戻すこともしない。
     let yieldStop = false;
-    if (origin?.caller === LLM_CALLER_ROOT) {
+    if (origin?.engineTurn) {
       const added = addYieldStop(generationConfig.stopSequences);
       if (added.stops) generationConfig.stopSequences = added.stops;
       yieldStop = added.on;

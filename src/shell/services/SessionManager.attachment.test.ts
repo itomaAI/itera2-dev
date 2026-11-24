@@ -25,7 +25,7 @@ describe('SessionManager.putAttachment', () => {
       getCurrentMeta: async () => ({ id: 's1', createdAt: 1, title: '' }),
       setCurrentMeta: async () => {},
     };
-    const sm = new SessionManager(vfs, history, { log: () => {} } as any, {} as any);
+    const sm = new SessionManager(vfs, history, history, { log: () => {} } as any, {} as any);
     await sm.init();
 
     const blob = new Blob(['x']);

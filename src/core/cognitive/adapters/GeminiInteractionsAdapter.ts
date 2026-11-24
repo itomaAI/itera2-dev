@@ -24,14 +24,7 @@
  * OS のチャットでは、従来の口と同じく行頭の yield タグを停止文字列にし、止まったあとにタグを戻す（GeminiYieldStop.ts）。
  */
 
-import {
-  BaseLLMAdapter,
-  filterNestedObject,
-  LLM_CALLER_ROOT,
-  type LlmCallOrigin,
-  type LlmConfig,
-  type LlmResult,
-} from './BaseAdapter';
+import { BaseLLMAdapter, filterNestedObject, type LlmCallOrigin, type LlmConfig, type LlmResult } from './BaseAdapter';
 import { addYieldStop, yieldRestoration } from './GeminiYieldStop';
 import type { SystemLogger } from '../../state/SystemLogger';
 
@@ -249,10 +242,10 @@ export class GeminiInteractionsAdapter extends BaseLLMAdapter {
     const link = this.chains.find(scope, digests);
 
     const { generation_config, response_format } = toInteractionsGenerationConfig(this.config);
-    // 行頭の `<yield` で止める（OS のチャットだけ。GeminiYieldStop.ts の説明）。従来の口（GeminiAdapter）と同じ規則。
+    // 行頭の `<yield` で止める（エンジンのターンだけ。GeminiYieldStop.ts の説明）。従来の口（GeminiAdapter）と同じ規則。
     // 設定の停止文字列が上限まで埋まっていたら足さず、戻すこともしない。
     let yieldStop = false;
-    if (origin?.caller === LLM_CALLER_ROOT) {
+    if (origin?.engineTurn) {
       const added = addYieldStop(generation_config.stop_sequences);
       if (added.stops) generation_config.stop_sequences = added.stops;
       yieldStop = added.on;

@@ -8,7 +8,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { Engine } from './Engine';
+import { Engine, ROOT_ENGINE_ID } from './Engine';
 import { ToolRegistry } from './ToolRegistry';
 import { Translator } from '../cognitive/Translator';
 
@@ -60,7 +60,7 @@ function run(output: string, extraContext: any) {
     { createContext: async () => [] } as any,
     llm as any,
     new Translator(),
-    registry,
+    registry.viewFor(ROOT_ENGINE_ID),
     extraContext,
     'realtime',
     1500,
@@ -78,7 +78,7 @@ describe('Engine: 道具に渡す文脈（T-0903）', () => {
     vi.restoreAllMocks();
   });
 
-  it('渡すのは自分自身と、組み立てが差した取っ手だけ。VFS・設定・履歴そのものは渡さない', async () => {
+  it('渡すのは自分自身・自分に見える道具と、組み立てが差した取っ手だけ。VFS・設定・履歴そのものは渡さない', async () => {
     const fs = { tag: 'fs' };
     const conversation = { tag: 'conversation' };
     const shell = { tag: 'shell' };
@@ -89,8 +89,10 @@ describe('Engine: 道具に渡す文脈（T-0903）', () => {
 
     expect(h.seen).toHaveLength(1);
     const context = h.seen[0];
-    expect(Object.keys(context).sort()).toEqual(['conversation', 'engine', 'fs', 'shell']);
+    expect(Object.keys(context).sort()).toEqual(['conversation', 'engine', 'fs', 'shell', 'tools']);
     expect(context.engine).toBe(h.engine);
+    // 一覧（tool_catalog）が読むのは、エンジンが実行に使っている口そのもの
+    expect(context.tools).toBe(h.engine.tools);
     expect(context.fs).toBe(fs);
     expect(context.conversation).toBe(conversation);
     expect(context.shell).toBe(shell);

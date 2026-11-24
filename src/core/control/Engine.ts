@@ -11,7 +11,7 @@ import { DEFAULT_MAX_CONTINUOUS_TOOLS } from '../sys/ConfigManager';
 import type { Projector } from '../cognitive/Projector';
 import { LLM_CALLER_ROOT, type BaseLLMAdapter, type LlmResult } from '../cognitive/adapters/BaseAdapter';
 import type { Translator, ParsedAction } from '../cognitive/Translator';
-import type { ToolRegistry } from './ToolRegistry';
+import type { ToolView } from './ToolRegistry';
 import type { ToolContext } from './ToolContext';
 import { RESERVED_SYSTEM_TAGS } from '../cognitive/Translator';
 import { WAKE_POLICY, WAKE_DEBOUNCE_MS, type WakePolicy } from '../../config/wake_policy';
@@ -38,7 +38,7 @@ export const PENDING_LOG = '[Pending] Still running. The result will come in a l
 
 /**
  * ルートのエンジン（OS のチャット）の id。個体の印として使う（T-0903）。
- * いまは台帳に名乗る名前（LLM_CALLER_ROOT）と同じ値を指す —— 文字はあちらに 1 つだけ置く。
+ * LLM の台帳に名乗る名前（LLM_CALLER_ROOT）と同じ値 —— エンジンは台帳に自分の id を名乗る。文字はあちらに 1 つだけ置く。
  */
 export const ROOT_ENGINE_ID = LLM_CALLER_ROOT;
 
@@ -50,9 +50,15 @@ export class Engine {
   public projector: Projector | null;
   public llm: BaseLLMAdapter | null;
   public translator: Translator;
-  public registry: ToolRegistry;
-  /** 道具に渡す取っ手のうち、自分自身（engine）以外。組み立て（SystemBootstrapper）が差す（ToolContext.ts） */
-  public extraContext: Partial<Omit<ToolContext, 'engine'>>;
+  /** このエンジンに見える道具（探す順と台帳は ToolRegistry.ts の ToolView が持つ） */
+  public tools: ToolView;
+  /**
+   * このエンジンの id（生きている間だけの名前。ホストが振る）。LLM の台帳に名乗り、道具の記録と VFS の個体の印に出る（T-0903）。
+   * 省いたときはルート —— 作るのは束を作る関数（EngineBundle.ts）で、そこは必ず渡す。
+   */
+  public readonly id: string;
+  /** 道具に渡す取っ手のうち、自分が持っているもの（engine・tools）以外。組み立てが差す（ToolContext.ts） */
+  public extraContext: Partial<Omit<ToolContext, 'engine' | 'tools'>>;
   /**
    * いまの会話（セッション）の id を答える口。台帳の行の `tag` に入る（T-0806）。
    * 知っているのは SessionManager なので、組み立て（SystemBootstrapper）が差す。無ければ tag は書かれない。
@@ -102,28 +108,36 @@ export class Engine {
   private haltedByToolCap: boolean = false;
   /** ユーザーが明示的に停止を要求したか（デバウンス待機中・ツール実行中の停止を成立させるため） */
   private stopRequested: boolean = false;
+  /** 履歴を聞くのをやめる口（dispose が呼ぶ） */
+  private unsubscribeHistory: (() => void) | undefined;
+  /** 自分が預かっているタイマー（scheduleSystemEvent）。dispose で全部取り消す */
+  private readonly eventTimers = new Set<ReturnType<typeof setTimeout>>();
+  /** 畳まれたか（dispose）。畳んだあとは起きず、遅い結果も積まない */
+  private disposed: boolean = false;
 
   constructor(
     state: EngineState,
     projector: Projector | null,
     llm: BaseLLMAdapter | null,
     translator: Translator,
-    registry: ToolRegistry,
-    extraContext: Partial<Omit<ToolContext, 'engine'>> = {},
+    tools: ToolView,
+    extraContext: Partial<Omit<ToolContext, 'engine' | 'tools'>> = {},
     wakePolicy: WakePolicy = WAKE_POLICY,
     wakeDebounceMs: number = WAKE_DEBOUNCE_MS,
+    id: string = ROOT_ENGINE_ID,
   ) {
+    this.id = id;
     this.state = state;
     this.projector = projector;
     this.llm = llm;
     this.translator = translator;
-    this.registry = registry;
+    this.tools = tools;
     this.extraContext = extraContext;
     this.wakePolicy = wakePolicy;
     this.wakeDebounceMs = wakeDebounceMs;
 
-    // Historyの変更を監視し、非同期でトリガーする
-    this.state.history.on('change', (payload) => this._onHistoryChange(payload));
+    // Historyの変更を監視し、非同期でトリガーする。聞くのをやめる口は dispose が呼ぶ
+    this.unsubscribeHistory = this.state.history.on('change', (payload) => this._onHistoryChange(payload));
   }
 
   on(event: string, callback: Function): void {
@@ -221,6 +235,8 @@ export class Engine {
    * 実行中なら finally が、ツールを待っているなら束の最後の結果が、それぞれ拾う。
    */
   private _scheduleEvaluation(): void {
+    // 畳んだエンジンは起きない（stopRequested と違い、発言や wake でも解けない）
+    if (this.disposed) return;
     if (this.isRunning) return;
     // 自分のツールが返るのを待っている。追い越してよい変更が来ていなければ、束の終わりを待つ
     if (this.outstandingTools > 0 && !this.overtakeRequested) return;
@@ -303,6 +319,7 @@ export class Engine {
    * システムからの非同期割り込みイベントを注入する（タイマーやデーモンからの通知など）
    */
   injectSystemEvent(actionType: string, message: string, meta: TurnMeta = {}): void {
+    if (this.disposed) return;
     // タイマーやデーモンからの明示的な起床要求。停止によってこれらが
     // 永久に無視されてしまわないよう、ここでも停止要求を解除する。
     this.stopRequested = false;
@@ -326,6 +343,20 @@ export class Engine {
     const turn = this.state.history.append('system', turnContent, turnMeta);
 
     this._emit('turn_end', { role: 'system', turn });
+  }
+
+  /**
+   * あとで自分に知らせる（set_timer）。タイマーはエンジンが預かる ——
+   * 道具が素の setTimeout でエンジンを掴むと、エンジンを畳んだあとにも鳴る（T-0903）。
+   * stop() では消さない（停止のあとでも鳴って起こす。injectSystemEvent が停止要求を解く）。消すのは dispose だけ。
+   */
+  scheduleSystemEvent(delayMs: number, actionType: string, message: string): void {
+    if (this.disposed) return;
+    const timer = setTimeout(() => {
+      this.eventTimers.delete(timer);
+      this.injectSystemEvent(actionType, message);
+    }, delayMs);
+    this.eventTimers.add(timer);
   }
 
   private async _ping(): Promise<void> {
@@ -402,7 +433,7 @@ export class Engine {
               this._emit('stream_chunk', chunk);
             },
             this.abortController.signal,
-            { caller: LLM_CALLER_ROOT, tag: this.sessionTag ? this.sessionTag() : null },
+            { caller: this.id, engineTurn: true, tag: this.sessionTag ? this.sessionTag() : null },
           )) || null;
       } catch (err) {
         streamError = err;
@@ -425,7 +456,7 @@ export class Engine {
       if (streamError) throw streamError;
 
       // ツール解釈とアクションの抽出
-      const registeredTools = this.registry.getRegisteredToolNames();
+      const registeredTools = this.tools.getRegisteredToolNames();
       const actions = this.translator.parse(rawResponse, registeredTools);
 
       // 終端タグより後ろの出力（T-0593）。
@@ -540,7 +571,7 @@ export class Engine {
     const signal = this.abortController?.signal;
 
     // 道具に渡すのは取っ手だけ（T-0903。ToolContext.ts）。VFS・設定・履歴そのものは渡さない
-    const context = { engine: this, ...this.extraContext } as ToolContext;
+    const context = { engine: this, tools: this.tools, ...this.extraContext } as ToolContext;
 
     const combinedResults: ToolExecutionEntry[] = actions.map((action) => {
       const { content, ...safeParams } = action.params || {};
@@ -613,6 +644,8 @@ export class Engine {
      * 文脈から消えていた。失敗は各結果の error（→ status="error"）で伝わる。
      */
     const deliver = (index: number, output: ToolResult) => {
+      // 畳んだあとに返った結果は捨てる。届け先の会話は、もうこのエンジンのものではない
+      if (this.disposed) return;
       // 本数を減らしてから履歴を更新する。最後の 1 本なら、この更新の変更通知が起床を予約する
       settleOne();
       if (batch > this.closedBatchSerial) {
@@ -660,13 +693,13 @@ export class Engine {
       // 待機中にループが停止（Abort）された場合は実行をキャンセル。
       // this.abortController は既に null 化されている可能性があるため、
       // 捕捉済みの signal と停止フラグの両方を見る。
-      if (signal?.aborted || this.stopRequested) {
+      if (signal?.aborted || this.stopRequested || this.disposed) {
         settleOne();
         return;
       }
 
       try {
-        const result = await this.registry.execute(action, context);
+        const result = await this.tools.execute(action, context);
 
         deliver(index, result ?? { log: '', trigger_llm: false });
       } catch (err: any) {
@@ -709,5 +742,20 @@ export class Engine {
       // ここで明示的に emit して確実に解除する。
       this._emit('loop_stop', { reason: 'abort' });
     }
+  }
+
+  /**
+   * 畳む（T-0903）。止め、履歴を聞くのをやめ、預かったタイマーを取り消す。以後に返った道具の結果は捨てる。
+   * stop() との違い: 止めたエンジンは次の発言で起き、遅い結果も新しいターンとして受け取る。畳んだエンジンは何もしない。
+   * 畳むのは束（EngineBundle.ts）。ルートのエンジンは畳まれない。
+   */
+  dispose(): void {
+    if (this.disposed) return;
+    this.stop();
+    this.disposed = true;
+    this.unsubscribeHistory?.();
+    this.unsubscribeHistory = undefined;
+    for (const timer of this.eventTimers) clearTimeout(timer);
+    this.eventTimers.clear();
   }
 }

@@ -10,6 +10,8 @@ import type { ToolParams, ToolResult } from '../types/tools';
 
 export interface ToolExecutionLogEntry {
   tool: string;
+  /** 呼んだエンジンの id（ルートは `root`）。道具の持ち主（sourcePid）とは別のこと（T-0903） */
+  engine: string;
   kind: 'system' | 'dynamic' | 'unknown';
   toolSetId?: string;
   sourcePid?: string;
