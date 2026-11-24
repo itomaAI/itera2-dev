@@ -5,15 +5,15 @@ function harness(opts: { reply?: { usage: any; model: string }; limit?: number |
   const turns: any[] = [];
   // この会話の最後の返事（エンジンが生成の結果を meta に置いた model ターン）
   if (opts.reply) turns.push({ id: 'reply', timestamp: 1000, role: 'model', content: 'ok', meta: { ...opts.reply } });
-  const shown: any[] = [];
+  /** 束の口（post）を通って会話に置かれたターン */
+  const posted: any[] = [];
   const engine = { stop: vi.fn(), status: () => ({ running: false, busy: true, outstandingTools: 2 }) };
-  const history = {
-    get: () => turns,
-    append: (role: string, content: any, meta: any) => {
-      const t = { id: `t${turns.length}`, timestamp: 1000, role, content, meta };
-      turns.push(t);
-      return t;
-    },
+  const history = { get: () => turns };
+  const post = async (content: any, meta: any) => {
+    const t = { id: `t${turns.length}`, timestamp: 1000, role: 'system' as const, content, meta };
+    turns.push(t);
+    posted.push(t);
+    return t;
   };
   const sessionManager = {
     clearSession: vi.fn(async () => ({ archived: true, sessionId: 'n' })),
@@ -36,11 +36,11 @@ function harness(opts: { reply?: { usage: any; model: string }; limit?: number |
     config,
     contextLimit: async () => opts.limit ?? null,
     open: (t) => opened.push(t),
-    show: (t) => shown.push(t),
+    post,
     now: () => 60000,
   });
   const lastText = () => turns[turns.length - 1]?.content as string;
-  return { d, turns, shown, engine, sessionManager, opened, lastText, config, llm };
+  return { d, turns, posted, engine, sessionManager, opened, lastText, config, llm };
 }
 
 describe('CommandDispatcher', () => {
@@ -51,14 +51,14 @@ describe('CommandDispatcher', () => {
     expect(h.turns).toEqual([]);
   });
 
-  it('結果は command の system ターンとして置き、画面にも出し、LLM は起こさない', async () => {
+  it('結果は command の system ターンとして束の口に置き（画面にはそこから載る）、LLM は起こさない', async () => {
     const h = harness();
     expect(await h.d.tryDispatch('/help')).toEqual({ handled: true });
     expect(h.turns).toHaveLength(1);
     expect(h.turns[0].meta).toEqual({ type: 'event_log', eventType: 'command', trigger_llm: false });
     expect(h.lastText()).toMatch(/^<event type="command">\n\$ \/help\n/);
     expect(h.lastText()).toContain('/status');
-    expect(h.shown).toEqual([h.turns[0]]);
+    expect(h.posted).toEqual([h.turns[0]]);
   });
 
   it('/status は engine・会話・この会話の最後の返事の長さを 3 行で', async () => {

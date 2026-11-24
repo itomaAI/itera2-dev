@@ -40,10 +40,7 @@ export interface CommandDeps {
     stop(): void;
     status(): { running: boolean; busy: boolean; outstandingTools: number };
   };
-  history: {
-    get(): Turn[];
-    append(role: 'system', content: TurnContent, meta: TurnMeta): Turn;
-  };
+  history: { get(): Turn[] };
   sessionManager: {
     clearSession(opts: { summary?: string; triggerLlm?: boolean; restoreTools?: boolean }): Promise<unknown>;
     currentSession(): Promise<{ id: string; title: string; createdAt: number }>;
@@ -58,8 +55,8 @@ export interface CommandDeps {
   contextLimit?: () => Promise<number | null>;
   /** パス（関連付けのアプリ）または `metaos://…` を開く */
   open(target: string): void;
-  /** 結果のターンを画面に出す */
-  show(turn: Turn): void;
+  /** 結果のターンを会話に置く（束の post。起こさない）。画面には束の知らせで載る */
+  post(content: TurnContent, meta: TurnMeta): Promise<Turn>;
   now?: () => number;
   /** 画面に出る文言（既定は英語） */
   texts?: CommandTexts;
@@ -106,12 +103,11 @@ export class CommandDispatcher {
     }
     // 結果を履歴に置く。/reset は会話が空になったあとに置くと新しい会話の先頭に残るので、記録しない（summary が担う）
     if (!(parsed.name === 'reset' && result.ok)) {
-      const turn = this.deps.history.append('system', commandEventText(line, result), {
+      await this.deps.post(commandEventText(line, result), {
         type: 'event_log',
         eventType: 'command',
         trigger_llm: false,
       });
-      this.deps.show(turn);
     }
     return { handled: true };
   }

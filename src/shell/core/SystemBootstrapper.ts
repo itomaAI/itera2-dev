@@ -27,7 +27,8 @@ import { SystemLogger } from '../../core/state/SystemLogger';
 // Control & Cognitive
 import { ToolRegistry } from '../../core/control/ToolRegistry';
 import { ToolExecutionRecorder } from '../../core/control/ToolExecutionRecorder';
-import { Engine, ROOT_ENGINE_ID } from '../../core/control/Engine';
+import { ROOT_ENGINE_ID } from '../../core/control/Engine';
+import { createEngineBundle } from '../../core/control/EngineBundle';
 import { Translator } from '../../core/cognitive/Translator';
 import { registerBasicTools } from '../../core/control/tools/basic_tools';
 import { registerFSTools } from '../../core/control/tools/fs_tools';
@@ -163,8 +164,6 @@ export class SystemBootstrapper {
     registerSearchTools(toolRegistry);
     registerSysTools(toolRegistry);
     registerUITools(toolRegistry);
-    // ルートのエンジンに見える道具（システムの道具 ＋ ルートの台帳。T-0903）
-    const rootTools = toolRegistry.viewFor(ROOT_ENGINE_ID);
 
     const translator = new Translator();
     const processManager = new ProcessManager(vfs, appRegistry, configManager);
@@ -211,21 +210,36 @@ export class SystemBootstrapper {
     // ==========================================
     // 4. Shell Services & UI Layer
     // ==========================================
-    // Engineの初期化 (AdapterとProjectorはCognitiveManagerが後で注入)
-    const engine = new Engine({ history, vfs, configManager }, null, null, translator, rootTools, {});
+    // ルートの束（OS のチャットのエンジン。T-0903・EngineBundle.ts）。上流とプロンプトは CognitiveManager が後で差す。
+    // ルートは AI の役割で書く。会話に結び付いたもの（空にする・添付を置く・いまの会話）を知っているのは
+    // SessionManager なので、ここは配線するだけ
+    const root = createEngineBundle({
+      id: ROOT_ENGINE_ID,
+      history,
+      vfs,
+      configManager,
+      translator,
+      registry: toolRegistry,
+      fs: vfs.as({ principal: AGENT_PRINCIPAL, origin: ROOT_ENGINE_ID }),
+      conversation: {
+        reset: (options) => sessionManager.clearSession(options),
+        putAttachment: (name, blob) => sessionManager.putAttachment(name, blob),
+        current: () => sessionManager.currentSession(),
+        currentId: () => sessionManager.currentId(),
+      },
+      contextLimit: () => cognitiveManager.contextLimit(),
+    });
 
-    const cognitiveManager = new CognitiveManager(configManager, engine, logger, vfs, registryLayers);
-    const sessionManager = new SessionManager(vfs, history, historyStore, logger, rootTools, {
+    const cognitiveManager = new CognitiveManager(configManager, root.engine, logger, vfs, registryLayers);
+    const sessionManager = new SessionManager(vfs, history, historyStore, logger, root.tools, {
       keep: () => configManager.get('preferences')?.sessionHistoryKeep,
       // VFS の保存先は paths.json の user.sessions（T-0614）。ここから自動で決まり、利用者に場所を訊かない
       sessionsDir: () => configManager.paths().user.sessions,
     });
     // 切り替えを断る判定（走っている束を見捨てない）。知っているのは Engine なので、ここで配線するだけ
-    sessionManager.setBusyProbe(() => engine.isBusy());
+    sessionManager.setBusyProbe(() => root.engine.isBusy());
     // いまの会話の id を確定する（添付の置き場 `system/temp/sessions/<id>/` を同期で答えるため）
     await sessionManager.init();
-    // 生成が「どの会話のものか」を台帳に書けるように、いまの会話の id の取り方を渡す（知っているのは SessionManager）
-    engine.sessionTag = () => sessionManager.currentId();
     const themeService = new ThemeService(configManager, vfs);
     // UI の言語（appearance.locale）。英語はホストにあり、VFS の言語ファイルを上に重ねる（P-0046 / T-0545）
     const localeService = new LocaleService(configManager, vfs, eventBus, { layers: localeLayers });
@@ -286,16 +300,8 @@ export class SystemBootstrapper {
 
     desktop.bindNavHistory(navHistory);
 
-    // EngineコンテキストにもFacadeを注入
-    engine.extraContext.shell = shellFacade;
-    // 道具に渡す取っ手（T-0903。ToolContext.ts）。ルートのエンジンは AI の役割で書く。
-    // 会話に結び付いたもの（空にする・添付を置く）は shell ではなく会話の口から渡す ——
-    // 知っているのは SessionManager なので、ここは配線するだけ
-    engine.extraContext.fs = vfs.as({ principal: AGENT_PRINCIPAL, origin: ROOT_ENGINE_ID });
-    engine.extraContext.conversation = {
-      reset: (options) => sessionManager.clearSession(options),
-      putAttachment: (name, blob) => sessionManager.putAttachment(name, blob),
-    };
+    // 画面とプロセスはエンジンのものではないので、束の外から差す（道具の文脈の shell。ToolContext.ts）
+    root.engine.extraContext.shell = shellFacade;
 
     new HostApiRouter(transport, {
       vfs,
@@ -304,9 +310,8 @@ export class SystemBootstrapper {
       associations: resolver,
       processManager,
       navHistory,
-      history,
-      engine,
-      toolRegistry: rootTools,
+      // どのプロセスもルートに仕える（プロセスの記録から引くのは、プロセスに「仕えるエンジン」を持たせる段で）
+      engineFor: () => root,
       sessionManager,
       vendorCatalog: new VendorCatalog(vendorHrefOf(import.meta.env.BASE_URL, document.baseURI)),
       shell: shellFacade as any,
@@ -315,8 +320,7 @@ export class SystemBootstrapper {
     const orchestrator = new EventOrchestrator(
       desktop,
       vfs,
-      history,
-      engine,
+      root,
       processManager,
       uriRouter,
       sessionManager,
