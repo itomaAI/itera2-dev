@@ -294,7 +294,7 @@ const e = await MetaOS.engine.create({
 let reply = '';
 e.on('turn_start', () => { reply = ''; });
 e.on('stream_chunk', ({ text }) => { reply += text; render(reply); });
-e.on('turn_end', ({ role, turn }) => addToTranscript(role, turn));
+e.on('turn_end', ({ turn }) => upsertInTranscript(turn));   // placed or updated: key by turn.id
 e.on('loop_stop', ({ reason, message }) => setBusy(false, reason, message));
 
 // The engine has no boot protocol. Its role is the first message.
@@ -309,10 +309,10 @@ What to know:
 
 *   **Ownership.** The engine belongs to the process that created it. No other process can address it, and it disappears when the owner calls `dispose()`, when the owner's process ends (closing the app is enough), or when the OS reloads. Nothing is kept unless the app calls `e.save(dir)`. At most 8 such engines are alive at a time.
 *   **Same verbs as `MetaOS.chat`.** `append`, `wake`, `stop`, `reset` and `status` follow the same rules. `reset` does not archive: the conversation that is about to disappear arrives in the `reset` event (`{ session }`, the same object `save` writes), and the app decides whether to keep it.
-*   **The app draws.** The host UI shows nothing for this conversation. `turn_end` carries each finished turn (the user's, the model's, and system turns such as tool results); `e.turns()` returns all of them, e.g. right after `create({ from })`. What the model says to the user — `<report>`, `<ask>` — is in the model's turn.
+*   **The app draws.** The host UI shows nothing for this conversation. `turn_end` carries a turn each time it is placed or updated — the user's, the model's, and system turns such as tool results. A tool-result turn arrives again as its results come in, so key what you draw by `turn.id`. `e.turns()` returns the whole conversation; read it right after `create`, because the conversation may already hold turns no event announced (a system turn listing the dynamic tools the engine can see; with `from`, the saved turns). What the model says to the user — `<report>`, `<ask>` — is in the model's turn.
 *   **Tools and permissions** are those of the OS chat's AI. The engine also sees the dynamic tools registered with the OS chat. Processes it starts (`spawn`, `open`) serve it: their `MetaOS.chat` reaches this engine, it can end only those processes, and it can keep at most 4 windows open.
 *   **Settings.** `config` is laid over the OS settings for this engine only; keys left out follow the OS when the user changes them. API keys and custom endpoints cannot be passed. Any key other than `config` and `from` is refused.
-*   **Events.** `turn_start` `{ role, turnId }`, `stream_chunk` `{ text }`, `turn_end` `{ role, turn }`, `loop_stop` `{ reason, message? }` (`idle`, `abort`, `max_tools`, `not_configured`, `error`), `turn_placed` `{ turn }` (a system turn placed from outside), `reset` `{ session }`, `disposed` `{ reason }`. `e.on` throws on a name that is not in this list.
+*   **Events.** `turn_start` `{ role, turnId }`, `stream_chunk` `{ text }`, `turn_end` `{ role, turn }`, `loop_stop` `{ reason, message? }` (`idle`, `abort`, `max_tools`, `not_configured`, `error`), `turn_placed` `{ turn }` (a system turn placed from outside), `reset` `{ session }`, `disposed` `{ reason }`. `stop()`, `reset()` and `dispose()` each announce a `loop_stop` with `abort`, also when the engine was idle. `e.on` throws on a name that is not in this list.
 
 ## 8. Best Practices
 1. **Semantic Colors**: Always use `bg-app`, `text-text-main`, `bg-panel` etc. (See 03_design_system.md).
