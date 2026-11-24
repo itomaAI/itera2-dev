@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { registerSysTools, parsePresentedPaths } from './sys_tools';
 
 /**
@@ -84,5 +84,31 @@ describe('reset_session', () => {
     expect(calls[0].summary).toContain('[Carried Over Information]\ncarry this');
     expect(calls[0]).toMatchObject({ triggerLlm: true, restoreTools: true });
     expect(res.halt_loop).toBe(true);
+  });
+});
+
+describe('set_timer', () => {
+  it('呼んだエンジンにタイマーを預ける（道具は自分で setTimeout を持たない。T-0903）', async () => {
+    const scheduleSystemEvent = vi.fn();
+    const res = await tools().set_timer.impl({ delay: '30', message: 'tea' }, { engine: { scheduleSystemEvent } });
+    expect(scheduleSystemEvent).toHaveBeenCalledTimes(1);
+    expect(scheduleSystemEvent).toHaveBeenCalledWith(30000, 'timer_alert', 'tea');
+    expect(res).toEqual({ log: 'Timer set for 30 seconds.', ui: '⏱️ Timer set (30s)', trigger_llm: false });
+  });
+
+  it('message を省くと既定の文で預ける', async () => {
+    const scheduleSystemEvent = vi.fn();
+    await tools().set_timer.impl({ delay: '5' }, { engine: { scheduleSystemEvent } });
+    expect(scheduleSystemEvent).toHaveBeenCalledWith(5000, 'timer_alert', 'Timer expired.');
+  });
+
+  it('delay が数でない・0 以下なら失敗し、何も預けない', async () => {
+    const scheduleSystemEvent = vi.fn();
+    for (const delay of ['abc', '0', '-3', undefined]) {
+      await expect(tools().set_timer.impl({ delay }, { engine: { scheduleSystemEvent } })).rejects.toThrow(
+        /Invalid delay/,
+      );
+    }
+    expect(scheduleSystemEvent).not.toHaveBeenCalled();
   });
 });

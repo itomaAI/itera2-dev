@@ -116,9 +116,8 @@ export function registerSysTools(registry: ToolRegistry): void {
       if (isNaN(delay) || delay <= 0) throw new ToolError('Invalid delay.');
       const message = params.message || 'Timer expired.';
 
-      setTimeout(() => {
-        if (context.engine) context.engine.injectSystemEvent('timer_alert', message);
-      }, delay * 1000);
+      // タイマーは呼んだエンジンに預ける（道具は自分で setTimeout を持たない。T-0903）
+      context.engine.scheduleSystemEvent(delay * 1000, 'timer_alert', message);
 
       return {
         log: `Timer set for ${delay} seconds.`,
