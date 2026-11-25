@@ -1,5 +1,5 @@
-import { describe, it, expect } from 'vitest';
-import { decideIndicatorOnTurnEnd } from './EventOrchestrator';
+import { describe, it, expect, vi } from 'vitest';
+import { decideIndicatorOnTurnEnd, EventOrchestrator } from './EventOrchestrator';
 
 /**
  * ターン終了時に待機表示をどうするか（T-0028）
@@ -42,5 +42,30 @@ describe('turn_end のときに待機表示をどうするか', () => {
 
   it('ツール実行帯でなく、停止済みなら user ターンでも消す', () => {
     expect(decideIndicatorOnTurnEnd('user', false, false)).toBe('hide');
+  });
+});
+
+describe('停止ボタン —— 止めた者（T-0918）', () => {
+  it('チャット欄の stop は、by（the user）を付けてルートの束を止める', () => {
+    // チャット欄の口だけを差す。ほかの依存は、配線（_bindChatEvents）では触られない
+    const handlers = new Map<string, (...args: any[]) => void>();
+    const chat = { on: (name: string, cb: (...args: any[]) => void) => handlers.set(name, cb) };
+    const root = { history: {}, engine: {}, stop: vi.fn(), post: vi.fn() };
+    const o = new EventOrchestrator(
+      { panels: { chat } } as any,
+      {} as any,
+      root as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+    );
+    (o as any)._bindChatEvents();
+    handlers.get('stop')!();
+    expect(root.stop).toHaveBeenCalledTimes(1);
+    expect(root.stop).toHaveBeenCalledWith({ by: { kind: 'user' } });
   });
 });

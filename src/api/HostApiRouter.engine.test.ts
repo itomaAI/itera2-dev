@@ -248,3 +248,12 @@ describe('HostApiRouter: chat:append は前と同じ', () => {
     expect(w.rootBundle.post).not.toHaveBeenCalled();
   });
 });
+
+describe('chat:stop —— 止めた者（T-0918）', () => {
+  it('呼んだプロセスを by（app と pid）に入れて、仕えている束を止める', async () => {
+    const w = world();
+    expect(await w.call('chat:stop', {}, 'viewer')).toBe(true);
+    expect(w.rootBundle.stop).toHaveBeenCalledTimes(1);
+    expect(w.rootBundle.stop).toHaveBeenCalledWith({ by: { kind: 'app', pid: 'viewer' } });
+  });
+});
