@@ -139,7 +139,7 @@ class FakeVfs {
 }
 
 const logger = { log: vi.fn() } as any;
-const toolRegistry = { getActiveDynamicToolDefinitions: () => ['<define_tag name="x">x</define_tag>'] } as any;
+const toolRegistry = { restoreDefinitions: () => ['<define_tag name="x">x</define_tag>'] } as any;
 const principal = { type: 'user', id: 'u' } as any;
 
 function setup(keep = 10, sessionsDir: string | null = 'data/sessions') {

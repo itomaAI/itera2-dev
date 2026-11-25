@@ -12,7 +12,7 @@
  */
 
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { ToolRegistry, ToolNameTakenError } from './ToolRegistry';
+import { ToolRegistry, ToolNameTakenError, type ToolView } from './ToolRegistry';
 import { ROOT_ENGINE_ID } from './Engine';
 import { registerSysTools } from './tools/sys_tools';
 import { registerFSTools } from './tools/fs_tools';
@@ -372,7 +372,7 @@ describe('ToolRegistry: エンジンごとの台帳（T-0903）', () => {
     expect(h.sub.getRegisteredToolNames()).toEqual(expect.arrayContaining(['draw', 'search']));
     expect(h.sub.listToolSets().map((s) => s.id)).toEqual(['canvas_2', 'web_daemon']);
     expect(h.sub.getToolDefinition('search')?.setId).toBe('web_daemon');
-    expect(h.sub.getActiveDynamicToolDefinitions().join('\n')).toContain('<define_tag name="search">root</define_tag>');
+    expect(h.sub.restoreDefinitions().join('\n')).toContain('<define_tag name="search">root</define_tag>');
 
     // 何も与えられなかった口には、ほかのエンジンの道具は見えない
     const alone = h.r.viewFor('e2');
@@ -556,7 +556,7 @@ describe('ToolRegistry: 与えられた組（T-0912）', () => {
     expect(sub.getRegisteredToolNames()).toEqual(expect.arrayContaining(['bash', 'search', 'finish']));
     expect(sub.getRegisteredToolNames()).not.toContain('git');
     expect(sub.getToolDefinition('git')).toBeNull();
-    const defs = sub.getActiveDynamicToolDefinitions();
+    const defs = sub.restoreDefinitions();
     expect(defs).toHaveLength(1);
     expect(defs[0]).toContain('pid="bridge"');
     expect(defs[0]).not.toContain('<define_tag name="git">');
@@ -572,7 +572,7 @@ describe('ToolRegistry: 与えられた組（T-0912）', () => {
     const h = harness();
     const sub = h.r.viewFor('e1');
     expect(sub.listToolSets()).toEqual([]);
-    expect(sub.getActiveDynamicToolDefinitions()).toEqual([]);
+    expect(sub.restoreDefinitions()).toEqual([]);
     expect(sub.getRegisteredToolNames()).toContain('finish');
     expect(sub.getRegisteredToolNames()).not.toContain('bash');
   });
@@ -639,5 +639,168 @@ describe('ToolRegistry: 与えられた組（T-0912）', () => {
     h.r.viewFor('e2', { from: 'e1', toolsets: ['y'] });
     expect(a.listToolSets()).toEqual([]);
     expect(a.getRegisteredToolNames()).toContain('finish');
+  });
+});
+
+describe('ToolRegistry: 定義の控えと待ち（T-0912 段 3）', () => {
+  // 台帳は、エンジンごとに「いまの会話に渡した定義」を控える。登録された定義が控えと違えば待ちになり、聞く者（束）に知らせる
+  function harness() {
+    const r = new ToolRegistry(undefined, { record: () => {} } as any);
+    registerSysTools(r);
+    vi.spyOn(console, 'log').mockImplementation(() => {});
+    const root = r.viewFor(ROOT_ENGINE_ID);
+    /** 知らせを受けたエンジン（受けた順） */
+    const noted: string[] = [];
+    root.onDefinitionsPending(() => noted.push('root'));
+    const def = (name: string, body = name) => `<define_tag name="${name}">${body}</define_tag>`;
+    const reg = (view: ToolView, pid: string, name: string, body?: string) =>
+      view.registerDynamicTool(name, pid, { description: name, definition: def(name, body) });
+    return { r, root, noted, def, reg };
+  }
+  afterEach(() => vi.restoreAllMocks());
+
+  it('登録された定義は待ちになり、聞く者に知らせる。引くと組ごとの <toolset> で返り、2 度は返らない', () => {
+    const h = harness();
+    h.reg(h.root, 'web', 'search');
+    h.reg(h.root, 'web', 'fetch');
+    h.reg(h.root, 'git_daemon', 'git');
+    expect(h.noted).toEqual(['root', 'root', 'root']);
+    expect(h.root.takePendingDefinitions()).toEqual([
+      `<toolset name="Process: web" pid="web" description="Dynamic tools exposed by web">\n  ${h.def('search')}\n  ${h.def('fetch')}\n</toolset>`,
+      `<toolset name="Process: git_daemon" pid="git_daemon" description="Dynamic tools exposed by git_daemon">\n  ${h.def('git')}\n</toolset>`,
+    ]);
+    expect(h.root.takePendingDefinitions()).toEqual([]);
+  });
+
+  it('同じ定義の登録し直し・プロセスの起こし直し（組が消えて、同じ定義で登録し直す）は待ちにならない。定義が変われば、その道具だけ待ちになる', () => {
+    const h = harness();
+    h.reg(h.root, 'web', 'search');
+    h.reg(h.root, 'web', 'fetch');
+    h.root.takePendingDefinitions();
+    h.noted.length = 0;
+
+    h.reg(h.root, 'web', 'search');
+    h.r.removeToolsByPid('web');
+    h.reg(h.root, 'web', 'search');
+    h.reg(h.root, 'web', 'fetch');
+    expect(h.noted).toEqual([]);
+    expect(h.root.takePendingDefinitions()).toEqual([]);
+
+    h.reg(h.root, 'web', 'search', 'v2');
+    expect(h.noted).toEqual(['root']);
+    const blocks = h.root.takePendingDefinitions();
+    expect(blocks).toHaveLength(1);
+    expect(blocks[0]).toContain(h.def('search', 'v2'));
+    expect(blocks[0]).not.toContain('name="fetch"');
+    // 元の定義に戻しても、控えと違うので待ちになる（控えは最後に渡した定義）
+    h.reg(h.root, 'web', 'search');
+    expect(h.root.takePendingDefinitions()).toHaveLength(1);
+  });
+
+  it('定義を持たない道具は待ちにならない。引く前に解除された道具・同じ定義に戻った道具は返らない', () => {
+    const h = harness();
+    h.root.registerDynamicTool('bare', 'web', { description: 'no definition' });
+    expect(h.noted).toEqual([]);
+
+    h.reg(h.root, 'web', 'search');
+    h.root.unregisterDynamicTool('search', 'web');
+    expect(h.root.takePendingDefinitions()).toEqual([]);
+
+    h.reg(h.root, 'web', 'fetch');
+    h.root.takePendingDefinitions();
+    h.reg(h.root, 'web', 'fetch', 'v2');
+    h.reg(h.root, 'web', 'fetch');
+    expect(h.root.takePendingDefinitions()).toEqual([]);
+  });
+
+  it('全部引く（restoreDefinitions）と、見えている定義が控えになり、待ちは捨てる。そのあと同じ定義は待ちにならず、そのとき居なかった道具は待ちになる', () => {
+    const h = harness();
+    h.reg(h.root, 'web', 'search'); // 待ちのまま、会話の口が全部引く
+    expect(h.root.restoreDefinitions()).toHaveLength(1);
+    expect(h.root.takePendingDefinitions()).toEqual([]);
+    h.noted.length = 0;
+
+    h.r.removeToolsByPid('web');
+    h.reg(h.root, 'web', 'search');
+    expect(h.noted).toEqual([]);
+    h.reg(h.root, 'git_daemon', 'git');
+    expect(h.noted).toEqual(['root']);
+    expect(h.root.takePendingDefinitions().join('\n')).toContain(h.def('git'));
+
+    // 全部引いたとき居なかった道具は、控えに無い: web を消してから全部引き、そのあと同じ定義で戻ると待ちになる
+    h.r.removeToolsByPid('web');
+    h.root.restoreDefinitions();
+    h.noted.length = 0;
+    h.reg(h.root, 'web', 'search');
+    expect(h.noted).toEqual(['root']);
+  });
+
+  it('控えを捨てる（会話が空になった）と、同じ定義の登録し直しも待ちになる', () => {
+    const h = harness();
+    h.reg(h.root, 'web', 'search');
+    h.root.takePendingDefinitions();
+    h.noted.length = 0;
+    h.root.forgetGivenDefinitions();
+    h.reg(h.root, 'web', 'search');
+    expect(h.noted).toEqual(['root']);
+    expect(h.root.takePendingDefinitions()).toHaveLength(1);
+  });
+
+  it('与えられた組にも同じ規則: 与えた者の側の登録が、見えているエンジン（その先も）の待ちになる。与えられていない組・自分の同じ名前に隠れる道具は、ならない', () => {
+    const h = harness();
+    const sub = h.r.viewFor('e1', { from: ROOT_ENGINE_ID, toolsets: ['web'] });
+    const grand = h.r.viewFor('e2', { from: 'e1', toolsets: ['web'] });
+    const alone = h.r.viewFor('e3');
+    sub.onDefinitionsPending(() => h.noted.push('e1'));
+    grand.onDefinitionsPending(() => h.noted.push('e2'));
+    alone.onDefinitionsPending(() => h.noted.push('e3'));
+
+    h.reg(h.root, 'web', 'search');
+    h.reg(h.root, 'git_daemon', 'git');
+    expect(h.noted).toEqual(['root', 'e1', 'e2', 'root']);
+    const fromRoot = h.root.takePendingDefinitions();
+    expect(fromRoot).toHaveLength(2);
+    expect(sub.takePendingDefinitions()).toEqual(fromRoot.slice(0, 1));
+    expect(grand.takePendingDefinitions()).toEqual(fromRoot.slice(0, 1));
+    expect(alone.takePendingDefinitions()).toEqual([]);
+
+    // 控えはエンジンごと: サブの台帳への登録は、それが見えるエンジンだけの待ち（孫には canvas を与えていない）
+    h.noted.length = 0;
+    h.reg(sub, 'canvas', 'draw');
+    expect(h.noted).toEqual(['e1']);
+    sub.takePendingDefinitions();
+
+    // 自分の台帳に同じ名前が在れば、動くのは自分のもの。与えた者の側の登録は、そのエンジンの待ちにならない
+    h.noted.length = 0;
+    h.reg(h.root, 'web', 'draw', 'root draw');
+    expect(h.noted).toEqual(['root', 'e2']);
+    expect(sub.takePendingDefinitions()).toEqual([]);
+    expect(grand.takePendingDefinitions().join('\n')).toContain(h.def('draw', 'root draw'));
+  });
+
+  it('口を畳むと、控えも待ちも聞く者も消える', () => {
+    const h = harness();
+    const sub = h.r.viewFor('e1', { from: ROOT_ENGINE_ID, toolsets: ['web'] });
+    sub.onDefinitionsPending(() => h.noted.push('e1'));
+    h.reg(h.root, 'web', 'search');
+    sub.dispose();
+    h.noted.length = 0;
+    h.reg(h.root, 'web', 'search', 'v2');
+    expect(h.noted).toEqual(['root']);
+    const again = h.r.viewFor('e1', { from: ROOT_ENGINE_ID, toolsets: ['web'] });
+    expect(again.takePendingDefinitions()).toEqual([]);
+  });
+
+  it('聞く者が失敗しても、登録は通り、ほかの聞く者には届く', () => {
+    const h = harness();
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const sub = h.r.viewFor('e1', { from: ROOT_ENGINE_ID, toolsets: ['web'] });
+    h.root.onDefinitionsPending(() => {
+      throw new Error('boom');
+    });
+    sub.onDefinitionsPending(() => h.noted.push('e1'));
+    expect(() => h.reg(h.root, 'web', 'search')).not.toThrow();
+    expect(h.noted).toEqual(['root', 'e1']);
+    expect(h.root.getToolDefinition('search')?.setId).toBe('web');
   });
 });

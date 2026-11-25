@@ -9,6 +9,7 @@ import { ROOT_ENGINE_ID, TurnType } from './Engine';
 import { ToolRegistry, type ToolGrant } from './ToolRegistry';
 import { HistoryManager } from '../state/HistoryManager';
 import { Translator } from '../cognitive/Translator';
+import { TOOL_ANNOUNCE_DELAY_MS } from '../../config/tool_announce';
 
 function world() {
   /** 道具の記録（tool_events に書かれる行） */
@@ -306,5 +307,119 @@ describe('createEngineBundle: 束の口（T-0903）', () => {
 
     h.conversation.current.mockRejectedValueOnce(new Error('no session'));
     expect((await h.b.statusInput()).session).toBeNull();
+  });
+});
+
+describe('createEngineBundle: 道具の定義を会話に置く（T-0912 段 3）', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.spyOn(console, 'log').mockImplementation(() => {});
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+  });
+  const def = (name: string, body = name) => `<define_tag name="${name}">${body}</define_tag>`;
+  const reg = (h: any, pid: string, name: string, body?: string) =>
+    h.b.tools.registerDynamicTool(name, pid, { description: name, definition: def(name, body) });
+  /** その束の会話に置かれた、定義のターン */
+  const placed = (h: any) => h.history.get().filter((t: any) => t.meta?.eventType === 'tool_available');
+
+  it('登録されると、少し待ってから 1 つのターンにまとめて置く。起こさない・turn_placed を知らせる', async () => {
+    const w = world();
+    const root = w.bundle(ROOT_ENGINE_ID);
+    reg(root, 'web', 'search');
+    await vi.advanceTimersByTimeAsync(TOOL_ANNOUNCE_DELAY_MS - 1);
+    reg(root, 'web', 'fetch');
+    expect(placed(root)).toEqual([]);
+    await vi.advanceTimersByTimeAsync(1);
+
+    const turns = placed(root);
+    expect(turns).toHaveLength(1);
+    expect(turns[0].role).toBe('system');
+    expect(turns[0].content).toBe(
+      `<event type="tool_available">\n[System: Dynamic Tools Registered]\nThe following tools are now available from running processes:\n` +
+        `<toolset name="Process: web" pid="web" description="Dynamic tools exposed by web">\n  ${def('search')}\n  ${def('fetch')}\n</toolset>\n</event>`,
+    );
+    expect(turns[0].meta).toMatchObject({ type: 'tool_available', eventType: 'tool_available', trigger_llm: false });
+    expect(root.events.filter(([n]) => n === 'turn_placed').map(([, d]) => d.turn.id)).toEqual([turns[0].id]);
+
+    await settle();
+    expect(root.generateStream).not.toHaveBeenCalled();
+    expect(root.history.get()).toHaveLength(1);
+  });
+
+  it('同じ定義の登録し直し（プロセスの起こし直し）では置かない。定義が変われば置く', async () => {
+    const w = world();
+    const root = w.bundle(ROOT_ENGINE_ID);
+    reg(root, 'web', 'search');
+    await settle();
+    expect(placed(root)).toHaveLength(1);
+
+    w.registry.removeToolsByPid('web');
+    reg(root, 'web', 'search');
+    await settle();
+    expect(placed(root)).toHaveLength(1);
+
+    reg(root, 'web', 'search', 'v2');
+    await settle();
+    expect(placed(root)).toHaveLength(2);
+    expect(placed(root)[1].content).toContain(def('search', 'v2'));
+  });
+
+  it('会話が空になる・入れ替わると控えを捨てる: そのあとの登録し直しは置く。会話の口が全部引いたあとは置かない', async () => {
+    const w = world();
+    const root = w.bundle(ROOT_ENGINE_ID);
+    reg(root, 'web', 'search');
+    await settle();
+
+    // 空にして、積み直さない（定義は会話に無い）→ 起こし直しで入る
+    root.history.clear();
+    w.registry.removeToolsByPid('web');
+    reg(root, 'web', 'search');
+    await settle();
+    expect(placed(root)).toHaveLength(1);
+
+    // 入れ替えて、会話の口が全部引いた（積み直した）→ 起こし直しでは入らない
+    root.history.load([]);
+    expect(root.b.tools.restoreDefinitions()).toHaveLength(1);
+    w.registry.removeToolsByPid('web');
+    reg(root, 'web', 'search');
+    await settle();
+    expect(placed(root)).toEqual([]);
+  });
+
+  it('与えられた組に入った道具は、与えられた束の会話にも置く。与えられていない束には置かない', async () => {
+    const w = world();
+    const root = w.bundle(ROOT_ENGINE_ID);
+    reg(root, 'web', 'search');
+    reg(root, 'mailer', 'mail');
+    await settle();
+    const sub = w.bundle('e1', { from: ROOT_ENGINE_ID, toolsets: ['web'] });
+    const other = w.bundle('e2');
+    sub.b.tools.restoreDefinitions(); // 始まりに、会話の口が全部引く
+
+    reg(root, 'web', 'fetch');
+    reg(root, 'mailer', 'send');
+    await settle();
+    expect(placed(sub)).toHaveLength(1);
+    expect(placed(sub)[0].content).toContain(def('fetch'));
+    expect(placed(sub)[0].content).not.toContain('name="search"');
+    expect(placed(sub)[0].content).not.toContain('name="send"');
+    expect(sub.events.filter(([n]) => n === 'turn_placed')).toHaveLength(1);
+    expect(sub.generateStream).not.toHaveBeenCalled();
+    expect(placed(other)).toEqual([]);
+    expect(placed(root)).toHaveLength(2);
+  });
+
+  it('畳むと、待っていた知らせは置かれない', async () => {
+    const w = world();
+    const root = w.bundle(ROOT_ENGINE_ID);
+    const sub = w.bundle('e1', { from: ROOT_ENGINE_ID, toolsets: ['web'] });
+    reg(root, 'web', 'search');
+    sub.b.dispose();
+    await settle();
+    expect(sub.history.get()).toEqual([]);
+    expect(placed(root)).toHaveLength(1);
   });
 });

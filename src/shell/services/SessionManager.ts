@@ -80,7 +80,7 @@ export class SessionManager {
   private store: HistoryStore;
   private logger: SystemLogger;
   /** この会話のエンジンに見える道具（会話を空にした・差し替えたあと、定義を積み直すために読む） */
-  private tools: Pick<ToolView, 'getActiveDynamicToolDefinitions'>;
+  private tools: Pick<ToolView, 'restoreDefinitions'>;
   private onSessionChanged: (() => void) | null = null;
   private isBusy: () => boolean = () => false;
   private readonly keep: () => unknown;
@@ -96,7 +96,7 @@ export class SessionManager {
     history: HistoryManager,
     store: HistoryStore,
     logger: SystemLogger,
-    tools: Pick<ToolView, 'getActiveDynamicToolDefinitions'>,
+    tools: Pick<ToolView, 'restoreDefinitions'>,
     deps: SessionManagerDeps = {},
   ) {
     this.vfs = vfs;
@@ -309,7 +309,7 @@ export class SessionManager {
   /** 走っているアプリ・デーモンの道具の定義を積み直す（履歴ごと消えるので。T-0246） */
   private _restoreToolDefinitions(): void {
     if (!this.tools) return;
-    const event = toolsRestoredEvent(this.tools.getActiveDynamicToolDefinitions());
+    const event = toolsRestoredEvent(this.tools.restoreDefinitions());
     if (event) this.history.append('system', event.content, event.meta);
   }
 
@@ -425,7 +425,7 @@ export class SessionManager {
       this.logger.log('system', { action: `session_${how}`, sessionId: meta.id, turns: turns.length });
     }
 
-    const defs = this.tools ? this.tools.getActiveDynamicToolDefinitions() : [];
+    const defs = this.tools ? this.tools.restoreDefinitions() : [];
     const event = sessionActivatedEvent(how, lastActivity, this.now(), defs);
     this.history.append('system', event.content, event.meta);
 

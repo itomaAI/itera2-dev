@@ -218,7 +218,7 @@ export class EngineManager {
     const conversation = new EngineConversation({
       engineId: id,
       vfs: deps.vfs,
-      toolDefinitions: () => (entry ? entry.bundle.tools.getActiveDynamicToolDefinitions() : []),
+      toolDefinitions: () => (entry ? entry.bundle.tools.restoreDefinitions() : []),
       onReset: (session) => this.emit(owner.pid, id, 'reset', { session }),
     });
 
