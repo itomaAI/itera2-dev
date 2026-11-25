@@ -48,6 +48,30 @@ describe('serializeToolOutput', () => {
     });
   });
 
+  it('writes status="pending" for a frame that is still waiting for its result (T-0924)', () => {
+    const text = serializeToolOutput({
+      actionType: 'bash_exec',
+      params: { timeout: '60' },
+      output: { log: '[Pending] Still running. The result will come in a later turn.', pending: true },
+    });
+    expect(text).toBe(
+      '<tool_output tool="bash_exec" status="pending" param_timeout="60">\n[Pending] Still running. The result will come in a later turn.\n</tool_output>',
+    );
+    // 失敗の印が在れば error（結果で埋まった枠に pending は残らないが、両方在っても error）
+    expect(
+      attrsOf(serializeToolOutput({ actionType: 'x', output: { log: 'e', error: true, pending: true } })).status,
+    ).toBe('error');
+  });
+
+  it('keeps status="success" for an old frame without the mark, whatever its log says (T-0924)', () => {
+    // 印を付ける前に作られた枠は、もう status="success" で送ってある。log の文字列を見て変えない
+    const text = serializeToolOutput({
+      actionType: 'bash_exec',
+      output: { log: '[Pending] Still running. The result will come in a later turn.' },
+    });
+    expect(attrsOf(text).status).toBe('success');
+  });
+
   it('writes a self-closing tag when there is no log', () => {
     expect(serializeToolOutput({ actionType: 'yield', output: {} })).toBe(
       '<tool_output tool="yield" status="success" />',

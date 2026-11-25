@@ -727,6 +727,10 @@ describe('Engine: 閉じた束の遅い結果は、枠を埋めずに新しい�
     expect(frame.content[1].output.ui).toBe('⏩ Returned later');
     expect(frame.content[1].output.log).toBe(PENDING_LOG);
     expect(frame.content[1].output.log).not.toContain('slow result');
+    // 結果待ちの印も付いたまま（送った status="pending" を変えない）。投影の前に埋まった枠には無い（T-0924）
+    expect(frame.content[1].output.pending).toBe(true);
+    expect(frame.content[0].output.pending).toBeUndefined();
+    expect(late.content[0].output.pending).toBeUndefined();
 
     await vi.advanceTimersByTimeAsync(1600);
     expect(h.wakes()).toBe(3);

@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { EngineManager, type EngineOwnerNotice } from './EngineManager';
 import { EngineCalls } from '../../api/EngineCalls';
 import { MAX_SUB_ENGINES } from '../../config/engine_limits';
+import { WAKE_DEBOUNCE_MS } from '../../config/wake_policy';
 import { createEngineBundle } from '../../core/control/EngineBundle';
 import { ROOT_ENGINE_ID } from '../../core/control/Engine';
 import { ToolRegistry } from '../../core/control/ToolRegistry';
@@ -960,7 +961,8 @@ describe('EngineManager: 生成の途中で畳む・空にする（T-0918）', (
   const midStream = async (e: any) => {
     armStreaming(e.bundle.engine);
     await e.bundle.post('user', 'go', { trigger_llm: true });
-    await vi.advanceTimersByTimeAsync(1500 + 25 * 3 + 5);
+    // 起床の待ちはサブの束の既定（WAKE_DEBOUNCE_MS。dev は 1500・ミャク楽は 1000）
+    await vi.advanceTimersByTimeAsync(WAKE_DEBOUNCE_MS + 25 * 3 + 5);
     expect(e.bundle.engine.status().running).toBe(true);
   };
 

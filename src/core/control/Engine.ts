@@ -666,6 +666,8 @@ export class Engine {
         output: {
           log: PENDING_LOG,
           ui: `⚙️ Executing ${action.type}...`,
+          // 結果待ちの印。<tool_output> の status が "pending" になる（T-0924）
+          pending: true,
           trigger_llm: false,
         },
       };
@@ -743,7 +745,7 @@ export class Engine {
         return;
       }
 
-      // 画面の印だけを変える。log（モデルに見える文）は [Pending] のまま触らない（T-0597）。
+      // 画面の印だけを変える。log（モデルに見える文）は [Pending] のまま、結果待ちの印（pending）も付けたまま触らない（T-0597・T-0924）。
       // この枠はもう投影に入って送られている。log を書き換えると、次の投影で過去の文字列が変わり、
       // 前置の一致で引き当てるセッションの再利用やプロンプトキャッシュがそこから外れていた。
       // PENDING_LOG は「あとで返る」としか言わないので、書き換えなくても嘘にならない。

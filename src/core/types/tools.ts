@@ -55,6 +55,12 @@ export interface ToolResult {
   media?: MediaRef;
   artifact?: ToolArtifact;
   error?: boolean;
+  /**
+   * まだ返っていない道具の枠（Engine が束を投げるときに積む）。<tool_output> の status が "pending" になる（T-0924）。
+   * 付けるのは枠を作るときだけ。結果で枠を埋めるときは output ごと替わるので消える。
+   * 投影のあとに返ったときは残る（送った文を変えない。結果は新しいターンで届く）
+   */
+  pending?: boolean;
   trigger_llm?: boolean;
   halt_loop?: boolean;
 }
