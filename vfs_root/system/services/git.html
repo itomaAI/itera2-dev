@@ -347,10 +347,7 @@ Attributes:
           },
         });
 
-        MetaOS.ai.log(
-          definition + '\n\n[System] Git client tool is now available in the background.',
-          'tool_available',
-        );
+        // 道具の定義は、登録のときに OS が会話に置く（T-0912。ここから ai.log では流さない）
       }
 
       initDaemon();

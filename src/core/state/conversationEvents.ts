@@ -32,6 +32,23 @@ export function toolsRestoredEvent(definitions: string[]): ConversationEvent | n
   };
 }
 
+/**
+ * 登録された道具の定義（T-0912 段 3）。道具が登録されて、その定義をまだこの会話に渡していないとき、台帳の定義を束が置く
+ * （アプリが自分で流す必要は無い）。包みは上と同じ <toolset>。起こさない。無ければ null。
+ */
+export function toolsRegisteredEvent(definitions: string[]): ConversationEvent | null {
+  if (definitions.length === 0) return null;
+  const defsText = definitions.join('\n');
+  return {
+    content: `<event type="tool_available">\n[System: Dynamic Tools Registered]\nThe following tools are now available from running processes:\n${defsText}\n</event>`,
+    meta: {
+      type: 'tool_available',
+      eventType: 'tool_available',
+      trigger_llm: false,
+    },
+  };
+}
+
 /** 空にしたあとの申し送り。起こすかどうかは、空にした者が決める */
 export function sessionResetEvent(summary: string, triggerLlm: boolean): ConversationEvent {
   return {

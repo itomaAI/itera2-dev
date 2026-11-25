@@ -411,7 +411,6 @@
             '</define_tag>',
           ].join('\n'),
         };
-        const defs = Object.values(DEF).join('\n');
 
         const guard = (fn) => async (params) => {
           const p = params || {};
@@ -464,7 +463,7 @@
           }),
         });
 
-        M.ai.log(defs, 'tool_available');
+        // 道具の定義は、登録のときに OS が会話に置く（T-0912。ここから ai.log では流さない）
         log('Started (pdf_info / pdf_extract / pdf_pages / pdf_text).');
       })();
     </script>

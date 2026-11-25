@@ -436,7 +436,6 @@
             '</define_tag>',
           ].join('\n'),
         };
-        const defs = Object.values(DEF).join('\n');
 
         const guard = (fn) => async (params) => {
           try {
@@ -465,7 +464,7 @@
           handler: guard(create),
         });
 
-        M.ai.log(defs, 'tool_available');
+        // 道具の定義は、登録のときに OS が会話に置く（T-0912。ここから ai.log では流さない）
         log('Started (zip_list / zip_extract / zip_create).');
       })();
     </script>

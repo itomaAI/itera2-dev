@@ -46,7 +46,7 @@ export interface EngineConversationDeps {
   /** このエンジンの id（添付の置き場の名前になる） */
   engineId: string;
   vfs: EngineConversationVfs;
-  /** いまこのエンジンに見えている動的な道具の定義 */
+  /** いまこのエンジンに見えている動的な道具の定義（引いたものは会話に置く。台帳は、渡したものとして控える） */
   toolDefinitions: () => string[];
   /** 空にする直前の会話（保存と同じ形）。持ち主へ渡す */
   onReset: (session: SessionExport) => void;

@@ -154,6 +154,12 @@ export interface ToolGrant {
  * 同じ名前が複数見えるのは、自分の台帳が先に持っていた名前を、あとから与えた者の側の組が登録したときだけ
  * （与えた者の側の登録は、与えられた側の台帳を見ない。与えられた側からは自分のものが動く）。
  *
+ * 定義を会話に入れるのも台帳から（T-0912 段 3）。台帳は、エンジンごとに「いまの会話に渡した定義」の控え（道具の名前 → 定義の文）を持つ。
+ * 道具が登録されたとき、その行が見えているエンジンで定義が控えと違えば「待ち」になり、聞く者（束）に知らせる。束が待ちを引いて会話に置く。
+ * 控えは組が消えても残すので、プロセスの起こし直し（同じ定義の登録し直し）では待ちにならない。会話の口が定義を全部引くと
+ * （restoreDefinitions。会話を空にした・切り替えた・始めた）、控えは「いま見えている定義」に取り直される。
+ * 台帳が比べるのは自分の控えで、会話の文は読まない。
+ *
  * どの台帳か（エンジンの id）はこの口に焼き込んである。使う側（エンジン・会話の積み直し・ゲストの登録の口）は id を書かない。
  */
 export interface ToolView {
@@ -166,8 +172,17 @@ export interface ToolView {
   listToolSets(includeSystem?: boolean): ToolSetSummary[];
   /** 1 つの道具の定義。見えていなければ null */
   getToolDefinition(toolName: string): ToolDefinitionInfo | null;
-  /** 見えている動的な道具の定義を、組ごとの <toolset> にして返す（会話を空にしたあとの積み直し） */
-  getActiveDynamicToolDefinitions(): string[];
+  /**
+   * 見えている動的な道具の定義を、組ごとの <toolset> にして全部返し、このエンジンの会話に渡したものとして控える
+   * （会話を空にした・切り替えた・始めたあとの積み直し。呼ぶのは会話の口だけ —— 引いたものは会話に置くこと）
+   */
+  restoreDefinitions(): string[];
+  /** 登録で、まだ会話に渡していない定義（待ち）が出来たときに呼ばれる。会話に置くのは聞いた側（束） */
+  onDefinitionsPending(callback: () => void): void;
+  /** 待ちの定義を、組ごとの <toolset> にして返し、渡したものとして控える（返したものは会話に置くこと） */
+  takePendingDefinitions(): string[];
+  /** 控えを捨てる（会話が空になった・入れ替わった —— 渡した定義は、もう会話に無い） */
+  forgetGivenDefinitions(): void;
   /**
    * このエンジンの台帳に登録する（sourcePid は登録したプロセス）。同じ名前の道具がもう見えていれば、
    * 何も変えずに ToolNameTakenError を投げる（自分の道具の登録し直しは上書き）
@@ -185,6 +200,12 @@ export class ToolRegistry {
   private ledgers: Map<string, Map<string, ToolSet>> = new Map();
   /** 与えられた組: エンジンの id → 与え（口を作るときに決まり、口を畳むと消える。T-0912） */
   private grants: Map<string, ToolGrant> = new Map();
+  /** 控え: エンジンの id → そのエンジンのいまの会話に渡した定義（道具の名前 → 定義の文）。組が消えても残す（T-0912 段 3） */
+  private given: Map<string, Map<string, string>> = new Map();
+  /** 待ち: エンジンの id → 登録されて、まだ会話に渡していない道具の名前 */
+  private pending: Map<string, Set<string>> = new Map();
+  /** 待ちが出来たことを聞く者（束）。エンジンの id → 聞き手 */
+  private pendingListeners: Map<string, Array<() => void>> = new Map();
   private appRegistry: AppRegistry | null = null;
   private guestToolInvoker: GuestToolInvoker | null = null;
   private executionRecorder: ToolExecutionRecorder | null = null;
@@ -217,13 +238,25 @@ export class ToolRegistry {
       execute: (action, context) => this._execute(engineId, visible(), action, context),
       listToolSets: (includeSystem = false) => this._listToolSets(visible(), includeSystem),
       getToolDefinition: (toolName) => this._getToolDefinition(visible(), toolName),
-      getActiveDynamicToolDefinitions: () => this._activeDynamicToolDefinitions(visible()),
+      restoreDefinitions: () => this._restoreDefinitions(engineId, visible()),
+      onDefinitionsPending: (callback) => {
+        const listeners = this.pendingListeners.get(engineId) ?? [];
+        listeners.push(callback);
+        this.pendingListeners.set(engineId, listeners);
+      },
+      takePendingDefinitions: () => this._takePendingDefinitions(engineId, visible()),
+      forgetGivenDefinitions: () => {
+        this.given.delete(engineId);
+      },
       registerDynamicTool: (toolName, sourcePid, payload) =>
         this._registerDynamicTool(engineId, visible(), toolName, sourcePid, payload),
       unregisterDynamicTool: (toolName, sourcePid) => this._unregisterDynamicTool(engineId, toolName, sourcePid),
       dispose: () => {
         this.ledgers.delete(engineId);
         this.grants.delete(engineId);
+        this.given.delete(engineId);
+        this.pending.delete(engineId);
+        this.pendingListeners.delete(engineId);
       },
     };
   }
@@ -337,6 +370,7 @@ export class ToolRegistry {
       description: payload.description || '',
       definition: payload.definition,
     });
+    this._noteRegistered(setId, toolName);
 
     console.log(`[ToolRegistry] Registered dynamic tool: <${toolName}> into ToolSet: [${toolSet.name}]`);
   }
@@ -384,26 +418,97 @@ export class ToolRegistry {
    */
   private _activeDynamicToolDefinitions(visible: ToolSet[]): string[] {
     const output: string[] = [];
-
     for (const toolSet of visible) {
       if (toolSet.kind === 'system') continue;
       if (toolSet.tools.size === 0) continue;
+      output.push(this._toolsetBlock(toolSet, toolSet.tools.values()));
+    }
+    return output;
+  }
 
-      let block = `<toolset name="${toolSet.name}" pid="${toolSet.id}"${toolSet.description ? ` description="${toolSet.description}"` : ''}>\n`;
+  /** 1 組の <toolset>。中は、渡された道具の定義（定義を持たない道具は行を出さない） */
+  private _toolsetBlock(toolSet: ToolSet, tools: Iterable<ToolDef>): string {
+    let block = `<toolset name="${toolSet.name}" pid="${toolSet.id}"${toolSet.description ? ` description="${toolSet.description}"` : ''}>\n`;
+    for (const tool of tools) {
+      if (tool.definition) {
+        // インデントをつけて整形
+        block +=
+          tool.definition
+            .split('\n')
+            .map((line) => `  ${line}`)
+            .join('\n') + '\n';
+      }
+    }
+    block += `</toolset>`;
+    return block;
+  }
+
+  /**
+   * 定義を全部引く（会話の口が積み直すとき）。控えを「いま見えている定義」に取り直し、待ちは捨てる（全部渡すので）。
+   * 同じ名前が 2 つ見えていれば、控えるのは先に当たるもの（動くもの）の定義
+   */
+  private _restoreDefinitions(engineId: string, visible: ToolSet[]): string[] {
+    const given = new Map<string, string>();
+    for (const toolSet of visible) {
+      if (toolSet.kind === 'system') continue;
       for (const tool of toolSet.tools.values()) {
-        if (tool.definition) {
-          // インデントをつけて整形
-          block +=
-            tool.definition
-              .split('\n')
-              .map((line) => `  ${line}`)
-              .join('\n') + '\n';
+        if (tool.definition && !given.has(tool.name)) given.set(tool.name, tool.definition);
+      }
+    }
+    this.given.set(engineId, given);
+    this.pending.delete(engineId);
+    return this._activeDynamicToolDefinitions(visible);
+  }
+
+  /**
+   * 登録のあと: その行が見えていて（そのエンジンから、その名前で最初に当たるのがこの組）、定義が控えと違うエンジンに、
+   * 待ちを 1 つ足して知らせる。見るのは聞く者の居るエンジンだけ（会話に置けるのは束）。
+   * 与えられた組として見えているエンジンにも、同じ規則で届く。定義を持たない道具は、置くものが無いので対象外
+   */
+  private _noteRegistered(pid: string, toolName: string): void {
+    for (const [engineId, listeners] of this.pendingListeners) {
+      const hit = this._getToolDefinition(this._visibleSets(engineId), toolName);
+      if (!hit || hit.kind !== 'dynamic' || hit.setId !== pid || !hit.definition) continue;
+      if (this.given.get(engineId)?.get(toolName) === hit.definition) continue;
+      const names = this.pending.get(engineId) ?? new Set<string>();
+      names.add(toolName);
+      this.pending.set(engineId, names);
+      for (const callback of [...listeners]) {
+        try {
+          callback();
+        } catch (e) {
+          console.warn(`[ToolRegistry] A pending-definition listener failed (${engineId}).`, e);
         }
       }
-      block += `</toolset>`;
-      output.push(block);
     }
+  }
 
+  /**
+   * 待ちの定義を引く: 待ちの名前のうち、いま見えていて、定義が控えと違うものを、組ごとの <toolset> にして返す。
+   * 返したものは控えに入れ、待ちは空にする。引くまでに解除された・同じ定義に戻った道具は返らない
+   */
+  private _takePendingDefinitions(engineId: string, visible: ToolSet[]): string[] {
+    const names = this.pending.get(engineId);
+    this.pending.delete(engineId);
+    if (!names || names.size === 0) return [];
+    const given = this.given.get(engineId) ?? new Map<string, string>();
+    this.given.set(engineId, given);
+
+    const output: string[] = [];
+    const seen = new Set<string>();
+    for (const toolSet of visible) {
+      if (toolSet.kind === 'system') continue;
+      const tools: ToolDef[] = [];
+      for (const tool of toolSet.tools.values()) {
+        // 同じ名前が 2 つ見えていれば、先に当たるもの（動くもの）だけ
+        if (!names.has(tool.name) || seen.has(tool.name)) continue;
+        seen.add(tool.name);
+        if (!tool.definition || given.get(tool.name) === tool.definition) continue;
+        given.set(tool.name, tool.definition);
+        tools.push(tool);
+      }
+      if (tools.length > 0) output.push(this._toolsetBlock(toolSet, tools));
+    }
     return output;
   }
 

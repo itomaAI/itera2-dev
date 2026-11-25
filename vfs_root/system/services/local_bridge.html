@@ -1812,9 +1812,7 @@ Attributes:
           }
         });
 
-        for (const def of Object.values(DEFS)) {
-          MetaOS.ai.log(def, 'tool_available');
-        }
+        // 道具の定義は、登録のときに OS が会話に置く（T-0912。ここから ai.log では流さない）
 
         // ---------- 起動 ----------
         await ensureDirRecursive(ANCHOR_DIR, null);

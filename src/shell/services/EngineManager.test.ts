@@ -335,6 +335,43 @@ describe('EngineManager: 作る', () => {
     expect(g.bundle.tools.listToolSets().map((s) => s.id)).toEqual(['helper', 'web']);
   });
 
+  it('与えた組にあとから入った道具の定義は、サブの会話に置かれ、持ち主に turn_placed で届く。起こし直しでは置かれない（T-0912 段 3）', async () => {
+    const w = world();
+    const def = (name: string) => `<define_tag name="${name}">${name}</define_tag>`;
+    const reg = (name: string) =>
+      w.root.tools.registerDynamicTool(name, 'web', { description: name, definition: def(name) });
+    reg('search');
+    const e = await w.manager.create(OWNER, { toolsets: ['web'] });
+    await settle();
+    expect(e.bundle.history.get()).toHaveLength(1); // 始まりの定義（search）
+
+    reg('fetch');
+    await settle();
+    const turns = e.bundle.history.get();
+    expect(turns).toHaveLength(2);
+    expect(turns[1].content).toContain('[System: Dynamic Tools Registered]');
+    expect(turns[1].content).toContain(def('fetch'));
+    expect(turns[1].content).not.toContain(def('search'));
+    const placedIds = w.notices
+      .filter((n) => n.engineId === e.id && n.event === 'turn_placed')
+      .map((n) => (n.data as any).turn.id);
+    expect(placedIds).toContain(turns[1].id);
+    expect(w.equips[0].generateStream).not.toHaveBeenCalled();
+
+    // 道具を持つプロセスの起こし直し: 組が消えて、同じ定義で登録し直す
+    w.registry.removeToolsByPid('web');
+    reg('search');
+    reg('fetch');
+    await settle();
+    expect(e.bundle.history.get()).toHaveLength(2);
+
+    // 空にして積み直すと、定義は 1 度だけ入り直る（積み直しの分。待ちからは入らない）
+    await e.bundle.reset({ restoreTools: true });
+    await settle();
+    expect(e.bundle.history.get()).toHaveLength(1);
+    expect(e.bundle.history.get()[0].content).toContain('[System: Restored Dynamic Tools]');
+  });
+
   it('保存された会話から始める。読むのは持ち主の主体・添付はこのエンジンの置き場へ', async () => {
     const w = world();
     seedSaved(w.vfs);
