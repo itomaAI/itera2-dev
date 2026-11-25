@@ -735,12 +735,22 @@ describe('ToolRegistry: 定義の控えと待ち（T-0912 段 3）', () => {
     expect(h.noted).toEqual(['root']);
   });
 
+  it('全部引くと、それまでの待ちは捨てる（そのあと控えを捨てても、古い待ちは出てこない）', () => {
+    const h = harness();
+    h.reg(h.root, 'web', 'search');
+    h.root.restoreDefinitions();
+    h.root.forgetGivenDefinitions();
+    expect(h.root.takePendingDefinitions()).toEqual([]);
+  });
+
   it('控えを捨てる（会話が空になった）と、同じ定義の登録し直しも待ちになる', () => {
     const h = harness();
     h.reg(h.root, 'web', 'search');
     h.root.takePendingDefinitions();
     h.noted.length = 0;
     h.root.forgetGivenDefinitions();
+    // 捨てただけでは、何も待ちにならない（待ちが出来るのは登録のとき）
+    expect(h.root.takePendingDefinitions()).toEqual([]);
     h.reg(h.root, 'web', 'search');
     expect(h.noted).toEqual(['root']);
     expect(h.root.takePendingDefinitions()).toHaveLength(1);
@@ -776,6 +786,13 @@ describe('ToolRegistry: 定義の控えと待ち（T-0912 段 3）', () => {
     expect(h.noted).toEqual(['root', 'e2']);
     expect(sub.takePendingDefinitions()).toEqual([]);
     expect(grand.takePendingDefinitions().join('\n')).toContain(h.def('draw', 'root draw'));
+
+    // 控えが空でも同じ: 待ちになるのは、登録されたその行が見えているエンジンだけ（隠している自分の道具が待ちになることはない）
+    sub.forgetGivenDefinitions();
+    h.noted.length = 0;
+    h.reg(h.root, 'web', 'draw', 'root draw 2');
+    expect(h.noted).toEqual(['root', 'e2']);
+    expect(sub.takePendingDefinitions()).toEqual([]);
   });
 
   it('口を畳むと、控えも待ちも聞く者も消える', () => {

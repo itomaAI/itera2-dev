@@ -380,6 +380,13 @@ describe('createEngineBundle: 道具の定義を会話に置く（T-0912 段 3�
     await settle();
     expect(placed(root)).toHaveLength(1);
 
+    // 入れ替えて、積み直さない → 起こし直しで入る
+    root.history.load([]);
+    w.registry.removeToolsByPid('web');
+    reg(root, 'web', 'search');
+    await settle();
+    expect(placed(root)).toHaveLength(1);
+
     // 入れ替えて、会話の口が全部引いた（積み直した）→ 起こし直しでは入らない
     root.history.load([]);
     expect(root.b.tools.restoreDefinitions()).toHaveLength(1);
