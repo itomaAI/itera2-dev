@@ -587,3 +587,15 @@ describe('止めた知らせ（新しい 1 ターン）', () => {
     expect(r.loopStopsAfterStop()).toEqual(['loop_stop(abort)']);
   });
 });
+
+describe('止めた回は、それ以上何も積まない', () => {
+  it('turn_end(model) の聞き手の中で止めたら、終端タグの後ろの警告も積まない', async () => {
+    const h = createHarness({ adapter: 'silent', first: [...FIRST, '\ntrailing words'] });
+    h.onTurnEnd((d) => {
+      if (d.role === 'model' && h.seq.indexOf('STOP') < 0) h.stop();
+    });
+    await h.go();
+    expect(h.turns.some((t: any) => String(t.content).includes('syntax_warning'))).toBe(false);
+    expect(h.loopStopsAfterStop()).toEqual(['loop_stop(abort)']);
+  });
+});
