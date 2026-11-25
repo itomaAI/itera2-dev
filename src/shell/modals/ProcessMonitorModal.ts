@@ -13,6 +13,7 @@ import { LABEL_KICKER, LABEL_STREAM } from '../styles/typography';
 import { t, escapeHtml } from '../../i18n/i18n';
 import { bindText } from '../../i18n/staticTexts';
 import { ROOT_ENGINE_ID } from '../../core/control/Engine';
+import { linkButton } from './EngineMonitorModal';
 
 /**
  * 持ち主の札（T-0916）: そのプロセスが仕えるエンジン（プロセスの記録の engine）。
@@ -40,11 +41,18 @@ export class ProcessMonitorModal {
   private listContainer: HTMLElement | null = null;
   private pollTimer: ReturnType<typeof setInterval> | null = null;
   private isOpen: boolean = false;
+  /** エンジンの一覧へ移る（差されていなければ、リンクを出さない。T-0916） */
+  private toEngines: (() => void) | null = null;
 
   constructor(processManager: ProcessManager, appRegistry: AppRegistry, configManager: ConfigManager) {
     this.processManager = processManager;
     this.appRegistry = appRegistry;
     this.configManager = configManager;
+  }
+
+  /** 行き来のリンク（モニタ → エンジンの一覧。T-0916） */
+  linkTo(openEngines: () => void): void {
+    this.toEngines = openEngines;
   }
 
   /**
@@ -123,7 +131,22 @@ export class ProcessMonitorModal {
     };
 
     footer.appendChild(statusText);
-    footer.appendChild(btnKillAll);
+    const actions = document.createElement('div');
+    actions.className = 'flex items-center gap-2';
+    if (this.toEngines) {
+      actions.appendChild(
+        linkButton(
+          'engines',
+          null,
+          'engines.title',
+          '→',
+          () => this.toEngines,
+          () => this.close(),
+        ),
+      );
+    }
+    actions.appendChild(btnKillAll);
+    footer.appendChild(actions);
 
     box.appendChild(header);
     box.appendChild(this.listContainer);

@@ -399,6 +399,8 @@ export const EN = {
   'palette.apiKeys.subtitle': 'Manage LLM API Secrets',
   'palette.monitor.title': 'Activity Monitor',
   'palette.monitor.subtitle': 'View background processes',
+  'palette.engines.title': 'Engines',
+  'palette.engines.subtitle': 'View running AI engines',
   'palette.appSubtitle': 'App • {path}',
   'palette.fileSubtitle': 'File • /{path}',
   'palette.askAi': 'Ask AI: "{query}"',
@@ -414,6 +416,18 @@ export const EN = {
   'monitor.empty': 'No processes running.',
   'monitor.engine': 'Engine',
   'monitor.engineTitle': 'The engine this process serves',
+
+  // ---- engine list (metaos://system/engines)
+  'engines.title': 'Engines',
+  'engines.subtitle': 'Running engines',
+  'engines.owner': 'Owner',
+  'engines.state.running': 'Running',
+  'engines.state.busy': 'Busy',
+  'engines.state.scheduled': 'Scheduled',
+  'engines.state.idle': 'Idle',
+  'engines.turns': 'Turns',
+  'engines.serving': 'Processes',
+  'engines.context': 'Context',
 
   // ---- sync modal
   'sync.title': 'Cloud Sync',

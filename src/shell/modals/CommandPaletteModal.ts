@@ -204,6 +204,14 @@ export class CommandPaletteModal {
       score: 98,
       action: () => this.uriRouter.dispatch('metaos://system/monitor', USER_MOVER),
     });
+    items.push({
+      id: 'sys-engines',
+      title: t('palette.engines.title'),
+      subtitle: t('palette.engines.subtitle'),
+      icon: '🧠',
+      score: 97,
+      action: () => this.uriRouter.dispatch('metaos://system/engines', USER_MOVER),
+    });
 
     // Apps
     const apps = this.appRegistry.getAllApps();
@@ -261,6 +269,14 @@ export class CommandPaletteModal {
         en: 'Activity Monitor View background processes',
         icon: '📊',
         uri: 'metaos://system/monitor',
+      },
+      {
+        id: 'sys-engines',
+        title: t('palette.engines.title'),
+        sub: t('palette.engines.subtitle'),
+        en: 'Engines View running AI engines',
+        icon: '🧠',
+        uri: 'metaos://system/engines',
       },
     ];
     sysCmds.forEach((cmd) => {

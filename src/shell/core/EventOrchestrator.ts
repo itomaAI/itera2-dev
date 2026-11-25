@@ -295,6 +295,8 @@ export class EventOrchestrator {
         this.desktop.modals.apiSettings.open();
       } else if (target === 'monitor') {
         this.desktop.modals.processMonitor.open();
+      } else if (target === 'engines') {
+        this.desktop.modals.engineMonitor.open();
       } else if (target === 'sessions') {
         this.desktop.modals.sessions.open();
       } else {

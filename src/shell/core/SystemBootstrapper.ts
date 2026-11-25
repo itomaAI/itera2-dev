@@ -334,6 +334,8 @@ export class SystemBootstrapper {
       logger,
     });
     void engineManager.sweepLeftovers();
+    // エンジンの一覧の窓（metaos://system/engines）が、束の表を読む（読むだけ。T-0916）
+    desktop.bindEngines(engineManager);
 
     new HostApiRouter(transport, {
       vfs,

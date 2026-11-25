@@ -28,6 +28,7 @@ import type { PromptRole } from '../../config/system_prompts';
 import { MAX_SUB_ENGINES } from '../../config/engine_limits';
 import { generateId } from '../../utils/id';
 import { OS_MOVER, type Mover } from '../windowing/processGate';
+import { contextFromHistory } from '../../api/chatApi';
 
 /** 作るときに渡せるもの。どちらも省ける */
 export interface EngineSpec {
@@ -56,6 +57,30 @@ export interface SubEngine {
   readonly ownerApp: string;
   readonly bundle: EngineBundle;
   readonly conversation: EngineConversation;
+}
+
+/**
+ * 束の表を読むだけの口（overview）が返す 1 行（T-0916。エンジンの一覧の窓が読む）。素の値だけ: 束そのものは外へ渡さない。
+ * 状態は Engine.status() のまま（running／busy／scheduled。どれも false なら何も進んでいない）
+ */
+export interface EngineOverview {
+  id: string;
+  role: 'root' | 'sub';
+  /** 持ち主のプロセス（サブだけ。ルートは null） */
+  ownerPid: string | null;
+  /** 持ち主が何のアプリか（サブだけ） */
+  ownerApp: string | null;
+  running: boolean;
+  busy: boolean;
+  scheduled: boolean;
+  outstandingTools: number;
+  /** 会話のターンの数 */
+  turns: number;
+  /** このエンジンに仕えているプロセスの数（プロセスの記録の engine） */
+  serving: number;
+  /** 最後の応答のモデルと、そのときの文脈の長さ（履歴から読む。応答がまだ無ければ null） */
+  model: string | null;
+  contextTokens: number | null;
 }
 
 /** 畳んだ理由: 持ち主が畳んだ／持ち主のプロセスが終わった／作る途中で失敗した */
@@ -159,6 +184,37 @@ export class EngineManager {
   /** そのプロセスが持っているエンジン */
   public owned(ownerPid: string): SubEngine[] {
     return [...this.subs.values()].filter((entry) => entry.ownerPid === ownerPid);
+  }
+
+  /**
+   * 生きているエンジン全部（ルートが先頭、続いてサブを作った順）を、素の値で読む（T-0916）。
+   * 読むだけ: 何も起こさず、何も変えない。持ち主の規則（of）を通さないので、ホストの窓だけが使う（ゲストには渡さない）
+   */
+  public overview(): EngineOverview[] {
+    const procs = [...this.deps.processes.processes.values()];
+    const row = (bundle: EngineBundle, role: 'root' | 'sub', ownerPid: string | null, ownerApp: string | null) => {
+      const status = bundle.engine.status();
+      const turns = bundle.history.get();
+      const context = contextFromHistory(turns, null);
+      return {
+        id: bundle.id,
+        role,
+        ownerPid,
+        ownerApp,
+        running: status.running,
+        busy: status.busy,
+        scheduled: status.scheduled,
+        outstandingTools: status.outstandingTools,
+        turns: turns.length,
+        serving: procs.filter((p) => p.engine === bundle.id).length,
+        model: context ? context.model : null,
+        contextTokens: context ? context.tokens : null,
+      };
+    };
+    return [
+      row(this.deps.root, 'root', null, null),
+      ...[...this.subs.values()].map((entry) => row(entry.bundle, 'sub', entry.ownerPid, entry.ownerApp)),
+    ];
   }
 
   /** 持ち主への知らせを聞く（ゲストへ届ける側が聞く） */
