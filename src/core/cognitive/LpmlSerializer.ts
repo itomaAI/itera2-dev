@@ -37,7 +37,9 @@ export function formatAttributeValue(value: string): string {
 
 export function serializeToolOutput(entry: ToolExecutionEntry): string {
   const toolName = entry.actionType || 'unknown';
-  const status = entry.output.error ? 'error' : 'success';
+  // 結果待ちの枠は、成功でも失敗でもない（T-0924）。印の無い枠（印を付ける前に作られたもの）は success のまま ——
+  // log の文字列（[Pending]）からは決めない。決めると、もう送った古い枠の文が変わる
+  const status = entry.output.error ? 'error' : entry.output.pending ? 'pending' : 'success';
   let attrStr = `tool="${toolName}" status="${status}"`;
 
   if (entry.params) {

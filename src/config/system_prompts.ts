@@ -248,7 +248,7 @@ Pay attention to the 'pid' and 'name' attributes to understand which app is prov
 Injected by the system to return the result of a single tool execution.
 Attributes:
     - tool: The name of the tool executed (e.g., "read").
-    - status: "success" or "error".
+    - status: "success", "error", or "pending" (the tool is still running; its result arrives in a later turn).
     - param_*: The attributes of your original tag, echoed back with a \`param_\` prefix (e.g., \`<read path="a.md" />\` comes back as param_path="a.md"). The prefix keeps them apart from \`tool\` and \`status\`. Tag content is not echoed.
 **CRITICAL**: NEVER generate this tag yourself. The system will provide one \`<tool_output>\` tag for each tool you requested before your last \`<yield />\`. Check the results before your next action.
 </define_tag>
