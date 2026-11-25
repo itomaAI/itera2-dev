@@ -36,11 +36,11 @@ function fakeBundle(turnId: string) {
 
 function world(options: { engines?: boolean } = {}) {
   const handlers = new Map<string, (payload: any, sourcePid: string) => Promise<any>>();
-  const sendEvent = vi.fn();
   const transport = {
     registerHandler: (action: string, handler: any) => handlers.set(action, handler),
-    sendEvent,
   };
+  // そのプロセスにだけ知らせる口（ProcessManager.notify の代わり）
+  const notifyProcess = vi.fn();
   const viewerWindow = { tag: 'window-of-viewer' };
   const processes = new Map<string, any>([
     ['viewer', { pid: 'viewer', app: 'viewer_app', path: 'apps/viewer.html', iframe: { contentWindow: viewerWindow } }],
@@ -78,7 +78,7 @@ function world(options: { engines?: boolean } = {}) {
       withBlob: vi.fn(),
     } as any,
     configManager: {} as any,
-    processManager: { processes, on: vi.fn() } as any,
+    processManager: { processes, on: vi.fn(), notify: notifyProcess } as any,
     engineFor: (pid) => (processes.has(pid) ? (rootBundle as any) : null),
     engines: options.engines === false ? null : (table as unknown as EngineTable),
     guestLocalStore: {} as any,
@@ -90,7 +90,7 @@ function world(options: { engines?: boolean } = {}) {
     return handler(payload, pid);
   };
   const notify = (notice: OwnerNotice) => listeners.forEach((cb) => cb(notice));
-  return { handlers, call, notify, sendEvent, viewerWindow, table, engine, rootBundle };
+  return { handlers, call, notify, notifyProcess, table, engine, rootBundle };
 }
 
 /** ゲストの取っ手の口を全部呼んで、送られた engine:* の名前を集める */
@@ -202,25 +202,27 @@ describe('HostApiRouter: engine:* の配線', () => {
 });
 
 describe('HostApiRouter: 持ち主への知らせ', () => {
-  it('持ち主のプロセスの窓にだけ、ゲストへ送る形で送る', () => {
+  it('持ち主のプロセスにだけ、ゲストへ送る形で知らせる（送るのは関所）', () => {
     const w = world();
 
     w.notify({ ownerPid: 'viewer', engineId: 'eng-1', event: 'stream_chunk', data: 'he' });
 
-    expect(w.sendEvent).toHaveBeenCalledTimes(1);
-    expect(w.sendEvent).toHaveBeenCalledWith(
-      'viewer',
-      'engine:event',
-      { id: 'eng-1', event: 'stream_chunk', data: { text: 'he' } },
-      w.viewerWindow,
-    );
+    expect(w.notifyProcess).toHaveBeenCalledTimes(1);
+    expect(w.notifyProcess).toHaveBeenCalledWith('viewer', 'engine:event', {
+      id: 'eng-1',
+      event: 'stream_chunk',
+      data: { text: 'he' },
+    });
   });
 
-  it('窓の無いプロセス・もう居ないプロセスへは、送らない', () => {
+  it('相手に届くかは見ずに、持ち主の pid を指して関所へ渡す（届かない相手に何もしないのは関所。ProcessManager.gate.test.ts）', () => {
     const w = world();
     w.notify({ ownerPid: 'windowless', engineId: 'eng-2', event: 'loop_stop', data: { reason: 'idle' } });
     w.notify({ ownerPid: 'gone', engineId: 'eng-3', event: 'disposed', data: { reason: 'owner_exit' } });
-    expect(w.sendEvent).not.toHaveBeenCalled();
+    expect(w.notifyProcess.mock.calls.map((c) => [c[0], c[1], c[2].id, c[2].event])).toEqual([
+      ['windowless', 'engine:event', 'eng-2', 'loop_stop'],
+      ['gone', 'engine:event', 'eng-3', 'disposed'],
+    ]);
   });
 });
 

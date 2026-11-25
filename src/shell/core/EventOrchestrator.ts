@@ -10,6 +10,7 @@ import type { HistoryManager } from '../../core/state/HistoryManager';
 import type { Engine } from '../../core/control/Engine';
 import type { EngineBundle } from '../../core/control/EngineBundle';
 import type { ProcessManager } from '../windowing/ProcessManager';
+import { USER_MOVER, type Mover } from '../windowing/processGate';
 import type { UriRouter } from './UriRouter';
 import type { SessionManager } from '../services/SessionManager';
 import type { CognitiveManager } from '../services/CognitiveManager';
@@ -53,6 +54,9 @@ export function decideIndicatorOnTurnEnd(role: string, isRunning: boolean, toolP
   if (!isRunning && !toolPhase) return 'hide';
   return 'keep';
 }
+
+/** URI の ?query を写したもの（UriRouter が handler に渡す） */
+type Args = Record<string, string>;
 
 export class EventOrchestrator {
   /** モデル発話後〜loop_stop までの「ツール実行中」帯にいるか（表示判断にのみ使う） */
@@ -107,7 +111,7 @@ export class EventOrchestrator {
       open: (target) => {
         if (/^metaos:\/\//i.test(target)) {
           try {
-            uriRouter.dispatch(target);
+            uriRouter.dispatch(target, USER_MOVER);
           } catch (e: any) {
             if (window.AppUI) window.AppUI.notify(`Cannot open: ${e.message}`, 'error');
           }
@@ -142,7 +146,7 @@ export class EventOrchestrator {
       const input = addressBar.value.trim();
       if (!input) return;
       try {
-        this.uriRouter.dispatch(input);
+        this.uriRouter.dispatch(input, USER_MOVER);
       } catch (e: any) {
         console.error('[Router] Navigation failed:', e);
         if (window.AppUI) window.AppUI.notify(e.message, 'warning');
@@ -185,7 +189,7 @@ export class EventOrchestrator {
     const p = (path || '').trim().replace(/^\/+/, '');
     if (!p) return;
     try {
-      this.uriRouter.dispatch(`metaos://open/${p}`);
+      this.uriRouter.dispatch(`metaos://open/${p}`, USER_MOVER);
     } catch (e: any) {
       if (window.AppUI) window.AppUI.notify(t('notify.cannotOpen', { reason: e.message }), 'error');
     }
@@ -193,7 +197,9 @@ export class EventOrchestrator {
 
   private _bindUriRouting(): void {
     // metaos://open/... (データファイルを関連付けアプリで開く)
-    this.uriRouter.register('open', async (path: string, queryArgs: Record<string, string>, searchAndHash: string) => {
+    // mover は「誰が」開くか: 利用者の操作（アドレスバー・リンク・エクスプローラ）か、ゲストの MetaOS.host.open
+    //（呼んだプロセスが仕えるエンジンとして）。プロセスを起こすときは、そのまま関所へ渡す（T-0912）
+    this.uriRouter.register('open', async (path: string, queryArgs: Args, searchAndHash: string, mover: Mover) => {
       const homePath = this.configManager.homePath();
       let targetPath = path || homePath;
       try {
@@ -206,7 +212,7 @@ export class EventOrchestrator {
           this._restoreAddressBar();
         } else if (resolvedApp.appId === 'HostRunner') {
           const fullUri = `metaos://run/${targetPath}${searchAndHash}`;
-          await this.processManager.spawn({
+          await this.processManager.spawn(mover, {
             path: targetPath + searchAndHash,
             show: true,
             args: queryArgs,
@@ -222,9 +228,10 @@ export class EventOrchestrator {
         } else {
           const args = { file: targetPath, ...queryArgs };
           const fullUri = `metaos://open/${targetPath}${searchAndHash}`;
-          // V2仕様: args として起動パラメータを渡す
-          await this.processManager.spawn({
-            pid: resolvedApp.appId,
+          // V2仕様: args として起動パラメータを渡す。
+          // pid を名指ししない: 個体の決め方（processIdentity.ts）が、開いた者のエンジンから見た「そのアプリ」の個体
+          //（無ければ新しい個体）にする。AI の道具の open と同じ
+          await this.processManager.spawn(mover, {
             path: resolvedApp.appPath!,
             show: true,
             args,
@@ -238,13 +245,13 @@ export class EventOrchestrator {
     });
 
     // metaos://run/... (関連付けを無視して実行ファイルとして起動)
-    this.uriRouter.register('run', async (path: string, queryArgs: Record<string, string>, searchAndHash: string) => {
+    this.uriRouter.register('run', async (path: string, queryArgs: Args, searchAndHash: string, mover: Mover) => {
       const homePath = this.configManager.homePath();
       let executablePath = path || homePath;
       try {
         const args = { ...queryArgs };
         const fullUri = `metaos://run/${executablePath}${searchAndHash}`;
-        await this.processManager.spawn({
+        await this.processManager.spawn(mover, {
           path: executablePath,
           show: true,
           args,
@@ -344,22 +351,21 @@ export class EventOrchestrator {
     explorer.on('open_file', async (path: string, resolvedApp?: ResolvedApp) => {
       // 解決済みアプリ情報が渡されなければ、デフォルトの振る舞い（UriRouter経由）に落とし込む
       if (!resolvedApp) {
-        this.uriRouter.dispatch(`metaos://open/${path}`);
+        this.uriRouter.dispatch(`metaos://open/${path}`, USER_MOVER);
       } else {
         // AppRegistryで紐付けられたアプリを明示的に起動
         if (resolvedApp.appId === 'HostRunner') {
-          this.uriRouter.dispatch(`metaos://run/${path}`);
+          this.uriRouter.dispatch(`metaos://run/${path}`, USER_MOVER);
         } else if (resolvedApp.appId === 'HostExplorer') {
-          this.uriRouter.dispatch(`metaos://open/${path}`);
+          this.uriRouter.dispatch(`metaos://open/${path}`, USER_MOVER);
         } else if (resolvedApp.appId === 'HostEditor') {
-          this.uriRouter.dispatch(`metaos://edit/${path}`);
+          this.uriRouter.dispatch(`metaos://edit/${path}`, USER_MOVER);
         } else if (resolvedApp.appId === 'HostMediaViewer') {
-          this.uriRouter.dispatch(`metaos://view/${path}`);
+          this.uriRouter.dispatch(`metaos://view/${path}`, USER_MOVER);
         } else {
-          // Guestアプリを明示指定で開く
+          // Guestアプリを明示指定で開く（pid は名指ししない。上の open と同じ）
           const currentUri = `metaos://open/${path}`;
-          await this.processManager.spawn({
-            pid: resolvedApp.appId,
+          await this.processManager.spawn(USER_MOVER, {
             path: resolvedApp.appPath!,
             show: true,
             args: { file: path },
@@ -385,7 +391,7 @@ export class EventOrchestrator {
 
     explorer.on('spawn_daemon', async (path: string) => {
       try {
-        await this.processManager.spawn({
+        await this.processManager.spawn(USER_MOVER, {
           path,
           type: 'daemon',
           show: false,

@@ -32,6 +32,7 @@ import { ROOT_ENGINE_ID } from '../../core/control/Engine';
 import { createEngineBundle } from '../../core/control/EngineBundle';
 import { EngineManager } from '../services/EngineManager';
 import { createEngineProcesses } from '../windowing/engineProcesses';
+import { OS_MOVER, type Mover } from '../windowing/processGate';
 import type { ToolShell } from '../../core/control/ToolContext';
 import { Translator } from '../../core/cognitive/Translator';
 import { registerBasicTools } from '../../core/control/tools/basic_tools';
@@ -174,14 +175,16 @@ export class SystemBootstrapper {
     registerUITools(toolRegistry);
 
     const translator = new Translator();
-    const processManager = new ProcessManager(vfs, appRegistry, configManager);
+    // ゲストへの道（IPC）。ゲスト宛ての要求と知らせは、これを持つ ProcessManager だけが出す（T-0912）
+    const transport = new HostTransport();
+    const processManager = new ProcessManager(vfs, appRegistry, configManager, transport);
 
     // 動作中にブラウザのデータが消されたら、全プロセス（デーモンを含む）を止めてから読み込み直す。
     // 古い在庫のまま走らせない（T-0383。Itera にはクラウドが無いので消えたものは戻らない）。
     const haltAllProcesses = () => {
       for (const pid of Array.from(processManager.processes.keys())) {
         try {
-          processManager.kill(pid);
+          processManager.kill(OS_MOVER, pid);
         } catch {
           /* 止められないものは放置して読み込み直す */
         }
@@ -196,11 +199,11 @@ export class SystemBootstrapper {
     const uriRouter = new UriRouter('open');
 
     // アプリをまたぐ「戻る／進む」（T-0453）。OS（ProcessManager）が持つ「現在の場所」の変化を購読して積む。
-    // 戻る・進むは記録した URI を uriRouter.dispatch に渡すだけ。ブラウザ連動は preferences.navBrowserSync（既定 true）で切れる
+    // 戻る・進むは記録した URI を、頼んだ者（mover）として uriRouter.dispatch に渡すだけ。ブラウザ連動は preferences.navBrowserSync（既定 true）で切れる
     const navBrowserSync = configManager.get('preferences')?.navBrowserSync !== false;
     const navHistory = new NavHistory({
-      navigate: (uri) => {
-        uriRouter.dispatch(uri);
+      navigate: (uri, mover) => {
+        uriRouter.dispatch(uri, mover);
       },
       browser: navBrowserSync && typeof window !== 'undefined' && window.history ? window.history : null,
     });
@@ -273,11 +276,10 @@ export class SystemBootstrapper {
     // ==========================================
     // 5. IPC Routing & Event Orchestration
     // ==========================================
-    const transport = new HostTransport();
-    toolRegistry.setGuestToolInvoker(new HostGuestToolInvoker(processManager, transport));
+    toolRegistry.setGuestToolInvoker(new HostGuestToolInvoker(processManager));
 
     // プロバイダマネージャーの初期化と VFS への注入
-    const providerManager = new ProviderManager(eventBus, transport, processManager, pathResolver);
+    const providerManager = new ProviderManager(eventBus, processManager, pathResolver);
     vfs.setProviderManager(providerManager);
 
     // セキュリティ: PID偽装防止のための発信元検証
@@ -293,9 +295,9 @@ export class SystemBootstrapper {
       modals: desktop.modals,
       _closeMobileDrawers: () => desktop.closeMobileDrawers(),
       _revealInExplorer: (path: string) => desktop.revealInExplorer(path),
-      // 関連付けで開く（ゲストの MetaOS.host.open。T-0344）。intent の登録は EventOrchestrator にあり、
+      // 関連付けで開く（ゲストの MetaOS.host.open。T-0344）。誰が開くか（mover）は、呼んだプロセスから HostApiRouter が決める。intent の登録は EventOrchestrator にあり、
       // dispatch は同期で登録済みの handler を呼ぶだけなので、ここで router を握っていれば足りる
-      _openPath: (path: string) => uriRouter.dispatch(`metaos://open/${path}`),
+      _openPath: (path: string, mover: Mover) => uriRouter.dispatch(`metaos://open/${path}`, mover),
       getMergedProviders: () => cognitiveManager.getMergedProviders(),
       getContextLimit: () => cognitiveManager.contextLimit(),
       resolveLlm: (config: any) => cognitiveManager.resolveLlm(config),
@@ -310,7 +312,7 @@ export class SystemBootstrapper {
     const toolShellFor = (engineId: string): ToolShell => ({
       // 利用者の取っ手（files・open が、利用者に見せるために読む。T-0903）
       userFs: vfs.as(USER_ACTOR),
-      processes: createEngineProcesses({ processManager, transport }, engineId),
+      processes: createEngineProcesses({ processManager }, engineId),
       resolver,
       modals: desktop.modals,
       _revealInExplorer: (path: string) => desktop.revealInExplorer(path),
@@ -467,7 +469,7 @@ export class SystemBootstrapper {
 
     // ダッシュボードの起動
     const homePath = configManager.homePath();
-    await processManager.spawn({ path: homePath, show: true });
+    await processManager.spawn(OS_MOVER, { path: homePath, show: true });
 
     // 未ログインで起きたらクラウドの画面を最初から出しておく（preferences.promptCloudSignIn。T-0778）。
     // アダプタの復元（connecting）が終わるのを待ってから判定するので await しない —— ホームを止めない

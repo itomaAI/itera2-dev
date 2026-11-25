@@ -420,4 +420,28 @@ describe('spawn・open・kill・ps: プロセスの口は取っ手', () => {
       ui: '📊 Process List (0)',
     });
   });
+
+  it('ps scope="mine": このエンジンに仕えるプロセスだけ。既定（と "all"）は全部。知らない値は断る', async () => {
+    const line = (pid: string, type: string, state: string, path: string) =>
+      `PID: ${pid.padEnd(15)} | Type: ${type.padEnd(6)} | State: ${state.padEnd(10)} | Path: ${path}`;
+    const list = [
+      { pid: 'home', type: 'app', state: 'foreground', path: 'system/apps/home.html', engine: 'eng-a', mine: true },
+      { pid: 'notes', type: 'app', state: 'background', path: 'system/apps/notes.html', engine: 'root', mine: false },
+    ];
+    expect(await tools().ps.impl({ scope: 'mine' }, procCtx(list).context)).toEqual({
+      log: line('home', 'app', 'foreground', 'system/apps/home.html'),
+      ui: '📊 Process List (1)',
+    });
+    expect(await tools().ps.impl({ scope: 'all' }, procCtx(list).context)).toEqual(
+      await tools().ps.impl({}, procCtx(list).context),
+    );
+    expect(await tools().ps.impl({ scope: 'mine' }, procCtx([list[1]]).context)).toEqual({
+      log: 'No processes serve this engine.',
+      ui: '📊 Process List (0)',
+    });
+    expect(await toolError(tools().ps.impl({ scope: 'theirs' }, procCtx(list).context))).toEqual({
+      name: 'ToolError',
+      message: 'Unknown scope "theirs". Use "all" or "mine".',
+    });
+  });
 });

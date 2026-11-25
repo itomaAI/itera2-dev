@@ -5,6 +5,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { ProcessManager } from './ProcessManager';
+import { USER_MOVER } from './processGate';
 
 function mk() {
   const released: string[] = [];
@@ -33,7 +34,7 @@ function mk() {
 describe('ProcessManager.kill → vfs.releaseContent (T-0791)', () => {
   it('kill した pid だけを手放す', async () => {
     const { pm, released } = mk();
-    expect(pm.kill('a')).toBe(true);
+    expect(pm.kill(USER_MOVER, 'a')).toBe(true);
     await Promise.resolve();
     expect(released).toEqual(['a']);
     expect(pm.processes.has('b')).toBe(true);
@@ -41,7 +42,7 @@ describe('ProcessManager.kill → vfs.releaseContent (T-0791)', () => {
 
   it('居ない pid の kill は何もしない', async () => {
     const { pm, released } = mk();
-    expect(pm.kill('nope')).toBe(false);
+    expect(pm.kill(USER_MOVER, 'nope')).toBe(false);
     await Promise.resolve();
     expect(released).toEqual([]);
   });

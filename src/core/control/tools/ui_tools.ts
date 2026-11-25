@@ -135,10 +135,19 @@ export function registerUITools(registry: ToolRegistry): void {
   registry.registerSystemTool(setId, setName, {
     name: 'ps',
     description: 'List processes.',
-    impl: async (_params: any, context: ToolContext) => {
+    impl: async (params: any, context: ToolContext) => {
       if (context.shell?.processes) {
-        const list = context.shell.processes.list();
-        if (list.length === 0) return { log: 'No processes running.', ui: `📊 Process List (0)` };
+        // scope="mine": このエンジンに仕えるプロセス（＝動かせるもの）だけ。既定は全部（見るのは全部。T-0912）
+        const scope = String(params?.scope || 'all');
+        if (scope !== 'all' && scope !== 'mine') {
+          throw new ToolError(`Unknown scope "${scope}". Use "all" or "mine".`);
+        }
+        const mine = scope === 'mine';
+        const all = context.shell.processes.list();
+        const list = mine ? all.filter((p) => p.mine) : all;
+        if (list.length === 0) {
+          return { log: mine ? 'No processes serve this engine.' : 'No processes running.', ui: `📊 Process List (0)` };
+        }
 
         // このエンジンに仕えていないプロセスには、仕える先を添える（動かせるのは、自分に仕えるものだけ）
         const logStr = list

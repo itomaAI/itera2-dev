@@ -11,10 +11,9 @@ import { HostGuestToolInvoker } from './HostGuestToolInvoker';
 import { RpcManager, RpcRemoteError } from '../../ipc/RpcManager';
 import { isToolError } from '../../core/control/ToolError';
 
-function invoker(invokeGuest: () => Promise<unknown>) {
-  const pm: any = { processes: new Map([['p1', { pid: 'p1', iframe: { contentWindow: {} } }]]) };
-  const transport: any = { invokeGuest };
-  return new HostGuestToolInvoker(pm, transport);
+/** 届くのは p1 だけ。頼んだ先の答えを `request` で差す */
+function invoker(request: () => Promise<unknown>) {
+  return new HostGuestToolInvoker({ isReachable: (pid) => pid === 'p1', request });
 }
 
 describe('HostGuestToolInvoker: 失敗の分け方', () => {

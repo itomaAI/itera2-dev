@@ -7,9 +7,10 @@
  */
 import { describe, it, expect, vi } from 'vitest';
 import { NavHistory } from './NavHistory';
+import { USER_MOVER, engineMover } from '../windowing/processGate';
 
 const mk = (opts: Partial<ConstructorParameters<typeof NavHistory>[0]> = {}) => {
-  const navigate = vi.fn(async (_uri: string) => {});
+  const navigate = vi.fn(async (_uri: string, _mover?: unknown) => {});
   const h = new NavHistory({ navigate, now: () => 1, ...opts });
   return { h, navigate };
 };
@@ -33,7 +34,7 @@ describe('NavHistory', () => {
       'metaos://run/b.html',
     ]);
     expect(h.index).toBe(2);
-    await h.go(0);
+    await h.go(0, USER_MOVER);
     h.record({ pid: 'c', uri: 'metaos://run/c.html' }); // 途中から新しい所へ → 後ろを捨てる
     expect(h.entries.map((e) => e.uri)).toEqual(['metaos://run/a.html', 'metaos://run/c.html']);
     expect(h.state()).toMatchObject({ index: 1, canBack: true, canForward: false });
@@ -44,21 +45,21 @@ describe('NavHistory', () => {
     h.record({ pid: 'a', uri: 'metaos://run/a.html' });
     h.record({ pid: 'b', uri: 'metaos://run/b.html' });
     h.record({ pid: 'c', uri: 'metaos://run/c.html' });
-    expect(await h.back()).toBe(true);
-    expect(navigate).toHaveBeenLastCalledWith('metaos://run/b.html');
+    expect(await h.back(USER_MOVER)).toBe(true);
+    expect(navigate).toHaveBeenLastCalledWith('metaos://run/b.html', USER_MOVER);
     expect(h.state()).toMatchObject({ index: 1, canBack: true, canForward: true });
     // dispatch の中で場所が変わっても（navigating 中）積まない
     const { h: h2, navigate: n2 } = mk();
     n2.mockImplementation(async (uri: string) => h2.record({ pid: 'x', uri }));
     h2.record({ pid: 'a', uri: 'metaos://run/a.html' });
     h2.record({ pid: 'b', uri: 'metaos://run/b.html' });
-    await h2.back();
+    await h2.back(USER_MOVER);
     expect(h2.entries.length).toBe(2);
     expect(h2.index).toBe(0);
-    expect(await h2.back()).toBe(false);
-    expect(await h2.forward()).toBe(true);
-    expect(await h2.forward()).toBe(false);
-    expect(await h2.go(9)).toBe(false);
+    expect(await h2.back(USER_MOVER)).toBe(false);
+    expect(await h2.forward(USER_MOVER)).toBe(true);
+    expect(await h2.forward(USER_MOVER)).toBe(false);
+    expect(await h2.go(9, USER_MOVER)).toBe(false);
     // navigate が投げても index は動き、navigating は戻る
     const { h: h3, navigate: n3 } = mk();
     n3.mockImplementation(async () => {
@@ -66,7 +67,7 @@ describe('NavHistory', () => {
     });
     h3.record({ pid: 'a', uri: 'metaos://run/a.html' });
     h3.record({ pid: 'b', uri: 'metaos://run/b.html' });
-    expect(await h3.back()).toBe(true);
+    expect(await h3.back(USER_MOVER)).toBe(true);
     h3.record({ pid: 'c', uri: 'metaos://run/c.html' });
     expect(h3.entries.map((e) => e.uri)).toEqual(['metaos://run/a.html', 'metaos://run/c.html']);
   });
@@ -79,11 +80,11 @@ describe('NavHistory', () => {
     h.record({ pid: 'b', uri: 'metaos://run/b.html' });
     expect(browser.pushState).toHaveBeenNthCalledWith(1, { iteraNav: 0 }, '');
     expect(browser.pushState).toHaveBeenNthCalledWith(2, { iteraNav: 1 }, '');
-    expect(await h.back()).toBe(true);
+    expect(await h.back(USER_MOVER)).toBe(true);
     expect(browser.go).toHaveBeenCalledWith(-1);
     expect(navigate).not.toHaveBeenCalled(); // popstate が来るまで動かない
     expect(await h.onPopState({ iteraNav: 0 })).toBe(true);
-    expect(navigate).toHaveBeenLastCalledWith('metaos://run/a.html');
+    expect(navigate).toHaveBeenLastCalledWith('metaos://run/a.html', USER_MOVER);
     expect(h.index).toBe(0);
     // 外から来た popstate は無視
     expect(await h.onPopState(null)).toBe(false);
@@ -91,8 +92,52 @@ describe('NavHistory', () => {
     expect(await h.onPopState({ iteraNav: -1 })).toBe(false);
     expect(await h.onPopState({ iteraNav: 0 })).toBe(false); // 同じ段
     // canBack が無いときは go を呼ばない
-    expect(await h.back()).toBe(false);
+    expect(await h.back(USER_MOVER)).toBe(false);
     expect(browser.go).toHaveBeenCalledTimes(1);
+  });
+
+  it('誰が戻る・進むかを、navigate まで運ぶ', async () => {
+    const { h, navigate } = mk();
+    const SUB = engineMover('eng-a', 'a_app');
+    for (const x of ['a', 'b', 'c']) h.record({ pid: x, uri: `metaos://run/${x}.html` });
+    expect(await h.back(SUB)).toBe(true);
+    expect(navigate).toHaveBeenLastCalledWith('metaos://run/b.html', SUB);
+    expect(await h.forward(USER_MOVER)).toBe(true);
+    expect(navigate).toHaveBeenLastCalledWith('metaos://run/c.html', USER_MOVER);
+    expect(await h.go(0, SUB)).toBe(true);
+    expect(navigate).toHaveBeenLastCalledWith('metaos://run/a.html', SUB);
+  });
+
+  it('ブラウザ連動: 頼んだ者を、行き先の段と一緒に popstate まで持ち越す。頼んでいない popstate は利用者', async () => {
+    const browser = { pushState: vi.fn(), replaceState: vi.fn(), go: vi.fn() };
+    const { h, navigate } = mk({ browser });
+    const SUB = engineMover('eng-a', 'a_app');
+    for (const x of ['a', 'b', 'c']) h.record({ pid: x, uri: `metaos://run/${x}.html` });
+    // 頼んだ段の popstate → 頼んだ者として
+    await h.back(SUB);
+    expect(await h.onPopState({ iteraNav: 1 })).toBe(true);
+    expect(navigate).toHaveBeenLastCalledWith('metaos://run/b.html', SUB);
+    // 誰も頼んでいない popstate（ブラウザの戻る）→ 利用者
+    expect(await h.onPopState({ iteraNav: 0 })).toBe(true);
+    expect(navigate).toHaveBeenLastCalledWith('metaos://run/a.html', USER_MOVER);
+    // 頼んだ段と違う段の popstate → 利用者。持ち越しは使い切る（あとで同じ段が来ても、頼んだ者にはならない）
+    await h.forward(SUB);
+    expect(await h.onPopState({ iteraNav: 2 })).toBe(true);
+    expect(navigate).toHaveBeenLastCalledWith('metaos://run/c.html', USER_MOVER);
+    expect(await h.onPopState({ iteraNav: 1 })).toBe(true);
+    expect(navigate).toHaveBeenLastCalledWith('metaos://run/b.html', USER_MOVER);
+    // 進むも同じく持ち越す（いま段 1 に居る）
+    await h.forward(SUB);
+    expect(await h.onPopState({ iteraNav: 2 })).toBe(true);
+    expect(navigate).toHaveBeenLastCalledWith('metaos://run/c.html', SUB);
+    await h.go(1, USER_MOVER);
+    // 外から来た popstate（自分の state でない）は、持ち越しを消さない
+    await h.back(SUB);
+    expect(await h.onPopState(null)).toBe(false);
+    expect(await h.onPopState({ foo: 1 })).toBe(false);
+    expect(await h.onPopState({ iteraNav: 0 })).toBe(true);
+    expect(navigate).toHaveBeenLastCalledWith('metaos://run/a.html', SUB);
+    expect(navigate).toHaveBeenCalledTimes(7);
   });
 
   it('購読: 変化のたびに state が届く。購読側が投げても止まらない', async () => {
@@ -104,7 +149,7 @@ describe('NavHistory', () => {
     h.onChange((s) => seen.push(s.index));
     h.record({ pid: 'a', uri: 'metaos://run/a.html' });
     h.record({ pid: 'b', uri: 'metaos://run/b.html' });
-    await h.back();
+    await h.back(USER_MOVER);
     expect(seen).toEqual([0, 1, 0]);
   });
 });

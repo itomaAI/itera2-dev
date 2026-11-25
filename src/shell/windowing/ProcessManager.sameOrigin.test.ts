@@ -10,6 +10,7 @@ import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
 import { ProcessManager } from './ProcessManager';
 import { GUEST_SANDBOX, GUEST_SANDBOX_SAME_ORIGIN } from './guestSandbox';
+import { USER_MOVER } from './processGate';
 
 function mk() {
   const vfs = { releaseContent: async () => {} };
@@ -39,14 +40,14 @@ describe('ProcessManager — ゲストとホストの境界（T-0838）', () => 
   it('既定は opaque で起動する', () => {
     const pm = mk();
     expect(pm.isGuestSameOrigin()).toBe(false);
-    void pm.spawn({ pid: 'd', path: 'system/services/d.html', type: 'daemon' });
+    void pm.spawn(USER_MOVER, { pid: 'd', path: 'system/services/d.html', type: 'daemon' });
     expect(pm.processes.get('d')!.iframe.getAttribute('sandbox')).toBe(GUEST_SANDBOX);
     expect(pm.sameOriginPids()).toEqual([]);
   });
 
   it('外すと同一オリジンで起動し直し、戻すと opaque で起動し直す', () => {
     const pm = mk();
-    void pm.spawn({ pid: 'd', path: 'system/services/d.html', type: 'daemon' });
+    void pm.spawn(USER_MOVER, { pid: 'd', path: 'system/services/d.html', type: 'daemon' });
     // setGuestSameOrigin は起動の終わりまで待つので、待たずに iframe を見る
     void pm.setGuestSameOrigin(true);
     expect(pm.isGuestSameOrigin()).toBe(true);
@@ -74,13 +75,17 @@ describe('ProcessManager — ゲストとホストの境界（T-0838）', () => 
     pm.processes.set('back', proc('back', 'background'));
     pm.processes.set('svc', proc('svc', 'running'));
     const calls: any[] = [];
-    vi.spyOn(pm, 'spawn').mockImplementation(async (o) => {
+    const movers: unknown[] = [];
+    vi.spyOn(pm, 'spawn').mockImplementation(async (mover, o) => {
+      movers.push(mover);
       calls.push(o);
     });
     const seen: boolean[] = [];
     pm.on('guest_origin_changed', (on: boolean) => seen.push(on));
     await pm.setGuestSameOrigin(true);
     expect(calls.map((c) => c.pid)).toEqual(['back', 'svc', 'front']);
+    // 人の切り替えなので、利用者として起こし直す
+    expect(movers).toEqual([USER_MOVER, USER_MOVER, USER_MOVER]);
     expect(calls.every((c) => c.forceReload === true)).toBe(true);
     expect(calls.map((c) => c.show)).toEqual([false, false, true]);
     expect(calls[2]).toMatchObject({ type: 'app', args: { file: 'a.md' }, currentUri: 'metaos://run/x?view=1' });
@@ -94,9 +99,15 @@ describe('前面のアプリを表示つきで起動し直す（T-0838 で見つ
     const pm = mk();
     const container = document.createElement('div');
     (pm as any).els.APPS_CONTAINER = container;
-    void pm.spawn({ pid: 'home', path: 'system/apps/home.html', type: 'app', show: true });
+    void pm.spawn(USER_MOVER, { pid: 'home', path: 'system/apps/home.html', type: 'app', show: true });
     expect(pm.processes.get('home')!.state).toBe('foreground');
-    void pm.spawn({ pid: 'home', path: 'system/apps/home.html', type: 'app', show: true, forceReload: true });
+    void pm.spawn(USER_MOVER, {
+      pid: 'home',
+      path: 'system/apps/home.html',
+      type: 'app',
+      show: true,
+      forceReload: true,
+    });
     expect(container.querySelectorAll('iframe').length).toBe(1);
     expect(pm.processes.get('home')!.iframe.parentElement).toBe(container);
     expect(pm.processes.get('home')!.state).toBe('foreground');
@@ -106,9 +117,9 @@ describe('前面のアプリを表示つきで起動し直す（T-0838 で見つ
     const pm = mk();
     const container = document.createElement('div');
     (pm as any).els.APPS_CONTAINER = container;
-    void pm.spawn({ pid: 'a', path: 'system/apps/a.html', type: 'app', show: true });
-    void pm.spawn({ pid: 'b', path: 'system/apps/b.html', type: 'app', show: true });
-    void pm.spawn({ pid: 'b', path: 'system/apps/b.html', type: 'app', show: false, forceReload: true });
+    void pm.spawn(USER_MOVER, { pid: 'a', path: 'system/apps/a.html', type: 'app', show: true });
+    void pm.spawn(USER_MOVER, { pid: 'b', path: 'system/apps/b.html', type: 'app', show: true });
+    void pm.spawn(USER_MOVER, { pid: 'b', path: 'system/apps/b.html', type: 'app', show: false, forceReload: true });
     expect(pm.processes.get('a')!.state).toBe('foreground');
     expect(container.querySelectorAll('iframe').length).toBe(2);
   });

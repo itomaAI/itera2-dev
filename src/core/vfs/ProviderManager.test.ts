@@ -24,24 +24,27 @@ function setup() {
   const eventBus = new VfsEventBus();
   const sent: SentEvent[] = [];
 
-  const transport = {
-    sendEvent: (pid: string, event: string, payload: any) => {
-      sent.push({ pid, event, payload });
-    },
-  };
-
-  // _bindEventBus は processes.get(pid).iframe.contentWindow を要求するため、
-  // 各プロセスに最低限の形だけ持たせる。
-  const processes = new Map<string, any>();
+  // 担当プロセスへの道（ProcessManager の代わり）。届くのは registerProcess した pid だけ ——
+  // 届かない相手への知らせが何も起こさないのは、ProcessManager の側の規則（ProcessManager.gate.test.ts）
+  const live = new Set<string>();
   const registerProcess = (pid: string) => {
-    processes.set(pid, { iframe: { contentWindow: {} } });
+    live.add(pid);
+  };
+  const processes = {
+    isReachable: (pid: string) => live.has(pid),
+    notify: (pid: string, event: string, payload: any) => {
+      if (live.has(pid)) sent.push({ pid, event, payload });
+    },
+    request: async (..._args: any[]): Promise<unknown> => {
+      throw new Error('request is not stubbed');
+    },
   };
 
   const pathResolver = {
     normalizePath: (p: string) => (p || '').replace(/\\/g, '/').replace(/^\/+|\/+$/g, ''),
   };
 
-  const manager = new ProviderManager(eventBus, transport as any, { processes } as any, pathResolver as any);
+  const manager = new ProviderManager(eventBus, processes, pathResolver as any);
 
   // origin（個体の印）を省くと主体の id（主体だけで書く者の既定。T-0903）
   const publish = (path: string, sourcePrincipal: Principal, origin: string = sourcePrincipal.id) => {
@@ -238,7 +241,7 @@ describe('ProviderManager capabilities / moveContent（T-0689）', () => {
     ctx.registerProcess('sync');
     ctx.manager.registerProvider('', 'sync');
     const calls: any[] = [];
-    (ctx.manager as any).transport.invokeGuest = async (...args: any[]) => {
+    (ctx.manager as any).processes.request = async (...args: any[]) => {
       calls.push(args);
       return true;
     };
@@ -251,7 +254,7 @@ describe('ProviderManager capabilities / moveContent（T-0689）', () => {
     ctx.registerProcess('sync');
     ctx.manager.registerProvider('', 'sync', { move: true });
     const calls: any[] = [];
-    (ctx.manager as any).transport.invokeGuest = async (pid: string, name: string, payload: any) => {
+    (ctx.manager as any).processes.request = async (pid: string, name: string, payload: any) => {
       calls.push([pid, name, payload]);
       return payload.oldPath === 'ok/x' ? true : 'not-a-boolean';
     };
@@ -266,7 +269,7 @@ describe('ProviderManager capabilities / moveContent（T-0689）', () => {
   it('担当が死んでいれば頼まず false（登録は残る）', async () => {
     const ctx = setup();
     ctx.manager.registerProvider('', 'sync', { move: true });
-    (ctx.manager as any).transport.invokeGuest = async () => {
+    (ctx.manager as any).processes.request = async () => {
       throw new Error('should not be called');
     };
     expect(await ctx.manager.moveContent('a', 'b')).toBe(false);
@@ -276,7 +279,7 @@ describe('ProviderManager capabilities / moveContent（T-0689）', () => {
     const ctx = setup();
     ctx.registerProcess('sync');
     ctx.manager.registerProvider('', 'sync', { move: true });
-    (ctx.manager as any).transport.invokeGuest = async () => {
+    (ctx.manager as any).processes.request = async () => {
       throw new Error('remote move failed');
     };
     expect(await ctx.manager.moveContent('a', 'b')).toBe(false);

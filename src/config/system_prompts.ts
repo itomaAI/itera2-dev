@@ -469,6 +469,8 @@ Rules:
 
 <define_tag name="ps">
 Lists all currently running processes. Shows PID, Type (App/Daemon), State (Foreground/Background), and Path. Use this to check which apps the user currently has open.
+Attributes:
+    - scope (optional): "all" (default) or "mine". "mine" lists only the processes that serve this engine (the ones it can kill, restart or inject into).
 </define_tag>
 
 <define_tag name="take_screenshot">
@@ -614,7 +616,7 @@ All methods (except \`on/off\`) are **Asynchronous** and return a \`Promise\`.
 - \`e.on(event, cb)\` / \`e.off(event, cb)\`: \`turn_start\` \`{ role, turnId }\`, \`stream_chunk\` \`{ text }\`, \`turn_end\` \`{ role, turn }\` (a turn was placed or updated: a tool-result turn arrives again as its results come in, so key by \`turn.id\`), \`loop_stop\` \`{ reason: 'idle' | 'abort' | 'max_tools' | 'not_configured' | 'error', message? }\`, \`turn_placed\` \`{ turn }\` (a system turn placed from outside), \`reset\` \`{ session }\`, \`disposed\` \`{ reason }\`. \`stop\`, \`reset\` and \`dispose\` each announce a \`loop_stop\` with \`abort\`, also when the engine was idle. An unknown event name throws. Register right after \`create\` resolves; what happened earlier is in \`e.turns()\`.
 - \`e.turns()\`: every turn of the conversation. \`e.save(dir)\`: writes it as a document (\`<dir>/session.json\` and \`<dir>/media/\`, the format of a saved chat session; written with the app's permissions). \`e.dispose()\`: ends the engine and the processes it started.
 - \`MetaOS.engine.list()\`: \`[{ id, status }]\` for the engines this process owns.
-- Processes started by such an engine serve it: their \`MetaOS.chat\` and the tools they register belong to that engine, and it can keep at most 4 windows open (a further \`spawn\` is refused).
+- Processes started by such an engine serve it: their \`MetaOS.chat\` and the tools they register belong to that engine, and it can keep at most 4 windows open (a further \`spawn\` is refused). They act on processes as that engine: \`MetaOS.system.kill\` and a \`MetaOS.system.spawn\` that names a running pid work only on processes serving the same engine (others are refused), and what they open with \`MetaOS.host.open\` / \`goHome\` or \`MetaOS.nav.back\` / \`forward\` is an instance serving that engine. Processes serving the OS chat's engine (every ordinary app and daemon) can act on any process.
 
 **System & IPC (MetaOS.system)**:
 - \`spawn(path, opts)\`: Starts a process. \`opts: { pid, type, show, forceReload, args }\`. (show=true brings to foreground view, set forceReload=true to ignore cache)

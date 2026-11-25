@@ -29,10 +29,9 @@ function makePathResolver() {
  * 登録（registerProvider）と生存（processes に居る）は別の軸である —— T-0353。
  */
 function makeProviderManager(pathResolver: any, livePids: string[] = []) {
-  const processes = new Map<string, any>();
-  for (const pid of livePids) processes.set(pid, { iframe: { contentWindow: {} } });
-  const transport = { sendEvent: () => {}, invokeGuest: async () => true };
-  return new ProviderManager(new VfsEventBus(), transport as any, { processes } as any, pathResolver as any);
+  const live = new Set(livePids);
+  const processes = { live, isReachable: (pid: string) => live.has(pid), notify: () => {}, request: async () => true };
+  return new ProviderManager(new VfsEventBus(), processes, pathResolver as any);
 }
 
 function dir(name: string, path: string, children: TreeNode[] = []): TreeNode {
@@ -275,7 +274,7 @@ describe('VfsService.stat: 登録が在っても、応じられるとは限ら�
     expect(svc.stat(PRINCIPAL, `${MOUNT}/a.ts`).syncProvider!.alive).toBe(true);
 
     // 途中でプロセスが消える（kill 相当）。登録は触らない
-    (svc as any).providerManager.processManager.processes.delete('local_bridge');
+    (svc as any).providerManager.processes.live.delete('local_bridge');
     expect(svc.stat(PRINCIPAL, `${MOUNT}/a.ts`).syncProvider!.alive).toBe(false);
     expect(svc.stat(PRINCIPAL, `${MOUNT}/a.ts`).syncProvider!.pid).toBe('local_bridge');
   });
@@ -289,11 +288,16 @@ describe('ProviderManager.isProviderAlive', () => {
     expect(pm.isProviderAlive('never_started')).toBe(false);
   });
 
-  it('窓の無いプロセス（描画前・破棄後）は応じられない扱い', () => {
+  it('届くかどうかは、担当プロセスへの道に訊く（窓の無いプロセスを届かないとするのは ProcessManager.isReachable）', () => {
     const pathResolver = makePathResolver();
     const pm: any = makeProviderManager(pathResolver, []);
-    pm.processManager.processes.set('no_window', { iframe: {} });
+    const asked: string[] = [];
+    pm.processes.isReachable = (pid: string) => {
+      asked.push(pid);
+      return false;
+    };
     expect(pm.isProviderAlive('no_window')).toBe(false);
+    expect(asked).toEqual(['no_window']);
   });
 
   it('取り寄せは、応じられない担当に対しては偽を返す（判定が 1 か所である証拠）', async () => {

@@ -18,6 +18,7 @@ import { declaredRoute } from './declaredRoute';
 import { choosePid, resolveApp } from './processIdentity';
 import { ROOT_ENGINE_ID } from '../../core/control/Engine';
 import { MAX_APPS_ROOT, MAX_APPS_SUB } from '../../config/engine_limits';
+import { OS_MOVER, USER_MOVER, ProcessRefusedError, canMove, type Mover } from './processGate';
 
 export interface Process {
   /** どの個体か。名前空間は OS に 1 つ（IPC の宛先・道具の組・変更の個体の印） */
@@ -50,7 +51,10 @@ export interface CurrentRoute {
 export interface SpawnOptions {
   /** 個体に付ける名前。省けばホストが振る（アプリの id。埋まっていれば枝番） */
   pid?: string;
-  /** 仕えるエンジンの id。省けばルート */
+  /**
+   * 仕えるエンジンの id（OS・利用者が起こすとき。省けばルート。起こし直しで元の仕え先を保つための欄）。
+   * エンジンが起こすものは、この欄に関係なく、そのエンジンに仕える
+   */
   engine?: string;
   path: string;
   type?: 'app' | 'daemon';
@@ -105,11 +109,20 @@ export class SpawnRefusedError extends Error {
   }
 }
 
+/**
+ * ゲストへ送る道（HostTransport が満たす）。ゲスト宛ての要求と知らせは、これを持つ ProcessManager だけが出す（T-0912）
+ */
+export interface GuestChannel {
+  invokeGuest(pid: string, action: string, payload: unknown, targetWindow: Window): Promise<unknown>;
+  sendEvent(pid: string, action: string, payload: unknown, targetWindow: Window): void;
+}
+
 export class ProcessManager {
   private vfs: VfsService;
   private compiler: GuestCompiler;
   private appRegistry: AppRegistry;
   private configManager: ConfigManager;
+  private channel: GuestChannel | null;
   public processes: Map<string, Process> = new Map();
   public currentRoute: CurrentRoute | null = null;
   /**
@@ -121,10 +134,16 @@ export class ProcessManager {
   private events: Record<string, Function[]> = {};
   private els: Record<string, HTMLElement | null> = {};
 
-  constructor(vfs: VfsService, appRegistry: AppRegistry, configManager: ConfigManager) {
+  constructor(
+    vfs: VfsService,
+    appRegistry: AppRegistry,
+    configManager: ConfigManager,
+    channel: GuestChannel | null = null,
+  ) {
     this.vfs = vfs;
     this.appRegistry = appRegistry;
     this.configManager = configManager;
+    this.channel = channel;
     this.compiler = new GuestCompiler();
     this._initElements();
     this._bindEvents();
@@ -151,7 +170,7 @@ export class ProcessManager {
       this.els.BTN_REFRESH.onclick = () => {
         let targetProc = Array.from(this.processes.values()).find((p) => p.state === 'foreground');
         if (targetProc) {
-          this.spawn({
+          this.spawn(USER_MOVER, {
             pid: targetProc.pid,
             engine: targetProc.engine,
             path: targetProc.path,
@@ -163,24 +182,25 @@ export class ProcessManager {
           });
         } else {
           const homePath = this.configManager.homePath();
-          this.spawn({ path: homePath, show: true, forceReload: true });
+          this.spawn(USER_MOVER, { path: homePath, show: true, forceReload: true });
         }
       };
     }
     if (this.els.BTN_HOME) {
       this.els.BTN_HOME.onclick = () => {
         const homePath = this.configManager.homePath();
-        this.spawn({ path: homePath, show: true });
+        this.spawn(USER_MOVER, { path: homePath, show: true });
       };
     }
   }
 
   /** 何のアプリか・どのエンジンに仕えるか・どの個体か を決める（規則は processIdentity.ts） */
-  private _resolveProcessInfo(options: SpawnOptions) {
+  private _resolveProcessInfo(options: SpawnOptions, mover: Mover) {
     const basePath = options.path.split(/[?#]/)[0];
     const identity = resolveApp(basePath, options.pid, this.appRegistry, () => this.configManager.homePath());
     const type: 'app' | 'daemon' = options.type || identity.defaultType;
-    const engine = options.engine || ROOT_ENGINE_ID;
+    // エンジンが起こすものは、そのエンジンに仕える。OS・利用者は、仕える先を指せる（省けばルート）
+    const engine = mover.kind === 'engine' ? mover.engine : options.engine || ROOT_ENGINE_ID;
     const pid = choosePid(options.pid, identity.app, engine, this.processes);
 
     // デーモンは強制的に非表示、アプリは未指定なら表示(true)
@@ -190,16 +210,21 @@ export class ProcessManager {
   }
 
   /**
-   * プロセスを起動、またはバックグラウンドにあるアプリをフォアグラウンドに引き出す
+   * プロセスを起動、またはバックグラウンドにあるアプリをフォアグラウンドに引き出す（動かす口。T-0912）。
+   * `mover` は「誰が」。居る個体への再開・起こし直しは、その個体を動かせる者だけ（規則は processGate.ts）。
+   * 動かせない相手なら、何も変えずに ProcessRefusedError
    */
-  async spawn(options: SpawnOptions): Promise<void> {
+  async spawn(mover: Mover, options: SpawnOptions): Promise<void> {
     const { path: rawPath, forceReload = false, args: rawArgs, currentUri } = options;
-    const { pid, app, engine, type, show } = this._resolveProcessInfo(options);
+    const { pid, app, engine, type, show } = this._resolveProcessInfo(options, mover);
 
     const uri = currentUri || `metaos://run/${rawPath}${queryFromArgs(rawPath, rawArgs)}`;
     // 起動に使う path には query を残さない（T-0542）
     const { path, args } = moveQueryToArgs(rawPath, rawArgs);
     const existingProc = this.processes.get(pid);
+    if (existingProc && !canMove(mover, existingProc)) {
+      throw new ProcessRefusedError(existingProc, 'resume or restart');
+    }
 
     if (existingProc && existingProc.iframe) {
       // 厳密なパス一致ではなくベースパスの一致でResumeを判定する（引数だけの変化を許容）
@@ -217,7 +242,7 @@ export class ProcessManager {
         }
 
         if (this.events['process_resumed']) {
-          this.events['process_resumed'].forEach((cb) => cb(existingProc));
+          this.events['process_resumed'].forEach((cb) => cb(existingProc, mover));
         }
 
         if (existingProc.iframe.contentWindow) {
@@ -251,7 +276,7 @@ export class ProcessManager {
 
     // 新規起動または強制リロード。表示するなら前面は新しい起動が取るので、kill に前面を渡させない
     // （渡させると、前面のホームを起動し直すときに kill がホームを別に起こし、iframe が 2 つになる。T-0838 で見つけた）
-    this.kill(pid, { refocus: !show });
+    this._kill(pid, mover, { refocus: !show });
 
     if (show && this.els.LOADER) {
       this.els.LOADER.classList.remove('hidden');
@@ -302,7 +327,7 @@ export class ProcessManager {
 
       // 状態が確定した後にイベントを発行する
       if (this.events['process_spawned']) {
-        this.events['process_spawned'].forEach((cb) => cb(this.processes.get(pid)));
+        this.events['process_spawned'].forEach((cb) => cb(this.processes.get(pid), mover));
       }
 
       // 1 段目（ブートストラップ）を置き、本体の文書が load する（sys:ready）まで待つ。
@@ -366,16 +391,29 @@ export class ProcessManager {
         bgApps.sort((a, b) => a.lastActiveTime - b.lastActiveTime);
         const oldest = bgApps[0];
         console.log(`[ProcessManager] LRU limit reached. Killing oldest app: ${oldest.pid}`);
-        this.kill(oldest.pid);
+        this._kill(oldest.pid, OS_MOVER);
       }
     }
   }
 
   /**
-   * プロセスを終わらせる。前面のアプリだったときは、残りのアプリかホームへ前面を渡す。
+   * プロセスを終わらせる（動かす口。T-0912）。`mover` は「誰が」。居なければ false。
+   * 動かせない相手なら、何も変えずに ProcessRefusedError（規則は processGate.ts）
+   */
+  kill(mover: Mover, pid: string): boolean {
+    const proc = this.processes.get(pid);
+    if (!proc) return false;
+    if (!canMove(mover, proc)) throw new ProcessRefusedError(proc, 'kill');
+    return this._kill(pid, mover);
+  }
+
+  /**
+   * 終わらせる本体（判定の内側。ProcessManager 自身の片付け —— 起こし直しの前・窓の押し出し・全部の起こし直し —— は
+   * ここを直に呼ぶ）。`by` は誰が終わらせたか（知らせ process_killed に載り、記録に残る）。
+   * 前面のアプリだったときは、残りのアプリかホームへ前面を渡す。
    * `refocus: false` は「前面は呼び手が決める」（spawn が同じ pid を表示つきで起動し直すとき）。
    */
-  kill(pid: string, opts: { refocus?: boolean } = {}): boolean {
+  private _kill(pid: string, by: Mover, opts: { refocus?: boolean } = {}): boolean {
     if (!this.processes.has(pid)) return false;
     const refocus = opts.refocus !== false;
 
@@ -395,7 +433,7 @@ export class ProcessManager {
     void this.vfs.releaseContent(pid).catch((e) => console.warn(`[ProcessManager] releaseContent(${pid})`, e));
 
     if (this.events['process_killed']) {
-      this.events['process_killed'].forEach((cb) => cb(pid, proc));
+      this.events['process_killed'].forEach((cb) => cb(pid, proc, by));
     }
 
     if (proc.state === 'foreground' && refocus) {
@@ -406,7 +444,7 @@ export class ProcessManager {
         this.setCurrentRoute({ pid: apps[0].pid, uri: apps[0].currentUri });
       } else {
         const homePath = this.configManager.homePath();
-        this.spawn({ path: homePath, show: true });
+        this.spawn(OS_MOVER, { path: homePath, show: true });
       }
     }
 
@@ -442,20 +480,23 @@ export class ProcessManager {
     }
   }
 
-  /** 走っているゲストを全部起動し直す。前面のアプリは最後に（先に消すと別のアプリかホームへ前面が移るため） */
-  async restartAll(): Promise<void> {
+  /**
+   * 走っているゲストを全部起動し直す。前面のアプリは最後に（先に消すと別のアプリかホームへ前面が移るため）。
+   * 人の切り替え（setGuestSameOrigin）の実体なので、外には出さず、利用者として起こし直す
+   */
+  private async restartAll(): Promise<void> {
     // ルート以外のエンジンに仕えるプロセスは、起こし直さずに終わらせる。そのエンジンは、持ち主（辿ればルートに仕える
     // プロセス）が起こし直された時点で畳まれる（EngineManager）ので、起こし直すと、畳まれたエンジンに仕えるものが出来る。
     // 先に終わらせるのは、前面がそれだったときに、前面を残るアプリへ渡しておくため
     for (const p of Array.from(this.processes.values())) {
-      if (p.engine !== ROOT_ENGINE_ID) this.kill(p.pid);
+      if (p.engine !== ROOT_ENGINE_ID) this._kill(p.pid, USER_MOVER);
     }
     const procs = Array.from(this.processes.values());
     const front = procs.find((p) => p.state === 'foreground');
     const order = [...procs.filter((p) => p !== front), ...(front ? [front] : [])];
     await Promise.all(
       order.map((p) =>
-        this.spawn({
+        this.spawn(USER_MOVER, {
           pid: p.pid,
           engine: p.engine,
           path: p.path,
@@ -467,12 +508,6 @@ export class ProcessManager {
         }),
       ),
     );
-  }
-
-  killAll(): void {
-    for (const pid of this.processes.keys()) {
-      this.kill(pid);
-    }
   }
 
   reportError(pid: string, errorData: any): void {
@@ -499,6 +534,47 @@ export class ProcessManager {
         proc.iframe.contentWindow.postMessage(msg, '*');
       }
     }
+  }
+
+  /** そのプロセスの窓（居ない・窓が無いときは null） */
+  private _windowOf(pid: string): Window | null {
+    const proc = this.processes.get(pid);
+    return proc && proc.iframe && proc.iframe.contentWindow ? proc.iframe.contentWindow : null;
+  }
+
+  /**
+   * いま届くか（居て、窓が在る）。「登録が在る」とは別のこと ——
+   * 同期プロバイダの「いま応じられるか」も、道具を持つプロセスが居るかも、これを訊く（条件を 2 か所に書かない。T-0353）
+   */
+  isReachable(pid: string): boolean {
+    return this.channel !== null && this._windowOf(pid) !== null;
+  }
+
+  /**
+   * 頼む: そのプロセスに要求を送り、答えを待つ（道具の呼び出し・同期プロバイダへの要求）。
+   * 関所は通すだけで、誰が頼んだかを見ない —— 頼んでよいかを知っているのは呼び手の側（道具の台帳・マウントの表）。
+   * 届かなければ失敗
+   */
+  async request(pid: string, action: string, payload: unknown): Promise<unknown> {
+    const win = this._windowOf(pid);
+    if (!this.channel || !win) throw new Error(`[ProcessManager] Process '${pid}' is not reachable.`);
+    return this.channel.invokeGuest(pid, action, payload, win);
+  }
+
+  /** 知らせる: そのプロセスにだけ送る（返事は待たない）。届かなければ何もしない */
+  notify(pid: string, action: string, payload: unknown): void {
+    const win = this._windowOf(pid);
+    if (this.channel && win) this.channel.sendEvent(pid, action, payload, win);
+  }
+
+  /**
+   * そのプロセスの中でコードを走らせ、戻り値を返す（動かす口。T-0912）。`mover` は「誰が」。
+   * 動かせない相手なら、何も送らずに ProcessRefusedError（規則は processGate.ts）。届かなければ失敗
+   */
+  async evalIn(mover: Mover, pid: string, code: string): Promise<unknown> {
+    const proc = this.processes.get(pid);
+    if (proc && !canMove(mover, proc)) throw new ProcessRefusedError(proc, 'run code in');
+    return this.request(pid, 'eval_js', { code });
   }
 
   list(): any[] {

@@ -26,6 +26,7 @@ import { ENGINES_TEMP_DIR, EngineConversation } from '../../core/state/EngineCon
 import type { PromptRole } from '../../config/system_prompts';
 import { MAX_SUB_ENGINES } from '../../config/engine_limits';
 import { generateId } from '../../utils/id';
+import { OS_MOVER, type Mover } from '../windowing/processGate';
 
 /** 作るときに渡せるもの。どちらも省ける */
 export interface EngineSpec {
@@ -101,7 +102,7 @@ export interface EngineManagerDeps {
   shellFor: (engineId: string) => ToolShell;
   processes: {
     processes: ReadonlyMap<string, ServingProcess>;
-    kill(pid: string): boolean;
+    kill(mover: Mover, pid: string): boolean;
     on(event: string, callback: (...args: any[]) => void): void;
   };
   /** プロンプトと上流を差す側（CognitiveManager） */
@@ -262,7 +263,7 @@ export class EngineManager {
     // 先にエンジンを止める（仕えていたプロセスが終わっていくことに、エンジンが反応しないように）
     entry.bundle.dispose();
     for (const proc of [...this.deps.processes.processes.values()]) {
-      if (proc.engine === id) this.deps.processes.kill(proc.pid);
+      if (proc.engine === id) this.deps.processes.kill(OS_MOVER, proc.pid);
     }
 
     this.deps.logger.log('process_events', {
