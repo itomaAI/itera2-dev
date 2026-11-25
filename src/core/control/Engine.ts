@@ -826,7 +826,8 @@ export class Engine {
     this.hasPendingEvents = false;
     this.overtakeRequested = false;
     // 走っている束は見捨てる（閉じる）。遅れて届いた結果は新しいターンとして履歴に入るが、
-    // 本数には数えず、利用者が次に発言するまで起こさない（stopRequested が予約を止める）
+    // 本数には数えず、利用者が次に発言するまで起こさない（stopRequested が予約を止める）。
+    // まだ始まっていない道具は、あとの発言で stopRequested が解けても始めない（stoppedBatchSerial）
     this.closedBatchSerial = this.batchSerial;
     this.stoppedBatchSerial = this.batchSerial;
     this.batchSerial++;

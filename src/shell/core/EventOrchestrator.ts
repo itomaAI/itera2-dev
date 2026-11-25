@@ -40,7 +40,7 @@ import { t } from '../../i18n/i18n';
  * "Processing..." が画面に見えることはない。
  *
  * toolPhase は「消してよいか」の判断にだけ使う。取りこぼすと待機表示が残り続けるので、
- * loop_stop では必ず false に戻すこと（Engine は loop_stop を必ず出す契約になっている）。
+ * loop_stop では必ず false に戻すこと（Engine は回ごとに loop_stop を出す。生成の途中で止めた回も 1 度。T-0918）。
  */
 export type IndicatorAction = 'processing' | 'hide' | 'keep';
 
