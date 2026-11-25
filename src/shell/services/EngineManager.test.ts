@@ -322,15 +322,17 @@ describe('EngineManager: 作る', () => {
     await expect(w.manager.create(helper, { toolsets: ['mailer'] })).rejects.toThrow(
       'toolsets: "mailer" is not a toolset visible to the engine this process serves (visible: web)',
     );
-    const g = await w.manager.create(helper, { toolsets: ['web'] });
-    expect(g.bundle.tools.listToolSets().map((s) => s.id)).toEqual(['web']);
+    // 与えた者は、作るプロセスが仕えるエンジン: サブの台帳に在る組（サブに仕えるプロセスの道具）も、与えられた組も渡せる
+    e.bundle.tools.registerDynamicTool('draw', 'helper', { description: 'd' });
+    const g = await w.manager.create(helper, { toolsets: ['web', 'helper'] });
+    expect(g.bundle.tools.listToolSets().map((s) => s.id)).toEqual(['helper', 'web']);
 
     // 道具を持つプロセスが消えて登録し直しても（起こし直し）、与えた先の全部からまた見える
     w.registry.removeToolsByPid('web');
-    expect(g.bundle.tools.listToolSets()).toEqual([]);
+    expect(g.bundle.tools.listToolSets().map((s) => s.id)).toEqual(['helper']);
     w.root.tools.registerDynamicTool('search', 'web', { description: 's' });
-    expect(e.bundle.tools.listToolSets().map((s) => s.id)).toEqual(['web']);
-    expect(g.bundle.tools.listToolSets().map((s) => s.id)).toEqual(['web']);
+    expect(e.bundle.tools.listToolSets().map((s) => s.id)).toEqual(['helper', 'web']);
+    expect(g.bundle.tools.listToolSets().map((s) => s.id)).toEqual(['helper', 'web']);
   });
 
   it('保存された会話から始める。読むのは持ち主の主体・添付はこのエンジンの置き場へ', async () => {

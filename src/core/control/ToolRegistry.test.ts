@@ -391,14 +391,16 @@ describe('ToolRegistry: エンジンごとの台帳（T-0903）', () => {
     expect(systemOf(h.root).length).toBeGreaterThan(0);
   });
 
-  it('ルートの台帳には、ほかのエンジンの台帳が先に持っていた名前も登録できる。そのエンジンからは自分のものが、ルートからはルートのものが動く', async () => {
+  it('与えた者の側の組は、与えられた側の台帳が先に持っていた名前も登録できる。与えられた側からは自分のものが、与えた者からは与えた者のものが動く', async () => {
     const h = harness();
-    h.root.registerDynamicTool('draw', 'painter', { description: 'root draw' });
+    // web_daemon は e1 に与えてある組。そこへ、e1 の台帳（canvas_2）がもう持っている名前を足す
+    h.root.registerDynamicTool('draw', 'web_daemon', { description: 'root draw' });
+    expect(h.sub.listToolSets().map((s) => s.id)).toEqual(['canvas_2', 'web_daemon']);
     expect((await h.sub.execute({ type: 'draw', params: {} }, NO_CTX))?.log).toBe('canvas_2:draw');
-    expect((await h.root.execute({ type: 'draw', params: {} }, NO_CTX))?.log).toBe('painter:draw');
+    expect((await h.root.execute({ type: 'draw', params: {} }, NO_CTX))?.log).toBe('web_daemon:draw');
     expect(h.calls).toEqual([
       { pid: 'canvas_2', name: 'draw' },
-      { pid: 'painter', name: 'draw' },
+      { pid: 'web_daemon', name: 'draw' },
     ]);
   });
 
@@ -625,6 +627,10 @@ describe('ToolRegistry: 与えられた組（T-0912）', () => {
     expect(grand.listToolSets().map((s) => s.id)).toEqual(['git_daemon']);
     sub.dispose();
     expect(grand.listToolSets()).toEqual([]);
+
+    // 与えずに作り直せば、前の与えは残らない
+    h.r.viewFor('e3', { from: ROOT_ENGINE_ID, toolsets: ['bridge'] });
+    expect(h.r.viewFor('e3').listToolSets()).toEqual([]);
   });
 
   it('与えが輪になっても、たどりは止まる', () => {
