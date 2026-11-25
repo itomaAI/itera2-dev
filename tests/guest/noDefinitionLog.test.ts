@@ -11,8 +11,25 @@ import { join, relative, resolve } from 'node:path';
 
 const ROOT = resolve(__dirname, '../../vfs_root');
 const TEXT = /\.(html|js|md|json|ts)$/;
-// `….log(` の引数のどこかに 'tool_available' を渡している呼び出し（複数行でもよい）
-const CALL = /\.log\(\s*(?:[^()]|\([^()]*\))*?['"`]tool_available['"`]/;
+const WORD = /['"`]tool_available['"`]/;
+const MAX_CALL = 4000; // 1 つの呼び出しとして読む長さの上限（閉じ括弧が見つからないときの歯止め）
+
+/** `….log(` の呼び出しのうち、引数のどこかに 'tool_available' を渡しているものの数。括弧を数えて、呼び出しの終わりまでを引数として読む */
+function definitionLogCalls(text: string): number {
+  let n = 0;
+  for (let i = text.indexOf('.log('); i >= 0; i = text.indexOf('.log(', i + 1)) {
+    const open = i + 4;
+    let depth = 0;
+    let j = open;
+    for (; j < text.length && j < open + MAX_CALL; j++) {
+      const c = text[j];
+      if (c === '(') depth++;
+      else if (c === ')' && --depth === 0) break;
+    }
+    if (WORD.test(text.slice(open + 1, j))) n++;
+  }
+  return n;
+}
 
 function walk(dir: string, out: string[] = []): string[] {
   for (const name of readdirSync(dir)) {
@@ -32,18 +49,28 @@ describe('配信物は、道具の定義を ai.log で流さない', () => {
   });
 
   it("vfs_root のどこにも log(…, 'tool_available') の呼び出しが無い", () => {
-    const hits = files.filter((p) => CALL.test(readFileSync(p, 'utf8'))).map((p) => relative(ROOT, p));
+    const hits = files.filter((p) => definitionLogCalls(readFileSync(p, 'utf8')) > 0).map((p) => relative(ROOT, p));
     expect(hits).toEqual([]);
   });
 
-  it('見分けの式は、実際の書き方を拾う', () => {
-    expect(CALL.test('await MetaOS.ai.log(systemMsg, "tool_available");')).toBe(true);
-    expect(CALL.test("MetaOS.ai.log(\n  definition + '\\n\\n[System] ready.',\n  'tool_available',\n);")).toBe(true);
-    expect(CALL.test("ai.log(toolDefs, 'tool_available', { trigger_llm: false });")).toBe(true);
-    // 手引きの説明の文（呼び出しではない）は拾わない
+  it('見分けは、実際の書き方を拾う（1 行・複数行・引数の中に括弧が入れ子のもの）', () => {
+    expect(definitionLogCalls('await MetaOS.ai.log(systemMsg, "tool_available");')).toBe(1);
+    expect(definitionLogCalls("MetaOS.ai.log(\n  definition + '\\n\\n[System] ready.',\n  'tool_available',\n);")).toBe(
+      1,
+    );
+    expect(definitionLogCalls("ai.log(toolDefs, 'tool_available', { trigger_llm: false });")).toBe(1);
+    expect(definitionLogCalls("M.ai.log(TOOLS.map((t) => t.definition).join('\\n'), 'tool_available');")).toBe(1);
+    expect(definitionLogCalls("M.ai.log(Object.values(defs).join('\\n'), `tool_available`);")).toBe(1);
+  });
+
+  it('見分けは、定義を流していないものを拾わない', () => {
+    // 手引きの説明の文（呼び出しではない）
     expect(
-      CALL.test('placed in the conversation (a `tool_available` event). Do not log it with `MetaOS.ai.log`.'),
-    ).toBe(false);
-    expect(CALL.test("MetaOS.ai.log('User cleared the mind map.', 'map_cleared');")).toBe(false);
+      definitionLogCalls('placed in the conversation (a `tool_available` event). Do not log it with `MetaOS.ai.log`.'),
+    ).toBe(0);
+    // 別の種類の記録
+    expect(definitionLogCalls("MetaOS.ai.log('User cleared the mind map.', 'map_cleared');")).toBe(0);
+    // 呼び出しが閉じたあとに語が出てくるだけ
+    expect(definitionLogCalls("console.log('started');\nconst hidden = ['tool_available', 'info'];")).toBe(0);
   });
 });
