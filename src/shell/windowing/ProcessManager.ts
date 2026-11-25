@@ -242,7 +242,7 @@ export class ProcessManager {
         }
 
         if (this.events['process_resumed']) {
-          this.events['process_resumed'].forEach((cb) => cb(existingProc));
+          this.events['process_resumed'].forEach((cb) => cb(existingProc, mover));
         }
 
         if (existingProc.iframe.contentWindow) {
@@ -276,7 +276,7 @@ export class ProcessManager {
 
     // 新規起動または強制リロード。表示するなら前面は新しい起動が取るので、kill に前面を渡させない
     // （渡させると、前面のホームを起動し直すときに kill がホームを別に起こし、iframe が 2 つになる。T-0838 で見つけた）
-    this._kill(pid, { refocus: !show });
+    this._kill(pid, mover, { refocus: !show });
 
     if (show && this.els.LOADER) {
       this.els.LOADER.classList.remove('hidden');
@@ -327,7 +327,7 @@ export class ProcessManager {
 
       // 状態が確定した後にイベントを発行する
       if (this.events['process_spawned']) {
-        this.events['process_spawned'].forEach((cb) => cb(this.processes.get(pid)));
+        this.events['process_spawned'].forEach((cb) => cb(this.processes.get(pid), mover));
       }
 
       // 1 段目（ブートストラップ）を置き、本体の文書が load する（sys:ready）まで待つ。
@@ -391,7 +391,7 @@ export class ProcessManager {
         bgApps.sort((a, b) => a.lastActiveTime - b.lastActiveTime);
         const oldest = bgApps[0];
         console.log(`[ProcessManager] LRU limit reached. Killing oldest app: ${oldest.pid}`);
-        this._kill(oldest.pid);
+        this._kill(oldest.pid, OS_MOVER);
       }
     }
   }
@@ -404,15 +404,16 @@ export class ProcessManager {
     const proc = this.processes.get(pid);
     if (!proc) return false;
     if (!canMove(mover, proc)) throw new ProcessRefusedError(proc, 'kill');
-    return this._kill(pid);
+    return this._kill(pid, mover);
   }
 
   /**
    * 終わらせる本体（判定の内側。ProcessManager 自身の片付け —— 起こし直しの前・窓の押し出し・全部の起こし直し —— は
-   * ここを直に呼ぶ）。前面のアプリだったときは、残りのアプリかホームへ前面を渡す。
+   * ここを直に呼ぶ）。`by` は誰が終わらせたか（知らせ process_killed に載り、記録に残る）。
+   * 前面のアプリだったときは、残りのアプリかホームへ前面を渡す。
    * `refocus: false` は「前面は呼び手が決める」（spawn が同じ pid を表示つきで起動し直すとき）。
    */
-  private _kill(pid: string, opts: { refocus?: boolean } = {}): boolean {
+  private _kill(pid: string, by: Mover, opts: { refocus?: boolean } = {}): boolean {
     if (!this.processes.has(pid)) return false;
     const refocus = opts.refocus !== false;
 
@@ -432,7 +433,7 @@ export class ProcessManager {
     void this.vfs.releaseContent(pid).catch((e) => console.warn(`[ProcessManager] releaseContent(${pid})`, e));
 
     if (this.events['process_killed']) {
-      this.events['process_killed'].forEach((cb) => cb(pid, proc));
+      this.events['process_killed'].forEach((cb) => cb(pid, proc, by));
     }
 
     if (proc.state === 'foreground' && refocus) {
@@ -488,7 +489,7 @@ export class ProcessManager {
     // プロセス）が起こし直された時点で畳まれる（EngineManager）ので、起こし直すと、畳まれたエンジンに仕えるものが出来る。
     // 先に終わらせるのは、前面がそれだったときに、前面を残るアプリへ渡しておくため
     for (const p of Array.from(this.processes.values())) {
-      if (p.engine !== ROOT_ENGINE_ID) this._kill(p.pid);
+      if (p.engine !== ROOT_ENGINE_ID) this._kill(p.pid, USER_MOVER);
     }
     const procs = Array.from(this.processes.values());
     const front = procs.find((p) => p.state === 'foreground');

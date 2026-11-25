@@ -2,7 +2,7 @@
  * プロセスの関所の規則（T-0912）: OS と利用者は全部・ルートは全部・ほかのエンジンは自分に仕えるプロセスだけ。
  */
 import { describe, expect, it } from 'vitest';
-import { OS_MOVER, USER_MOVER, ProcessRefusedError, canMove, engineMover } from './processGate';
+import { OS_MOVER, USER_MOVER, ProcessRefusedError, canMove, describeMover, engineMover } from './processGate';
 import { ROOT_ENGINE_ID } from '../../core/control/Engine';
 
 const targets = [{ engine: ROOT_ENGINE_ID }, { engine: 'eng-a' }, { engine: 'eng-b' }];
@@ -30,6 +30,13 @@ describe('processGate: 動かしてよいか', () => {
     expect(row(engineMover(ROOT_ENGINE_ID, 'home'))).toEqual([true, true, true]);
     expect(engineMover('eng-a', 'some_app')).toEqual({ kind: 'engine', engine: 'eng-a', via: 'some_app' });
     expect(engineMover('eng-a')).toEqual({ kind: 'engine', engine: 'eng-a' });
+  });
+
+  it('記録に書く形: os・user はそれだけ。エンジンは id と、頼んだプロセス（居れば）', () => {
+    expect(describeMover(OS_MOVER)).toEqual({ by: 'os' });
+    expect(describeMover(USER_MOVER)).toEqual({ by: 'user' });
+    expect(describeMover(engineMover('eng-a'))).toEqual({ by: 'engine', byEngine: 'eng-a' });
+    expect(describeMover(engineMover('eng-a', 'a_app'))).toEqual({ by: 'engine', byEngine: 'eng-a', via: 'a_app' });
   });
 
   it('断りの文は、相手・その仕える先・しようとしたこと', () => {

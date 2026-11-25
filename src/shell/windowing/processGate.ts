@@ -36,6 +36,12 @@ export function engineMover(engine: string, via?: string): Mover {
   return via === undefined ? { kind: 'engine', engine } : { kind: 'engine', engine, via };
 }
 
+/** 記録（process_events）に書く形: 誰が動かしたか。エンジンなら、その id と、頼んだゲストのプロセス（居れば） */
+export function describeMover(mover: Mover): { by: Mover['kind']; byEngine?: string; via?: string } {
+  if (mover.kind !== 'engine') return { by: mover.kind };
+  return { by: 'engine', byEngine: mover.engine, ...(mover.via === undefined ? {} : { via: mover.via }) };
+}
+
 /** 動かしてよいか。`target` はプロセスの記録のうち、仕えるエンジン */
 export function canMove(mover: Mover, target: { engine: string }): boolean {
   if (mover.kind !== 'engine') return true;

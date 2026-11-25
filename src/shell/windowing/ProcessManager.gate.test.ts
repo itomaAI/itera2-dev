@@ -5,6 +5,8 @@
  */
 import { describe, expect, it } from 'vitest';
 import { ProcessManager } from './ProcessManager';
+import { ProcessEventRecorder } from '../services/ProcessEventRecorder';
+import { MAX_APPS_ROOT } from '../../config/engine_limits';
 import { OS_MOVER, USER_MOVER, ProcessRefusedError, engineMover } from './processGate';
 import { ROOT_ENGINE_ID } from '../../core/control/Engine';
 
@@ -236,5 +238,52 @@ describe('ProcessManager — 中でコードを走らせる・頼む・知らせ
       "[ProcessManager] Process 'p' is not reachable.",
     );
     expect(() => pm.notify('p', 'x', {})).not.toThrow();
+  });
+});
+
+describe('プロセスの記録（process_events）に、誰が動かしたかが載る', () => {
+  const record = (pm: ProcessManager) => {
+    const lines: any[] = [];
+    new ProcessEventRecorder(pm, { log: (_kind: string, payload: any) => lines.push(payload) } as any).start();
+    return lines;
+  };
+  const who = (l: any) => [l.action, l.pid, l.by, l.byEngine, l.via];
+
+  it('起こした者・再開した者・終わらせた者（起こし直しの前の終了は、起こし直した者）', () => {
+    const w = mk();
+    const lines = record(w.pm);
+    void w.pm.spawn(engineMover('eng-a', 'a_app'), { pid: 'x', path: 'data/x.html', show: false });
+    void w.pm.spawn(A, { pid: 'x', path: 'data/x.html', show: false });
+    void w.pm.spawn(USER_MOVER, { pid: 'x', path: 'data/x.html', engine: 'eng-a', show: false, forceReload: true });
+    w.pm.kill(OS_MOVER, 'x');
+    expect(lines.map(who)).toEqual([
+      ['spawned', 'x', 'engine', 'eng-a', 'a_app'],
+      ['resumed', 'x', 'engine', 'eng-a', undefined],
+      ['killed', 'x', 'user', undefined, undefined],
+      ['spawned', 'x', 'user', undefined, undefined],
+      ['killed', 'x', 'os', undefined, undefined],
+    ]);
+    // 載らない欄は、行に無い（undefined の鍵を書かない）
+    expect(Object.keys(lines[2])).not.toContain('byEngine');
+    expect(Object.keys(lines[1])).not.toContain('via');
+  });
+
+  it('窓の押し出しは OS', () => {
+    const w = mk();
+    const lines = record(w.pm);
+    for (let i = 0; i <= MAX_APPS_ROOT; i++) {
+      void w.pm.spawn(USER_MOVER, { pid: `w${i}`, path: `data/w${i}.html`, show: false });
+    }
+    expect(lines.filter((l) => l.action === 'killed').map((l) => l.by)).toEqual(['os']);
+    expect(lines.filter((l) => l.action === 'spawned').every((l) => l.by === 'user')).toBe(true);
+  });
+
+  it('断った操作は、記録に載らない', async () => {
+    const w = mk();
+    void w.pm.spawn(ROOT, { path: NOTES, show: false });
+    const lines = record(w.pm);
+    await refusal(() => w.pm.kill(A, 'notes'));
+    await refusal(w.pm.spawn(A, { pid: 'notes', path: NOTES, show: false }));
+    expect(lines).toEqual([]);
   });
 });
