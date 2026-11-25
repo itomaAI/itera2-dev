@@ -1316,7 +1316,7 @@ Attributes:
               console.warn('[loom] 道具を登録できませんでした: ' + t.name + ' ' + errMsg(e));
             }
           }
-          M.ai.log(TOOLS.map((t) => t.definition).join('\n'), 'tool_available');
+          // 道具の定義は、登録のときに OS が会話に置く（T-0912。ここから ai.log では流さない）
         }
         // 試験・診断用（inject_js から呼ぶ）。道具と同じ Ops を直接叩ける
         window.LoomDaemon = { Ops, TOOLS, reconcile, statusObj, cards, DIR, CH };

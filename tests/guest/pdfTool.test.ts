@@ -142,7 +142,12 @@ describe('置き場と配線', () => {
   });
   it('道具の定義（define_tag）は英語（Itera の見えるところは英語）', () => {
     const daemon = read('vfs_root/system/services/pdf_tool.html');
-    const defs = daemon.slice(daemon.indexOf('const defs = ['), daemon.indexOf('].join('));
+    const from = daemon.indexOf('const DEF = {');
+    const to = daemon.indexOf('const guard = ');
+    expect(from).toBeGreaterThan(0);
+    expect(to).toBeGreaterThan(from);
+    const defs = daemon.slice(from, to);
+    expect(defs).toContain('<define_tag name=');
     expect(defs).not.toMatch(/[\u3040-\u30ff\u4e00-\u9fff]/);
   });
   it('attach_file の定義は「PDF は切り出して PDF のまま添付」を先に言い、画像化は見た目が要るときだけ', () => {
