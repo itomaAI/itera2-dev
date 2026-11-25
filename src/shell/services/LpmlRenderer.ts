@@ -76,7 +76,8 @@ export class LpmlRenderer {
   private _createTagHTML(tagName: string, attributes: string, content: string, streaming = false): string {
     // 機構レイヤ（LLM生出力・システムログ）の中では、タグ箱は中立の見た目にする。
     // 意味は絵文字が担っているため色は不要であり、色を残すと「沈めたはずの機構」が
-    // かえって前に出てしまう。例外は error と syntax_warning だけ。
+    // かえって前に出てしまう。色の例外は error と syntax_warning だけ。
+    // 開いて出す例外は error と <event type="command"> だけ（syntax_warning は色を残して畳む。T-0916）。
     const NEUTRAL = 'border-border-main bg-overlay/5';
 
     let title = tagName;
@@ -165,9 +166,9 @@ export class LpmlRenderer {
       }
       case 'system':
         if ((getAttr('type') || 'info') === 'syntax_warning') {
-          // 例外3: 記法違反の警告は色を残す
+          // 例外3: 記法違反の警告は色を残す。開き方はほかの system と同じく畳む（T-0916）。
+          // 中身はモデルに宛てた長い文なので、利用者には赤い題（🚨 LPML Syntax Warning）だけで足りる
           colorClass = 'border-error bg-error/10';
-          isOpen = true;
         }
         break;
       default:
