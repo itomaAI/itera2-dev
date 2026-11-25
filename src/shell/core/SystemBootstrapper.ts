@@ -32,7 +32,7 @@ import { ROOT_ENGINE_ID } from '../../core/control/Engine';
 import { createEngineBundle } from '../../core/control/EngineBundle';
 import { EngineManager } from '../services/EngineManager';
 import { createEngineProcesses } from '../windowing/engineProcesses';
-import { OS_MOVER, USER_MOVER, type Mover } from '../windowing/processGate';
+import { OS_MOVER, type Mover } from '../windowing/processGate';
 import type { ToolShell } from '../../core/control/ToolContext';
 import { Translator } from '../../core/cognitive/Translator';
 import { registerBasicTools } from '../../core/control/tools/basic_tools';
@@ -199,11 +199,11 @@ export class SystemBootstrapper {
     const uriRouter = new UriRouter('open');
 
     // アプリをまたぐ「戻る／進む」（T-0453）。OS（ProcessManager）が持つ「現在の場所」の変化を購読して積む。
-    // 戻る・進むは記録した URI を uriRouter.dispatch に渡すだけ。ブラウザ連動は preferences.navBrowserSync（既定 true）で切れる
+    // 戻る・進むは記録した URI を、頼んだ者（mover）として uriRouter.dispatch に渡すだけ。ブラウザ連動は preferences.navBrowserSync（既定 true）で切れる
     const navBrowserSync = configManager.get('preferences')?.navBrowserSync !== false;
     const navHistory = new NavHistory({
-      navigate: (uri) => {
-        uriRouter.dispatch(uri, USER_MOVER);
+      navigate: (uri, mover) => {
+        uriRouter.dispatch(uri, mover);
       },
       browser: navBrowserSync && typeof window !== 'undefined' && window.history ? window.history : null,
     });

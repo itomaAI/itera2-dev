@@ -35,10 +35,16 @@ function world() {
   void pm.spawn(USER_MOVER, { pid: 'b_app', engine: 'eng-b', path: 'data/b_app.html', show: false });
 
   const openPath = vi.fn();
+  const navHistory = {
+    back: vi.fn(async (_mover: unknown) => true),
+    forward: vi.fn(async (_mover: unknown) => true),
+    state: () => ({ canBack: true, canForward: true, current: null }),
+  };
   new HostApiRouter(transport as any, {
     vfs: {} as any,
     configManager: config as any,
     processManager: pm as any,
+    navHistory,
     shell: { _closeMobileDrawers: () => {}, _openPath: openPath, modals: {} as any },
     engineFor: () => null,
     engines: null,
@@ -49,7 +55,7 @@ function world() {
     Array.from(pm.processes.values())
       .map((p) => `${p.pid} engine=${p.engine}`)
       .sort();
-  return { pm, call, rows, resumed, killed, openPath };
+  return { pm, call, rows, resumed, killed, openPath, navHistory };
 }
 
 const BEFORE = [
@@ -159,12 +165,23 @@ describe('host:open_path（MetaOS.host.open）', () => {
   });
 });
 
+describe('nav:back / nav:forward（MetaOS.nav.back / forward）', () => {
+  it('呼んだプロセスが仕えるエンジンとして、履歴へ渡す', async () => {
+    const w = world();
+    expect(await w.call('nav:back', {}, 'a_app')).toBe(true);
+    expect(await w.call('nav:forward', {}, 'home')).toBe(true);
+    expect(w.navHistory.back.mock.calls).toEqual([[{ kind: 'engine', engine: 'eng-a', via: 'a_app' }]]);
+    expect(w.navHistory.forward.mock.calls).toEqual([[{ kind: 'engine', engine: 'root', via: 'home' }]]);
+  });
+});
+
 describe('記録に無いプロセスからの要求', () => {
   it('動かす口は断る', async () => {
     const w = world();
     await expect(w.call('sys:kill', { pid: 'notes' }, 'ghost')).rejects.toThrow('Process [ghost] not found.');
     await expect(w.call('sys:spawn', { path: NOTES }, 'ghost')).rejects.toThrow('Process [ghost] not found.');
     await expect(w.call('host:go_home', {}, 'ghost')).rejects.toThrow('Process [ghost] not found.');
+    await expect(w.call('nav:back', {}, 'ghost')).rejects.toThrow('Process [ghost] not found.');
     expect(w.rows()).toEqual(BEFORE);
   });
 });

@@ -44,6 +44,7 @@ import { t } from '../../i18n/i18n';
 import { bindText } from '../../i18n/staticTexts';
 import { GUEST_SAME_ORIGIN_SWITCH } from '../../config/guest_origin_policy';
 import { unregisterHostServiceWorkers } from '../windowing/hostServiceWorkers';
+import { USER_MOVER, type Mover } from '../windowing/processGate';
 
 export class DesktopEnvironment {
   // Components
@@ -247,8 +248,8 @@ export class DesktopEnvironment {
 
   /** アドレスバー左の ← →（T-0453）。活性は履歴の変化で描き直す。ホストの UI はここだけ */
   public bindNavHistory(nav: {
-    back(): Promise<boolean>;
-    forward(): Promise<boolean>;
+    back(mover: Mover): Promise<boolean>;
+    forward(mover: Mover): Promise<boolean>;
     state(): { canBack: boolean; canForward: boolean };
     onChange(cb: (s: { canBack: boolean; canForward: boolean }) => void): void;
   }): void {
@@ -258,8 +259,9 @@ export class DesktopEnvironment {
       if (back) back.disabled = !s.canBack;
       if (fwd) fwd.disabled = !s.canForward;
     };
-    if (back) back.addEventListener('click', () => void nav.back());
-    if (fwd) fwd.addEventListener('click', () => void nav.forward());
+    // 画面のボタンは、利用者の操作
+    if (back) back.addEventListener('click', () => void nav.back(USER_MOVER));
+    if (fwd) fwd.addEventListener('click', () => void nav.forward(USER_MOVER));
     nav.onChange(paint);
     paint(nav.state());
   }

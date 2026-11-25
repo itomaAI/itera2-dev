@@ -105,8 +105,8 @@ export interface IAssociationReader {
 }
 
 export interface INavHistory {
-  back(): Promise<boolean>;
-  forward(): Promise<boolean>;
+  back(mover: Mover): Promise<boolean>;
+  forward(mover: Mover): Promise<boolean>;
   state(): { canBack: boolean; canForward: boolean; current: { uri: string; pid: string } | null };
 }
 
@@ -734,8 +734,13 @@ export class HostApiRouter {
     };
     t.registerHandler('host:address_bar', declare);
     t.registerHandler('nav:declare', declare);
-    t.registerHandler('nav:back', async () => (d.navHistory ? d.navHistory.back() : false));
-    t.registerHandler('nav:forward', async () => (d.navHistory ? d.navHistory.forward() : false));
+    // 戻る・進む: 記録した場所（URI）を、呼んだプロセスが仕えるエンジンとして開く（T-0912）
+    t.registerHandler('nav:back', async (_payload, sourcePid) =>
+      d.navHistory ? d.navHistory.back(moverOf(sourcePid)) : false,
+    );
+    t.registerHandler('nav:forward', async (_payload, sourcePid) =>
+      d.navHistory ? d.navHistory.forward(moverOf(sourcePid)) : false,
+    );
     t.registerHandler('nav:state', async () =>
       d.navHistory ? d.navHistory.state() : { canBack: false, canForward: false, current: null },
     );

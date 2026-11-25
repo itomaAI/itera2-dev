@@ -13,7 +13,13 @@
  * ブラウザの「戻る」との連動（任意）: 1 段ごとに window.history.pushState({ iteraNav: index })、popstate で同じ index へ跳ぶ。
  * ゲストの iframe は blob を 1 回読むだけで履歴に段を足さないので、popstate に来るのは自分が積んだものだけ。
  * 妙なら preferences の navBrowserSync: false で切る。
+ *
+ * 誰が戻る・進むか（T-0912）: 段は場所（URI）の記録で、個体の記録ではない。戻る・進むは「記録した URI を、頼んだ者として開く」こと ——
+ * 画面のボタンとブラウザの戻る・進むは利用者、ゲストの MetaOS.nav.back / forward は、呼んだプロセスが仕えるエンジンとして。
+ * 開いた先でプロセスを動かしてよいかは、関所（ProcessManager）が決める。ここは「誰が」を navigate まで運ぶだけ。
  */
+
+import { USER_MOVER, type Mover } from '../windowing/processGate';
 
 export interface NavEntry {
   uri: string;
@@ -37,8 +43,8 @@ export interface BrowserHistoryLike {
 }
 
 export interface NavHistoryOptions {
-  /** 記録した URI を開く（UriRouter.dispatch）。戻る・進むはこれを呼ぶだけ */
-  navigate: (uri: string) => void | Promise<void>;
+  /** 記録した URI を、`mover`（誰が）として開く（UriRouter.dispatch）。戻る・進むはこれを呼ぶだけ */
+  navigate: (uri: string, mover: Mover) => void | Promise<void>;
   /** 上限。古いほうから落とす */
   max?: number;
   /** ブラウザの履歴と連動するなら渡す（省略で連動しない） */
@@ -52,6 +58,11 @@ export class NavHistory {
   public entries: NavEntry[] = [];
   public index = -1;
   private navigating = false;
+  /**
+   * ブラウザの履歴を動かして popstate を待っている間の「誰が」。行き先の段と一緒に持つ ——
+   * 次に来た自分の popstate がその段なら、頼んだ者として開く。違う段なら、それは頼んでいない動き（利用者）
+   */
+  private pending: { target: number; mover: Mover } | null = null;
   private listeners: Array<(s: NavState) => void> = [];
   private readonly opts: Required<Pick<NavHistoryOptions, 'max' | 'now'>> & NavHistoryOptions;
 
@@ -110,14 +121,14 @@ export class NavHistory {
     this.emit();
   }
 
-  /** 指定の段へ跳ぶ。範囲外なら false。到達中の変化は積まない */
-  async go(target: number): Promise<boolean> {
+  /** 指定の段へ、`mover` として跳ぶ。範囲外なら false。到達中の変化は積まない */
+  async go(target: number, mover: Mover): Promise<boolean> {
     if (target < 0 || target >= this.entries.length || target === this.index) return false;
     const entry = this.entries[target];
     this.index = target;
     this.navigating = true;
     try {
-      await this.opts.navigate(entry.uri);
+      await this.opts.navigate(entry.uri, mover);
     } catch (e) {
       console.warn('[NavHistory] navigate failed: ' + (e instanceof Error ? e.message : String(e)));
     } finally {
@@ -128,33 +139,39 @@ export class NavHistory {
   }
 
   /** 戻る。ブラウザと連動しているときは、ブラウザの履歴を動かし popstate 側で go する（経路を 1 本にする） */
-  async back(): Promise<boolean> {
+  async back(mover: Mover): Promise<boolean> {
     if (!this.state().canBack) return false;
     if (this.opts.browser) {
+      this.pending = { target: this.index - 1, mover };
       this.opts.browser.go(-1);
       return true;
     }
-    return this.go(this.index - 1);
+    return this.go(this.index - 1, mover);
   }
 
-  async forward(): Promise<boolean> {
+  async forward(mover: Mover): Promise<boolean> {
     if (!this.state().canForward) return false;
     if (this.opts.browser) {
+      this.pending = { target: this.index + 1, mover };
       this.opts.browser.go(1);
       return true;
     }
-    return this.go(this.index + 1);
+    return this.go(this.index + 1, mover);
   }
 
   /**
    * popstate の受け口。自分が積んだ state（iteraNav）だけを見る。
-   * state が無い・知らない値なら何もしない（Firebase Auth のリダイレクトなど、外から来た履歴の動きを無視する）
+   * state が無い・知らない値なら何もしない（Firebase Auth のリダイレクトなど、外から来た履歴の動きを無視する）。
+   * 誰として開くか: back / forward が頼んだ段なら、頼んだ者。そうでなければ利用者（ブラウザの戻る・進むを押した）。
+   * 持ち越し（pending）は、自分の state を持つ popstate が来たら、当たっても外れても使い切る
    */
   async onPopState(state: any): Promise<boolean> {
     if (!state || typeof state !== 'object' || typeof state[STATE_KEY] !== 'number') return false;
+    const pending = this.pending;
+    this.pending = null;
     const target = state[STATE_KEY];
     if (target < 0) return false;
-    return this.go(target);
+    return this.go(target, pending && pending.target === target ? pending.mover : USER_MOVER);
   }
 
   private emit(): void {
