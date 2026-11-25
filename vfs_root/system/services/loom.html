@@ -1007,18 +1007,18 @@
           'loom_list',
           'List Loom cards by front matter (status / kind / parent / subtree / scheduled / title).',
           `<define_tag name="loom_list">
-Loom の札を front matter で絞って一覧する（Loom デーモン。ファイルを読まずに写しから答える）。
+Lists Loom cards filtered by front matter (answered from the daemon's index, without reading the files).
 Attributes:
-  - status (optional): カンマ区切り。todo,doing / review / blocked ほか。特別な値: "mine"（私の番＝todo・doing）"yours"（${USER}さんの番）"open"（閉じていない）
+  - status (optional): Comma-separated, e.g. todo,doing / review / blocked. Special values: "mine" (my turn = todo, doing), "yours" (${USER}'s turn), "open" (not closed)
   - kind (optional): "task" | "project"
-  - parent (optional): この札の直下の子だけ（継承の前任の子も含む）
-  - under (optional): この札とその子孫だけ
-  - scheduled_by (optional): "YYYY-MM-DD" または "today"。予定がその日以前のもの
-  - q (optional): 題の部分一致
-  - sort (optional): "id"（既定）| "updated" | "scheduled"
-  - limit (optional): 既定 100
-Returns: 1 行 1 枚「id [状態] 優先度 予定 親 更新 | 題」。先頭に件数。
-Note: 要約はしない。着手前に親を根まで読むのは read で（loom_tree がパスを出す）。
+  - parent (optional): Only the direct children of this card (including the children of the predecessors it succeeded)
+  - under (optional): Only this card and its descendants
+  - scheduled_by (optional): "YYYY-MM-DD" or "today". Cards scheduled on or before that day
+  - q (optional): Substring match on the title
+  - sort (optional): "id" (default) | "updated" | "scheduled"
+  - limit (optional): Default 100
+Returns: One card per line: "id [status] priority scheduled parent updated | title". The count comes first.
+Note: No summaries. Before starting a card, read its ancestors up to the root with read (loom_tree gives the paths).
 </define_tag>`,
           async (ctx) => {
             const { a } = attrsOf(ctx);
@@ -1043,16 +1043,16 @@ Note: 要約はしない。着手前に親を根まで読むのは read で（lo
           'loom_search',
           'Full-text search over all Loom cards (including stubs).',
           `<define_tag name="loom_search">
-Loom の札の本文を全文検索する（stub の札も読んでから探す。1 行ずつの照合）。
+Full-text search over the bodies of Loom cards (stub cards are fetched first; matching is line by line).
 Attributes:
-  - query (required): 探す文字列（regex="true" なら正規表現）
-  - regex (optional): "true" で正規表現
-  - case_sensitive (optional): "true" で大文字小文字を区別
-  - status / kind / under (optional): loom_list と同じ絞り込み
-  - section (optional): この節（例: "進捗"・"履歴"）の中だけ
-  - limit (optional): 既定 40 行
-Returns: 「id Lnn [節] (状態) 行の中身」。nn はファイルの行番号（read の start/end にそのまま使える）。
-         先頭に 当たった行数・当たった札の数・探した札の数。
+  - query (required): Text to search for (a regular expression when regex="true")
+  - regex (optional): "true" to treat query as a regular expression
+  - case_sensitive (optional): "true" to match case
+  - status / kind / under (optional): Same filters as loom_list
+  - section (optional): Only inside this section (e.g. "進捗", "履歴")
+  - limit (optional): Default 40 lines
+Returns: "id Lnn [section] (status) line". nn is the line number in the file (usable as start/end of read).
+         First come the numbers of matching lines, of matching cards and of cards searched.
 </define_tag>`,
           async (ctx) => {
             const { a } = attrsOf(ctx);
@@ -1101,10 +1101,10 @@ Returns: 「id Lnn [節] (状態) 行の中身」。nn はファイルの行番�
           'loom_tree',
           'Show where a Loom card sits: ancestors to the root, owning project, predecessors/successor, children.',
           `<define_tag name="loom_tree">
-札の系譜を出す（祖先を根まで・所属プロジェクト・前任／後継・直下の子）。**パスを返すだけで中身は返さない。**
+Shows where a card sits (ancestors up to the root, owning project, predecessors / successor, direct children). **Returns paths only, not contents.**
 Attributes:
-  - id (required): 札の id
-Returns: 各行「id [状態] 題 — パス」。着手前に読むべき札（祖先）はこの順に read する。
+  - id (required): Card id
+Returns: One line each: "id [status] title — path". Read the ancestors in this order before starting the card.
 </define_tag>`,
           async (ctx) => {
             const { a } = attrsOf(ctx);
@@ -1138,14 +1138,14 @@ Returns: 各行「id [状態] 題 — パス」。着手前に読むべき札（
           'loom_update',
           'Change a Loom card front matter (status, priority, scheduled, title, parent, refs).',
           `<define_tag name="loom_update">
-札の front matter を変える（読み直してから書く。デーモンの中で直列）。
+Changes the front matter of a card (re-read before writing; serialized inside the daemon).
 Attributes:
   - id (required)
-  - status / priority / scheduled / title / parent (optional): 変えるものだけ渡す
-  - refs (optional): JSON の配列（例: ["data/x.md"]）
-  - force (optional): status="review" のとき、レポートが無くても回す
-Note: status="review" は「確認へ回す」と同じ（レポートが無ければ回さずに理由を返す。親へは運ばない）。
-      🔴 status="done" は受け付けない —— done は${USER}さんの一手で、親へ運ぶ引き金でもある。
+  - status / priority / scheduled / title / parent (optional): Pass only what changes
+  - refs (optional): JSON array (e.g. ["data/x.md"])
+  - force (optional): With status="review", send it even when there is no report
+Note: status="review" is "send to review" (without a report it is not sent and the reason is returned; nothing is carried to the parent).
+      🔴 status="done" is refused: done is ${USER}'s move, and it is what carries the report to the parent.
 </define_tag>`,
           async (ctx) => {
             const { a } = attrsOf(ctx);
@@ -1186,20 +1186,20 @@ Note: status="review" は「確認へ回す」と同じ（レポートが無け�
           'loom_append',
           'Append to a section of a Loom card, stamped with the current JST time by the daemon.',
           `<define_tag name="loom_append">
-札の節に追記する。**日時はデーモンがいまの時刻（JST）で押す**。書いたあと読み直して行番号を返す。
+Appends to a section of a card. **The daemon stamps the current time (JST).** After writing it re-reads the file and returns the line numbers.
 Attributes:
   - id (required)
-  - section (optional): 既定はタスクなら "進捗"、プロジェクトなら "履歴"。"確認事項"・"追加要望"・"計画"・"成果物" など
+  - section (optional): Default "進捗" for a task, "履歴" for a project. Others: "確認事項", "追加要望", "計画", "成果物", ...
   - form (optional):
-      "entry"（既定）… \`- <日時> <who>: <本文>\`
-      "report"      … \`### レポート <日時>\`（タスク → 進捗）／\`### 総括 <日時>\`（プロジェクト → 履歴）の見出しを付けて本文を置く
-      "addendum"    … 最後の自分のレポート／総括の**枠の中**へ \`- **追記 <日時> <who>**: <本文>\`
-      "raw"         … 本文をそのまま（計画のチェックボックス・成果物の行。日時を付けない節に）
-  - who (optional): 既定 "Itera"
-  - status (optional): 同じ書き込みで状態も変える（例: 確認事項を書いて "blocked"）。done は不可
-Content: 本文。
-Note: 観測した時刻と書いた時刻が違うなら、本文に観測の時刻を書く（「**12:5x に見た**: …」）。押されるのは書いた時刻。
-      レポートの中に「成果物」の枠を書かない（転記のとき札の ## 成果物 が付く）。
+      "entry" (default) … \`- <datetime> <who>: <body>\`
+      "report"      … the body under a heading: \`### レポート <datetime>\` (task → 進捗) / \`### 総括 <datetime>\` (project → 履歴)
+      "addendum"    … **inside** your last レポート / 総括: \`- **追記 <datetime> <who>**: <body>\`
+      "raw"         … the body as is (checkboxes in 計画, lines in 成果物: sections that take no datetime)
+  - who (optional): Default "Itera"
+  - status (optional): Also change the status in the same write (e.g. write to 確認事項 and set "blocked"). "done" is not allowed
+Content: The body.
+Note: When the time you observed something differs from the time you write it, put the observed time in the body ("**seen at 12:5x**: …"). The stamp is the time of writing.
+      Do not write a 成果物 block inside a report (the card's ## 成果物 is attached when the report is carried).
 </define_tag>`,
           async (ctx) => {
             const { a, content } = attrsOf(ctx);
@@ -1227,15 +1227,15 @@ Note: 観測した時刻と書いた時刻が違うなら、本文に観測の�
           'loom_create',
           'Create a Loom card (task under a project/task, or a sub-project). The daemon allocates the id.',
           `<define_tag name="loom_create">
-札を起こす。**id はデーモンが採番する**（写しとディレクトリの両方を数え、衝突したら番号を上げる）。親の側にも出来事を 1 行書く
-（プロジェクトの下のタスク → 親の履歴に「起票」／タスクの下 → 親の進捗に「分解」／プロジェクトの下のプロジェクト → 「分岐」を両側に）。
+Creates a card. **The daemon assigns the id** (it counts both the index and the directory, and takes the next number on a collision). It also writes one line about the event on the parent's side
+(task under a project → "起票" in the parent's 履歴 / under a task → "分解" in the parent's 進捗 / project under a project → "分岐" on both sides).
 Attributes:
-  - parent (required for task): 親の id
-  - title (required): 題（仮の題を焼き付けないため必須）
-  - kind (optional): "task"（既定）| "project"
-  - status (optional): タスクの既定は "todo"（私が起こす札は私のボール）。${USER}さんに渡すなら "inbox"
+  - parent (required for task): Parent id
+  - title (required): Title (required so that a placeholder title is never baked in)
+  - kind (optional): "task" (default) | "project"
+  - status (optional): Default "todo" for a task (a card I create is my ball). Use "inbox" to hand it to ${USER}
   - priority / scheduled (optional)
-Content: タスクなら ## 依頼 の本文。プロジェクトでは受け付けない（## 意図 は${USER}さんが置く）。
+Content: For a task, the body of ## 依頼. Not accepted for a project (## 意図 is written by ${USER}).
 </define_tag>`,
           async (ctx) => {
             const { a, content } = attrsOf(ctx);
@@ -1261,10 +1261,10 @@ Content: タスクなら ## 依頼 の本文。プロジェクトでは受け付
           'loom_status',
           'Report the state of the Loom daemon (index, stubs, unreadable files).',
           `<define_tag name="loom_status">
-Loom デーモンの状態（写しの枚数・本文を持っている枚数・stub・読めないファイル・最後の突き合わせ）。
+State of the Loom daemon (cards in the index, cards whose body is loaded, stubs, unreadable files, last reconcile).
 Attributes:
-  - selftest (optional): "true" で核（system/lib/loom_core.js）の自己試験も走らせる
-  - reconcile (optional): "true" で返す前にディレクトリと突き合わせ直す（stub も全部取りに行く）
+  - selftest (optional): "true" also runs the self-test of the core (system/lib/loom_core.js)
+  - reconcile (optional): "true" reconciles with the directory again before answering (fetches every stub too)
 </define_tag>`,
           async (ctx) => {
             const { a } = attrsOf(ctx);
