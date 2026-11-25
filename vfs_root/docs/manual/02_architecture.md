@@ -134,8 +134,8 @@ The **Guest** environment (where apps run) is isolated from the **Host** (where 
     *   `.task(instruction, context, opts)`: Triggers the AI to perform a background task.
     *   `.log(message, type, opts)`: Appends an event to the AI's history (e.g., to inform the AI that a user clicked a button). Pass `opts.trigger_llm=true` to wake the AI (debounced 1.5s).
 
-*   **Engines owned by an app (`MetaOS.engine`)** — an app can have the host create an engine of its own: a separate conversation with the same tools and permissions as the OS chat's AI, and no boot protocol. Only the process that created it can address it; it is gone when that process disposes it or ends, or when the OS reloads. See `04_development.md` §7.
-    *   `.create({ config, from })`: Returns a handle `e`. `config` overrides `llm` and `preferences` (`maxContinuousTools`, `agentName`, `username`, `language`) for this engine only; `from` continues a saved conversation.
+*   **Engines owned by an app (`MetaOS.engine`)** — an app can have the host create an engine of its own: a separate conversation with the same system tools and permissions as the OS chat's AI, and no boot protocol. Only the process that created it can address it; it is gone when that process disposes it or ends, or when the OS reloads. See `04_development.md` §7.
+    *   `.create({ config, from, toolsets })`: Returns a handle `e`. `config` overrides `llm` and `preferences` (`maxContinuousTools`, `agentName`, `username`, `language`) for this engine only; `from` continues a saved conversation; `toolsets` gives it the tools of the named processes (pids) — of the app and daemon tools, it sees only those and the ones of processes serving it.
     *   `e.append` / `e.wake` / `e.stop` / `e.reset` / `e.status`: the verbs of `MetaOS.chat`, addressed to this engine.
     *   `e.on(event, cb)`: `turn_start`, `stream_chunk`, `turn_end`, `loop_stop`, `turn_placed`, `reset`, `disposed` — delivered to the owner only.
     *   `e.turns()` / `e.save(dir)` / `e.dispose()`, and `MetaOS.engine.list()`.
