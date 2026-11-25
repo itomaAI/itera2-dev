@@ -5,8 +5,6 @@
 
 import type { VfsEventBus } from './VfsEventBus';
 import type { VfsMutation } from './types';
-import type { HostTransport } from '../../ipc/HostTransport';
-import type { ProcessManager } from '../../shell/windowing/ProcessManager';
 import type { PathResolver } from './PathResolver';
 
 /**
@@ -16,6 +14,16 @@ import type { PathResolver } from './PathResolver';
 export interface ProviderCapabilities {
   /** 同じプロバイダの中の改名・移動を向こう側でも動かせる（onMove を持つ）。無ければ核が stub を実体化してから動かす */
   move: boolean;
+}
+
+/**
+ * 担当プロセスへの道（ProcessManager が満たす）: いま届くか・頼む・知らせる。
+ * プロセスの記録と、ゲストへ送る道そのものは、ここからは見えない（T-0912）
+ */
+export interface ProviderProcesses {
+  isReachable(pid: string): boolean;
+  request(pid: string, action: string, payload: unknown): Promise<unknown>;
+  notify(pid: string, action: string, payload: unknown): void;
 }
 
 export interface ProviderInfo {
@@ -29,19 +37,12 @@ export class ProviderManager {
   private fetchPromises: Map<string, Promise<boolean>> = new Map();
 
   private eventBus: VfsEventBus;
-  private transport: HostTransport;
-  private processManager: ProcessManager;
+  private processes: ProviderProcesses;
   private pathResolver: PathResolver;
 
-  constructor(
-    eventBus: VfsEventBus,
-    transport: HostTransport,
-    processManager: ProcessManager,
-    pathResolver: PathResolver,
-  ) {
+  constructor(eventBus: VfsEventBus, processes: ProviderProcesses, pathResolver: PathResolver) {
     this.eventBus = eventBus;
-    this.transport = transport;
-    this.processManager = processManager;
+    this.processes = processes;
     this.pathResolver = pathResolver;
     this._bindEventBus();
   }
@@ -117,12 +118,6 @@ export class ProviderManager {
     return matchedInfo;
   }
 
-  /** 担当プロセスの窓（応じられないときは null）。生死の判定はここ 1 か所に置く。 */
-  private _liveWindow(pid: string): Window | null {
-    const proc = this.processManager.processes.get(pid);
-    return proc && proc.iframe && proc.iframe.contentWindow ? proc.iframe.contentWindow : null;
-  }
-
   /**
    * その担当プロセスが「いま実際に応じられるか」（T-0353）。
    *
@@ -132,11 +127,11 @@ export class ProviderManager {
    *   file_info は担当が居るかのように見えたまま、read_file だけが
    *   『Failed to fetch missing content』で落ちた。
    *
-   * 判定は fetchContent が実際に使う条件そのもの（_liveWindow）である。
+   * 判定は fetchContent が実際に使う条件そのもの（担当プロセスに届くか。ProcessManager.isReachable）である。
    * 表示と実際の可否が食い違わないよう、条件を 2 か所に書かない。
    */
   isProviderAlive(pid: string): boolean {
-    return this._liveWindow(pid) !== null;
+    return this.processes.isReachable(pid);
   }
 
   /**
@@ -148,11 +143,10 @@ export class ProviderManager {
     const info = this.findProviderForPath(oldPath);
     if (!info || !info.capabilities.move) return false;
 
-    const win = this._liveWindow(info.pid);
-    if (!win) return false;
+    if (!this.processes.isReachable(info.pid)) return false;
 
     try {
-      const res = await this.transport.invokeGuest(info.pid, 'fs:move_content', { oldPath, newPath }, win);
+      const res = await this.processes.request(info.pid, 'fs:move_content', { oldPath, newPath });
       return res === true;
     } catch (e) {
       console.warn(`[ProviderManager] Move failed for ${oldPath} -> ${newPath} (falling back to hydration):`, e);
@@ -164,13 +158,13 @@ export class ProviderManager {
     const info = this.findProviderForPath(path);
     if (!info) return false;
 
-    const win = this._liveWindow(info.pid);
-    if (!win) return false;
+    if (!this.processes.isReachable(info.pid)) return false;
 
     // 同一パスへの同時フェッチを防止（重複リクエストの排除）
     if (!this.fetchPromises.has(path)) {
-      const fetchTask = this.transport
-        .invokeGuest(info.pid, 'fs:resolve_missing', { path }, win)
+      const fetchTask = this.processes
+        .request(info.pid, 'fs:resolve_missing', { path })
+        .then((res) => res as boolean)
         .catch((e) => {
           console.error(`[ProviderManager] Fetch failed for ${path}:`, e);
           return false;
@@ -229,11 +223,8 @@ export class ProviderManager {
 
       // 各プロバイダにRPC送信
       for (const [pid, providerMutations] of routingMap.entries()) {
-        const proc = this.processManager.processes.get(pid);
-        if (proc && proc.iframe && proc.iframe.contentWindow) {
-          // sendEventを使ってゲスト側の onMutate イベントを発火
-          this.transport.sendEvent(pid, 'sync:onMutate', { mutations: providerMutations }, proc.iframe.contentWindow);
-        }
+        // ゲスト側の onMutate を発火する。担当に届かなければ（居ない・窓が無い）、何も起きない
+        this.processes.notify(pid, 'sync:onMutate', { mutations: providerMutations });
       }
     });
   }

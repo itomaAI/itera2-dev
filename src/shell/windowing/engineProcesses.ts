@@ -14,18 +14,17 @@
 import { ToolError } from '../../core/control/ToolError';
 import type { ToolProcesses } from '../../core/control/ToolContext';
 import { SpawnRefusedError, type Process, type SpawnOptions } from './ProcessManager';
-import { ProcessRefusedError, canMove, engineMover, type Mover } from './processGate';
+import { ProcessRefusedError, engineMover, type Mover } from './processGate';
 
-/** 取っ手が使う分（ProcessManager と HostTransport が満たす） */
+/** 取っ手が使う分（ProcessManager が満たす） */
 export interface EngineProcessesDeps {
   processManager: {
     processes: ReadonlyMap<string, Process>;
     spawn(mover: Mover, options: SpawnOptions): Promise<void>;
     kill(mover: Mover, pid: string): boolean;
     captureScreenshot(pid?: string, timeoutMs?: number): Promise<string>;
-  };
-  transport: {
-    invokeGuest(pid: string, action: string, payload: unknown, targetWindow: Window): Promise<unknown>;
+    isReachable(pid: string): boolean;
+    evalIn(mover: Mover, pid: string, code: string): Promise<unknown>;
   };
 }
 
@@ -38,7 +37,7 @@ function refusalAsToolError(e: unknown): never {
 }
 
 export function createEngineProcesses(deps: EngineProcessesDeps, engineId: string): ToolProcesses {
-  const { processManager: pm, transport } = deps;
+  const { processManager: pm } = deps;
   const me = engineMover(engineId);
 
   return {
@@ -74,12 +73,12 @@ export function createEngineProcesses(deps: EngineProcessesDeps, engineId: strin
     },
 
     async evalJs(pid, code) {
-      const proc = pm.processes.get(pid);
-      if (!proc || !proc.iframe || !proc.iframe.contentWindow) {
-        throw new ToolError(`Target process '${pid}' is not running.`);
+      if (!pm.isReachable(pid)) throw new ToolError(`Target process '${pid}' is not running.`);
+      try {
+        return await pm.evalIn(me, pid, code);
+      } catch (e) {
+        return refusalAsToolError(e);
       }
-      if (!canMove(me, proc)) refusalAsToolError(new ProcessRefusedError(proc, 'run code in'));
-      return transport.invokeGuest(pid, 'eval_js', { code }, proc.iframe.contentWindow);
     },
   };
 }

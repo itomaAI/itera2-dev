@@ -17,12 +17,7 @@ function mk() {
     getAllApps: () => [{ id: 'notes', path: NOTES }],
     getAllServices: () => [{ id: 'sync_daemon', path: SYNC }],
   };
-  const pm = new ProcessManager(vfs as any, registry as any, { homePath: () => 'system/apps/home.html' } as any);
-  (pm as any).compiler = { compile: () => new Promise(() => {}) };
-  const resumed: string[] = [];
-  pm.on('process_resumed', (p: any) => resumed.push(p.pid));
-  const killed: string[] = [];
-  pm.on('process_killed', (pid: string) => killed.push(pid));
+  // ゲストへの道（HostTransport の代わり）。持つのは ProcessManager
   const evals: any[] = [];
   const transport = {
     invokeGuest: vi.fn(async (pid: string, action: string, payload: any, target: any) => {
@@ -30,7 +25,18 @@ function mk() {
       return 42;
     }),
   };
-  const handle = (engineId: string) => createEngineProcesses({ processManager: pm, transport }, engineId);
+  const pm = new ProcessManager(
+    vfs as any,
+    registry as any,
+    { homePath: () => 'system/apps/home.html' } as any,
+    transport as any,
+  );
+  (pm as any).compiler = { compile: () => new Promise(() => {}) };
+  const resumed: string[] = [];
+  pm.on('process_resumed', (p: any) => resumed.push(p.pid));
+  const killed: string[] = [];
+  pm.on('process_killed', (pid: string) => killed.push(pid));
+  const handle = (engineId: string) => createEngineProcesses({ processManager: pm }, engineId);
   const rows = () =>
     Array.from(pm.processes.values())
       .map((p) => `${p.pid} app=${p.app} engine=${p.engine} type=${p.type}`)

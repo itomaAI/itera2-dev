@@ -4,28 +4,32 @@
 
 import type { GuestToolInvoker } from '../../core/control/GuestToolInvoker';
 import type { ToolParams } from '../../core/types/tools';
-import type { HostTransport } from '../../ipc/HostTransport';
-import type { ProcessManager } from '../windowing/ProcessManager';
 import { RpcRemoteError } from '../../ipc/RpcManager';
 import { ToolError } from '../../core/control/ToolError';
 
-export class HostGuestToolInvoker implements GuestToolInvoker {
-  private processManager: ProcessManager;
-  private transport: HostTransport;
+/**
+ * 道具を持つプロセスへ頼む道（ProcessManager が満たす）。
+ * ここでは「誰が呼んだか」を見ない —— 呼べるかどうかは道具の台帳が決めていて、関所は通すだけ（T-0912）
+ */
+export interface ToolHostProcesses {
+  isReachable(pid: string): boolean;
+  request(pid: string, action: string, payload: unknown): Promise<unknown>;
+}
 
-  constructor(processManager: ProcessManager, transport: HostTransport) {
-    this.processManager = processManager;
-    this.transport = transport;
+export class HostGuestToolInvoker implements GuestToolInvoker {
+  private processes: ToolHostProcesses;
+
+  constructor(processes: ToolHostProcesses) {
+    this.processes = processes;
   }
 
   async invokeTool(pid: string, name: string, params: ToolParams): Promise<unknown> {
-    const proc = this.processManager.processes.get(pid);
-    if (!proc || !proc.iframe || !proc.iframe.contentWindow) {
+    if (!this.processes.isReachable(pid)) {
       throw new Error(`Target process '${pid}' is no longer available.`);
     }
 
     try {
-      return await this.transport.invokeGuest(pid, 'execute_tool', { name, params }, proc.iframe.contentWindow);
+      return await this.processes.request(pid, 'execute_tool', { name, params });
     } catch (err: unknown) {
       // ゲストの handler が投げた（＝ゲストが返した error）は、その道具の契約上の答えなので ToolError にする。
       // RPC の timeout・transport の失敗はそのまま投げる（ToolRegistry が実装の例外として記録する。T-0677）

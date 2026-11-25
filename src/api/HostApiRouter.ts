@@ -32,6 +32,8 @@ import { t as tr } from '../i18n/i18n';
 export interface IProcessManager {
   spawn(mover: Mover, options: SpawnOptions): Promise<void>;
   kill(mover: Mover, pid: string): boolean;
+  /** そのプロセスにだけ知らせる（届かなければ何もしない） */
+  notify(pid: string, action: string, payload: unknown): void;
   list(): ProcessInfo[];
   broadcast(eventName: string, payload: any): void;
   captureScreenshot(pid?: string): Promise<string>;
@@ -458,10 +460,9 @@ export class HostApiRouter {
     });
 
     // そのプロセスにだけ通知する（返事を RPC で待たせないものの道: MetaOS.llm の文字・MetaOS.engine の知らせ）。
-    // 相手がもう居なければ何もしない
+    // 送るのは関所（ProcessManager）。相手に届かなければ（もう居ない・窓が無い）何もしない
     const sendTo = (pid: string, action: string, payload: unknown): void => {
-      const target = d.processManager?.processes.get(pid)?.iframe?.contentWindow;
-      if (target) t.sendEvent(pid, action, payload, target);
+      d.processManager?.notify(pid, action, payload);
     };
 
     // LLM を 1 回呼ぶ口（MetaOS.llm。T-0807）。会話もエンジンも通らない。

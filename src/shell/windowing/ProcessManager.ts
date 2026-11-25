@@ -109,11 +109,20 @@ export class SpawnRefusedError extends Error {
   }
 }
 
+/**
+ * ゲストへ送る道（HostTransport が満たす）。ゲスト宛ての要求と知らせは、これを持つ ProcessManager だけが出す（T-0912）
+ */
+export interface GuestChannel {
+  invokeGuest(pid: string, action: string, payload: unknown, targetWindow: Window): Promise<unknown>;
+  sendEvent(pid: string, action: string, payload: unknown, targetWindow: Window): void;
+}
+
 export class ProcessManager {
   private vfs: VfsService;
   private compiler: GuestCompiler;
   private appRegistry: AppRegistry;
   private configManager: ConfigManager;
+  private channel: GuestChannel | null;
   public processes: Map<string, Process> = new Map();
   public currentRoute: CurrentRoute | null = null;
   /**
@@ -125,10 +134,16 @@ export class ProcessManager {
   private events: Record<string, Function[]> = {};
   private els: Record<string, HTMLElement | null> = {};
 
-  constructor(vfs: VfsService, appRegistry: AppRegistry, configManager: ConfigManager) {
+  constructor(
+    vfs: VfsService,
+    appRegistry: AppRegistry,
+    configManager: ConfigManager,
+    channel: GuestChannel | null = null,
+  ) {
     this.vfs = vfs;
     this.appRegistry = appRegistry;
     this.configManager = configManager;
+    this.channel = channel;
     this.compiler = new GuestCompiler();
     this._initElements();
     this._bindEvents();
@@ -518,6 +533,47 @@ export class ProcessManager {
         proc.iframe.contentWindow.postMessage(msg, '*');
       }
     }
+  }
+
+  /** そのプロセスの窓（居ない・窓が無いときは null） */
+  private _windowOf(pid: string): Window | null {
+    const proc = this.processes.get(pid);
+    return proc && proc.iframe && proc.iframe.contentWindow ? proc.iframe.contentWindow : null;
+  }
+
+  /**
+   * いま届くか（居て、窓が在る）。「登録が在る」とは別のこと ——
+   * 同期プロバイダの「いま応じられるか」も、道具を持つプロセスが居るかも、これを訊く（条件を 2 か所に書かない。T-0353）
+   */
+  isReachable(pid: string): boolean {
+    return this.channel !== null && this._windowOf(pid) !== null;
+  }
+
+  /**
+   * 頼む: そのプロセスに要求を送り、答えを待つ（道具の呼び出し・同期プロバイダへの要求）。
+   * 関所は通すだけで、誰が頼んだかを見ない —— 頼んでよいかを知っているのは呼び手の側（道具の台帳・マウントの表）。
+   * 届かなければ失敗
+   */
+  async request(pid: string, action: string, payload: unknown): Promise<unknown> {
+    const win = this._windowOf(pid);
+    if (!this.channel || !win) throw new Error(`[ProcessManager] Process '${pid}' is not reachable.`);
+    return this.channel.invokeGuest(pid, action, payload, win);
+  }
+
+  /** 知らせる: そのプロセスにだけ送る（返事は待たない）。届かなければ何もしない */
+  notify(pid: string, action: string, payload: unknown): void {
+    const win = this._windowOf(pid);
+    if (this.channel && win) this.channel.sendEvent(pid, action, payload, win);
+  }
+
+  /**
+   * そのプロセスの中でコードを走らせ、戻り値を返す（動かす口。T-0912）。`mover` は「誰が」。
+   * 動かせない相手なら、何も送らずに ProcessRefusedError（規則は processGate.ts）。届かなければ失敗
+   */
+  async evalIn(mover: Mover, pid: string, code: string): Promise<unknown> {
+    const proc = this.processes.get(pid);
+    if (proc && !canMove(mover, proc)) throw new ProcessRefusedError(proc, 'run code in');
+    return this.request(pid, 'eval_js', { code });
   }
 
   list(): any[] {

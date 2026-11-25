@@ -175,7 +175,9 @@ export class SystemBootstrapper {
     registerUITools(toolRegistry);
 
     const translator = new Translator();
-    const processManager = new ProcessManager(vfs, appRegistry, configManager);
+    // ゲストへの道（IPC）。ゲスト宛ての要求と知らせは、これを持つ ProcessManager だけが出す（T-0912）
+    const transport = new HostTransport();
+    const processManager = new ProcessManager(vfs, appRegistry, configManager, transport);
 
     // 動作中にブラウザのデータが消されたら、全プロセス（デーモンを含む）を止めてから読み込み直す。
     // 古い在庫のまま走らせない（T-0383。Itera にはクラウドが無いので消えたものは戻らない）。
@@ -274,11 +276,10 @@ export class SystemBootstrapper {
     // ==========================================
     // 5. IPC Routing & Event Orchestration
     // ==========================================
-    const transport = new HostTransport();
-    toolRegistry.setGuestToolInvoker(new HostGuestToolInvoker(processManager, transport));
+    toolRegistry.setGuestToolInvoker(new HostGuestToolInvoker(processManager));
 
     // プロバイダマネージャーの初期化と VFS への注入
-    const providerManager = new ProviderManager(eventBus, transport, processManager, pathResolver);
+    const providerManager = new ProviderManager(eventBus, processManager, pathResolver);
     vfs.setProviderManager(providerManager);
 
     // セキュリティ: PID偽装防止のための発信元検証
@@ -311,7 +312,7 @@ export class SystemBootstrapper {
     const toolShellFor = (engineId: string): ToolShell => ({
       // 利用者の取っ手（files・open が、利用者に見せるために読む。T-0903）
       userFs: vfs.as(USER_ACTOR),
-      processes: createEngineProcesses({ processManager, transport }, engineId),
+      processes: createEngineProcesses({ processManager }, engineId),
       resolver,
       modals: desktop.modals,
       _revealInExplorer: (path: string) => desktop.revealInExplorer(path),

@@ -13,7 +13,24 @@ const NOTES = 'system/apps/notes.html';
 function mk() {
   const vfs = { releaseContent: async () => {} };
   const registry = { getAllApps: () => [{ id: 'notes', path: NOTES }], getAllServices: () => [] };
-  const pm = new ProcessManager(vfs as any, registry as any, { homePath: () => 'system/apps/home.html' } as any);
+  // ゲストへの道（HostTransport の代わり）。送られたものを集める
+  const requests: any[] = [];
+  const events: any[] = [];
+  const channel = {
+    invokeGuest: async (pid: string, action: string, payload: any, target: any) => {
+      requests.push({ pid, action, payload, target });
+      return 'answer';
+    },
+    sendEvent: (pid: string, action: string, payload: any, target: any) => {
+      events.push({ pid, action, payload, target });
+    },
+  };
+  const pm = new ProcessManager(
+    vfs as any,
+    registry as any,
+    { homePath: () => 'system/apps/home.html' } as any,
+    channel as any,
+  );
   // compile は終わらせない（記録ができるところまでを見る）
   (pm as any).compiler = { compile: () => new Promise(() => {}) };
   const resumed: string[] = [];
@@ -24,7 +41,13 @@ function mk() {
     Array.from(pm.processes.values())
       .map((p) => `${p.pid} engine=${p.engine}`)
       .sort();
-  return { pm, resumed, killed, rows };
+  /** 窓を持たせる（jsdom では iframe が文書に付かないので contentWindow が無い） */
+  const giveWindow = (pid: string) => {
+    const win = { tag: `win-${pid}` };
+    (pm.processes.get(pid) as any).iframe = { contentWindow: win, remove() {} };
+    return win;
+  };
+  return { pm, resumed, killed, rows, requests, events, giveWindow };
 }
 
 const refusal = async (p: Promise<unknown> | (() => unknown)) => {
@@ -131,5 +154,87 @@ describe('ProcessManager — 終わらせる', () => {
     expect(w.pm.kill(OS_MOVER, 'p2')).toBe(true);
     expect(w.pm.kill(USER_MOVER, 'p3')).toBe(true);
     expect(w.killed).toEqual(['p1', 'p2', 'p3']);
+  });
+});
+
+describe('ProcessManager — 中でコードを走らせる・頼む・知らせる（ゲストへ送るのは関所だけ）', () => {
+  it('中でコードを走らせる: 自分に仕えるプロセスへは届く。ほかのエンジンのプロセスへは、何も送らずに断る', async () => {
+    const w = mk();
+    void w.pm.spawn(ROOT, { path: NOTES, show: false });
+    void w.pm.spawn(A, { pid: 'mine', path: NOTES, show: false });
+    w.giveWindow('notes');
+    const win = w.giveWindow('mine');
+
+    expect(await w.pm.evalIn(A, 'mine', 'return 1')).toBe('answer');
+    expect(w.requests).toEqual([{ pid: 'mine', action: 'eval_js', payload: { code: 'return 1' }, target: win }]);
+
+    const e = await refusal(w.pm.evalIn(A, 'notes', 'return 1'));
+    expect(e).toBeInstanceOf(ProcessRefusedError);
+    expect((e as Error).message).toBe(
+      'Process "notes" serves another engine ("root"). This engine cannot run code in it.',
+    );
+    expect(w.requests).toHaveLength(1);
+  });
+
+  it('中でコードを走らせる: ルート・OS・利用者は、どのプロセスへも', async () => {
+    const w = mk();
+    void w.pm.spawn(A, { pid: 'mine', path: NOTES, show: false });
+    w.giveWindow('mine');
+    await w.pm.evalIn(ROOT, 'mine', '1');
+    await w.pm.evalIn(OS_MOVER, 'mine', '2');
+    await w.pm.evalIn(USER_MOVER, 'mine', '3');
+    expect(w.requests.map((r) => r.payload.code)).toEqual(['1', '2', '3']);
+  });
+
+  it('頼む: 誰が呼んだかを見ずに通す（頼めるかを決めるのは呼び手の側）。届かなければ失敗', async () => {
+    const w = mk();
+    void w.pm.spawn(B, { pid: 'tool_host', path: 'data/tool.html', type: 'daemon' });
+    const win = w.giveWindow('tool_host');
+
+    expect(await w.pm.request('tool_host', 'execute_tool', { name: 'x', params: {} })).toBe('answer');
+    expect(w.requests).toEqual([
+      { pid: 'tool_host', action: 'execute_tool', payload: { name: 'x', params: {} }, target: win },
+    ]);
+
+    expect(((await refusal(w.pm.request('gone', 'execute_tool', {}))) as Error).message).toBe(
+      "[ProcessManager] Process 'gone' is not reachable.",
+    );
+    expect(w.requests).toHaveLength(1);
+  });
+
+  it('知らせる: そのプロセスにだけ。居ない・窓が無いプロセスへは、何もしない', () => {
+    const w = mk();
+    void w.pm.spawn(A, { pid: 'mine', path: NOTES, show: false });
+    void w.pm.spawn(A, { pid: 'windowless', path: 'data/w.html', show: false });
+    const win = w.giveWindow('mine');
+    (w.pm.processes.get('windowless') as any).iframe = { contentWindow: null, remove() {} };
+
+    w.pm.notify('mine', 'engine:event', { n: 1 });
+    w.pm.notify('windowless', 'engine:event', { n: 2 });
+    w.pm.notify('gone', 'engine:event', { n: 3 });
+    expect(w.events).toEqual([{ pid: 'mine', action: 'engine:event', payload: { n: 1 }, target: win }]);
+  });
+
+  it('いま届くか: 居て、窓が在る', () => {
+    const w = mk();
+    void w.pm.spawn(A, { pid: 'mine', path: NOTES, show: false });
+    expect(w.pm.isReachable('mine')).toBe(false); // jsdom では iframe が文書に付かず、窓が無い
+    w.giveWindow('mine');
+    expect(w.pm.isReachable('mine')).toBe(true);
+    expect(w.pm.isReachable('gone')).toBe(false);
+  });
+
+  it('ゲストへの道を持たない ProcessManager は、頼めない・知らせは何もしない', async () => {
+    const vfs = { releaseContent: async () => {} };
+    const registry = { getAllApps: () => [], getAllServices: () => [] };
+    const pm = new ProcessManager(vfs as any, registry as any, { homePath: () => 'system/apps/home.html' } as any);
+    (pm as any).compiler = { compile: () => new Promise(() => {}) };
+    void pm.spawn(USER_MOVER, { pid: 'p', path: 'data/p.html', show: false });
+    (pm.processes.get('p') as any).iframe = { contentWindow: { tag: 'w' }, remove() {} };
+    expect(pm.isReachable('p')).toBe(false);
+    expect(((await refusal(pm.request('p', 'x', {}))) as Error).message).toBe(
+      "[ProcessManager] Process 'p' is not reachable.",
+    );
+    expect(() => pm.notify('p', 'x', {})).not.toThrow();
   });
 });
