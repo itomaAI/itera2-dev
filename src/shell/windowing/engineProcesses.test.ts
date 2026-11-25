@@ -207,7 +207,7 @@ describe('engineProcesses: 見る', () => {
     ]);
   });
 
-  it('ProcessManager.list() はゲストに渡る形のまま。持ち主は listWithEngine() にだけ付く（T-0916）', () => {
+  it('ProcessManager.list() はゲストに渡る形のまま。app と持ち主は listForHost() にだけ付く（T-0916）', () => {
     const w = mk();
     void w.root.spawn({ path: NOTES, show: false });
     void w.a.spawn({ path: SYNC });
@@ -215,9 +215,9 @@ describe('engineProcesses: 見る', () => {
       { pid: 'notes', path: NOTES, type: 'app', state: 'background' },
       { pid: 'sync_daemon', path: SYNC, type: 'daemon', state: 'running' },
     ]);
-    expect(w.pm.listWithEngine()).toEqual([
-      { pid: 'notes', path: NOTES, type: 'app', state: 'background', engine: 'root' },
-      { pid: 'sync_daemon', path: SYNC, type: 'daemon', state: 'running', engine: 'eng-a' },
+    expect(w.pm.listForHost()).toEqual([
+      { pid: 'notes', app: 'notes', engine: 'root', path: NOTES, type: 'app', state: 'background' },
+      { pid: 'sync_daemon', app: 'sync_daemon', engine: 'eng-a', path: SYNC, type: 'daemon', state: 'running' },
     ]);
   });
 

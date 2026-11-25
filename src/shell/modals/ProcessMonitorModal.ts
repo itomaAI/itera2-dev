@@ -159,7 +159,8 @@ export class ProcessMonitorModal {
   private _renderList(): void {
     if (!this.listContainer) return;
 
-    const processes = this.processManager.listWithEngine();
+    // app（何のアプリか）で登録簿を引く。ゲストに渡る list() は app を持たない（#237 の退行。T-0916）
+    const processes = this.processManager.listForHost();
 
     // Sort: Foreground -> Background App -> Daemon
     processes.sort((a, b) => {
