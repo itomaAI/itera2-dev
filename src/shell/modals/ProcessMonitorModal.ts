@@ -9,9 +9,29 @@ import type { ProcessManager } from '../windowing/ProcessManager';
 import { USER_MOVER } from '../windowing/processGate';
 import type { AppRegistry } from '../../core/sys/AppRegistry';
 import type { ConfigManager } from '../../core/sys/ConfigManager';
-import { LABEL_KICKER } from '../styles/typography';
+import { LABEL_KICKER, LABEL_STREAM } from '../styles/typography';
 import { t, escapeHtml } from '../../i18n/i18n';
 import { bindText } from '../../i18n/staticTexts';
+import { ROOT_ENGINE_ID } from '../../core/control/Engine';
+import { linkButton } from './EngineMonitorModal';
+
+/**
+ * 持ち主の札（T-0916）: そのプロセスが仕えるエンジン（プロセスの記録の engine）。
+ * ルートのものは控えめに、サブ（eng-…）のものは見分けがつくように色を付ける。id は大文字にしない（id は字のとおりに読む）。
+ * 札の字は行ごとに出る（反復する）ので LABEL_STREAM（typography.ts の「反復するものは飾らない」）
+ */
+export function ownerBadgeHTML(engine: string): string {
+  const isRoot = engine === ROOT_ENGINE_ID;
+  const tone = isRoot
+    ? 'border-border-main text-text-muted opacity-70'
+    : 'border-primary/40 bg-primary/10 text-primary';
+  return (
+    `<span class="shrink-0 inline-flex items-center gap-1 px-1.5 py-0.5 rounded border ${tone}"` +
+    ` data-owner="${escapeHtml(engine)}" data-owner-role="${isRoot ? 'root' : 'sub'}" title="${escapeHtml(t('monitor.engineTitle'))}">` +
+    `<span class="${LABEL_STREAM}">${escapeHtml(t('monitor.engine'))}</span>` +
+    `<span class="font-mono text-[0.625rem]">${escapeHtml(engine)}</span></span>`
+  );
+}
 
 export class ProcessMonitorModal {
   private processManager: ProcessManager;
@@ -21,11 +41,18 @@ export class ProcessMonitorModal {
   private listContainer: HTMLElement | null = null;
   private pollTimer: ReturnType<typeof setInterval> | null = null;
   private isOpen: boolean = false;
+  /** エンジンの一覧へ移る（差されていなければ、リンクを出さない。T-0916） */
+  private toEngines: (() => void) | null = null;
 
   constructor(processManager: ProcessManager, appRegistry: AppRegistry, configManager: ConfigManager) {
     this.processManager = processManager;
     this.appRegistry = appRegistry;
     this.configManager = configManager;
+  }
+
+  /** 行き来のリンク（モニタ → エンジンの一覧。T-0916） */
+  linkTo(openEngines: () => void): void {
+    this.toEngines = openEngines;
   }
 
   /**
@@ -104,7 +131,22 @@ export class ProcessMonitorModal {
     };
 
     footer.appendChild(statusText);
-    footer.appendChild(btnKillAll);
+    const actions = document.createElement('div');
+    actions.className = 'flex items-center gap-2';
+    if (this.toEngines) {
+      actions.appendChild(
+        linkButton(
+          'engines',
+          null,
+          'engines.title',
+          '→',
+          () => this.toEngines,
+          () => this.close(),
+        ),
+      );
+    }
+    actions.appendChild(btnKillAll);
+    footer.appendChild(actions);
 
     box.appendChild(header);
     box.appendChild(this.listContainer);
@@ -117,7 +159,8 @@ export class ProcessMonitorModal {
   private _renderList(): void {
     if (!this.listContainer) return;
 
-    const processes = this.processManager.list();
+    // app（何のアプリか）で登録簿を引く。ゲストに渡る list() は app を持たない（#237 の退行。T-0916）
+    const processes = this.processManager.listForHost();
 
     // Sort: Foreground -> Background App -> Daemon
     processes.sort((a, b) => {
@@ -166,6 +209,7 @@ export class ProcessMonitorModal {
       }
 
       const row = document.createElement('div');
+      row.dataset.pid = proc.pid;
       row.className = `flex items-center justify-between p-3 rounded-xl border transition ${isForeground ? 'border-primary/50 bg-primary/5 shadow-sm' : 'border-border-main bg-panel hover:border-primary/30'}`;
 
       row.innerHTML = `
@@ -175,6 +219,7 @@ export class ProcessMonitorModal {
             <div class="flex items-center gap-2 mb-1">
               <span class="font-bold text-sm text-text-main truncate">${displayName}</span>
               <span class="text-[0.625rem] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border ${badgeColor}">${proc.state}</span>
+              ${ownerBadgeHTML(proc.engine || ROOT_ENGINE_ID)}
             </div>
             <div class="text-[0.625rem] text-text-muted font-mono truncate" title="${proc.path}">${proc.path} ${displayName !== proc.pid && !isDaemon ? `(${proc.pid})` : ''}</div>
           </div>

@@ -48,6 +48,18 @@ export interface CurrentRoute {
   uri: string;
 }
 
+/** ホストの窓が読む 1 行（listForHost）。ゲストには渡さない */
+export interface HostProcessRow {
+  pid: string;
+  /** 何のアプリか（登録簿の id。モニタは名前とアイコンをこれで引く） */
+  app: string;
+  /** 仕えるエンジンの id（持ち主） */
+  engine: string;
+  path: string;
+  type: 'app' | 'daemon';
+  state: 'foreground' | 'background' | 'running';
+}
+
 export interface SpawnOptions {
   /** 個体に付ける名前。省けばホストが振る（アプリの id。埋まっていれば枝番） */
   pid?: string;
@@ -580,6 +592,22 @@ export class ProcessManager {
   list(): any[] {
     return Array.from(this.processes.values()).map((proc) => ({
       pid: proc.pid,
+      path: proc.path,
+      type: proc.type,
+      state: proc.state,
+    }));
+  }
+
+  /**
+   * ホストの窓（プロセスモニタ）が読む口（T-0916）。list() に、何のアプリか（app: 登録簿を引く鍵）と
+   * 仕えるエンジン（engine: 持ち主）を添えたもの。
+   * list() はゲストに渡る形（sys:ps の `{ pid, path, type, state }`）なので、そちらには足さない
+   */
+  listForHost(): HostProcessRow[] {
+    return Array.from(this.processes.values()).map((proc) => ({
+      pid: proc.pid,
+      app: proc.app,
+      engine: proc.engine,
       path: proc.path,
       type: proc.type,
       state: proc.state,

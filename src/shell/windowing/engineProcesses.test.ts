@@ -207,6 +207,20 @@ describe('engineProcesses: 見る', () => {
     ]);
   });
 
+  it('ProcessManager.list() はゲストに渡る形のまま。app と持ち主は listForHost() にだけ付く（T-0916）', () => {
+    const w = mk();
+    void w.root.spawn({ path: NOTES, show: false });
+    void w.a.spawn({ path: SYNC });
+    expect(w.pm.list()).toEqual([
+      { pid: 'notes', path: NOTES, type: 'app', state: 'background' },
+      { pid: 'sync_daemon', path: SYNC, type: 'daemon', state: 'running' },
+    ]);
+    expect(w.pm.listForHost()).toEqual([
+      { pid: 'notes', app: 'notes', engine: 'root', path: NOTES, type: 'app', state: 'background' },
+      { pid: 'sync_daemon', app: 'sync_daemon', engine: 'eng-a', path: SYNC, type: 'daemon', state: 'running' },
+    ]);
+  });
+
   it('画面写真は、どのプロセスも撮れる（そのまま ProcessManager に渡す）', async () => {
     const w = mk();
     const capture = vi.spyOn(w.pm, 'captureScreenshot').mockResolvedValue('QUJD');

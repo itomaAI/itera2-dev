@@ -29,6 +29,7 @@ import { TaskSwitcherModal } from '../modals/TaskSwitcherModal';
 import { CameraModal } from '../modals/CameraModal';
 import { AudioModal } from '../modals/AudioModal';
 import { ProcessMonitorModal } from '../modals/ProcessMonitorModal';
+import { EngineMonitorModal, type EngineOverviewSource } from '../modals/EngineMonitorModal';
 import { PropertiesModal } from '../modals/PropertiesModal';
 import { CommandPaletteModal } from '../modals/CommandPaletteModal';
 import { FilePickerModal } from '../modals/FilePickerModal';
@@ -61,6 +62,7 @@ export class DesktopEnvironment {
   private _apiSettingsModal: ApiSettingsModal;
   private _taskSwitcherModal: TaskSwitcherModal;
   private _processMonitorModal: ProcessMonitorModal;
+  private _engineMonitorModal: EngineMonitorModal;
   private _propertiesModal: PropertiesModal;
   private _filePickerModal: FilePickerModal;
   private _syncModal: SyncModal;
@@ -103,6 +105,10 @@ export class DesktopEnvironment {
     this._apiSettingsModal = new ApiSettingsModal(cognitiveManager);
     this._taskSwitcherModal = new TaskSwitcherModal(processManager, appRegistry, configManager);
     this._processMonitorModal = new ProcessMonitorModal(processManager, appRegistry, configManager);
+    // 動いているエンジンの一覧（T-0916）。束の表は画面より後に出来るので、bindEngines で差す
+    this._engineMonitorModal = new EngineMonitorModal();
+    this._processMonitorModal.linkTo(() => this._engineMonitorModal.open());
+    this._engineMonitorModal.linkTo(() => this._processMonitorModal.open());
     this._propertiesModal = new PropertiesModal(vfs);
     this._filePickerModal = new FilePickerModal(vfs, () => this.getActivePrincipal());
     this.commandPalette = new CommandPaletteModal(vfs, appRegistry, uriRouter, () => this.getActivePrincipal());
@@ -186,6 +192,7 @@ export class DesktopEnvironment {
       apiSettings: this._apiSettingsModal,
       taskSwitcher: this._taskSwitcherModal,
       processMonitor: this._processMonitorModal,
+      engineMonitor: this._engineMonitorModal,
       properties: this._propertiesModal,
       filePicker: this._filePickerModal,
       sync: this._syncModal,
@@ -244,6 +251,11 @@ export class DesktopEnvironment {
         statusEl.classList.add('opacity-0');
       }
     }, 300);
+  }
+
+  /** 束の表を、エンジンの一覧の窓に差す（束の表は画面より後に出来る。T-0916） */
+  public bindEngines(source: EngineOverviewSource): void {
+    this._engineMonitorModal.bind(source);
   }
 
   /** アドレスバー左の ← →（T-0453）。活性は履歴の変化で描き直す。ホストの UI はここだけ */

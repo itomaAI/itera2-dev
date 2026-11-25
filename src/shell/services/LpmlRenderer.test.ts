@@ -67,6 +67,35 @@ describe('LpmlRenderer: command events', () => {
   });
 });
 
+describe('LpmlRenderer: the LPML syntax warning (T-0916)', () => {
+  // 警告の中身はモデルに宛てた長い文。利用者には赤い題だけ見えればよいので、ほかの system と同じく畳む
+  const r = new LpmlRenderer();
+  const details = (html: string) => {
+    const div = document.createElement('div');
+    div.innerHTML = html;
+    return div.querySelector('details');
+  };
+
+  it('is folded, like the other system tags', () => {
+    const d = details(r.formatStream('<system type="syntax_warning">\nText outside tags.\n</system>'));
+    expect(d).not.toBeNull();
+    expect(d!.hasAttribute('open')).toBe(false);
+    expect(details(r.formatStream('<system type="info">\nx\n</system>'))!.hasAttribute('open')).toBe(false);
+  });
+
+  it('keeps its red color and its title', () => {
+    const html = r.formatStream('<system type="syntax_warning">w</system>');
+    expect(summaryOf(html)).toBe('🚨 LPML Syntax Warning');
+    expect(details(html)!.className).toContain('border-error');
+    // ほかの system は中立の色のまま
+    expect(details(r.formatStream('<system type="info">x</system>'))!.className).not.toContain('border-error');
+  });
+
+  it('still opens an <error> box', () => {
+    expect(details(r.formatStream('<error>\nboom\n</error>'))!.hasAttribute('open')).toBe(true);
+  });
+});
+
 describe('LpmlRenderer: system tools have their own icons (the same as the SYSTEM side)', () => {
   const r = new LpmlRenderer();
 

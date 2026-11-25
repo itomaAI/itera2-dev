@@ -729,6 +729,74 @@ describe('EngineManager: 添付の置き場の掃除', () => {
     expect(w.vfs.deletes).toEqual([]);
   });
 });
+describe('EngineManager: 読むだけの口 overview()（T-0916）', () => {
+  it('ルートが先頭、サブが作った順に並ぶ。持ち主・仕えるプロセスの数・ターンの数', async () => {
+    const w = world();
+    w.spawn('home');
+    const a = await w.manager.create(OWNER);
+    const b = await w.manager.create(OWNER);
+    w.spawn('helper', a.id);
+    w.spawn('helper2', a.id);
+    await a.bundle.post('user', 'hi', { trigger_llm: false });
+
+    const rows = w.manager.overview();
+    expect(rows.map((r) => [r.id, r.role, r.ownerPid, r.ownerApp, r.serving])).toEqual([
+      [ROOT_ENGINE_ID, 'root', null, null, 2],
+      [a.id, 'sub', 'viewer', 'viewer', 2],
+      [b.id, 'sub', 'viewer', 'viewer', 0],
+    ]);
+    expect(rows.map((r) => r.turns)).toEqual([
+      w.rootHistory.get().length,
+      a.bundle.history.get().length,
+      b.bundle.history.get().length,
+    ]);
+    expect(rows[1].turns).toBe(rows[2].turns + 1);
+    // 素の値だけ（束そのものを渡さない）
+    expect(JSON.parse(JSON.stringify(rows))).toEqual(rows);
+    for (const r of rows) expect(Object.values(r).every((v) => v === null || typeof v !== 'object')).toBe(true);
+  });
+
+  it('状態は Engine.status() のまま: 予約 → 走っている最中 → 何も進んでいない', async () => {
+    const w = world();
+    const e = await w.manager.create(OWNER);
+    const hold = deferred();
+    w.equips[0].generateStream.mockImplementationOnce(async () => {
+      await hold.wait;
+    });
+    const state = () => {
+      const r = w.manager.overview().find((x) => x.id === e.id)!;
+      return { running: r.running, busy: r.busy, scheduled: r.scheduled };
+    };
+    expect(state()).toEqual({ running: false, busy: false, scheduled: false });
+
+    await e.bundle.post('user', 'hi', { trigger_llm: true });
+    expect(state().scheduled).toBe(true);
+
+    await settle();
+    expect(state()).toMatchObject({ running: true, busy: true });
+    // ルートは動いていない
+    expect(w.manager.overview()[0]).toMatchObject({ running: false, busy: false, scheduled: false });
+
+    hold.release();
+    await settle();
+    expect(state()).toEqual({ running: false, busy: false, scheduled: false });
+  });
+
+  it('モデルと文脈の長さは、最後の応答の記録から読む（応答が無ければ null）', async () => {
+    const w = world();
+    expect(w.manager.overview()[0]).toMatchObject({ model: null, contextTokens: null });
+    w.rootHistory.append('model', 'x', { model: 'google/big', usage: { input: 1000, cached: 200, output: 5 } } as any);
+    expect(w.manager.overview()[0]).toMatchObject({ model: 'google/big', contextTokens: 1200 });
+  });
+
+  it('畳んだエンジンは、一覧から消える', async () => {
+    const w = world();
+    const a = await w.manager.create(OWNER);
+    const b = await w.manager.create(OWNER);
+    await w.manager.dispose(a.id);
+    expect(w.manager.overview().map((r) => r.id)).toEqual([ROOT_ENGINE_ID, b.id]);
+  });
+});
 describe('EngineManager × EngineCalls: 持ち主の口を通す（MetaOS.engine のホストの側）', () => {
   const OTHER = { pid: 'other', principal: { type: 'app', id: 'other' } as Principal };
   /** 束の表は本物。ゲストへ送る所だけ、記録に替える */
