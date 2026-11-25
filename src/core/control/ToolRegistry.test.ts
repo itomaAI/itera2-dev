@@ -756,6 +756,21 @@ describe('ToolRegistry: 定義の控えと待ち（T-0912 段 3）', () => {
     expect(h.root.takePendingDefinitions()).toHaveLength(1);
   });
 
+  it('引くのは待ちの道具だけ: 控えが空でも、登録されなかった道具の定義は返らない（見えている定義を全部は流さない）', () => {
+    const h = harness();
+    h.reg(h.root, 'web', 'search');
+    h.reg(h.root, 'web', 'fetch');
+    h.reg(h.root, 'git_daemon', 'git');
+    h.root.takePendingDefinitions();
+    h.root.forgetGivenDefinitions();
+
+    h.reg(h.root, 'web', 'search');
+    const blocks = h.root.takePendingDefinitions();
+    expect(blocks).toEqual([
+      `<toolset name="Process: web" pid="web" description="Dynamic tools exposed by web">\n  ${h.def('search')}\n</toolset>`,
+    ]);
+  });
+
   it('与えられた組にも同じ規則: 与えた者の側の登録が、見えているエンジン（その先も）の待ちになる。与えられていない組・自分の同じ名前に隠れる道具は、ならない', () => {
     const h = harness();
     const sub = h.r.viewFor('e1', { from: ROOT_ENGINE_ID, toolsets: ['web'] });
@@ -806,6 +821,11 @@ describe('ToolRegistry: 定義の控えと待ち（T-0912 段 3）', () => {
     expect(h.noted).toEqual(['root']);
     const again = h.r.viewFor('e1', { from: ROOT_ENGINE_ID, toolsets: ['web'] });
     expect(again.takePendingDefinitions()).toEqual([]);
+
+    // 同じ id で口を作り直しても、畳む前の聞く者は呼ばれない
+    h.noted.length = 0;
+    h.reg(h.root, 'web', 'search', 'v3');
+    expect(h.noted).toEqual(['root']);
   });
 
   it('聞く者が失敗しても、登録は通り、ほかの聞く者には届く', () => {
