@@ -28,7 +28,7 @@ import type { WakePolicy } from '../../config/wake_policy';
 import { ROLE_PARTS, type PromptRole } from '../../config/system_prompts';
 import { TOOL_ANNOUNCE_DELAY_MS } from '../../config/tool_announce';
 import { toolsRegisteredEvent } from '../state/conversationEvents';
-import { Engine } from './Engine';
+import { Engine, type StopOptions } from './Engine';
 import type { ToolGrant, ToolRegistry, ToolView } from './ToolRegistry';
 import type { ToolConversation } from './ToolContext';
 
@@ -113,8 +113,8 @@ export interface EngineBundle {
   post(role: 'user' | 'system', content: TurnContent, meta?: TurnMeta): Promise<Turn>;
   /** 評価を頼む。未読が無ければ idle で終わる（空の応答は作らない） */
   wake(): void;
-  stop(): void;
-  /** 止めてから会話を空にする。起こさない（申し送りは次に起きたときに読まれる） */
+  stop(options?: StopOptions): void;
+  /** 止めて、止まりきってから会話を空にする。起こさない（申し送りは次に起きたときに読まれる） */
   reset(options?: { summary?: string; restoreTools?: boolean }): Promise<unknown>;
   statusInput(): Promise<EngineStatusInput>;
   on(event: EngineBundleEvent, callback: (data?: any) => void): void;
@@ -218,14 +218,18 @@ export function createEngineBundle(spec: EngineBundleSpec): EngineBundle {
       emit('wake_requested');
     },
 
-    stop() {
-      engine.stop();
+    stop(options) {
+      engine.stop(options);
     },
 
     async reset(options = {}) {
       assertAlive();
-      // LLM が応答できない状態（文脈の溢れ）でも効くように、busy は見ない。走っている束は見捨てる
-      engine.stop();
+      // LLM が応答できない状態（文脈の溢れ）でも効くように、busy は見ない。走っている束は見捨てる。
+      // 生成の回の中なら、止まりきる（model のターンの更新と loop_stop(abort)）のを待ってから空にする。
+      // 待たないと、止めた回の書き込みが新しい会話に落ちる（T-0918）
+      engine.stop({ quiet: true });
+      await engine.settled();
+      assertAlive();
       return conversation.reset({ summary: options.summary, triggerLlm: false, restoreTools: options.restoreTools });
     },
 

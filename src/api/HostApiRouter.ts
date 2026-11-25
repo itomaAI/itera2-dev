@@ -9,6 +9,7 @@ import type { Actor } from '../core/vfs/VfsHandle';
 import type { ConfigManager } from '../core/sys/ConfigManager';
 import type { VendorCatalog } from '../core/sys/VendorCatalog';
 import type { Turn, TurnContent, TurnMeta } from '../core/state/HistoryManager';
+import type { StopOptions } from '../core/control/Engine';
 import type { DynamicToolRegistration, ProcessInfo } from './HostApiContract';
 import { resolvePrincipal } from './principal';
 import { fileDataUrl } from './fileDataUrl';
@@ -88,7 +89,7 @@ export interface IEngineBundle {
   readonly afterReset: string;
   post(role: 'user' | 'system', content: TurnContent, meta?: TurnMeta): Promise<Turn>;
   wake(): void;
-  stop(): void;
+  stop(options?: StopOptions): void;
   reset(options?: { summary?: string; restoreTools?: boolean }): Promise<unknown>;
   statusInput(): Promise<ChatStatusInput>;
   tools: IToolRegistry;
@@ -450,7 +451,7 @@ export class HostApiRouter {
     });
 
     t.registerHandler('chat:stop', async (_payload, sourcePid) => {
-      d.engineFor?.(sourcePid)?.stop();
+      d.engineFor?.(sourcePid)?.stop({ by: { kind: 'app', pid: sourcePid } });
       return true;
     });
 

@@ -43,6 +43,19 @@ export const PENDING_LOG = '[Pending] Still running. The result will come in a l
  */
 export const ROOT_ENGINE_ID = LLM_CALLER_ROOT;
 
+/** 誰が止めたか（止めた知らせの文に入る。T-0918）。知っている呼び手だけが渡す */
+export type StopOrigin = { kind: 'user' } | { kind: 'app'; pid: string } | { kind: 'owner' };
+
+export interface StopOptions {
+  /** 誰が止めたか。省けば書かない */
+  by?: StopOrigin;
+  /** 止めた知らせを積まない（reset・dispose。会話ごと消える） */
+  quiet?: boolean;
+}
+
+/** 止めた知らせの種類（`<event type>`・meta.eventType。T-0918） */
+export const STOPPED_EVENT_TYPE = 'stopped';
+
 /** 書き留めるだけの要素。道具としては投げない（結果も返らない） */
 const NOTE_TAGS = new Set(['thinking', 'memo', 'plan']);
 
@@ -109,6 +122,22 @@ export class Engine {
   private haltedByToolCap: boolean = false;
   /** ユーザーが明示的に停止を要求したか（デバウンス待機中・ツール実行中の停止を成立させるため） */
   private stopRequested: boolean = false;
+  /**
+   * いまの回（_ping）が止められ、loop_stop(abort) をまだ出していないか（T-0918）。
+   * 立てるのは回の中の stop()、倒すのは _announceAbort だけ。だから回ごとにちょうど 1 度
+   */
+  private abortToAnnounce: boolean = false;
+  /**
+   * stop() が見捨てた束の世代（これ以下の束の、まだ始まっていない道具は始めない。T-0918）。
+   * stopRequested は次の発言・知らせで解けるので、それで見ると見捨てた道具が走り出す
+   */
+  private stoppedBatchSerial: number = 0;
+  /** いまの回（_ping）の終わり。回の外では null（settled() が待つ。T-0918） */
+  private cycleEnded: Promise<void> | null = null;
+  /** いまの回の model のターンを生成中か（束を作る前まで）。止めた知らせの文を選ぶ（T-0918） */
+  private generating: boolean = false;
+  /** いちばん新しい束の道具の名前と、始まったか。止めた知らせの「Not run」に使う（T-0918） */
+  private lastBatch: { serial: number; names: string[]; started: boolean[] } | null = null;
   /** 履歴を聞くのをやめる口（dispose が呼ぶ） */
   private unsubscribeHistory: (() => void) | undefined;
   /** 自分が預かっているタイマー（scheduleSystemEvent）。dispose で全部取り消す */
@@ -327,6 +356,16 @@ export class Engine {
   }
 
   /**
+   * いまの回（_ping）が終わるのを待つ。回の外ならすぐ解決する（T-0918）。
+   * 止めた回は、終わるまでに model のターンの更新と loop_stop(abort) を済ませる。会話を差し替える側（束の reset）は、
+   * これを待ってから差し替える（待たないと、止めた回の書き込みが新しい会話に落ちる）。
+   * 回が終わるのはアダプタが返ったとき。返らないアダプタでは解決しない
+   */
+  settled(): Promise<void> {
+    return this.cycleEnded ?? Promise.resolve();
+  }
+
+  /**
    * システムからの非同期割り込みイベントを注入する（タイマーやデーモンからの通知など）
    */
   injectSystemEvent(actionType: string, message: string, meta: TurnMeta = {}): void {
@@ -372,9 +411,18 @@ export class Engine {
 
   private async _ping(): Promise<void> {
     this.isRunning = true;
-    this.abortController = new AbortController();
+    const controller = new AbortController();
+    this.abortController = controller;
+    const signal = controller.signal;
+    this.abortToAnnounce = false;
+    let endCycle: () => void = () => {};
+    this.cycleEnded = new Promise<void>((resolve) => (endCycle = resolve));
     // 新しいサイクルを開始するため、前回の停止要求はここで解除する
     this.stopRequested = false;
+    /** 止められていたら先へ進まない（中断として catch へ）。アダプタが中断を黙って普通に終えても、ここで拾う（T-0918） */
+    const throwIfStopped = () => {
+      if (signal.aborted) throw new DOMException('Aborted', 'AbortError');
+    };
 
     try {
       if (!this._evaluateWakeUp()) {
@@ -421,13 +469,18 @@ export class Engine {
 
       // ここで束を閉じる。この投影に入らなかった結果は、枠ではなく新しいターンへ届く
       this.closedBatchSerial = this.batchSerial;
-      const messages = await this.projector.createContext(this.state, this.abortController.signal);
+      const messages = await this.projector.createContext(this.state, signal);
+      // 畳まれた: 回の残りは何も書かず、何も知らせない（loop_stop(abort) は dispose が出した。T-0918）
+      if (this.disposed) return;
+      // 投影の中で止められた: 空の model のターンを積まず、アダプタも呼ばない
+      throwIfStopped();
 
       // 空のMODELターンをHistoryに追加 (自己トリガーを防ぐため trigger_llm: false)
       const modelTurn = this.state.history.append('model', '', {
         type: TurnType.MODEL_THOUGHT,
         trigger_llm: false,
       });
+      this.generating = true;
 
       this._emit('turn_start', { role: 'model', turnId: modelTurn.id });
 
@@ -443,11 +496,17 @@ export class Engine {
               rawResponse += chunk;
               this._emit('stream_chunk', chunk);
             },
-            this.abortController.signal,
+            signal,
             { caller: this.id, engineTurn: true, tag: this.sessionTag ? this.sessionTag() : null },
           )) || null;
       } catch (err) {
         streamError = err;
+      }
+      if (this.disposed) return;
+      // 止めた回は、アダプタが普通に返しても中断として扱う（AbortError の道と同じ形で残す。T-0918）
+      if (!streamError && signal.aborted) {
+        streamError = new DOMException('Aborted', 'AbortError');
+        result = null;
       }
 
       // 生成の結果（使ったトークン・止まった理由）は、その生成が作ったターンに置く（T-0806）。
@@ -465,6 +524,8 @@ export class Engine {
       }
 
       if (streamError) throw streamError;
+      // turn_end(model) の聞き手の中で止められた
+      throwIfStopped();
 
       // ツール解釈とアクションの抽出
       const registeredTools = this.tools.getRegisteredToolNames();
@@ -506,18 +567,25 @@ export class Engine {
       // 実行はされず、ToolRegistry が「閉じていない」という失敗の結果を返す。ここで黙って落とすと、
       // 閉じ忘れた memo が後ろのタグを中身として飲み込んだことが、モデルに伝わらない
       const validActions = actions.filter((a) => !a.closed || !NOTE_TAGS.has(a.type));
+      // 警告の turn_end の聞き手の中で止められた: 束を作らない
+      throwIfStopped();
+      this.generating = false;
 
       if (validActions.length > 0) {
         this.continuousToolCount++;
+        // 枠の turn_end の聞き手・最初の道具の execute の中で止められたら、知らせは finally が出す
         this._dispatchActions(validActions);
       } else {
         this.continuousToolCount = 0;
         this._emit('loop_stop', { reason: 'idle' });
       }
     } catch (error: any) {
-      if (error.name === 'AbortError') {
+      if (this.disposed) return;
+      if (error.name === 'AbortError' || signal.aborted) {
         console.log('[Engine] Aborted.');
-        this._emit('loop_stop', { reason: 'abort' });
+        // stop() を通らずに来た AbortError も、いままでどおり abort として 1 度知らせる
+        this.abortToAnnounce = true;
+        this._announceAbort();
       } else {
         console.error('[Engine] Error:', error);
         const errTurn = this.state.history.append(
@@ -532,8 +600,13 @@ export class Engine {
         this._emit('loop_stop', { reason: 'error', error });
       }
     } finally {
+      this.generating = false;
+      // 止められたのにまだ知らせていなければ、ここで出す（流れのあとの同期の窓で止めた場合）
+      this._announceAbort();
       this.isRunning = false;
       this.abortController = null;
+      this.cycleEnded = null;
+      endCycle();
       // 実行中に来た変更を拾う。ツールを投げた直後は outstandingTools > 0 なので、
       // 追い越せる変更（方針次第）が来ていなければ、ここでは予約されず、束の最後の結果が拾う
       if (this.hasPendingEvents) this._scheduleEvaluation();
@@ -606,6 +679,8 @@ export class Engine {
     // 世代（batchSerial）は stop() で見捨てた束の遅い結果を数えないため
     const batch = ++this.batchSerial;
     this.outstandingTools = actions.length;
+    const record = { serial: batch, names: actions.map((a) => a.type), started: actions.map(() => false) };
+    this.lastBatch = record;
     /** 1 本返った（または走らせなかった）。この束のものなら本数を減らす */
     const settleOne = () => {
       if (batch !== this.batchSerial) return;
@@ -701,14 +776,14 @@ export class Engine {
         await new Promise((resolve) => setTimeout(resolve, index * 50));
       }
 
-      // 待機中にループが停止（Abort）された場合は実行をキャンセル。
-      // this.abortController は既に null 化されている可能性があるため、
-      // 捕捉済みの signal と停止フラグの両方を見る。
-      if (signal?.aborted || this.stopRequested || this.disposed) {
+      // 待機中に止められた束の道具は始めない。見るのは束の世代（stop() が見捨てた束か。T-0918）。
+      // 回の中で止めた場合は、捕捉済みの signal も aborted
+      if (batch <= this.stoppedBatchSerial || signal?.aborted || this.disposed) {
         settleOne();
         return;
       }
 
+      record.started[index] = true;
       try {
         const result = await this.tools.execute(action, context);
 
@@ -726,7 +801,9 @@ export class Engine {
     });
   }
 
-  stop(): void {
+  stop(options: StopOptions = {}): void {
+    // 止めた知らせの文は、止める前の様子（何が動いていたか）で決める
+    const notice = options.quiet || this.disposed ? null : this._stoppedNotice(options.by);
     // 停止要求を記録する。ストリーミング中以外（デバウンス待機中・ツール実行中）でも
     // 確実に停止させるためのフラグ。
     this.stopRequested = true;
@@ -736,23 +813,78 @@ export class Engine {
       clearTimeout(this.debounceTimer);
       this.debounceTimer = null;
     }
+    // 動いていたものを止めたら、新しい 1 ターンで伝える（起こさない。既存のターンは書き換えない）。
+    // 止めた model のターン・枠の後ろ、loop_stop(abort) の前（T-0918）
+    if (notice) {
+      const turn = this.state.history.append('system', notice, {
+        type: 'event_log',
+        eventType: STOPPED_EVENT_TYPE,
+        trigger_llm: false,
+      });
+      this._emit('turn_end', { role: 'system', turn });
+    }
     this.hasPendingEvents = false;
     this.overtakeRequested = false;
     // 走っている束は見捨てる（閉じる）。遅れて届いた結果は新しいターンとして履歴に入るが、
-    // 本数には数えず、利用者が次に発言するまで起こさない（stopRequested が予約を止める）
+    // 本数には数えず、利用者が次に発言するまで起こさない（stopRequested が予約を止める）。
+    // まだ始まっていない道具は、あとの発言で stopRequested が解けても始めない（stoppedBatchSerial）
     this.closedBatchSerial = this.batchSerial;
+    this.stoppedBatchSerial = this.batchSerial;
     this.batchSerial++;
     this.outstandingTools = 0;
 
     if (this.abortController) {
-      // ストリーミング中: abort() 経由で AbortError が発生し、catch側が loop_stop を emit する
-      this.abortController.abort();
+      // 回の中（投影・生成・流れのあとの同期の窓）: 中断を伝えるだけ。loop_stop(abort) は回の終わりが 1 度出す（_announceAbort）。
+      // 2 度目の stop() は何もしない（T-0918）
+      if (!this.abortController.signal.aborted) {
+        this.abortToAnnounce = true;
+        this.abortController.abort();
+      }
     } else {
       // abortController が存在しない時間帯（デバウンス待機中／ツール実行中）は
       // 誰も loop_stop を emit しないため、UIが "Processing..." のまま固着する。
       // ここで明示的に emit して確実に解除する。
       this._emit('loop_stop', { reason: 'abort' });
     }
+  }
+
+  /** stop() が積む知らせ。何も動いていなければ null（T-0918） */
+  private _stoppedNotice(by?: StopOrigin): string | null {
+    const inCycle = this.abortController !== null && !this.abortController.signal.aborted;
+    if (inCycle && this.generating) return Engine.stoppedEvent('generation', by);
+    const batch = this.lastBatch;
+    if (batch && batch.serial === this.batchSerial && this.outstandingTools > 0) {
+      return Engine.stoppedEvent(
+        'tools',
+        by,
+        batch.names.filter((_, i) => !batch.started[i]),
+      );
+    }
+    return null;
+  }
+
+  /** 止めた知らせの文（T-0918。英語。モデルが読む） */
+  static stoppedEvent(phase: 'generation' | 'tools', by?: StopOrigin, notRun: string[] = []): string {
+    const who =
+      by?.kind === 'user'
+        ? ' by the user'
+        : by?.kind === 'app'
+          ? ` by an app (${by.pid})`
+          : by?.kind === 'owner'
+            ? ' by the owner'
+            : '';
+    const text =
+      phase === 'generation'
+        ? `Generation stopped${who}. Nothing in that turn was run.`
+        : `Tool execution stopped${who}.${notRun.length ? ` Not run: ${notRun.join(', ')}.` : ''}`;
+    return `<event type="${STOPPED_EVENT_TYPE}">\n${text}\n</event>`;
+  }
+
+  /** 止めた回の loop_stop(abort) を出す。出す番でなければ何もしない（T-0918） */
+  private _announceAbort(): void {
+    if (!this.abortToAnnounce) return;
+    this.abortToAnnounce = false;
+    this._emit('loop_stop', { reason: 'abort' });
   }
 
   /**
@@ -762,7 +894,9 @@ export class Engine {
    */
   dispose(): void {
     if (this.disposed) return;
-    this.stop();
+    this.stop({ quiet: true });
+    // 回の中でも、loop_stop(abort) はここで出す（止まっているときと同じく、畳んだ知らせより先。T-0918）
+    this._announceAbort();
     this.disposed = true;
     this.unsubscribeHistory?.();
     this.unsubscribeHistory = undefined;

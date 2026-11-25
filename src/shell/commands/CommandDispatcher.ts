@@ -10,6 +10,7 @@
 
 import { ROLE_PARTS } from '../../config/system_prompts';
 import type { Turn, TurnContent, TurnMeta } from '../../core/state/HistoryManager';
+import type { StopOptions } from '../../core/control/Engine';
 import {
   buildChatStatus,
   buildResetPlan,
@@ -38,7 +39,9 @@ export interface Command extends CommandSpec {
 
 export interface CommandDeps {
   engine: {
-    stop(): void;
+    stop(options?: StopOptions): void;
+    /** いまの回が終わるのを待つ（/reset が、止まりきってから空にする。T-0918） */
+    settled(): Promise<void>;
     status(): { running: boolean; busy: boolean; outstandingTools: number; scheduled: boolean };
   };
   history: { get(): Turn[] };
@@ -150,7 +153,7 @@ export class CommandDispatcher {
         usage: '/stop',
         summary: T.summary.stop,
         run: async () => {
-          d.engine.stop();
+          d.engine.stop({ by: { kind: 'user' } });
           return { ok: true, text: T.stopped };
         },
       },
@@ -162,7 +165,8 @@ export class CommandDispatcher {
           // /reset は OS のチャット（ルート）の命令
           const plan = buildResetPlan({ summary: c.rest }, 'user command', ROLE_PARTS.root.afterReset);
           // 起こさない（chat:reset と同じ。次の発言で AI が起きて申し送りを読む）
-          d.engine.stop();
+          d.engine.stop({ quiet: true });
+          await d.engine.settled();
           await d.sessionManager.clearSession({
             summary: plan.summary,
             triggerLlm: false,

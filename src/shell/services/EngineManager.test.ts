@@ -932,3 +932,72 @@ describe('EngineManager × EngineCalls: 持ち主の口を通す（MetaOS.engine
     expect(await calls.list(OWNER)).toEqual([]);
   });
 });
+describe('EngineManager: 生成の途中で畳む・空にする（T-0918）', () => {
+  /** 塊を 25ms おきに流し、中断されたらそこまでで黙って返す上流（Chromium で起きていた形） */
+  const armStreaming = (engine: any) => {
+    const chunks = ['<memo>hello', ' world</memo>\n', '<write path="out.txt">', 'probe', '</write>\n', '<yield />'];
+    engine.llm = {
+      generateStream: vi.fn(async (_m: any, onChunk: (c: string) => void, signal: AbortSignal) => {
+        for (const c of chunks) {
+          const ok = await new Promise<boolean>((resolve) => {
+            if (signal.aborted) return resolve(false);
+            const t = setTimeout(() => resolve(true), 25);
+            signal.addEventListener('abort', () => {
+              clearTimeout(t);
+              resolve(false);
+            });
+          });
+          if (!ok) return { provider: 'fake', model: 'fake', usage: null, stopReason: null };
+          onChunk(c);
+        }
+        return { provider: 'fake', model: 'fake', usage: null, stopReason: 'end_turn' };
+      }),
+    };
+  };
+  const label = (n: EngineOwnerNotice) => (n.event === 'loop_stop' ? `loop_stop(${(n.data as any).reason})` : n.event);
+
+  /** 発言して、3 つ目の塊まで流れたところ（生成の途中）まで進める */
+  const midStream = async (e: any) => {
+    armStreaming(e.bundle.engine);
+    await e.bundle.post('user', 'go', { trigger_llm: true });
+    await vi.advanceTimersByTimeAsync(1500 + 25 * 3 + 5);
+    expect(e.bundle.engine.status().running).toBe(true);
+  };
+
+  it('生成の途中で畳むと、持ち主には loop_stop(abort) → disposed の順に届き、そのあとは何も届かない', async () => {
+    const w = world();
+    const e = await w.manager.create(OWNER);
+    await midStream(e);
+    const mark = w.notices.length;
+
+    await w.manager.dispose(e.id);
+    await settle();
+
+    expect(w.notices.slice(mark).map(label)).toEqual(['loop_stop(abort)', 'disposed']);
+  });
+
+  it('生成の途中で空にすると、止まりきってから空にする: 古い会話に流れた文、新しい会話に止めたターンは入らない', async () => {
+    const w = world();
+    const e = await w.manager.create(OWNER);
+    await midStream(e);
+    const mark = w.notices.length;
+
+    const pending = e.bundle.reset({ summary: 'carry' });
+    await settle();
+    await pending;
+
+    const after = w.notices.slice(mark).map(label);
+    expect(after.indexOf('loop_stop(abort)')).toBeGreaterThan(after.indexOf('turn_end'));
+    expect(after.indexOf('reset')).toBeGreaterThan(after.indexOf('loop_stop(abort)'));
+    expect(after.filter((x) => x.startsWith('loop_stop'))).toEqual(['loop_stop(abort)']);
+    expect(after.slice(after.indexOf('reset') + 1)).not.toContain('turn_end');
+
+    const old = (w.notices.find((n) => n.event === 'reset')!.data as any).session;
+    const model = old.turns.find((t: any) => t.role === 'model');
+    expect(model.content).toBe('<memo>hello world</memo>\n<write path="out.txt">');
+    expect(model.meta.status).toBe('error');
+    expect(e.bundle.history.get().map((t) => t.content)).toEqual([
+      '<event type="session_reset">\n[Session Restored & Context Compressed]\n\ncarry\n</event>',
+    ]);
+  });
+});

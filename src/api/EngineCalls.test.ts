@@ -163,6 +163,7 @@ describe('EngineCalls: MetaOS.chat と同じ動詞', () => {
     expect(e.bundle.stop).not.toHaveBeenCalled();
     expect(await w.calls.stop(CALLER, id)).toBe(true);
     expect(e.bundle.stop).toHaveBeenCalledTimes(1);
+    expect(e.bundle.stop).toHaveBeenCalledWith({ by: { kind: 'owner' } });
   });
 
   it('reset は、申し送りの頭に呼び手と、そのエンジンの役割の 1 行を付ける', async () => {

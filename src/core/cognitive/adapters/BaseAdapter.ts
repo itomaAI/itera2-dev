@@ -292,7 +292,8 @@ export abstract class BaseLLMAdapter {
    *   - fetch が応答を返さずに落ちたら（TypeError: Failed to fetch。ブラウザは理由を教えない）、送った大きさと
    *     理由の候補と次の一手を添えて投げ直す。素の文言のままだと、利用者も AI も同じ送信を繰り返すだけになる
    *     （ミャク楽 2026-10-02: 「続けてください」の繰り返し）
-   *   - 中断（AbortError）はそのまま投げ直す（Engine が停止として扱う）
+   *   - 応答の頭が届く前の中断（fetch の AbortError）はそのまま投げ直す（Engine が停止として扱う）。
+   *     頭が届いたあと（本文を読んでいる間）の中断は、`monitorStream` が AbortError として投げる（T-0918）
    */
   protected async postForStream(url: string, headers: any, payload: any, signal?: AbortSignal): Promise<Response> {
     let body = JSON.stringify(payload);
@@ -359,6 +360,7 @@ export abstract class BaseLLMAdapter {
     let timedOut: 'first' | 'idle' | null = null;
     this.contentStarted = false;
 
+    // 中断されたら網を切る。ただし cancel の結果（read が何で返るか）には頼らない —— 中断を伝えるのは下の確かめ（T-0918）
     const onAbort = () => {
       reader.cancel(new DOMException('Aborted', 'AbortError')).catch(() => {});
     };
@@ -380,6 +382,10 @@ export abstract class BaseLLMAdapter {
       while (true) {
         if (signal && signal.aborted) throw new DOMException('Aborted', 'AbortError');
         const { done, value } = await reader.read();
+        // 中断は AbortError として投げる（done でも）。Chromium では、上の onAbort の cancel が fetch 自身の中断より先に
+        // 流れを閉じ、待っていた read() が { done: true } で返る（Node の fetch は逆で、read が AbortError で落ちる）。
+        // これを普通の終わりとして読むと、止めた生成が「最後まで流れた」ことになり、Engine は止まった知らせを出せなかった（T-0918）
+        if (signal && signal.aborted) throw new DOMException('Aborted', 'AbortError');
 
         if (timedOut === 'first') {
           throw new Error(
