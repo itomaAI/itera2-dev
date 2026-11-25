@@ -57,7 +57,7 @@ export interface OwnerNotice {
 
 /** 束の表のうち、ここが使う面（EngineManager が満たす） */
 export interface EngineTable {
-  create(owner: Caller, spec?: { config?: unknown; from?: unknown }): Promise<OwnedEngine>;
+  create(owner: Caller, spec?: { config?: unknown; from?: unknown; toolsets?: unknown }): Promise<OwnedEngine>;
   of(ownerPid: string, id: string): OwnedEngine;
   owned(ownerPid: string): OwnedEngine[];
   dispose(id: string, reason?: 'owner_request'): Promise<boolean>;
@@ -120,7 +120,10 @@ export class EngineCalls {
    * 受け付けない spec は、束の表が理由を付けて断る。保存された会話（from）は呼び手の権限で読む
    */
   async create(caller: Caller, spec: unknown): Promise<{ id: string }> {
-    const engine = await this.deps.engines.create(caller, spec as { config?: unknown; from?: unknown } | undefined);
+    const engine = await this.deps.engines.create(
+      caller,
+      spec as { config?: unknown; from?: unknown; toolsets?: unknown } | undefined,
+    );
     return { id: engine.id };
   }
 

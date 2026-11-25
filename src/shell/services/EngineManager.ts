@@ -8,6 +8,7 @@
  *   - 消えるとき、そのエンジンに仕えていたプロセスも終わる。そのプロセスが持っていたエンジンは、
  *     「持ち主のプロセスが終わった」ことで畳まれる（木は、持ち主の規則だけから出来る。深さの決まりは置かない）
  *   - 宛先に書けるのは持ち主だけ（of）。持ち主でない者には、在るかどうかも答えない
+ *   - 道具は、システムの道具と自分に仕えるプロセスの道具のほかに、作る者が与えた組（toolsets）だけが見える（T-0912）
  *
  * ここは束を作って表に載せるだけで、ゲストへの届け方は知らない。持ち主への知らせは onOwnerEvent で聞く。
  */
@@ -34,8 +35,13 @@ export interface EngineSpec {
   config?: unknown;
   /** 保存してあった会話から始める（保存のディレクトリ・その中の session.json）。省けば空 */
   from?: unknown;
+  /**
+   * 与える道具の組（T-0912）: プロセスの名前（pid）の並び。作るプロセスが仕えるエンジンから見えている組だけを渡せる。
+   * 省けば、このエンジンに見えるのはシステムの道具と、自分に仕えるプロセスの道具だけ
+   */
+  toolsets?: unknown;
 }
-const SPEC_KEYS = ['config', 'from'];
+const SPEC_KEYS = ['config', 'from', 'toolsets'];
 
 /** 頼んだプロセスと、その主体（保存された会話を読むのは、頼んだ者の権限） */
 export interface EngineOwner {
@@ -182,6 +188,24 @@ export class EngineManager {
     if (from !== undefined && (typeof from !== 'string' || !from.trim())) {
       problems.push('from must be a non-empty path');
     }
+    // 与える組: 作るプロセスが仕えるエンジンから、いま見えている組だけ（見えていなければ作らずに断る）
+    let toolsets: string[] = [];
+    if (spec.toolsets !== undefined) {
+      if (!Array.isArray(spec.toolsets) || spec.toolsets.some((pid) => typeof pid !== 'string' || !pid)) {
+        problems.push('toolsets must be an array of process names (pids)');
+      } else {
+        toolsets = [...new Set(spec.toolsets as string[])];
+        const visible = (this.bundleFor(owner.pid)?.tools.listToolSets() ?? []).map((set) => set.id);
+        const unseen = toolsets.filter((pid) => !visible.includes(pid));
+        if (unseen.length > 0) {
+          const names = unseen.map((pid) => `"${pid}"`).join(', ');
+          const what = unseen.length === 1 ? 'is not a toolset' : 'are not toolsets';
+          problems.push(
+            `toolsets: ${names} ${what} visible to the engine this process serves (visible: ${visible.length > 0 ? visible.join(', ') : 'none'})`,
+          );
+        }
+      }
+    }
     if (problems.length > 0) throw new Error(`Invalid engine spec: ${problems.join('; ')}`);
 
     if (this.subs.size + this.creating >= MAX_SUB_ENGINES) {
@@ -214,6 +238,8 @@ export class EngineManager {
         configManager: config,
         translator: deps.translator,
         registry: deps.registry,
+        // 与えた者は、作るプロセスが仕えるエンジン（見え方なので、そのエンジンの側で組が入れ替わっても追う）
+        grant: toolsets.length > 0 ? { from: ownerProc.engine, toolsets } : undefined,
         fs: deps.fsFor(id),
         conversation,
         contextLimit: () => deps.cognitive.contextLimit(config),
@@ -228,7 +254,13 @@ export class EngineManager {
       this.creating--;
     }
 
-    deps.logger.log('process_events', { action: 'engine_created', engine: id, owner: owner.pid, app: ownerProc.app });
+    deps.logger.log('process_events', {
+      action: 'engine_created',
+      engine: id,
+      owner: owner.pid,
+      app: ownerProc.app,
+      ...(toolsets.length > 0 ? { toolsets } : {}),
+    });
     for (const event of FORWARDED) {
       entry.bundle.on(event, (data: unknown) => this.emit(owner.pid, id, event, data));
     }
