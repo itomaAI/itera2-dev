@@ -469,6 +469,8 @@ Rules:
 
 <define_tag name="ps">
 Lists all currently running processes. Shows PID, Type (App/Daemon), State (Foreground/Background), and Path. Use this to check which apps the user currently has open.
+Attributes:
+    - scope (optional): "all" (default) or "mine". "mine" lists only the processes that serve this engine (the ones it can kill, restart or inject into).
 </define_tag>
 
 <define_tag name="take_screenshot">
