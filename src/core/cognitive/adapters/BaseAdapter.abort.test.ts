@@ -233,15 +233,17 @@ function sse(kind: Kind) {
 /**
  * 本文が signal に繋がっていない応答（fetch は中断を本文に伝えない ＝ Chromium で cancel が先に流れを閉じるのと同じ）。
  * 止められるのは monitorStream の cancel だけ。cancel されると待っている read は done で返る（Streams の仕様どおり）。
+ * holdAfter を渡すと、本文をその数だけ流したあとは cancel されるまで何も流さない（止める試験を時間に依らせない）。
  */
-function detachedResponse(kind: Kind): Response {
+function detachedResponse(kind: Kind, holdAfter?: number): Response {
   const { pre, text, post } = sse(kind);
+  const shown = holdAfter === undefined ? text : text.slice(0, holdAfter);
   const enc = new TextEncoder();
   const timers: ReturnType<typeof setTimeout>[] = [];
   const body = new ReadableStream<Uint8Array>({
     start(controller) {
       pre.forEach((s) => controller.enqueue(enc.encode(s)));
-      text.forEach((s, i) =>
+      shown.forEach((s, i) =>
         timers.push(
           setTimeout(
             () => {
@@ -258,6 +260,7 @@ function detachedResponse(kind: Kind): Response {
       timers.push(
         setTimeout(
           () => {
+            if (holdAfter !== undefined) return;
             try {
               post.forEach((s) => controller.enqueue(enc.encode(s)));
               controller.close();
@@ -320,7 +323,7 @@ describe('generateStream: 読んでいる途中の中断は、どのアダプタ
       vi.spyOn(console, 'warn').mockImplementation(() => {});
       vi.stubGlobal(
         'fetch',
-        vi.fn(async () => detachedResponse(kind)),
+        vi.fn(async () => detachedResponse(kind, 3)),
       );
       const logger = { log: vi.fn(async () => {}) };
       const ac = new AbortController();
