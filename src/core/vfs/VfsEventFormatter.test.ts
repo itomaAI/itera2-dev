@@ -4,6 +4,7 @@
  *
  * AI と利用者が読む「何が起きたか」の 1 行。呼び手は HostApiRouter（fs:*）と Explorer（利用者の操作）。
  * 1 件はパスを、行き先の決まった操作（移動・コピー・アップロード）は名前を、複数は件数と最初の 3 つの名前を出す。
+ * 行き先のフォルダが無く、先が元と違う項目（改名・ゴミ箱から戻す）は、複数でも「元 -> 先」（T-0923）。
  * itera2-dev とミャク楽で同じファイルを置く（文の形を両方で同じに保つため）。
  */
 
@@ -101,6 +102,36 @@ describe('VfsEventFormatter', () => {
     expect(VfsEventFormatter.format({ actor: 'User', action: 'delete', items: items.slice(0, 4) })).toBe(
       'User deleted 4 items ("a.md", "b.md", "c.md" and 1 more)',
     );
+  });
+
+  it('複数で、行き先のフォルダが無い（ゴミ箱から戻す）: 項目ごとに 元 -> 先（T-0923）', () => {
+    expect(
+      VfsEventFormatter.format({
+        actor: 'User',
+        action: 'move',
+        items: [
+          { srcPath: 'trash/1_a.md', destPath: 'data/a.md' },
+          { srcPath: 'trash/2_b.md', destPath: 'docs/b.md' },
+        ],
+      }),
+    ).toBe('User moved 2 items ("trash/1_a.md" -> "data/a.md", "trash/2_b.md" -> "docs/b.md")');
+    const items = [1, 2, 3, 4].map((n) => ({ srcPath: `trash/${n}_f${n}.md`, destPath: `data/f${n}.md` }));
+    expect(VfsEventFormatter.format({ actor: 'User', action: 'move', items })).toBe(
+      'User moved 4 items ("trash/1_f1.md" -> "data/f1.md", "trash/2_f2.md" -> "data/f2.md", "trash/3_f3.md" -> "data/f3.md" and 1 more)',
+    );
+  });
+
+  it('複数で、先が元と同じ項目は名前だけ（行き先のフォルダが無いとき）', () => {
+    expect(
+      VfsEventFormatter.format({
+        actor: 'User',
+        action: 'copy',
+        items: [
+          { srcPath: 'data/a.md', destPath: 'data/a.md' },
+          { srcPath: 'data/b.md', destPath: 'data/c.md' },
+        ],
+      }),
+    ).toBe('User copied 2 items ("a.md", "data/b.md" -> "data/c.md")');
   });
 
   it('name が在れば名前に使う・項目が無ければ空', () => {
