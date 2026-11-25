@@ -18,6 +18,7 @@
  */
 
 import type { Turn } from '../core/state/HistoryManager';
+import type { StopOptions } from '../core/control/Engine';
 import type { Principal } from '../core/vfs/types';
 import type { VfsService } from '../core/vfs/VfsService';
 import {
@@ -37,7 +38,7 @@ export interface OwnedEngine {
     /** リセットのあと、この役割のエンジンがすること（申し送りの頭に置く 1 行） */
     readonly afterReset: string;
     wake(): void;
-    stop(): void;
+    stop(options?: StopOptions): void;
     reset(options?: { summary?: string; restoreTools?: boolean }): Promise<unknown>;
     statusInput(): Promise<ChatStatusInput>;
   };
@@ -137,7 +138,7 @@ export class EngineCalls {
   }
 
   async stop(caller: Caller, id: unknown): Promise<true> {
-    this.own(caller, id).bundle.stop();
+    this.own(caller, id).bundle.stop({ by: { kind: 'owner' } });
     return true;
   }
 

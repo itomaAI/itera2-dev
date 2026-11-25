@@ -415,7 +415,7 @@ export class EventOrchestrator {
       this._handleChatSend(text, attachments, vfsReferences, opts);
     });
 
-    chat.on('stop', () => this.root.stop());
+    chat.on('stop', () => this.root.stop({ by: { kind: 'user' } }));
 
     chat.on('clear', async () => {
       const res = await window.AppUI?.showMessageBox({

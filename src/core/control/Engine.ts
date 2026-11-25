@@ -43,6 +43,19 @@ export const PENDING_LOG = '[Pending] Still running. The result will come in a l
  */
 export const ROOT_ENGINE_ID = LLM_CALLER_ROOT;
 
+/** 誰が止めたか（止めた知らせの文に入る。T-0918）。知っている呼び手だけが渡す */
+export type StopOrigin = { kind: 'user' } | { kind: 'app'; pid: string } | { kind: 'owner' };
+
+export interface StopOptions {
+  /** 誰が止めたか。省けば書かない */
+  by?: StopOrigin;
+  /** 止めた知らせを積まない（reset・dispose。会話ごと消える） */
+  quiet?: boolean;
+}
+
+/** 止めた知らせの種類（`<event type>`・meta.eventType。T-0918） */
+export const STOPPED_EVENT_TYPE = 'stopped';
+
 /** 書き留めるだけの要素。道具としては投げない（結果も返らない） */
 const NOTE_TAGS = new Set(['thinking', 'memo', 'plan']);
 
@@ -121,6 +134,10 @@ export class Engine {
   private stoppedBatchSerial: number = 0;
   /** いまの回（_ping）の終わり。回の外では null（settled() が待つ。T-0918） */
   private cycleEnded: Promise<void> | null = null;
+  /** いまの回の model のターンを生成中か（束を作る前まで）。止めた知らせの文を選ぶ（T-0918） */
+  private generating: boolean = false;
+  /** いちばん新しい束の道具の名前と、始まったか。止めた知らせの「Not run」に使う（T-0918） */
+  private lastBatch: { serial: number; names: string[]; started: boolean[] } | null = null;
   /** 履歴を聞くのをやめる口（dispose が呼ぶ） */
   private unsubscribeHistory: (() => void) | undefined;
   /** 自分が預かっているタイマー（scheduleSystemEvent）。dispose で全部取り消す */
@@ -463,6 +480,7 @@ export class Engine {
         type: TurnType.MODEL_THOUGHT,
         trigger_llm: false,
       });
+      this.generating = true;
 
       this._emit('turn_start', { role: 'model', turnId: modelTurn.id });
 
@@ -551,6 +569,7 @@ export class Engine {
       const validActions = actions.filter((a) => !a.closed || !NOTE_TAGS.has(a.type));
       // 警告の turn_end の聞き手の中で止められた: 束を作らない
       throwIfStopped();
+      this.generating = false;
 
       if (validActions.length > 0) {
         this.continuousToolCount++;
@@ -581,6 +600,7 @@ export class Engine {
         this._emit('loop_stop', { reason: 'error', error });
       }
     } finally {
+      this.generating = false;
       // 止められたのにまだ知らせていなければ、ここで出す（流れのあとの同期の窓で止めた場合）
       this._announceAbort();
       this.isRunning = false;
@@ -659,6 +679,8 @@ export class Engine {
     // 世代（batchSerial）は stop() で見捨てた束の遅い結果を数えないため
     const batch = ++this.batchSerial;
     this.outstandingTools = actions.length;
+    const record = { serial: batch, names: actions.map((a) => a.type), started: actions.map(() => false) };
+    this.lastBatch = record;
     /** 1 本返った（または走らせなかった）。この束のものなら本数を減らす */
     const settleOne = () => {
       if (batch !== this.batchSerial) return;
@@ -761,6 +783,7 @@ export class Engine {
         return;
       }
 
+      record.started[index] = true;
       try {
         const result = await this.tools.execute(action, context);
 
@@ -778,7 +801,9 @@ export class Engine {
     });
   }
 
-  stop(): void {
+  stop(options: StopOptions = {}): void {
+    // 止めた知らせの文は、止める前の様子（何が動いていたか）で決める
+    const notice = options.quiet || this.disposed ? null : this._stoppedNotice(options.by);
     // 停止要求を記録する。ストリーミング中以外（デバウンス待機中・ツール実行中）でも
     // 確実に停止させるためのフラグ。
     this.stopRequested = true;
@@ -787,6 +812,16 @@ export class Engine {
     if (this.debounceTimer) {
       clearTimeout(this.debounceTimer);
       this.debounceTimer = null;
+    }
+    // 動いていたものを止めたら、新しい 1 ターンで伝える（起こさない。既存のターンは書き換えない）。
+    // 止めた model のターン・枠の後ろ、loop_stop(abort) の前（T-0918）
+    if (notice) {
+      const turn = this.state.history.append('system', notice, {
+        type: 'event_log',
+        eventType: STOPPED_EVENT_TYPE,
+        trigger_llm: false,
+      });
+      this._emit('turn_end', { role: 'system', turn });
     }
     this.hasPendingEvents = false;
     this.overtakeRequested = false;
@@ -812,6 +847,38 @@ export class Engine {
     }
   }
 
+  /** stop() が積む知らせ。何も動いていなければ null（T-0918） */
+  private _stoppedNotice(by?: StopOrigin): string | null {
+    const inCycle = this.abortController !== null && !this.abortController.signal.aborted;
+    if (inCycle && this.generating) return Engine.stoppedEvent('generation', by);
+    const batch = this.lastBatch;
+    if (batch && batch.serial === this.batchSerial && this.outstandingTools > 0) {
+      return Engine.stoppedEvent(
+        'tools',
+        by,
+        batch.names.filter((_, i) => !batch.started[i]),
+      );
+    }
+    return null;
+  }
+
+  /** 止めた知らせの文（T-0918。英語。モデルが読む） */
+  static stoppedEvent(phase: 'generation' | 'tools', by?: StopOrigin, notRun: string[] = []): string {
+    const who =
+      by?.kind === 'user'
+        ? ' by the user'
+        : by?.kind === 'app'
+          ? ` by an app (${by.pid})`
+          : by?.kind === 'owner'
+            ? ' by the owner'
+            : '';
+    const text =
+      phase === 'generation'
+        ? `Generation stopped${who}. Nothing in that turn was run.`
+        : `Tool execution stopped${who}.${notRun.length ? ` Not run: ${notRun.join(', ')}.` : ''}`;
+    return `<event type="${STOPPED_EVENT_TYPE}">\n${text}\n</event>`;
+  }
+
   /** 止めた回の loop_stop(abort) を出す。出す番でなければ何もしない（T-0918） */
   private _announceAbort(): void {
     if (!this.abortToAnnounce) return;
@@ -826,7 +893,7 @@ export class Engine {
    */
   dispose(): void {
     if (this.disposed) return;
-    this.stop();
+    this.stop({ quiet: true });
     // 回の中でも、loop_stop(abort) はここで出す（止まっているときと同じく、畳んだ知らせより先。T-0918）
     this._announceAbort();
     this.disposed = true;

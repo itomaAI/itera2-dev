@@ -93,6 +93,7 @@ describe('CommandDispatcher', () => {
     const h = harness();
     await h.d.tryDispatch('/stop');
     expect(h.engine.stop).toHaveBeenCalledTimes(1);
+    expect(h.engine.stop).toHaveBeenCalledWith({ by: { kind: 'user' } });
     expect(h.lastText()).toContain('Stopped.');
   });
 
@@ -100,7 +101,8 @@ describe('CommandDispatcher', () => {
     const h = harness();
     await h.d.tryDispatch('/reset T-0633 を見張る');
     expect(h.engine.stop).toHaveBeenCalledTimes(1);
-    // 止まりきってから空にする（T-0918）
+    // 止めた知らせは積まない（会話ごと消す）。止まりきってから空にする（T-0918）
+    expect(h.engine.stop).toHaveBeenCalledWith({ quiet: true });
     expect(h.engine.settled).toHaveBeenCalledTimes(1);
     expect(h.engine.settled.mock.invocationCallOrder[0]).toBeLessThan(
       h.sessionManager.clearSession.mock.invocationCallOrder[0],

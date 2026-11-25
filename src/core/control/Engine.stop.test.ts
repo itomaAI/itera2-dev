@@ -12,7 +12,7 @@
  *   6. 回の外の stop()（道具の段・止まっているとき）は、いままでどおりその場で 1 度
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { Engine, PENDING_LOG } from './Engine';
+import { Engine, PENDING_LOG, STOPPED_EVENT_TYPE } from './Engine';
 import { Translator } from '../cognitive/Translator';
 
 const GAP = 25;
@@ -130,9 +130,9 @@ function createHarness(opts: HarnessOptions) {
   });
   engine.on('loop_stop', (d: any) => seq.push(`loop_stop(${d?.reason})`));
 
-  const stop = () => {
+  const stop = (options?: any) => {
     seq.push('STOP');
-    engine.stop();
+    engine.stop(options);
   };
   const afterStop = () => seq.slice(seq.indexOf('STOP') + 1);
   return {
@@ -202,7 +202,7 @@ describe('流れの途中の stop()', () => {
           await h.go();
 
           expect(h.loopStopsAfterStop()).toEqual(['loop_stop(abort)']);
-          expect(h.afterStop()).toEqual(['turn_end(model:error)', 'loop_stop(abort)']);
+          expect(h.afterStop()).toEqual(['turn_end(system)', 'turn_end(model:error)', 'loop_stop(abort)']);
           expect(h.frames()).toHaveLength(0);
           expect(h.tools.execute).not.toHaveBeenCalled();
           expect(h.modelTurn().content).toBe(FIRST.slice(0, index + 1).join(''));
@@ -264,7 +264,7 @@ describe('流れのあと〜回の終わりの前の同期の窓での stop()', 
         if (d.role === 'model' && h.seq.indexOf('STOP') < 0) h.stop();
       });
       await h.go();
-      expect(h.afterStop()).toEqual(['loop_stop(abort)']);
+      expect(h.afterStop()).toEqual(['turn_end(system)', 'loop_stop(abort)']);
       expect(h.frames()).toHaveLength(0);
       expect(h.tools.execute).not.toHaveBeenCalled();
       expect(await h.wakesAgain()).toBe(true);
@@ -277,7 +277,7 @@ describe('流れのあと〜回の終わりの前の同期の窓での stop()', 
           h.stop();
       });
       await h.go();
-      expect(h.afterStop()).toEqual(['loop_stop(abort)']);
+      expect(h.afterStop()).toEqual(['turn_end(system)', 'loop_stop(abort)']);
       expect(h.frames()).toHaveLength(0);
       expect(h.tools.execute).not.toHaveBeenCalled();
     });
@@ -329,7 +329,12 @@ describe('止めた直後の発言', () => {
         });
         await h.go();
         const after = h.afterStop().filter((e) => e !== 'turn_end(user)');
-        expect(after.slice(0, 3)).toEqual(['turn_end(model:error)', 'loop_stop(abort)', 'turn_start(model)']);
+        expect(after.slice(0, 4)).toEqual([
+          'turn_end(system)',
+          'turn_end(model:error)',
+          'loop_stop(abort)',
+          'turn_start(model)',
+        ]);
         expect(h.loopStopsAfterStop()).toEqual(['loop_stop(abort)', 'loop_stop(idle)']);
         expect(h.llm.generateStream).toHaveBeenCalledTimes(2);
       });
@@ -345,7 +350,7 @@ describe('（対比）回の外の stop() は、いままでどおりその場�
     expect(h.tools.execute).toHaveBeenCalledTimes(1);
     expect(h.engine.status().running).toBe(false);
     h.stop();
-    expect(h.afterStop()[0]).toBe('loop_stop(abort)');
+    expect(h.afterStop().slice(0, 2)).toEqual(['turn_end(system)', 'loop_stop(abort)']);
     await vi.advanceTimersByTimeAsync(1000);
     expect(h.loopStopsAfterStop()).toEqual(['loop_stop(abort)']);
     expect(h.tools.execute).toHaveBeenCalledTimes(1);
@@ -450,6 +455,135 @@ describe('settled（止まりきるのを待つ口）', () => {
         void h.engine.settled().then(() => h.seq.push('SETTLED'));
       });
       await h.go();
-      expect(h.afterStop().slice(0, 3)).toEqual(['turn_end(model:error)', 'loop_stop(abort)', 'SETTLED']);
+      expect(h.afterStop().slice(0, 4)).toEqual([
+        'turn_end(system)',
+        'turn_end(model:error)',
+        'loop_stop(abort)',
+        'SETTLED',
+      ]);
     });
+});
+describe('止めた知らせ（新しい 1 ターン）', () => {
+  const notices = (h: any) => h.turns.filter((t: any) => t.meta?.eventType === STOPPED_EVENT_TYPE);
+  const wrap = (text: string) => `<event type="stopped">\n${text}\n</event>`;
+
+  for (const [by, text] of [
+    [{ kind: 'user' }, 'Generation stopped by the user. Nothing in that turn was run.'],
+    [{ kind: 'app', pid: 'home' }, 'Generation stopped by an app (home). Nothing in that turn was run.'],
+    [{ kind: 'owner' }, 'Generation stopped by the owner. Nothing in that turn was run.'],
+    [undefined, 'Generation stopped. Nothing in that turn was run.'],
+  ] as const)
+    it(`生成の途中（${by ? by.kind : '呼び手なし'}）: ${text}`, async () => {
+      const h = createHarness({ adapter: 'silent' });
+      h.onChunk((_c, i) => {
+        if (i === 2) {
+          h.stop(by ? { by } : undefined);
+          h.stop(by ? { by } : undefined); // 2 度押しても 1 つ
+        }
+      });
+      await h.go();
+      expect(notices(h)).toHaveLength(1);
+      const n = notices(h)[0];
+      expect(n.role).toBe('system');
+      expect(n.content).toBe(wrap(text));
+      expect(n.meta).toEqual({ type: 'event_log', eventType: 'stopped', trigger_llm: false });
+      // 置く順: 止めた model のターンの後ろ、loop_stop(abort) の前
+      expect(h.turns.indexOf(n)).toBeGreaterThan(h.turns.indexOf(h.modelTurn()));
+      expect(h.afterStop().indexOf('turn_end(system)')).toBeLessThan(h.afterStop().indexOf('loop_stop(abort)'));
+      // 起こさない
+      expect(h.createContext).toHaveBeenCalledTimes(1);
+    });
+
+  it('止めた直後の発言: 会話の順は model → 知らせ → 発言 で、次の投影に入る', async () => {
+    const h = createHarness({ adapter: 'silent' });
+    h.onChunk((_c, i) => {
+      if (i === 2) {
+        h.stop({ by: { kind: 'user' } });
+        void h.engine.injectUserTurn('next');
+      }
+    });
+    await h.go();
+    expect(h.turns.map((t: any) => t.meta?.eventType ?? t.role)).toEqual(['user', 'model', 'stopped', 'user', 'model']);
+  });
+
+  it('道具の段（始まっていない道具が在る）: Tool execution stopped by the user. Not run: report, yield.', async () => {
+    const h = createHarness({ adapter: 'silent', first: ['<write path="a">x</write>\n<report>r</report>\n<yield />'] });
+    let calls = 0;
+    h.setInExecute(() => {
+      if (++calls === 1) setTimeout(() => h.stop({ by: { kind: 'user' } }), 0);
+    });
+    await h.go();
+    expect(notices(h).map((t: any) => t.content)).toEqual([
+      wrap('Tool execution stopped by the user. Not run: report, yield.'),
+    ]);
+    // 枠の後ろ
+    expect(h.turns.indexOf(notices(h)[0])).toBeGreaterThan(h.turns.indexOf(h.frames()[0]));
+    // 並べた道具は、あとから走らない
+    expect(h.tools.execute.mock.calls.map((c: any) => c[0].type)).toEqual(['write']);
+  });
+
+  it('道具の段（全部もう始まっていた）: Tool execution stopped by the user.', async () => {
+    const h = createHarness({ adapter: 'silent', first: ['<write path="a">x</write>\n<yield />'] });
+    let calls = 0;
+    h.setInExecute(() => {
+      if (++calls === 2) setTimeout(() => h.stop({ by: { kind: 'user' } }), 0);
+    });
+    await h.go();
+    expect(notices(h).map((t: any) => t.content)).toEqual([wrap('Tool execution stopped by the user.')]);
+  });
+
+  it('[Pending] の枠の turn_end の聞き手の中: Not run: write, yield.', async () => {
+    const h = createHarness({ adapter: 'silent' });
+    h.onTurnEnd((d) => {
+      if (d.turn?.meta?.type === 'tool_execution' && h.seq.indexOf('STOP') < 0) h.stop({ by: { kind: 'owner' } });
+    });
+    await h.go();
+    expect(notices(h).map((t: any) => t.content)).toEqual([
+      wrap('Tool execution stopped by the owner. Not run: write, yield.'),
+    ]);
+  });
+
+  it('最初の道具の execute の中: Not run: yield.', async () => {
+    const h = createHarness({ adapter: 'silent' });
+    h.setInExecute(() => {
+      if (h.seq.indexOf('STOP') < 0) h.stop({ by: { kind: 'app', pid: 'home' } });
+    });
+    await h.go();
+    expect(notices(h).map((t: any) => t.content)).toEqual([
+      wrap('Tool execution stopped by an app (home). Not run: yield.'),
+    ]);
+  });
+
+  it('積まない: 止まっているとき・起床の待ちだけを取り消したとき・投影の中', async () => {
+    const h = createHarness({ adapter: 'silent', debounceMs: 1500 });
+    h.stop({ by: { kind: 'user' } });
+    await h.engine.injectUserTurn('go');
+    h.stop({ by: { kind: 'user' } });
+    expect(notices(h)).toHaveLength(0);
+
+    const p = createHarness({ adapter: 'silent' });
+    p.setInProjection(() => {
+      p.setInProjection(() => {});
+      p.stop({ by: { kind: 'user' } });
+    });
+    await p.go();
+    expect(notices(p)).toHaveLength(0);
+  });
+
+  it('積まない: dispose・quiet（reset）', async () => {
+    const h = createHarness({ adapter: 'silent' });
+    h.onChunk((_c, i) => {
+      if (i === 2) h.engine.dispose();
+    });
+    await h.go();
+    expect(notices(h)).toHaveLength(0);
+
+    const r = createHarness({ adapter: 'silent' });
+    r.onChunk((_c, i) => {
+      if (i === 2) r.stop({ quiet: true });
+    });
+    await r.go();
+    expect(notices(r)).toHaveLength(0);
+    expect(r.loopStopsAfterStop()).toEqual(['loop_stop(abort)']);
+  });
 });
