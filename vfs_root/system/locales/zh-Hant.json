@@ -371,6 +371,8 @@
     "monitor.killAllMessage": "確定要結束所有背景常駐程式嗎？",
     "monitor.killAllConfirm": "全部結束",
     "monitor.empty": "沒有正在執行的處理程序。",
+    "monitor.engine": "引擎",
+    "monitor.engineTitle": "此處理程序所服務的引擎",
     "sync.title": "雲端同步",
     "sync.subtitle": "同步提供者",
     "sync.localOnly": "僅限本機模式",

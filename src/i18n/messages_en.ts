@@ -412,6 +412,8 @@ export const EN = {
   'monitor.killAllMessage': 'Are you sure you want to terminate all background daemons?',
   'monitor.killAllConfirm': 'Kill All',
   'monitor.empty': 'No processes running.',
+  'monitor.engine': 'Engine',
+  'monitor.engineTitle': 'The engine this process serves',
 
   // ---- sync modal
   'sync.title': 'Cloud Sync',

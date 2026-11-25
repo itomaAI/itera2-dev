@@ -586,6 +586,20 @@ export class ProcessManager {
     }));
   }
 
+  /**
+   * list() に、仕えるエンジン（持ち主）を添えたもの。ホストの窓（プロセスモニタ）が読む（T-0916）。
+   * list() はゲストに渡る形（sys:ps の `{ pid, path, type, state }`）なので、そちらには足さない
+   */
+  listWithEngine(): any[] {
+    return Array.from(this.processes.values()).map((proc) => ({
+      pid: proc.pid,
+      path: proc.path,
+      type: proc.type,
+      state: proc.state,
+      engine: proc.engine,
+    }));
+  }
+
   getArgs(pid: string): Record<string, string> | null {
     const proc = this.processes.get(pid);
     return proc ? proc.args || null : null;

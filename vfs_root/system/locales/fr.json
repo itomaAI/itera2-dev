@@ -393,6 +393,8 @@
     "monitor.killAllMessage": "Voulez-vous vraiment arrêter tous les démons en arrière-plan ?",
     "monitor.killAllConfirm": "Tout arrêter",
     "monitor.empty": "Aucun processus en cours.",
+    "monitor.engine": "Moteur",
+    "monitor.engineTitle": "Le moteur que sert ce processus",
     "sync.title": "Synchronisation cloud",
     "sync.subtitle": "Fournisseurs de synchronisation",
     "sync.localOnly": "Mode local uniquement",

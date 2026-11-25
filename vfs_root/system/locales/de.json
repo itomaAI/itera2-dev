@@ -393,6 +393,8 @@
     "monitor.killAllMessage": "Möchtest du wirklich alle Hintergrund-Daemons beenden?",
     "monitor.killAllConfirm": "Alle beenden",
     "monitor.empty": "Keine laufenden Prozesse.",
+    "monitor.engine": "Engine",
+    "monitor.engineTitle": "Die Engine, der dieser Prozess dient",
     "sync.title": "Cloud-Synchronisierung",
     "sync.subtitle": "Synchronisierungsanbieter",
     "sync.localOnly": "Nur lokaler Modus",

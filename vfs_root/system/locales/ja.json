@@ -371,6 +371,8 @@
     "monitor.killAllMessage": "バックグラウンドのデーモンをすべて停止しますか？",
     "monitor.killAllConfirm": "すべて停止",
     "monitor.empty": "動いているプロセスはありません。",
+    "monitor.engine": "エンジン",
+    "monitor.engineTitle": "このプロセスが仕えるエンジン",
     "sync.title": "クラウド同期",
     "sync.subtitle": "同期の提供者",
     "sync.localOnly": "ローカルのみ",

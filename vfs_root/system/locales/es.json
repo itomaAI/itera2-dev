@@ -393,6 +393,8 @@
     "monitor.killAllMessage": "¿Seguro que quieres detener todos los daemons en segundo plano?",
     "monitor.killAllConfirm": "Detener todos",
     "monitor.empty": "No hay procesos en ejecución.",
+    "monitor.engine": "Motor",
+    "monitor.engineTitle": "El motor al que sirve este proceso",
     "sync.title": "Sincronización en la nube",
     "sync.subtitle": "Proveedores de sincronización",
     "sync.localOnly": "Solo modo local",

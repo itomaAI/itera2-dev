@@ -371,6 +371,8 @@
     "monitor.killAllMessage": "确定要结束所有后台守护进程吗？",
     "monitor.killAllConfirm": "全部结束",
     "monitor.empty": "没有正在运行的进程。",
+    "monitor.engine": "引擎",
+    "monitor.engineTitle": "此进程所服务的引擎",
     "sync.title": "云同步",
     "sync.subtitle": "同步提供方",
     "sync.localOnly": "仅本地模式",
