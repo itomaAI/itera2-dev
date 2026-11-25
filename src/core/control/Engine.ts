@@ -119,6 +119,8 @@ export class Engine {
    * stopRequested は次の発言・知らせで解けるので、それで見ると見捨てた道具が走り出す
    */
   private stoppedBatchSerial: number = 0;
+  /** いまの回（_ping）の終わり。回の外では null（settled() が待つ。T-0918） */
+  private cycleEnded: Promise<void> | null = null;
   /** 履歴を聞くのをやめる口（dispose が呼ぶ） */
   private unsubscribeHistory: (() => void) | undefined;
   /** 自分が預かっているタイマー（scheduleSystemEvent）。dispose で全部取り消す */
@@ -337,6 +339,16 @@ export class Engine {
   }
 
   /**
+   * いまの回（_ping）が終わるのを待つ。回の外ならすぐ解決する（T-0918）。
+   * 止めた回は、終わるまでに model のターンの更新と loop_stop(abort) を済ませる。会話を差し替える側（束の reset）は、
+   * これを待ってから差し替える（待たないと、止めた回の書き込みが新しい会話に落ちる）。
+   * 回が終わるのはアダプタが返ったとき。返らないアダプタでは解決しない
+   */
+  settled(): Promise<void> {
+    return this.cycleEnded ?? Promise.resolve();
+  }
+
+  /**
    * システムからの非同期割り込みイベントを注入する（タイマーやデーモンからの通知など）
    */
   injectSystemEvent(actionType: string, message: string, meta: TurnMeta = {}): void {
@@ -386,6 +398,8 @@ export class Engine {
     this.abortController = controller;
     const signal = controller.signal;
     this.abortToAnnounce = false;
+    let endCycle: () => void = () => {};
+    this.cycleEnded = new Promise<void>((resolve) => (endCycle = resolve));
     // 新しいサイクルを開始するため、前回の停止要求はここで解除する
     this.stopRequested = false;
     /** 止められていたら先へ進まない（中断として catch へ）。アダプタが中断を黙って普通に終えても、ここで拾う（T-0918） */
@@ -439,6 +453,8 @@ export class Engine {
       // ここで束を閉じる。この投影に入らなかった結果は、枠ではなく新しいターンへ届く
       this.closedBatchSerial = this.batchSerial;
       const messages = await this.projector.createContext(this.state, signal);
+      // 畳まれた: 回の残りは何も書かず、何も知らせない（loop_stop(abort) は dispose が出した。T-0918）
+      if (this.disposed) return;
       // 投影の中で止められた: 空の model のターンを積まず、アダプタも呼ばない
       throwIfStopped();
 
@@ -468,6 +484,7 @@ export class Engine {
       } catch (err) {
         streamError = err;
       }
+      if (this.disposed) return;
       // 止めた回は、アダプタが普通に返しても中断として扱う（AbortError の道と同じ形で残す。T-0918）
       if (!streamError && signal.aborted) {
         streamError = new DOMException('Aborted', 'AbortError');
@@ -544,6 +561,7 @@ export class Engine {
         this._emit('loop_stop', { reason: 'idle' });
       }
     } catch (error: any) {
+      if (this.disposed) return;
       if (error.name === 'AbortError' || signal.aborted) {
         console.log('[Engine] Aborted.');
         // stop() を通らずに来た AbortError も、いままでどおり abort として 1 度知らせる
@@ -567,6 +585,8 @@ export class Engine {
       this._announceAbort();
       this.isRunning = false;
       this.abortController = null;
+      this.cycleEnded = null;
+      endCycle();
       // 実行中に来た変更を拾う。ツールを投げた直後は outstandingTools > 0 なので、
       // 追い越せる変更（方針次第）が来ていなければ、ここでは予約されず、束の最後の結果が拾う
       if (this.hasPendingEvents) this._scheduleEvaluation();
@@ -807,6 +827,8 @@ export class Engine {
   dispose(): void {
     if (this.disposed) return;
     this.stop();
+    // 回の中でも、loop_stop(abort) はここで出す（止まっているときと同じく、畳んだ知らせより先。T-0918）
+    this._announceAbort();
     this.disposed = true;
     this.unsubscribeHistory?.();
     this.unsubscribeHistory = undefined;

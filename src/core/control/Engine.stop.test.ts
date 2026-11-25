@@ -392,3 +392,64 @@ describe('止めた束の、まだ始まっていない道具', () => {
     expect(h.tools.execute.mock.calls.map((c: any) => c[0].type)).toEqual(['write']);
   });
 });
+describe('生成の回の中の dispose', () => {
+  for (const adapter of ['silent', 'throw'] as AdapterKind[])
+    for (const mode of ['sync', 'async'] as const)
+      it(`${adapter} × ${mode}: loop_stop(abort) をその場で 1 度。回の残りは何も書かず、何も知らせない。2 度畳んでも 1 度`, async () => {
+        const h = createHarness({ adapter });
+        h.onChunk((_c, i) => {
+          if (i !== 2) return;
+          const f = () => {
+            h.seq.push('DISPOSE');
+            h.engine.dispose();
+            h.seq.push('RETURNED');
+            h.engine.dispose();
+          };
+          if (mode === 'sync') f();
+          else setTimeout(f, 0);
+        });
+        await h.go();
+        expect(h.seq.slice(h.seq.indexOf('DISPOSE') + 1)).toEqual(['loop_stop(abort)', 'RETURNED']);
+        // model のターンは積んだときのまま（更新しない）。束も作らない
+        expect(h.modelTurn().content).toBe('');
+        expect(h.modelTurn().meta.status).toBeUndefined();
+        expect(h.frames()).toHaveLength(0);
+        expect(h.tools.execute).not.toHaveBeenCalled();
+        expect(h.engine.status()).toEqual(idle);
+      });
+
+  it('投影の中で畳む: その場で 1 度。model のターンを積まず、アダプタを呼ばない', async () => {
+    const h = createHarness({ adapter: 'silent' });
+    h.setInProjection(() => {
+      h.seq.push('DISPOSE');
+      h.engine.dispose();
+      h.seq.push('RETURNED');
+    });
+    await h.go();
+    expect(h.seq.slice(h.seq.indexOf('DISPOSE') + 1)).toEqual(['loop_stop(abort)', 'RETURNED']);
+    expect(h.modelTurn()).toBeUndefined();
+    expect(h.llm.generateStream).not.toHaveBeenCalled();
+  });
+});
+
+describe('settled（止まりきるのを待つ口）', () => {
+  it('回の外ではすぐ解決する', async () => {
+    const h = createHarness({ adapter: 'silent' });
+    let done = false;
+    void h.engine.settled().then(() => (done = true));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(done).toBe(true);
+  });
+
+  for (const adapter of ['silent', 'throw'] as AdapterKind[])
+    it(`${adapter}: 生成中に止めたら、model のターンの更新と loop_stop(abort) のあとに解決する`, async () => {
+      const h = createHarness({ adapter });
+      h.onChunk((_c, i) => {
+        if (i !== 2) return;
+        h.stop();
+        void h.engine.settled().then(() => h.seq.push('SETTLED'));
+      });
+      await h.go();
+      expect(h.afterStop().slice(0, 3)).toEqual(['turn_end(model:error)', 'loop_stop(abort)', 'SETTLED']);
+    });
+});

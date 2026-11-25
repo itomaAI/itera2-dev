@@ -9,6 +9,7 @@ function harness(opts: { reply?: { usage: any; model: string }; limit?: number |
   const posted: any[] = [];
   const engine = {
     stop: vi.fn(),
+    settled: vi.fn(async () => {}),
     status: () => ({ running: false, busy: true, outstandingTools: 2, scheduled: false }),
   };
   const history = { get: () => turns };
@@ -99,6 +100,11 @@ describe('CommandDispatcher', () => {
     const h = harness();
     await h.d.tryDispatch('/reset T-0633 を見張る');
     expect(h.engine.stop).toHaveBeenCalledTimes(1);
+    // 止まりきってから空にする（T-0918）
+    expect(h.engine.settled).toHaveBeenCalledTimes(1);
+    expect(h.engine.settled.mock.invocationCallOrder[0]).toBeLessThan(
+      h.sessionManager.clearSession.mock.invocationCallOrder[0],
+    );
     expect(h.sessionManager.clearSession).toHaveBeenCalledWith({
       summary:
         '[System: Session reset by user command]\nPlease run the Initialization Protocol first.\n\n[Carried Over Information]\nT-0633 を見張る',

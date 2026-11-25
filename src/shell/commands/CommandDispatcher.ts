@@ -39,6 +39,8 @@ export interface Command extends CommandSpec {
 export interface CommandDeps {
   engine: {
     stop(): void;
+    /** いまの回が終わるのを待つ（/reset が、止まりきってから空にする。T-0918） */
+    settled(): Promise<void>;
     status(): { running: boolean; busy: boolean; outstandingTools: number; scheduled: boolean };
   };
   history: { get(): Turn[] };
@@ -163,6 +165,7 @@ export class CommandDispatcher {
           const plan = buildResetPlan({ summary: c.rest }, 'user command', ROLE_PARTS.root.afterReset);
           // 起こさない（chat:reset と同じ。次の発言で AI が起きて申し送りを読む）
           d.engine.stop();
+          await d.engine.settled();
           await d.sessionManager.clearSession({
             summary: plan.summary,
             triggerLlm: false,
