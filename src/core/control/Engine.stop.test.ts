@@ -360,3 +360,35 @@ describe('（対比）回の外の stop() は、いままでどおりその場�
     expect(h.seq).toEqual(['STOP', 'loop_stop(abort)', 'STOP', 'loop_stop(abort)']);
   });
 });
+describe('止めた束の、まだ始まっていない道具', () => {
+  it('道具の段で止めた直後に発言が来ても、見捨てた束の 2・3 本目は始めない', async () => {
+    const h = createHarness({ adapter: 'silent', first: ['<write path="a">x</write>\n<report>r</report>\n<yield />'] });
+    let calls = 0;
+    h.setInExecute(() => {
+      if (++calls !== 1) return;
+      // 回が終わってから（道具の段）止め、すぐ発言する
+      setTimeout(() => {
+        h.stop();
+        void h.engine.injectUserTurn('next');
+      }, 0);
+    });
+    await h.go();
+    expect(h.tools.execute.mock.calls.map((c: any) => c[0].type)).toEqual(['write']);
+    // 発言では起きる（2 回目の生成は道具を投げない）
+    expect(h.llm.generateStream).toHaveBeenCalledTimes(2);
+  });
+
+  it('止めた直後にタイマーの知らせが来ても、見捨てた束の道具は始めない', async () => {
+    const h = createHarness({ adapter: 'silent', first: ['<write path="a">x</write>\n<report>r</report>\n<yield />'] });
+    let calls = 0;
+    h.setInExecute(() => {
+      if (++calls !== 1) return;
+      setTimeout(() => {
+        h.stop();
+        h.engine.injectSystemEvent('timer_alert', 'tea');
+      }, 0);
+    });
+    await h.go();
+    expect(h.tools.execute.mock.calls.map((c: any) => c[0].type)).toEqual(['write']);
+  });
+});

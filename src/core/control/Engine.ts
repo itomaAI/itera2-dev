@@ -114,6 +114,11 @@ export class Engine {
    * 立てるのは回の中の stop()、倒すのは _announceAbort だけ。だから回ごとにちょうど 1 度
    */
   private abortToAnnounce: boolean = false;
+  /**
+   * stop() が見捨てた束の世代（これ以下の束の、まだ始まっていない道具は始めない。T-0918）。
+   * stopRequested は次の発言・知らせで解けるので、それで見ると見捨てた道具が走り出す
+   */
+  private stoppedBatchSerial: number = 0;
   /** 履歴を聞くのをやめる口（dispose が呼ぶ） */
   private unsubscribeHistory: (() => void) | undefined;
   /** 自分が預かっているタイマー（scheduleSystemEvent）。dispose で全部取り消す */
@@ -729,10 +734,9 @@ export class Engine {
         await new Promise((resolve) => setTimeout(resolve, index * 50));
       }
 
-      // 待機中にループが停止（Abort）された場合は実行をキャンセル。
-      // this.abortController は既に null 化されている可能性があるため、
-      // 捕捉済みの signal と停止フラグの両方を見る。
-      if (signal?.aborted || this.stopRequested || this.disposed) {
+      // 待機中に止められた束の道具は始めない。見るのは束の世代（stop() が見捨てた束か。T-0918）。
+      // 回の中で止めた場合は、捕捉済みの signal も aborted
+      if (batch <= this.stoppedBatchSerial || signal?.aborted || this.disposed) {
         settleOne();
         return;
       }
@@ -769,6 +773,7 @@ export class Engine {
     // 走っている束は見捨てる（閉じる）。遅れて届いた結果は新しいターンとして履歴に入るが、
     // 本数には数えず、利用者が次に発言するまで起こさない（stopRequested が予約を止める）
     this.closedBatchSerial = this.batchSerial;
+    this.stoppedBatchSerial = this.batchSerial;
     this.batchSerial++;
     this.outstandingTools = 0;
 
