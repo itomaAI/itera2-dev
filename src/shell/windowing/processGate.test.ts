@@ -25,6 +25,13 @@ describe('processGate: 動かしてよいか', () => {
     expect(row(engineMover('eng-c'))).toEqual([false, false, false]);
   });
 
+  it('エンジンに仕えるゲストのプロセスは、そのエンジンとして（経由した pid は判定に効かない）', () => {
+    expect(row(engineMover('eng-a', 'some_app'))).toEqual([false, true, false]);
+    expect(row(engineMover(ROOT_ENGINE_ID, 'home'))).toEqual([true, true, true]);
+    expect(engineMover('eng-a', 'some_app')).toEqual({ kind: 'engine', engine: 'eng-a', via: 'some_app' });
+    expect(engineMover('eng-a')).toEqual({ kind: 'engine', engine: 'eng-a' });
+  });
+
   it('断りの文は、相手・その仕える先・しようとしたこと', () => {
     const e = new ProcessRefusedError({ pid: 'notes', engine: 'root' }, 'kill');
     expect(e).toBeInstanceOf(Error);

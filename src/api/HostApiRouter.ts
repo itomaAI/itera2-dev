@@ -14,7 +14,7 @@ import { resolvePrincipal } from './principal';
 import { fileDataUrl } from './fileDataUrl';
 import { GuestLocalStore } from '../core/sys/GuestLocalStore';
 import type { SpawnOptions } from '../shell/windowing/ProcessManager';
-import { USER_MOVER, type Mover } from '../shell/windowing/processGate';
+import { engineMover, type Mover } from '../shell/windowing/processGate';
 import type { CompiledGuest } from '../shell/windowing/GuestCompiler';
 import { USER_PRINCIPAL } from '../core/vfs/types';
 import { buildChatStatus, buildResetPlan, type ChatStatusInput } from './chatApi';
@@ -64,7 +64,7 @@ export interface ISessionManager {
 export interface IShell {
   _closeMobileDrawers(): void;
   _revealInExplorer?(path: string): boolean;
-  _openPath?(path: string): void;
+  _openPath?(path: string, mover: Mover): void;
   getMergedProviders?(): Promise<any[]>;
   /** いま選んでいるモデルの文脈の上限（無ければ null） */
   getContextLimit?(): Promise<number | null>;
@@ -199,6 +199,13 @@ export class HostApiRouter {
     const getActor = (sourcePid: string): Actor => ({ principal: getPrincipal(sourcePid), origin: sourcePid });
     // 呼んだプロセスと、その主体（会話に置く口・エンジンの口が使う）
     const callerOf = (sourcePid: string): Caller => ({ pid: sourcePid, principal: getPrincipal(sourcePid) });
+    // 呼んだプロセスがプロセスを動かすときの「誰が」（T-0912）: そのプロセスが仕えるエンジンとして。
+    // 動かせるのは、同じエンジンに仕える仲間と自分だけ（ルートに仕えるプロセスは全部）。判定は関所（ProcessManager）がする
+    const moverOf = (sourcePid: string): Mover => {
+      const proc = d.processManager?.processes.get(sourcePid);
+      if (!proc) throw new Error(`Process [${sourcePid}] not found.`);
+      return engineMover(proc.engine, sourcePid);
+    };
 
     t.registerHandler('fs:read', async ({ path, opts }, sourcePid) => {
       const principal = getPrincipal(sourcePid);
@@ -539,23 +546,22 @@ export class HostApiRouter {
     t.registerHandler('sys:spawn', async ({ path, opts }, sourcePid) => {
       if (!d.processManager) return false;
 
+      // 呼んだプロセスが仕えるエンジンとして起こす（T-0912）: 起こしたプロセスはそのエンジンに仕え、
+      // 名指しした個体が居れば、動かせる相手のときだけ再開・起こし直しになる（ほかは関所が断る）
       const spawnOptions: any = { path };
-      // 起こしたプロセスが仕えるエンジンを引き継ぐ（T-0903。いまはどのプロセスもルートに仕える）
-      const callerEngine = d.processManager.processes.get(sourcePid)?.engine;
-      if (callerEngine) spawnOptions.engine = callerEngine;
       if (opts?.pid) spawnOptions.pid = opts.pid;
       if (opts?.type) spawnOptions.type = opts.type;
       if (opts?.show !== undefined) spawnOptions.show = opts.show;
       if (opts?.forceReload !== undefined) spawnOptions.forceReload = opts.forceReload;
       if (opts?.args) spawnOptions.args = opts.args;
 
-      await d.processManager.spawn(USER_MOVER, spawnOptions);
+      await d.processManager.spawn(moverOf(sourcePid), spawnOptions);
       if (spawnOptions.show !== false && d.shell) d.shell._closeMobileDrawers();
       return true;
     });
 
-    t.registerHandler('sys:kill', async ({ pid }) =>
-      d.processManager ? d.processManager.kill(USER_MOVER, pid) : false,
+    t.registerHandler('sys:kill', async ({ pid }, sourcePid) =>
+      d.processManager ? d.processManager.kill(moverOf(sourcePid), pid) : false,
     );
     t.registerHandler('sys:ps', async () => (d.processManager ? d.processManager.list() : []));
     t.registerHandler('sys:info', async (_, sourcePid) => {
@@ -692,10 +698,11 @@ export class HostApiRouter {
     });
     // 関連付けのアプリで開く（metaos://open/… と同じ経路。T-0344）。
     // ゲストは「何で開くか」を知らなくてよい。開けなかったときはホストが通知で見せる。
-    t.registerHandler('host:open_path', async ({ path }) => {
+    // 関連付けのアプリを起こすときは、呼んだプロセスが仕えるエンジンとして（T-0912）
+    t.registerHandler('host:open_path', async ({ path }, sourcePid) => {
       if (!d.shell || !d.shell._openPath) throw new Error('open is not available.');
       if (typeof path !== 'string' || !path) throw new Error("'path' is required.");
-      d.shell._openPath(path.replace(/^\/+|\/+$/g, ''));
+      d.shell._openPath(path.replace(/^\/+|\/+$/g, ''), moverOf(sourcePid));
       return true;
     });
     t.registerHandler('host:notify', async ({ message, type, duration }) => {
@@ -747,10 +754,11 @@ export class HostApiRouter {
       if (window.AppUI) window.AppUI.hideLoading();
       return true;
     });
-    t.registerHandler('host:go_home', async () => {
+    // ホームへ: 呼んだプロセスが仕えるエンジンから見たホームの個体（ルートに仕えるプロセスなら、いまのホーム。T-0912）
+    t.registerHandler('host:go_home', async (_payload, sourcePid) => {
       if (!d.processManager) return false;
       const homePath = d.configManager.homePath();
-      await d.processManager.spawn(USER_MOVER, { path: homePath, show: true });
+      await d.processManager.spawn(moverOf(sourcePid), { path: homePath, show: true });
       if (d.shell) d.shell._closeMobileDrawers();
       return true;
     });

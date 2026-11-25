@@ -6,6 +6,7 @@
 import type { VfsService } from '../../core/vfs/VfsService';
 import type { AppRegistry } from '../../core/sys/AppRegistry';
 import type { UriRouter } from '../core/UriRouter';
+import { USER_MOVER } from '../windowing/processGate';
 import type { Principal, VfsStat } from '../../core/vfs/types';
 import { LABEL_KICKER } from '../styles/typography';
 import { t, escapeHtml } from '../../i18n/i18n';
@@ -185,7 +186,7 @@ export class CommandPaletteModal {
       subtitle: t('palette.settings.subtitle'),
       icon: '⚙️',
       score: 100,
-      action: () => this.uriRouter.dispatch('metaos://system/settings'),
+      action: () => this.uriRouter.dispatch('metaos://system/settings', USER_MOVER),
     });
     items.push({
       id: 'sys-api-keys',
@@ -193,7 +194,7 @@ export class CommandPaletteModal {
       subtitle: t('palette.apiKeys.subtitle'),
       icon: '🔑',
       score: 99,
-      action: () => this.uriRouter.dispatch('metaos://system/api_keys'),
+      action: () => this.uriRouter.dispatch('metaos://system/api_keys', USER_MOVER),
     });
     items.push({
       id: 'sys-monitor',
@@ -201,7 +202,7 @@ export class CommandPaletteModal {
       subtitle: t('palette.monitor.subtitle'),
       icon: '📊',
       score: 98,
-      action: () => this.uriRouter.dispatch('metaos://system/monitor'),
+      action: () => this.uriRouter.dispatch('metaos://system/monitor', USER_MOVER),
     });
 
     // Apps
@@ -213,7 +214,7 @@ export class CommandPaletteModal {
         subtitle: t('palette.appSubtitle', { path: app.path }),
         icon: app.icon || '📱',
         score: 90,
-        action: () => this.uriRouter.dispatch(`metaos://run/${app.path}`),
+        action: () => this.uriRouter.dispatch(`metaos://run/${app.path}`, USER_MOVER),
       });
     });
 
@@ -272,7 +273,7 @@ export class CommandPaletteModal {
           subtitle: cmd.sub,
           icon: cmd.icon,
           score: score + 50,
-          action: () => this.uriRouter.dispatch(cmd.uri),
+          action: () => this.uriRouter.dispatch(cmd.uri, USER_MOVER),
         });
       }
     });
@@ -288,7 +289,7 @@ export class CommandPaletteModal {
           subtitle: t('palette.appSubtitle', { path: app.path }),
           icon: app.icon || '📱',
           score: score + 40,
-          action: () => this.uriRouter.dispatch(`metaos://run/${app.path}`),
+          action: () => this.uriRouter.dispatch(`metaos://run/${app.path}`, USER_MOVER),
         });
       }
     });
@@ -315,7 +316,7 @@ export class CommandPaletteModal {
           subtitle: t('palette.fileSubtitle', { path: stat.path }),
           icon: icon,
           score: score,
-          action: () => this.uriRouter.dispatch(`metaos://open/${stat.path}`),
+          action: () => this.uriRouter.dispatch(`metaos://open/${stat.path}`, USER_MOVER),
         });
       }
     });

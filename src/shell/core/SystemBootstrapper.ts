@@ -32,7 +32,7 @@ import { ROOT_ENGINE_ID } from '../../core/control/Engine';
 import { createEngineBundle } from '../../core/control/EngineBundle';
 import { EngineManager } from '../services/EngineManager';
 import { createEngineProcesses } from '../windowing/engineProcesses';
-import { OS_MOVER } from '../windowing/processGate';
+import { OS_MOVER, USER_MOVER, type Mover } from '../windowing/processGate';
 import type { ToolShell } from '../../core/control/ToolContext';
 import { Translator } from '../../core/cognitive/Translator';
 import { registerBasicTools } from '../../core/control/tools/basic_tools';
@@ -203,7 +203,7 @@ export class SystemBootstrapper {
     const navBrowserSync = configManager.get('preferences')?.navBrowserSync !== false;
     const navHistory = new NavHistory({
       navigate: (uri) => {
-        uriRouter.dispatch(uri);
+        uriRouter.dispatch(uri, USER_MOVER);
       },
       browser: navBrowserSync && typeof window !== 'undefined' && window.history ? window.history : null,
     });
@@ -295,9 +295,9 @@ export class SystemBootstrapper {
       modals: desktop.modals,
       _closeMobileDrawers: () => desktop.closeMobileDrawers(),
       _revealInExplorer: (path: string) => desktop.revealInExplorer(path),
-      // 関連付けで開く（ゲストの MetaOS.host.open。T-0344）。intent の登録は EventOrchestrator にあり、
+      // 関連付けで開く（ゲストの MetaOS.host.open。T-0344）。誰が開くか（mover）は、呼んだプロセスから HostApiRouter が決める。intent の登録は EventOrchestrator にあり、
       // dispatch は同期で登録済みの handler を呼ぶだけなので、ここで router を握っていれば足りる
-      _openPath: (path: string) => uriRouter.dispatch(`metaos://open/${path}`),
+      _openPath: (path: string, mover: Mover) => uriRouter.dispatch(`metaos://open/${path}`, mover),
       getMergedProviders: () => cognitiveManager.getMergedProviders(),
       getContextLimit: () => cognitiveManager.contextLimit(),
       resolveLlm: (config: any) => cognitiveManager.resolveLlm(config),

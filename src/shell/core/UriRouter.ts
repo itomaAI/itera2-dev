@@ -3,6 +3,8 @@
  * Itera OS v2: Custom URI Router
  */
 
+import type { Mover } from '../windowing/processGate';
+
 export interface ParsedUri {
   intent: string;
   path: string;
@@ -26,7 +28,11 @@ export class UriRouter {
     return this.routes.has(intent.toLowerCase());
   }
 
-  dispatch(uriString: string): boolean {
+  /**
+   * URI を、登録された handler に渡す。`mover` は「誰が」開こうとしているか（利用者の操作か、ゲストの代行か）。
+   * ここでは見ずに handler へ渡すだけ —— プロセスを起こす handler（open・run）が、関所へそのまま渡す（T-0912）
+   */
+  dispatch(uriString: string, mover: Mover): boolean {
     if (!uriString || typeof uriString !== 'string') return false;
 
     const parsed = this._parse(uriString.trim());
@@ -40,7 +46,7 @@ export class UriRouter {
     }
 
     // 第2引数としてパース済みのクエリオブジェクトを追加で渡す
-    handler(parsed.path, parsed.queryArgs, parsed.searchAndHash);
+    handler(parsed.path, parsed.queryArgs, parsed.searchAndHash, mover);
     return true;
   }
 

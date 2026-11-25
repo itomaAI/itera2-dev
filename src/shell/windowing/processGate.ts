@@ -11,7 +11,8 @@
  * ■ 誰が（Mover）
  *   os     … OS 自身（自動起動・窓の押し出し・エンジンを畳む・全停止）
  *   user   … 画面の前の人の操作（アドレスバー・タスク切り替え・プロセスモニタ・ボタン）
- *   engine … エンジン（AI の道具）
+ *   engine … エンジンとして。AI の道具と、そのエンジンに仕えるゲストのプロセス（`via` は、そのプロセスの pid。
+ *            記録のための欄で、判定には使わない）
  *
  * ■ 規則（これ 1 つ）
  *   OS と利用者は全部。ルートのエンジンは全部。ほかのエンジンは、自分に仕えるプロセスだけ。
@@ -23,13 +24,16 @@
 import { ROOT_ENGINE_ID } from '../../core/control/Engine';
 
 export type Mover =
-  { readonly kind: 'os' } | { readonly kind: 'user' } | { readonly kind: 'engine'; readonly engine: string };
+  | { readonly kind: 'os' }
+  | { readonly kind: 'user' }
+  | { readonly kind: 'engine'; readonly engine: string; readonly via?: string };
 
 export const OS_MOVER: Mover = Object.freeze({ kind: 'os' });
 export const USER_MOVER: Mover = Object.freeze({ kind: 'user' });
 
-export function engineMover(engine: string): Mover {
-  return { kind: 'engine', engine };
+/** エンジンとして。`via` は、そのエンジンに仕えるゲストのプロセスが頼んだとき、そのプロセスの pid */
+export function engineMover(engine: string, via?: string): Mover {
+  return via === undefined ? { kind: 'engine', engine } : { kind: 'engine', engine, via };
 }
 
 /** 動かしてよいか。`target` はプロセスの記録のうち、仕えるエンジン */
