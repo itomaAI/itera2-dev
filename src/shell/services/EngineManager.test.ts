@@ -251,7 +251,7 @@ describe('EngineManager: 作る', () => {
     expect(w.rows()).toEqual([{ action: 'engine_created', engine: e.id, owner: 'viewer', app: 'viewer-app' }]);
   });
 
-  it('始まりに、見えている道具（ルートの台帳のもの）の定義を会話に置く。起こさない', async () => {
+  it('ルートの道具は、与えなければ見えない。始まりに置く定義も無い（T-0912）', async () => {
     const w = world();
     w.root.tools.registerDynamicTool('search', 'web', {
       description: 's',
@@ -259,14 +259,80 @@ describe('EngineManager: 作る', () => {
     });
     const e = await w.manager.create(OWNER);
 
+    expect(e.bundle.tools.getRegisteredToolNames()).not.toContain('search');
+    expect(e.bundle.history.get()).toEqual([]);
+    await settle();
+    expect(w.equips[0].generateStream).not.toHaveBeenCalled();
+  });
+
+  it('toolsets: 与えた組の道具だけが見え、始まりにその定義を置く。起こさない（T-0912）', async () => {
+    const w = world();
+    w.root.tools.registerDynamicTool('search', 'web', {
+      description: 's',
+      definition: '<define_tag name="search">S</define_tag>',
+    });
+    w.root.tools.registerDynamicTool('mail', 'mailer', {
+      description: 'm',
+      definition: '<define_tag name="mail">M</define_tag>',
+    });
+    const e = await w.manager.create(OWNER, { toolsets: ['web', 'web'] });
+
+    expect(e.bundle.tools.listToolSets().map((s) => s.id)).toEqual(['web']);
     const turns = e.bundle.history.get();
     expect(turns).toHaveLength(1);
     expect(turns[0].role).toBe('system');
     expect(turns[0].content).toContain('[System: Restored Dynamic Tools]');
     expect(turns[0].content).toContain('<define_tag name="search">S</define_tag>');
+    expect(turns[0].content).not.toContain('<define_tag name="mail">');
     await settle();
     expect(w.equips[0].generateStream).not.toHaveBeenCalled();
-    expect(e.bundle.history.get()).toHaveLength(1);
+    // 何を与えたかは記録に残る
+    expect(w.rows()).toEqual([
+      { action: 'engine_created', engine: e.id, owner: 'viewer', app: 'viewer', toolsets: ['web'] },
+    ]);
+  });
+
+  it('toolsets: 作るプロセスが仕えるエンジンから見えていない組・形の違うものは、作らずに理由を付けて断る', async () => {
+    const w = world();
+    w.root.tools.registerDynamicTool('search', 'web', { description: 's' });
+    await expect(w.manager.create(OWNER, { toolsets: ['web', 'nope'] })).rejects.toThrow(
+      'Invalid engine spec: toolsets: "nope" is not a toolset visible to the engine this process serves (visible: web)',
+    );
+    await expect(w.manager.create(OWNER, { toolsets: ['a', 'b'] })).rejects.toThrow(
+      'toolsets: "a", "b" are not toolsets visible to the engine this process serves (visible: web)',
+    );
+    await expect(w.manager.create(OWNER, { toolsets: 'web' })).rejects.toThrow(
+      'Invalid engine spec: toolsets must be an array of process names (pids)',
+    );
+    await expect(w.manager.create(OWNER, { toolsets: ['web', ''] })).rejects.toThrow(
+      'toolsets must be an array of process names (pids)',
+    );
+    expect(w.manager.owned('viewer')).toEqual([]);
+    expect(w.rows()).toEqual([]);
+  });
+
+  it('toolsets: その先へ渡せる —— サブに仕えるプロセスは、サブに見えている組（与えられた組）を与えられる', async () => {
+    const w = world();
+    w.root.tools.registerDynamicTool('search', 'web', { description: 's' });
+    w.root.tools.registerDynamicTool('mail', 'mailer', { description: 'm' });
+    const e = await w.manager.create(OWNER, { toolsets: ['web'] });
+    w.spawn('helper', e.id);
+    const helper = { pid: 'helper', principal: { type: 'app', id: 'helper' } as Principal };
+
+    await expect(w.manager.create(helper, { toolsets: ['mailer'] })).rejects.toThrow(
+      'toolsets: "mailer" is not a toolset visible to the engine this process serves (visible: web)',
+    );
+    // 与えた者は、作るプロセスが仕えるエンジン: サブの台帳に在る組（サブに仕えるプロセスの道具）も、与えられた組も渡せる
+    e.bundle.tools.registerDynamicTool('draw', 'helper', { description: 'd' });
+    const g = await w.manager.create(helper, { toolsets: ['web', 'helper'] });
+    expect(g.bundle.tools.listToolSets().map((s) => s.id)).toEqual(['helper', 'web']);
+
+    // 道具を持つプロセスが消えて登録し直しても（起こし直し）、与えた先の全部からまた見える
+    w.registry.removeToolsByPid('web');
+    expect(g.bundle.tools.listToolSets().map((s) => s.id)).toEqual(['helper']);
+    w.root.tools.registerDynamicTool('search', 'web', { description: 's' });
+    expect(e.bundle.tools.listToolSets().map((s) => s.id)).toEqual(['helper', 'web']);
+    expect(g.bundle.tools.listToolSets().map((s) => s.id)).toEqual(['helper', 'web']);
   });
 
   it('保存された会話から始める。読むのは持ち主の主体・添付はこのエンジンの置き場へ', async () => {
@@ -311,7 +377,7 @@ describe('EngineManager: 作る', () => {
       'Invalid engine spec: config.llm.model must be a non-empty string',
     );
     await expect(create(OWNER, { init: 'data/role.md' })).rejects.toThrow(
-      'Invalid engine spec: init is not supported (allowed: config, from)',
+      'Invalid engine spec: init is not supported (allowed: config, from, toolsets)',
     );
     await expect(create(OWNER, { from: 5 })).rejects.toThrow('Invalid engine spec: from must be a non-empty path');
     await expect(create(OWNER, { from: '  ' })).rejects.toThrow('Invalid engine spec: from must be a non-empty path');
