@@ -128,18 +128,31 @@ export class ToolNameTakenError extends Error {
 }
 
 /**
+ * 与える組（T-0912）。単位は組（toolset ＝ その道具を登録したプロセス）で、名前はその pid。
+ * 絞りは見るたびに掛ける（行を写さない）。
+ */
+export interface ToolGrant {
+  /** 与えた者のエンジンの id（作るエンジンの持ち主のプロセスが仕えるエンジン） */
+  from: string;
+  /** 与える組の id（pid） */
+  toolsets: readonly string[];
+}
+
+/**
  * エンジンから見える道具（T-0903）。
  *
  * 道具は 2 種類ある。システムの道具は 1 組を全エンジンが共有する。動的な道具（アプリ・デーモンが登録したもの）は、
- * 登録したプロセスが仕えるエンジンの台帳に入る。エンジンに見えるのは「システムの道具 → 自分の台帳 → 口を作るときに並べた
- * ほかの台帳」の順で、同じ名前が複数あれば最初に当たったものが動く。どの台帳を並べるかは口を作る側が決める
- * （束を作る関数は、ルートでないエンジンにルートの台帳を並べる —— ルートに仕えるデーモンの道具は、どのエンジンからも使える）。
+ * 登録したプロセスが仕えるエンジンの台帳に入る。エンジンに見えるのは「システムの道具 → 自分の台帳 → 与えられた組」の順で、
+ * 同じ名前が複数あれば最初に当たったものが動く。与えられた組（T-0912）は、口を作るときに受け取る ToolGrant の
+ * 「与えた者（from のエンジン）の見え方のうち、id（pid）が toolsets に在る組」。行の写しではなく見え方なので、与えた者の側で
+ * 組が消えれば見えなくなり、そのプロセスが登録し直せば（起こし直し）また見える。与えた者の見え方には、その者が与えられた組も
+ * 入るので、与えられたものはその先へも渡せる。
  *
  * 登録は、同じ名前の道具がそのエンジンからもう見えていれば断る（T-0908。ToolNameTakenError）。先に当たったものだけが動くので、
  * 登録できてしまうと、後から来た道具は黙って隠れる（登録は成功し、定義も会話に並ぶのに、呼ばれない）。
  * 同じプロセスが自分の道具を登録し直すのは上書き。
- * 同じ名前が複数見えるのは、ほかのエンジンの台帳が先に持っていた名前を、あとからルートの台帳に登録したときだけ
- * （ほかのエンジンに仕えるプロセスの道具で、ルートへの登録は止めない。そのエンジンからは自分のものが動く）。
+ * 同じ名前が複数見えるのは、自分の台帳が先に持っていた名前を、あとから与えた者の側の組が登録したときだけ
+ * （与えた者の側の登録は、与えられた側の台帳を見ない。与えられた側からは自分のものが動く）。
  *
  * どの台帳か（エンジンの id）はこの口に焼き込んである。使う側（エンジン・会話の積み直し・ゲストの登録の口）は id を書かない。
  */
@@ -170,6 +183,8 @@ export class ToolRegistry {
   private systemSets: Map<string, ToolSet> = new Map();
   /** 動的な道具の台帳: エンジンの id → そのエンジンに仕えるプロセスの組（組の id は pid。作った順） */
   private ledgers: Map<string, Map<string, ToolSet>> = new Map();
+  /** 与えられた組: エンジンの id → 与え（口を作るときに決まり、口を畳むと消える。T-0912） */
+  private grants: Map<string, ToolGrant> = new Map();
   private appRegistry: AppRegistry | null = null;
   private guestToolInvoker: GuestToolInvoker | null = null;
   private executionRecorder: ToolExecutionRecorder | null = null;
@@ -189,10 +204,13 @@ export class ToolRegistry {
 
   /**
    * あるエンジンから見える道具の口を作る。口は台帳を写さない（呼ぶたびに引く）ので、あとからの登録・解除もそのまま見える。
-   * `inherits` は、自分の台帳の後ろに見せるほかのエンジンの台帳（この順）。登録・解除は自分の台帳だけに効く。
+   * `grant` は、自分の台帳の後ろに見せる与えられた組（T-0912）。省けば、見えるのはシステムの道具と自分の台帳だけ。
+   * 口を作ると、そのエンジンの与えが決まる（作り直せば置き換わる）。登録・解除は自分の台帳だけに効く。
    */
-  viewFor(engineId: string, inherits: readonly string[] = []): ToolView {
-    const visible = () => this._visibleSets(engineId, inherits);
+  viewFor(engineId: string, grant?: ToolGrant): ToolView {
+    if (grant) this.grants.set(engineId, { from: grant.from, toolsets: [...grant.toolsets] });
+    else this.grants.delete(engineId);
+    const visible = () => this._visibleSets(engineId);
     return {
       engineId,
       getRegisteredToolNames: () => this._names(visible()),
@@ -205,16 +223,30 @@ export class ToolRegistry {
       unregisterDynamicTool: (toolName, sourcePid) => this._unregisterDynamicTool(engineId, toolName, sourcePid),
       dispose: () => {
         this.ledgers.delete(engineId);
+        this.grants.delete(engineId);
       },
     };
   }
 
-  /** あるエンジンに見える組: システムの道具 → 自分の台帳 → 並べたほかの台帳（探す順でもある） */
-  private _visibleSets(engineId: string, inherits: readonly string[]): ToolSet[] {
-    const sets = [...this.systemSets.values()];
-    for (const id of [engineId, ...inherits.filter((other) => other !== engineId)]) {
-      const ledger = this.ledgers.get(id);
-      if (ledger) sets.push(...ledger.values());
+  /** あるエンジンに見える組: システムの道具 → 自分の台帳 → 与えられた組（探す順でもある） */
+  private _visibleSets(engineId: string): ToolSet[] {
+    return [...this.systemSets.values(), ...this._dynamicSets(engineId, new Set())];
+  }
+
+  /**
+   * あるエンジンに見える動的な組: 自分の台帳 → 与えた者に見える動的な組のうち、与えられた id のもの（与えた者の順）。
+   * 与えた者をたどるので、与えられたものはその先へも渡る。たどったエンジンには戻らない（輪になっても止まる）。
+   * pid は 1 つのエンジンにしか仕えないので、同じ組が 2 度並ぶことはない
+   */
+  private _dynamicSets(engineId: string, seen: Set<string>): ToolSet[] {
+    seen.add(engineId);
+    const sets = [...(this.ledgers.get(engineId)?.values() ?? [])];
+    const grant = this.grants.get(engineId);
+    if (grant && !seen.has(grant.from)) {
+      const wanted = new Set(grant.toolsets);
+      for (const set of this._dynamicSets(grant.from, seen)) {
+        if (wanted.has(set.id)) sets.push(set);
+      }
     }
     return sets;
   }

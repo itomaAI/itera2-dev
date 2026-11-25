@@ -17,7 +17,7 @@ export interface ConversationEvent {
 
 /**
  * 走っているアプリ・デーモンの道具の定義（T-0246）。会話を空にすると定義も一緒に消えるので、置き直す。
- * アプリが作ったエンジンは、始まりにもこれを置く（OS のチャットのエンジンの道具を、これで知る）。無ければ null。
+ * アプリが作ったエンジンは、始まりにもこれを置く（与えられた道具を、これで知る）。無ければ null。
  */
 export function toolsRestoredEvent(definitions: string[]): ConversationEvent | null {
   if (definitions.length === 0) return null;

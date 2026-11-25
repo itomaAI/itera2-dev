@@ -336,7 +336,7 @@ describe('ToolRegistry: 閉じていない要素は実行しない（T-0878）',
 });
 describe('ToolRegistry: エンジンごとの台帳（T-0903）', () => {
   // システムの道具は 1 組を全エンジンが共有し、動的な道具は「登録したプロセスが仕えるエンジン」の台帳に入る。
-  // エンジンに見えるのは システムの道具 → 自分の台帳 → 口を作るときに並べたほかの台帳。
+  // エンジンに見えるのは システムの道具 → 自分の台帳 → 与えられた組（T-0912。ここでは e1 にルートの web_daemon を与える）。
   function harness() {
     const records: any[] = [];
     const r = new ToolRegistry(undefined, { record: (e: any) => records.push(e) } as any);
@@ -350,7 +350,7 @@ describe('ToolRegistry: エンジンごとの台帳（T-0903）', () => {
       },
     });
     const root = r.viewFor(ROOT_ENGINE_ID);
-    const sub = r.viewFor('e1', [ROOT_ENGINE_ID]);
+    const sub = r.viewFor('e1', { from: ROOT_ENGINE_ID, toolsets: ['web_daemon'] });
     root.registerDynamicTool('search', 'web_daemon', {
       description: 's',
       definition: '<define_tag name="search">root</define_tag>',
@@ -363,7 +363,7 @@ describe('ToolRegistry: エンジンごとの台帳（T-0903）', () => {
   }
   afterEach(() => vi.restoreAllMocks());
 
-  it('登録は自分の台帳に入る。見えるのは自分の台帳と、その後ろに並べた台帳だけ', () => {
+  it('登録は自分の台帳に入る。見えるのは自分の台帳と、与えられた組だけ', () => {
     const h = harness();
     expect(h.root.getRegisteredToolNames()).toContain('search');
     expect(h.root.getRegisteredToolNames()).not.toContain('draw');
@@ -374,7 +374,7 @@ describe('ToolRegistry: エンジンごとの台帳（T-0903）', () => {
     expect(h.sub.getToolDefinition('search')?.setId).toBe('web_daemon');
     expect(h.sub.getActiveDynamicToolDefinitions().join('\n')).toContain('<define_tag name="search">root</define_tag>');
 
-    // 何も並べなかった口には、ほかのエンジンの道具は見えない
+    // 何も与えられなかった口には、ほかのエンジンの道具は見えない
     const alone = h.r.viewFor('e2');
     expect(alone.listToolSets()).toEqual([]);
     expect(alone.getRegisteredToolNames()).toContain('finish');
@@ -424,7 +424,7 @@ describe('ToolRegistry: エンジンごとの台帳（T-0903）', () => {
     expect(h.root.listToolSets().map((s) => s.id)).toEqual(['web_daemon']);
   });
 
-  it('断る: 後ろに並べた台帳（ルート）に在る名前を、自分の台帳に登録する。並べていない口には関係ない', async () => {
+  it('断る: 与えられた組に在る名前を、自分の台帳に登録する。与えられていない口には関係ない', async () => {
     const h = harness();
     expect(() => h.sub.registerDynamicTool('search', 'my_search', { description: 'mine' })).toThrow(
       'A tool named "search" is already registered by process "web_daemon".',
@@ -487,7 +487,7 @@ describe('ToolRegistry: エンジンごとの台帳（T-0903）', () => {
     expect(h.calls).toEqual([]);
   });
 
-  it('解除は自分の台帳だけに効く（後ろに見えているだけの道具は外せない）', () => {
+  it('解除は自分の台帳だけに効く（与えられて見えているだけの道具は外せない）', () => {
     const h = harness();
     h.sub.unregisterDynamicTool('search', 'web_daemon');
     expect(h.root.getRegisteredToolNames()).toContain('search');
@@ -509,9 +509,129 @@ describe('ToolRegistry: エンジンごとの台帳（T-0903）', () => {
   it('口を畳むと、そのエンジンの台帳だけが消える', () => {
     const h = harness();
     h.sub.dispose();
-    const again = h.r.viewFor('e1', [ROOT_ENGINE_ID]);
+    const again = h.r.viewFor('e1', { from: ROOT_ENGINE_ID, toolsets: ['web_daemon'] });
     expect(again.getRegisteredToolNames()).not.toContain('draw');
     expect(again.getRegisteredToolNames()).toContain('search');
     expect(h.root.getRegisteredToolNames()).toContain('search');
+  });
+});
+
+describe('ToolRegistry: 与えられた組（T-0912）', () => {
+  // 与えは行の写しではなく見え方: 与えた者（from）に見えている動的な組のうち、id（pid）が toolsets に在るもの
+  function harness() {
+    const r = new ToolRegistry(undefined, { record: () => {} } as any);
+    registerSysTools(r);
+    vi.spyOn(console, 'log').mockImplementation(() => {});
+    const calls: string[] = [];
+    r.setGuestToolInvoker({
+      invokeTool: async (pid: string, name: string) => {
+        calls.push(`${pid}:${name}`);
+        return `${pid}:${name}`;
+      },
+    });
+    const root = r.viewFor(ROOT_ENGINE_ID);
+    root.registerDynamicTool('bash', 'bridge', {
+      description: 'b',
+      definition: '<define_tag name="bash">B</define_tag>',
+    });
+    root.registerDynamicTool('search', 'bridge', {
+      description: 's',
+      definition: '<define_tag name="search">S</define_tag>',
+    });
+    root.registerDynamicTool('git', 'git_daemon', {
+      description: 'g',
+      definition: '<define_tag name="git">G</define_tag>',
+    });
+    root.registerDynamicTool('loom', 'loom_daemon', { description: 'l' });
+    return { r, root, calls };
+  }
+  afterEach(() => vi.restoreAllMocks());
+
+  it('与えた組の道具だけが見え、呼べる。与えていない組の道具は知らない道具', async () => {
+    const h = harness();
+    const sub = h.r.viewFor('e1', { from: ROOT_ENGINE_ID, toolsets: ['bridge'] });
+    expect(sub.listToolSets().map((s) => s.id)).toEqual(['bridge']);
+    expect(sub.getRegisteredToolNames()).toEqual(expect.arrayContaining(['bash', 'search', 'finish']));
+    expect(sub.getRegisteredToolNames()).not.toContain('git');
+    expect(sub.getToolDefinition('git')).toBeNull();
+    const defs = sub.getActiveDynamicToolDefinitions();
+    expect(defs).toHaveLength(1);
+    expect(defs[0]).toContain('pid="bridge"');
+    expect(defs[0]).not.toContain('<define_tag name="git">');
+
+    expect((await sub.execute({ type: 'bash', params: {} }, NO_CTX))?.log).toBe('bridge:bash');
+    const res = await sub.execute({ type: 'git', params: {} }, NO_CTX);
+    expect(res?.error).toBe(true);
+    expect(res?.log).toContain('<git> is not registered');
+    expect(h.calls).toEqual(['bridge:bash']);
+  });
+
+  it('与えなければ、見えるのはシステムの道具と自分の台帳だけ', () => {
+    const h = harness();
+    const sub = h.r.viewFor('e1');
+    expect(sub.listToolSets()).toEqual([]);
+    expect(sub.getActiveDynamicToolDefinitions()).toEqual([]);
+    expect(sub.getRegisteredToolNames()).toContain('finish');
+    expect(sub.getRegisteredToolNames()).not.toContain('bash');
+  });
+
+  it('写しではない: 与えた者の側で組が消えれば見えなくなり、登録し直せば（起こし直し）また見える。あとから足した道具も見える', async () => {
+    const h = harness();
+    const sub = h.r.viewFor('e1', { from: ROOT_ENGINE_ID, toolsets: ['bridge'] });
+    h.r.removeToolsByPid('bridge');
+    expect(sub.getRegisteredToolNames()).not.toContain('bash');
+    expect(sub.listToolSets()).toEqual([]);
+
+    h.root.registerDynamicTool('bash', 'bridge', { description: 'b2' });
+    h.root.registerDynamicTool('fetch', 'bridge', { description: 'f' });
+    expect(sub.listToolSets()[0].tools.map((t) => t.name)).toEqual(['bash', 'fetch']);
+    expect((await sub.execute({ type: 'fetch', params: {} }, NO_CTX))?.log).toBe('bridge:fetch');
+  });
+
+  it('孫へ渡せる: 与えられた組は与えられた側の見え方に入るので、その先へも与えられる', async () => {
+    const h = harness();
+    const sub = h.r.viewFor('e1', { from: ROOT_ENGINE_ID, toolsets: ['bridge', 'git_daemon'] });
+    sub.registerDynamicTool('draw', 'canvas', { description: 'd' });
+    // loom_daemon はルートに在るが e1 には与えられていないので、e1 からは渡らない
+    const grand = h.r.viewFor('e2', { from: 'e1', toolsets: ['git_daemon', 'canvas', 'loom_daemon'] });
+    expect(grand.listToolSets().map((s) => s.id)).toEqual(['canvas', 'git_daemon']);
+    expect((await grand.execute({ type: 'git', params: {} }, NO_CTX))?.log).toBe('git_daemon:git');
+    expect((await grand.execute({ type: 'draw', params: {} }, NO_CTX))?.log).toBe('canvas:draw');
+    expect(grand.getRegisteredToolNames()).not.toContain('loom');
+
+    // 間のエンジンの見え方が変われば、孫にもそのまま効く
+    h.r.removeToolsByPid('git_daemon');
+    expect(grand.getRegisteredToolNames()).not.toContain('git');
+    expect(grand.listToolSets().map((s) => s.id)).toEqual(['canvas']);
+  });
+
+  it('同じ名前: 与えられた組に在る名前は、自分の台帳に登録できない。与えられていない組の名前はできる', async () => {
+    const h = harness();
+    const sub = h.r.viewFor('e1', { from: ROOT_ENGINE_ID, toolsets: ['bridge'] });
+    expect(() => sub.registerDynamicTool('bash', 'mine', { description: 'x' })).toThrow(
+      'A tool named "bash" is already registered by process "bridge".',
+    );
+    expect(() => sub.registerDynamicTool('git', 'mine', { description: 'x' })).not.toThrow();
+    expect((await sub.execute({ type: 'git', params: {} }, NO_CTX))?.log).toBe('mine:git');
+    expect((await h.root.execute({ type: 'git', params: {} }, NO_CTX))?.log).toBe('git_daemon:git');
+  });
+
+  it('口を作り直すと与えは置き換わり、畳むと消える（その先へ渡した分も見えなくなる）', () => {
+    const h = harness();
+    h.r.viewFor('e1', { from: ROOT_ENGINE_ID, toolsets: ['bridge'] });
+    const sub = h.r.viewFor('e1', { from: ROOT_ENGINE_ID, toolsets: ['git_daemon'] });
+    expect(sub.listToolSets().map((s) => s.id)).toEqual(['git_daemon']);
+    const grand = h.r.viewFor('e2', { from: 'e1', toolsets: ['git_daemon'] });
+    expect(grand.listToolSets().map((s) => s.id)).toEqual(['git_daemon']);
+    sub.dispose();
+    expect(grand.listToolSets()).toEqual([]);
+  });
+
+  it('与えが輪になっても、たどりは止まる', () => {
+    const h = harness();
+    const a = h.r.viewFor('e1', { from: 'e2', toolsets: ['x'] });
+    h.r.viewFor('e2', { from: 'e1', toolsets: ['y'] });
+    expect(a.listToolSets()).toEqual([]);
+    expect(a.getRegisteredToolNames()).toContain('finish');
   });
 });

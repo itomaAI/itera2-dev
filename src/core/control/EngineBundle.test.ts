@@ -6,7 +6,7 @@ import { ROLE_PARTS } from '../../config/system_prompts';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { createEngineBundle } from './EngineBundle';
 import { ROOT_ENGINE_ID, TurnType } from './Engine';
-import { ToolRegistry } from './ToolRegistry';
+import { ToolRegistry, type ToolGrant } from './ToolRegistry';
 import { HistoryManager } from '../state/HistoryManager';
 import { Translator } from '../cognitive/Translator';
 
@@ -25,7 +25,7 @@ function world() {
     },
   });
 
-  function bundle(id: string) {
+  function bundle(id: string, grant?: ToolGrant) {
     const history = new HistoryManager();
     const conversation = {
       reset: vi.fn(async (_options: any) => ({ archived: true, sessionId: 'n' })),
@@ -42,6 +42,7 @@ function world() {
       configManager: { get: () => ({}) } as any,
       translator: new Translator(),
       registry,
+      grant,
       fs,
       conversation,
       contextLimit: async () => 1000,
@@ -119,20 +120,23 @@ describe('createEngineBundle: 束は互いに独立（T-0903）', () => {
     expect(sub.generateStream.mock.calls[0][3]).toEqual({ caller: 'e1', engineTurn: true, tag: 's-e1' });
   });
 
-  it('道具の見え方 —— ルートは自分の台帳だけ。ルートでない束は、自分の台帳の後ろにルートの台帳', () => {
+  it('道具の見え方 —— システムの道具 → 自分の台帳 → 与えられた組。ルートの台帳を並べる継承は無い（T-0912）', () => {
     const w = world();
     const root = w.bundle(ROOT_ENGINE_ID);
-    const sub = w.bundle('e1');
-    const other = w.bundle('e2');
     root.b.tools.registerDynamicTool('search', 'web', { description: 's' });
+    root.b.tools.registerDynamicTool('mail', 'mailer', { description: 'm' });
+    const sub = w.bundle('e1', { from: ROOT_ENGINE_ID, toolsets: ['web'] });
+    const other = w.bundle('e2');
     sub.b.tools.registerDynamicTool('draw', 'canvas', { description: 'd' });
 
-    expect(root.b.tools.getRegisteredToolNames()).toContain('search');
+    expect(root.b.tools.getRegisteredToolNames()).toEqual(expect.arrayContaining(['probe', 'search', 'mail']));
     expect(root.b.tools.getRegisteredToolNames()).not.toContain('draw');
     expect(sub.b.tools.getRegisteredToolNames()).toEqual(expect.arrayContaining(['probe', 'draw', 'search']));
+    expect(sub.b.tools.getRegisteredToolNames()).not.toContain('mail');
     expect(sub.b.tools.listToolSets().map((s) => s.id)).toEqual(['canvas', 'web']);
-    expect(other.b.tools.getRegisteredToolNames()).toContain('search');
-    expect(other.b.tools.getRegisteredToolNames()).not.toContain('draw');
+    // 与えられなかった束に見えるのは、システムの道具だけ
+    expect(other.b.tools.listToolSets()).toEqual([]);
+    expect(other.b.tools.getRegisteredToolNames()).toEqual(['probe']);
   });
 
   it('道具には束の取っ手が渡り、記録には呼んだエンジンの id が付く', async () => {

@@ -251,7 +251,7 @@ describe('EngineManager: 作る', () => {
     expect(w.rows()).toEqual([{ action: 'engine_created', engine: e.id, owner: 'viewer', app: 'viewer-app' }]);
   });
 
-  it('始まりに、見えている道具（ルートの台帳のもの）の定義を会話に置く。起こさない', async () => {
+  it('ルートの道具は、与えなければ見えない。始まりに置く定義も無い（T-0912）', async () => {
     const w = world();
     w.root.tools.registerDynamicTool('search', 'web', {
       description: 's',
@@ -259,14 +259,10 @@ describe('EngineManager: 作る', () => {
     });
     const e = await w.manager.create(OWNER);
 
-    const turns = e.bundle.history.get();
-    expect(turns).toHaveLength(1);
-    expect(turns[0].role).toBe('system');
-    expect(turns[0].content).toContain('[System: Restored Dynamic Tools]');
-    expect(turns[0].content).toContain('<define_tag name="search">S</define_tag>');
+    expect(e.bundle.tools.getRegisteredToolNames()).not.toContain('search');
+    expect(e.bundle.history.get()).toEqual([]);
     await settle();
     expect(w.equips[0].generateStream).not.toHaveBeenCalled();
-    expect(e.bundle.history.get()).toHaveLength(1);
   });
 
   it('保存された会話から始める。読むのは持ち主の主体・添付はこのエンジンの置き場へ', async () => {

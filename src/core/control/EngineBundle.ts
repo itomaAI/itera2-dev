@@ -5,7 +5,7 @@
  * エンジンは複数作れる形をしているが、作る手順（どの道具が見えるか・どの取っ手を道具に渡すか・
  * 何と名乗るか）が組み立てに散っていると、2 つ目を作るときに同じ手順をもう一度書くことになる。
  * この関数が決めるのは:
- *   - 道具の見え方 … システムの道具 → 自分の台帳 →（ルートでなければ）ルートの台帳
+ *   - 道具の見え方 … システムの道具 → 自分の台帳 → 与えられた組（作る者が渡す。T-0912）
  *   - 道具に渡す取っ手 … fs（役割と個体の印が焼き込まれている）と、会話の口のうち道具に見せる分
  *   - 名乗り … LLM の台帳と道具の記録に出る id、生成に添える会話の id
  * プロンプトと上流（engine.projector・engine.llm）は、設定を知る側（CognitiveManager）が差す。
@@ -25,8 +25,8 @@ import type { EngineConfigReader } from '../sys/engineConfig';
 import type { Translator } from '../cognitive/Translator';
 import type { WakePolicy } from '../../config/wake_policy';
 import { ROLE_PARTS, type PromptRole } from '../../config/system_prompts';
-import { Engine, ROOT_ENGINE_ID } from './Engine';
-import type { ToolRegistry, ToolView } from './ToolRegistry';
+import { Engine } from './Engine';
+import type { ToolGrant, ToolRegistry, ToolView } from './ToolRegistry';
 import type { ToolConversation } from './ToolContext';
 
 /** 会話の名前（状態として外へ出す分） */
@@ -60,6 +60,8 @@ export interface EngineBundleSpec {
   translator: Translator;
   /** 道具の台帳（全エンジンで 1 つ）。このエンジンの口は束が作る */
   registry: ToolRegistry;
+  /** 与えられた組（T-0912）。省けば、見えるのはシステムの道具と自分の台帳だけ（ルートは省く） */
+  grant?: ToolGrant;
   /** VFS の取っ手。このエンジンの役割と個体の印が焼き込まれている */
   fs: VfsHandle;
   conversation: BundleConversation;
@@ -119,8 +121,9 @@ export function createEngineBundle(spec: EngineBundleSpec): EngineBundle {
   const { id, role, history, conversation } = spec;
   const afterReset = ROLE_PARTS[role].afterReset;
 
-  // ルートでないエンジンには、自分の台帳の後ろにルートの台帳が見える（同名なら自分のものが動く）
-  const tools = spec.registry.viewFor(id, id === ROOT_ENGINE_ID ? [] : [ROOT_ENGINE_ID]);
+  // 見えるのは システムの道具 → 自分の台帳 → 与えられた組（同名なら先のものが動く）。
+  // ルートの台帳を並べる継承は無い（T-0912）: サブに見えるルートの道具は、作る者が与えたものだけ
+  const tools = spec.registry.viewFor(id, spec.grant);
 
   const engine = new Engine(
     { history, vfs: spec.vfs, configManager: spec.configManager },
