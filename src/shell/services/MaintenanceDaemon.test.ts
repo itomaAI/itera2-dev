@@ -43,4 +43,33 @@ describe('MaintenanceDaemon: 自動起動', () => {
     // 自動起動は OS が起こす
     expect(spawn.mock.calls.every((c: any[]) => c[0] === OS_MOVER)).toBe(true);
   });
+
+  it('1 本の起動が投げても、残りのデーモンは起動する', async () => {
+    const SYS = 'system/registry';
+    const files = {
+      [`${SYS}/services.json`]: JSON.stringify([
+        { id: 'a', name: 'A', path: 'system/services/a.html', autoStart: true },
+        { id: 'broken', name: 'Broken', path: 'system/services/broken.html', autoStart: true },
+        { id: 'c', name: 'C', path: 'system/services/c.html', autoStart: true },
+      ]),
+    };
+    const vfs = makeVfs(files);
+    const registry = new AppRegistry(vfs, new VfsEventBus(), [SYS]);
+    await registry.loadAll();
+
+    const spawn = vi.fn(async (_mover: unknown, opts: { pid: string }) => {
+      if (opts.pid === 'broken') throw new Error('boom');
+      return 'ok';
+    });
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const daemon = new MaintenanceDaemon({ spawn } as any, {} as any, vfs, {} as any, registry);
+    await (daemon as any)._startInitialDaemons();
+    const warned = warn.mock.calls.map((c: any[]) => String(c[0]));
+    warn.mockRestore();
+
+    // 壊れた 1 本のあとの c も起こされる
+    expect(spawn.mock.calls.map((c: any[]) => c[1].pid)).toEqual(['a', 'broken', 'c']);
+    // 失敗はどの 1 本かが分かる形で残す
+    expect(warned.some((w) => w.includes('"broken"'))).toBe(true);
+  });
 });

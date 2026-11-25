@@ -56,7 +56,12 @@ export class MaintenanceDaemon {
       for (const svc of services) {
         // 新スキーマ: id が指定されており、autoStart が true のものだけを起動
         if (svc.id && svc.path && svc.autoStart) {
-          await this.processManager.spawn(OS_MOVER, { pid: svc.id, path: svc.path, type: 'daemon' });
+          try {
+            await this.processManager.spawn(OS_MOVER, { pid: svc.id, path: svc.path, type: 'daemon' });
+          } catch (e) {
+            // 1 本が壊れていても他は起動する（利用者のデーモンで起こりうる）
+            console.warn(`[MaintenanceDaemon] Failed to start service "${svc.id}" (${svc.path})`, e);
+          }
         }
       }
     } catch (e) {
