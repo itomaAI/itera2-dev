@@ -4,6 +4,7 @@
  */
 
 import type { ProcessManager } from '../windowing/ProcessManager';
+import { OS_MOVER } from '../windowing/processGate';
 import type { SystemLogger } from '../../core/state/SystemLogger';
 import type { VfsService } from '../../core/vfs/VfsService';
 import type { NodeStore } from '../../core/vfs/NodeStore';
@@ -55,7 +56,7 @@ export class MaintenanceDaemon {
       for (const svc of services) {
         // 新スキーマ: id が指定されており、autoStart が true のものだけを起動
         if (svc.id && svc.path && svc.autoStart) {
-          await this.processManager.spawn({ pid: svc.id, path: svc.path, type: 'daemon' });
+          await this.processManager.spawn(OS_MOVER, { pid: svc.id, path: svc.path, type: 'daemon' });
         }
       }
     } catch (e) {

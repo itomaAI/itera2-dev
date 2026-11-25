@@ -15,6 +15,7 @@ import { Translator } from '../../core/cognitive/Translator';
 import { FakeVfs } from '../../core/state/bundleTestKit';
 import { buildSessionExport } from '../../core/state/sessionArchive';
 import type { Principal } from '../../core/vfs/types';
+import { OS_MOVER, USER_MOVER } from '../windowing/processGate';
 
 const APP: Principal = { type: 'app', id: 'viewer' };
 const OWNER = { pid: 'viewer', principal: APP };
@@ -34,14 +35,17 @@ function world() {
   // プロセスの表（ProcessManager の代わり）。kill は表から外して process_killed を知らせる
   const procs = new Map<string, { pid: string; app: string; engine: string }>();
   const killed: string[] = [];
+  /** 誰が終わらせたか（killed と同じ並び） */
+  const killedBy: unknown[] = [];
   const onKilled: Array<(pid: string, proc: any) => void> = [];
   const processes = {
     processes: procs,
-    kill(pid: string) {
+    kill(mover: unknown, pid: string) {
       const proc = procs.get(pid);
       if (!proc) return false;
       procs.delete(pid);
       killed.push(pid);
+      killedBy.push(mover);
       onKilled.forEach((cb) => cb(pid, proc));
       return true;
     },
@@ -133,6 +137,7 @@ function world() {
     procs,
     processes,
     killed,
+    killedBy,
     spawn,
     osConfig,
     root,
@@ -336,7 +341,7 @@ describe('EngineManager: 作る', () => {
     const w = world();
     seedSaved(w.vfs);
     const p = w.manager.create(OWNER, { from: 'data/c' });
-    w.processes.kill('viewer');
+    w.processes.kill(USER_MOVER, 'viewer');
     w.spawn('viewer');
 
     await expect(p).rejects.toThrow(/^The owner of engine "eng-[0-9a-z]+" exited while it was being created\.$/);
@@ -380,7 +385,7 @@ describe('EngineManager: 作る', () => {
     const p = w.manager.create(OWNER);
     expect(w.cognitive.equip).toHaveBeenCalledTimes(1);
 
-    w.processes.kill('viewer');
+    w.processes.kill(USER_MOVER, 'viewer');
     gate.release();
 
     await expect(p).rejects.toThrow(/exited while it was being created/);
@@ -545,7 +550,7 @@ describe('EngineManager: 畳む', () => {
     const mine2 = await w.manager.create(OWNER);
     const theirs = await w.manager.create({ pid: 'other', principal: { type: 'app', id: 'other' } });
 
-    w.processes.kill('viewer');
+    w.processes.kill(USER_MOVER, 'viewer');
     await flush();
 
     expect(w.manager.owned('viewer')).toEqual([]);
@@ -572,10 +577,12 @@ describe('EngineManager: 畳む', () => {
     const c = await w.manager.create({ pid: 'p3', principal: APP });
     w.spawn('p4', c.id);
 
-    w.processes.kill('viewer');
+    w.processes.kill(USER_MOVER, 'viewer');
     await flush();
 
     expect(w.killed).toEqual(['viewer', 'p2', 'p3', 'p4']);
+    // 持ち主を終わらせたのは呼び手（ここでは利用者）。仕えていたプロセスは、エンジンを畳む OS が終わらせる
+    expect(w.killedBy).toEqual([USER_MOVER, OS_MOVER, OS_MOVER, OS_MOVER]);
     expect([...w.procs.keys()]).toEqual(['bystander']);
     for (const pid of ['viewer', 'p2', 'p3']) expect(w.manager.owned(pid)).toEqual([]);
     expect(

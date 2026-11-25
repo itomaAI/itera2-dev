@@ -121,7 +121,7 @@ describe('engineProcesses: 起こす', () => {
     expect(w.killed).toEqual([]);
   });
 
-  it('起こす口には、渡されたものに仕える先を足して渡す', () => {
+  it('起こす口には、「誰が」（このエンジン）と、渡されたものをそのまま渡す（仕える先は関所が決める）', () => {
     const w = mk();
     const spawn = vi.spyOn(w.pm, 'spawn');
     void w.a.spawn({
@@ -133,9 +133,9 @@ describe('engineProcesses: 起こす', () => {
       args: { file: 'a.md' },
       currentUri: 'u',
     });
-    expect(spawn.mock.calls[0][0]).toEqual({
+    expect(spawn.mock.calls[0][0]).toEqual({ kind: 'engine', engine: 'eng-a' });
+    expect(spawn.mock.calls[0][1]).toEqual({
       pid: 'x',
-      engine: 'eng-a',
       path: NOTES,
       type: 'app',
       show: false,
@@ -143,6 +143,7 @@ describe('engineProcesses: 起こす', () => {
       args: { file: 'a.md' },
       currentUri: 'u',
     });
+    expect(w.rows()).toEqual(['x app=notes engine=eng-a type=app']);
   });
 
   it('窓の上限で断られたら、道具の失敗として返す', async () => {

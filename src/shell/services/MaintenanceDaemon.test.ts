@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { MaintenanceDaemon } from './MaintenanceDaemon';
 import { AppRegistry } from '../../core/sys/AppRegistry';
 import { VfsEventBus } from '../../core/vfs/VfsEventBus';
+import { OS_MOVER } from '../windowing/processGate';
 
 /**
  * 自動起動は登録簿の層を重ねた値から決める（T-0447）。
@@ -37,7 +38,9 @@ describe('MaintenanceDaemon: 自動起動', () => {
     const daemon = new MaintenanceDaemon({ spawn } as any, {} as any, vfs, {} as any, registry);
     await (daemon as any)._startInitialDaemons();
 
-    const spawned = spawn.mock.calls.map((c: any[]) => c[0].pid).sort();
+    const spawned = spawn.mock.calls.map((c: any[]) => c[1].pid).sort();
     expect(spawned).toEqual(['a', 'mine']);
+    // 自動起動は OS が起こす
+    expect(spawn.mock.calls.every((c: any[]) => c[0] === OS_MOVER)).toBe(true);
   });
 });

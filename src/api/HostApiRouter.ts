@@ -14,6 +14,7 @@ import { resolvePrincipal } from './principal';
 import { fileDataUrl } from './fileDataUrl';
 import { GuestLocalStore } from '../core/sys/GuestLocalStore';
 import type { SpawnOptions } from '../shell/windowing/ProcessManager';
+import { USER_MOVER, type Mover } from '../shell/windowing/processGate';
 import type { CompiledGuest } from '../shell/windowing/GuestCompiler';
 import { USER_PRINCIPAL } from '../core/vfs/types';
 import { buildChatStatus, buildResetPlan, type ChatStatusInput } from './chatApi';
@@ -29,8 +30,8 @@ import { t as tr } from '../i18n/i18n';
 
 // 依存モジュールのダックタイピング・インターフェース (未実装モジュール用)
 export interface IProcessManager {
-  spawn(options: SpawnOptions): Promise<void>;
-  kill(pid: string): boolean;
+  spawn(mover: Mover, options: SpawnOptions): Promise<void>;
+  kill(mover: Mover, pid: string): boolean;
   list(): ProcessInfo[];
   broadcast(eventName: string, payload: any): void;
   captureScreenshot(pid?: string): Promise<string>;
@@ -547,12 +548,14 @@ export class HostApiRouter {
       if (opts?.forceReload !== undefined) spawnOptions.forceReload = opts.forceReload;
       if (opts?.args) spawnOptions.args = opts.args;
 
-      await d.processManager.spawn(spawnOptions);
+      await d.processManager.spawn(USER_MOVER, spawnOptions);
       if (spawnOptions.show !== false && d.shell) d.shell._closeMobileDrawers();
       return true;
     });
 
-    t.registerHandler('sys:kill', async ({ pid }) => (d.processManager ? d.processManager.kill(pid) : false));
+    t.registerHandler('sys:kill', async ({ pid }) =>
+      d.processManager ? d.processManager.kill(USER_MOVER, pid) : false,
+    );
     t.registerHandler('sys:ps', async () => (d.processManager ? d.processManager.list() : []));
     t.registerHandler('sys:info', async (_, sourcePid) => {
       if (!d.processManager) return null;
@@ -746,7 +749,7 @@ export class HostApiRouter {
     t.registerHandler('host:go_home', async () => {
       if (!d.processManager) return false;
       const homePath = d.configManager.homePath();
-      await d.processManager.spawn({ path: homePath, show: true });
+      await d.processManager.spawn(USER_MOVER, { path: homePath, show: true });
       if (d.shell) d.shell._closeMobileDrawers();
       return true;
     });

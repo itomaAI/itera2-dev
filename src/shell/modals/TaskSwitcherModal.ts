@@ -4,6 +4,7 @@
  */
 
 import type { ProcessManager } from '../windowing/ProcessManager';
+import { USER_MOVER } from '../windowing/processGate';
 import type { AppRegistry } from '../../core/sys/AppRegistry';
 import type { ConfigManager } from '../../core/sys/ConfigManager';
 import { t, escapeHtml } from '../../i18n/i18n';
@@ -126,14 +127,14 @@ export class TaskSwitcherModal {
       // アプリをクリックして切り替え
       iconWrapper.onclick = () => {
         // フォアグラウンドモードで起動 (ProcessManager 側で再利用/前面引き上げを判断)
-        this.processManager.spawn({ pid: app.pid, path: app.path, show: true, args: app.args });
+        this.processManager.spawn(USER_MOVER, { pid: app.pid, path: app.path, show: true, args: app.args });
         this.close();
       };
 
       // ✕ボタンをクリックしてプロセス終了
       btnKill.onclick = (e) => {
         e.stopPropagation();
-        this.processManager.kill(app.pid);
+        this.processManager.kill(USER_MOVER, app.pid);
         this._renderGrid(); // 即時再描画
       };
 

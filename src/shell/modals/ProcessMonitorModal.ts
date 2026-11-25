@@ -6,6 +6,7 @@
  */
 
 import type { ProcessManager } from '../windowing/ProcessManager';
+import { USER_MOVER } from '../windowing/processGate';
 import type { AppRegistry } from '../../core/sys/AppRegistry';
 import type { ConfigManager } from '../../core/sys/ConfigManager';
 import { LABEL_KICKER } from '../styles/typography';
@@ -96,7 +97,7 @@ export class ProcessMonitorModal {
       if (res && res.action) {
         const procs = this.processManager.list();
         procs.forEach((p) => {
-          if (p.type === 'daemon') this.processManager.kill(p.pid);
+          if (p.type === 'daemon') this.processManager.kill(USER_MOVER, p.pid);
         });
         this._renderList();
       }
@@ -185,7 +186,7 @@ export class ProcessMonitorModal {
         'shrink-0 w-8 h-8 flex items-center justify-center rounded-lg bg-card hover:bg-error/20 text-text-muted hover:text-error border border-border-main transition';
       btnKill.innerHTML = '✕';
       btnKill.onclick = () => {
-        this.processManager.kill(proc.pid);
+        this.processManager.kill(USER_MOVER, proc.pid);
         this._renderList(); // 即時反映
       };
 

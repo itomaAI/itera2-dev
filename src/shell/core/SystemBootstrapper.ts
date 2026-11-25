@@ -32,6 +32,7 @@ import { ROOT_ENGINE_ID } from '../../core/control/Engine';
 import { createEngineBundle } from '../../core/control/EngineBundle';
 import { EngineManager } from '../services/EngineManager';
 import { createEngineProcesses } from '../windowing/engineProcesses';
+import { OS_MOVER } from '../windowing/processGate';
 import type { ToolShell } from '../../core/control/ToolContext';
 import { Translator } from '../../core/cognitive/Translator';
 import { registerBasicTools } from '../../core/control/tools/basic_tools';
@@ -181,7 +182,7 @@ export class SystemBootstrapper {
     const haltAllProcesses = () => {
       for (const pid of Array.from(processManager.processes.keys())) {
         try {
-          processManager.kill(pid);
+          processManager.kill(OS_MOVER, pid);
         } catch {
           /* 止められないものは放置して読み込み直す */
         }
@@ -467,7 +468,7 @@ export class SystemBootstrapper {
 
     // ダッシュボードの起動
     const homePath = configManager.homePath();
-    await processManager.spawn({ path: homePath, show: true });
+    await processManager.spawn(OS_MOVER, { path: homePath, show: true });
 
     // 未ログインで起きたらクラウドの画面を最初から出しておく（preferences.promptCloudSignIn。T-0778）。
     // アダプタの復元（connecting）が終わるのを待ってから判定するので await しない —— ホームを止めない

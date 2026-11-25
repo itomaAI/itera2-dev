@@ -10,6 +10,7 @@ import type { HistoryManager } from '../../core/state/HistoryManager';
 import type { Engine } from '../../core/control/Engine';
 import type { EngineBundle } from '../../core/control/EngineBundle';
 import type { ProcessManager } from '../windowing/ProcessManager';
+import { USER_MOVER } from '../windowing/processGate';
 import type { UriRouter } from './UriRouter';
 import type { SessionManager } from '../services/SessionManager';
 import type { CognitiveManager } from '../services/CognitiveManager';
@@ -206,7 +207,7 @@ export class EventOrchestrator {
           this._restoreAddressBar();
         } else if (resolvedApp.appId === 'HostRunner') {
           const fullUri = `metaos://run/${targetPath}${searchAndHash}`;
-          await this.processManager.spawn({
+          await this.processManager.spawn(USER_MOVER, {
             path: targetPath + searchAndHash,
             show: true,
             args: queryArgs,
@@ -223,7 +224,7 @@ export class EventOrchestrator {
           const args = { file: targetPath, ...queryArgs };
           const fullUri = `metaos://open/${targetPath}${searchAndHash}`;
           // V2仕様: args として起動パラメータを渡す
-          await this.processManager.spawn({
+          await this.processManager.spawn(USER_MOVER, {
             pid: resolvedApp.appId,
             path: resolvedApp.appPath!,
             show: true,
@@ -244,7 +245,7 @@ export class EventOrchestrator {
       try {
         const args = { ...queryArgs };
         const fullUri = `metaos://run/${executablePath}${searchAndHash}`;
-        await this.processManager.spawn({
+        await this.processManager.spawn(USER_MOVER, {
           path: executablePath,
           show: true,
           args,
@@ -358,7 +359,7 @@ export class EventOrchestrator {
         } else {
           // Guestアプリを明示指定で開く
           const currentUri = `metaos://open/${path}`;
-          await this.processManager.spawn({
+          await this.processManager.spawn(USER_MOVER, {
             pid: resolvedApp.appId,
             path: resolvedApp.appPath!,
             show: true,
@@ -385,7 +386,7 @@ export class EventOrchestrator {
 
     explorer.on('spawn_daemon', async (path: string) => {
       try {
-        await this.processManager.spawn({
+        await this.processManager.spawn(USER_MOVER, {
           path,
           type: 'daemon',
           show: false,

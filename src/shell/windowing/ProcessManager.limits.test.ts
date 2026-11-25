@@ -7,6 +7,7 @@
 import { describe, expect, it } from 'vitest';
 import { ProcessManager, SpawnRefusedError } from './ProcessManager';
 import { MAX_APPS_ROOT, MAX_APPS_SUB } from '../../config/engine_limits';
+import { USER_MOVER } from './processGate';
 
 function mk() {
   const vfs = { releaseContent: async () => {} };
@@ -20,11 +21,11 @@ function mk() {
   /** 背景の窓を 1 つ起こす。lastActiveTime は起こした順に並べる */
   let clock = 0;
   const app = (pid: string, engine?: string) => {
-    void pm.spawn({ pid, engine, path: `data/${pid}.html`, show: false });
+    void pm.spawn(USER_MOVER, { pid, engine, path: `data/${pid}.html`, show: false });
     pm.processes.get(pid)!.lastActiveTime = ++clock;
   };
   const daemon = (pid: string, engine?: string) =>
-    void pm.spawn({ pid, engine, path: `data/${pid}.html`, type: 'daemon' });
+    void pm.spawn(USER_MOVER, { pid, engine, path: `data/${pid}.html`, type: 'daemon' });
   const pids = () => Array.from(pm.processes.keys());
   return { pm, killed, resumed, app, daemon, pids };
 }
@@ -77,7 +78,7 @@ describe('ProcessManager — 窓の上限: ルート以外のエンジン', () =
     const w = mk();
     for (let i = 1; i <= MAX_APPS_SUB; i++) w.app(`s${i}`, 'eng-a');
 
-    const e = await refusal(w.pm.spawn({ pid: 's5', engine: 'eng-a', path: 'data/s5.html', show: false }));
+    const e = await refusal(w.pm.spawn(USER_MOVER, { pid: 's5', engine: 'eng-a', path: 'data/s5.html', show: false }));
     expect(e).toBeInstanceOf(SpawnRefusedError);
     expect((e as Error).message).toBe('Engine "eng-a" already has 4 app windows (limit 4). Close one first.');
     expect(w.killed).toEqual([]);
@@ -88,11 +89,11 @@ describe('ProcessManager — 窓の上限: ルート以外のエンジン', () =
     const w = mk();
     for (let i = 1; i <= MAX_APPS_SUB; i++) w.app(`s${i}`, 'eng-a');
 
-    void w.pm.spawn({ pid: 's2', engine: 'eng-a', path: 'data/s2.html', show: false });
+    void w.pm.spawn(USER_MOVER, { pid: 's2', engine: 'eng-a', path: 'data/s2.html', show: false });
     expect(w.resumed).toEqual(['s2']);
 
     const before = w.pm.processes.get('s3')!.boot;
-    void w.pm.spawn({ pid: 's3', engine: 'eng-a', path: 'data/s3.html', show: false, forceReload: true });
+    void w.pm.spawn(USER_MOVER, { pid: 's3', engine: 'eng-a', path: 'data/s3.html', show: false, forceReload: true });
     expect(w.pm.processes.get('s3')!.boot).not.toBe(before);
     expect(w.pids()).toHaveLength(MAX_APPS_SUB);
   });
@@ -103,7 +104,7 @@ describe('ProcessManager — 窓の上限: ルート以外のエンジン', () =
     w.daemon('d1', 'eng-a');
     expect(w.pm.processes.get('d1')!.engine).toBe('eng-a');
 
-    w.pm.kill('s1');
+    w.pm.kill(USER_MOVER, 's1');
     w.app('s5', 'eng-a');
     expect(w.pm.processes.has('s5')).toBe(true);
   });
@@ -112,7 +113,9 @@ describe('ProcessManager — 窓の上限: ルート以外のエンジン', () =
     const w = mk();
     for (let i = 1; i <= MAX_APPS_SUB; i++) w.app(`s${i}`, 'eng-a');
     w.daemon('d1', 'eng-a');
-    const e = await refusal(w.pm.spawn({ pid: 'd1', engine: 'eng-a', path: 'data/d1.html', type: 'app', show: false }));
+    const e = await refusal(
+      w.pm.spawn(USER_MOVER, { pid: 'd1', engine: 'eng-a', path: 'data/d1.html', type: 'app', show: false }),
+    );
     expect(e).toBeInstanceOf(SpawnRefusedError);
     expect(w.pm.processes.get('d1')!.type).toBe('daemon');
     expect(w.killed).toEqual([]);
@@ -125,9 +128,9 @@ describe('ProcessManager — 窓の上限: ルート以外のエンジン', () =
     for (let i = 1; i <= MAX_APPS_SUB; i++) w.app(`b${i}`, 'eng-b');
     expect(w.pids()).toHaveLength(6 + MAX_APPS_SUB * 2);
 
-    expect(await refusal(w.pm.spawn({ pid: 'b5', engine: 'eng-b', path: 'data/b5.html', show: false }))).toBeInstanceOf(
-      SpawnRefusedError,
-    );
+    expect(
+      await refusal(w.pm.spawn(USER_MOVER, { pid: 'b5', engine: 'eng-b', path: 'data/b5.html', show: false })),
+    ).toBeInstanceOf(SpawnRefusedError);
   });
 
   it('同じ pid でも、ほかのエンジンに仕える窓の起こし直しは「増える」に数える', async () => {
@@ -135,7 +138,7 @@ describe('ProcessManager — 窓の上限: ルート以外のエンジン', () =
     for (let i = 1; i <= MAX_APPS_SUB; i++) w.app(`s${i}`, 'eng-a');
     w.app('r1');
     const e = await refusal(
-      w.pm.spawn({ pid: 'r1', engine: 'eng-a', path: 'data/r1.html', show: false, forceReload: true }),
+      w.pm.spawn(USER_MOVER, { pid: 'r1', engine: 'eng-a', path: 'data/r1.html', show: false, forceReload: true }),
     );
     expect(e).toBeInstanceOf(SpawnRefusedError);
     expect(w.pm.processes.get('r1')!.engine).toBe('root');
@@ -152,7 +155,7 @@ describe('ProcessManager — 全部を起こし直す（restartAll）', () => {
     w.daemon('sd1', 'eng-a');
     const boots = new Map(Array.from(w.pm.processes.values()).map((p) => [p.pid, p.boot]));
 
-    void w.pm.restartAll();
+    void (w.pm as any).restartAll();
 
     const changed = Array.from(w.pm.processes.values())
       .filter((p) => p.boot !== boots.get(p.pid))
@@ -166,10 +169,10 @@ describe('ProcessManager — 全部を起こし直す（restartAll）', () => {
   it('前面が、ほかのエンジンに仕える窓だったら、残るアプリが前面になって起こし直される', () => {
     const w = mk();
     w.app('r1');
-    void w.pm.spawn({ pid: 's1', engine: 'eng-a', path: 'data/s1.html', show: true });
+    void w.pm.spawn(USER_MOVER, { pid: 's1', engine: 'eng-a', path: 'data/s1.html', show: true });
     expect(w.pm.processes.get('s1')!.state).toBe('foreground');
 
-    void w.pm.restartAll();
+    void (w.pm as any).restartAll();
 
     expect(w.pids()).toEqual(['r1']);
     expect(w.pm.processes.get('r1')!.state).toBe('foreground');
