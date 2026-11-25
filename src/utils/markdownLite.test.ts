@@ -83,6 +83,57 @@ describe('renderMarkdownLite', () => {
     expect(html.includes('\n')).toBe(false);
   });
 
+  // --- 入れ子リスト ---------------------------------------------------
+
+  it('入れ子リストを親の <li> の中に入れる（番号が 1 に戻らない）', () => {
+    const html = renderMarkdownLite('1. a\n  - hoge\n2. b\n  - fuga');
+    // <ol> が2つになると、2つ目が新しいリストとして番号を振り直す。
+    // 症状（1,1 と並ぶ）の正体がこれだったので、1つであることを固定する。
+    expect((html.match(/<ol/g) || []).length).toBe(1);
+    expect((html.match(/<ul/g) || []).length).toBe(2);
+    expect((html.match(/<li/g) || []).length).toBe(4);
+    // 入れ子が親項目の内側にある
+    expect(html).toMatch(/<li[^>]*>a<ul/);
+  });
+
+  it('3段の入れ子も組み立てる', () => {
+    const html = renderMarkdownLite('1. a\n  - b\n    - c');
+    expect((html.match(/<ul/g) || []).length).toBe(2);
+    expect(html).toMatch(/<li[^>]*>b<ul/);
+  });
+
+  it('深さが同じなら1つのリストにまとめる', () => {
+    const html = renderMarkdownLite('1. a\n2. b\n3. c');
+    expect((html.match(/<ol/g) || []).length).toBe(1);
+    expect((html.match(/<li/g) || []).length).toBe(3);
+  });
+
+  // --- タスクリスト ---------------------------------------------------
+
+  it('タスクリストをチェックボックスにする', () => {
+    const html = renderMarkdownLite('- [ ] todo\n- [x] done');
+    expect((html.match(/type="checkbox"/g) || []).length).toBe(2);
+    expect((html.match(/ checked/g) || []).length).toBe(1);
+    expect(html).toContain('todo');
+    expect(html).toContain('done');
+  });
+
+  it('タスクリストは操作できない（表示専用の整形器なので）', () => {
+    const html = renderMarkdownLite('- [x] done');
+    expect(html).toContain('disabled');
+  });
+
+  it('入れ子の中でもタスクリストが効く', () => {
+    const html = renderMarkdownLite('- [x] parent\n  - [ ] child');
+    expect((html.match(/type="checkbox"/g) || []).length).toBe(2);
+    expect((html.match(/ checked/g) || []).length).toBe(1);
+  });
+
+  it('角括弧で始まらない項目は通常の項目のまま', () => {
+    const html = renderMarkdownLite('- [リンク風] だがタスクではない');
+    expect(html).not.toContain('type="checkbox"');
+  });
+
   describe('リンク（T-0344）', () => {
     it('http(s) は外部リンク（新しいタブ）', () => {
       const html = renderMarkdownLite('[公式](https://example.com/a?b=1&amp;c=2)');
