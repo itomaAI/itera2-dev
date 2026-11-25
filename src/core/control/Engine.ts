@@ -109,6 +109,11 @@ export class Engine {
   private haltedByToolCap: boolean = false;
   /** ユーザーが明示的に停止を要求したか（デバウンス待機中・ツール実行中の停止を成立させるため） */
   private stopRequested: boolean = false;
+  /**
+   * いまの回（_ping）が止められ、loop_stop(abort) をまだ出していないか（T-0918）。
+   * 立てるのは回の中の stop()、倒すのは _announceAbort だけ。だから回ごとにちょうど 1 度
+   */
+  private abortToAnnounce: boolean = false;
   /** 履歴を聞くのをやめる口（dispose が呼ぶ） */
   private unsubscribeHistory: (() => void) | undefined;
   /** 自分が預かっているタイマー（scheduleSystemEvent）。dispose で全部取り消す */
@@ -372,9 +377,16 @@ export class Engine {
 
   private async _ping(): Promise<void> {
     this.isRunning = true;
-    this.abortController = new AbortController();
+    const controller = new AbortController();
+    this.abortController = controller;
+    const signal = controller.signal;
+    this.abortToAnnounce = false;
     // 新しいサイクルを開始するため、前回の停止要求はここで解除する
     this.stopRequested = false;
+    /** 止められていたら先へ進まない（中断として catch へ）。アダプタが中断を黙って普通に終えても、ここで拾う（T-0918） */
+    const throwIfStopped = () => {
+      if (signal.aborted) throw new DOMException('Aborted', 'AbortError');
+    };
 
     try {
       if (!this._evaluateWakeUp()) {
@@ -421,7 +433,9 @@ export class Engine {
 
       // ここで束を閉じる。この投影に入らなかった結果は、枠ではなく新しいターンへ届く
       this.closedBatchSerial = this.batchSerial;
-      const messages = await this.projector.createContext(this.state, this.abortController.signal);
+      const messages = await this.projector.createContext(this.state, signal);
+      // 投影の中で止められた: 空の model のターンを積まず、アダプタも呼ばない
+      throwIfStopped();
 
       // 空のMODELターンをHistoryに追加 (自己トリガーを防ぐため trigger_llm: false)
       const modelTurn = this.state.history.append('model', '', {
@@ -443,11 +457,16 @@ export class Engine {
               rawResponse += chunk;
               this._emit('stream_chunk', chunk);
             },
-            this.abortController.signal,
+            signal,
             { caller: this.id, engineTurn: true, tag: this.sessionTag ? this.sessionTag() : null },
           )) || null;
       } catch (err) {
         streamError = err;
+      }
+      // 止めた回は、アダプタが普通に返しても中断として扱う（AbortError の道と同じ形で残す。T-0918）
+      if (!streamError && signal.aborted) {
+        streamError = new DOMException('Aborted', 'AbortError');
+        result = null;
       }
 
       // 生成の結果（使ったトークン・止まった理由）は、その生成が作ったターンに置く（T-0806）。
@@ -465,6 +484,8 @@ export class Engine {
       }
 
       if (streamError) throw streamError;
+      // turn_end(model) の聞き手の中で止められた
+      throwIfStopped();
 
       // ツール解釈とアクションの抽出
       const registeredTools = this.tools.getRegisteredToolNames();
@@ -506,18 +527,23 @@ export class Engine {
       // 実行はされず、ToolRegistry が「閉じていない」という失敗の結果を返す。ここで黙って落とすと、
       // 閉じ忘れた memo が後ろのタグを中身として飲み込んだことが、モデルに伝わらない
       const validActions = actions.filter((a) => !a.closed || !NOTE_TAGS.has(a.type));
+      // 警告の turn_end の聞き手の中で止められた: 束を作らない
+      throwIfStopped();
 
       if (validActions.length > 0) {
         this.continuousToolCount++;
+        // 枠の turn_end の聞き手・最初の道具の execute の中で止められたら、知らせは finally が出す
         this._dispatchActions(validActions);
       } else {
         this.continuousToolCount = 0;
         this._emit('loop_stop', { reason: 'idle' });
       }
     } catch (error: any) {
-      if (error.name === 'AbortError') {
+      if (error.name === 'AbortError' || signal.aborted) {
         console.log('[Engine] Aborted.');
-        this._emit('loop_stop', { reason: 'abort' });
+        // stop() を通らずに来た AbortError も、いままでどおり abort として 1 度知らせる
+        this.abortToAnnounce = true;
+        this._announceAbort();
       } else {
         console.error('[Engine] Error:', error);
         const errTurn = this.state.history.append(
@@ -532,6 +558,8 @@ export class Engine {
         this._emit('loop_stop', { reason: 'error', error });
       }
     } finally {
+      // 止められたのにまだ知らせていなければ、ここで出す（流れのあとの同期の窓で止めた場合）
+      this._announceAbort();
       this.isRunning = false;
       this.abortController = null;
       // 実行中に来た変更を拾う。ツールを投げた直後は outstandingTools > 0 なので、
@@ -745,14 +773,25 @@ export class Engine {
     this.outstandingTools = 0;
 
     if (this.abortController) {
-      // ストリーミング中: abort() 経由で AbortError が発生し、catch側が loop_stop を emit する
-      this.abortController.abort();
+      // 回の中（投影・生成・流れのあとの同期の窓）: 中断を伝えるだけ。loop_stop(abort) は回の終わりが 1 度出す（_announceAbort）。
+      // 2 度目の stop() は何もしない（T-0918）
+      if (!this.abortController.signal.aborted) {
+        this.abortToAnnounce = true;
+        this.abortController.abort();
+      }
     } else {
       // abortController が存在しない時間帯（デバウンス待機中／ツール実行中）は
       // 誰も loop_stop を emit しないため、UIが "Processing..." のまま固着する。
       // ここで明示的に emit して確実に解除する。
       this._emit('loop_stop', { reason: 'abort' });
     }
+  }
+
+  /** 止めた回の loop_stop(abort) を出す。出す番でなければ何もしない（T-0918） */
+  private _announceAbort(): void {
+    if (!this.abortToAnnounce) return;
+    this.abortToAnnounce = false;
+    this._emit('loop_stop', { reason: 'abort' });
   }
 
   /**

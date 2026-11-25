@@ -1,0 +1,362 @@
+/**
+ * src/core/control/Engine.stop.test.ts
+ * 生成の回（_ping）の中の stop()（T-0918）。
+ *
+ * 守りたいこと:
+ *   1. 回の中で止めたら、その回の終わりに loop_stop(abort) がちょうど 1 度出る。
+ *      アダプタが中断を AbortError にしても（throw）、黙って普通の終わりにしても（silent。Chromium で起きていた形）同じ。2 度押しても 1 度
+ *   2. 止めた回では道具の束を作らない（[Pending] の枠を積まない・道具を走らせない）。流れた文は model のターンに status: 'error' で残る
+ *   3. 投影の中で止めたら、空の model のターンを積まず、アダプタを呼ばない（理由は abort）
+ *   4. 流れのあと〜回の終わりの前の同期の窓（turn_end(model)・警告の turn_end(system)・枠の turn_end(system)・最初の道具の execute）で止めても 1 度
+ *   5. 止めた直後の発言は取りこぼさない: turn_end(model) → loop_stop(abort) → 次の回の turn_start
+ *   6. 回の外の stop()（道具の段・止まっているとき）は、いままでどおりその場で 1 度
+ */
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { Engine, PENDING_LOG } from './Engine';
+import { Translator } from '../cognitive/Translator';
+
+const GAP = 25;
+const FIRST = ['<memo>hello', ' world</memo>\n', '<write path="out.txt">', 'probe', '</write>\n', '<yield />'];
+const SECOND = ['<memo>again</memo>'];
+
+type AdapterKind = 'throw' | 'silent';
+
+/** 塊を GAP ms おきに流す偽のアダプタ。中断されたら、throw は AbortError を投げ、silent はそこまでで普通に返す */
+function fakeAdapter(kind: AdapterKind, script: (cycle: number) => string[]) {
+  let cycle = 0;
+  const generateStream = vi.fn(async (_m: any, onChunk: (c: string) => void, signal?: AbortSignal) => {
+    const chunks = script(++cycle);
+    const wait = (ms: number) =>
+      new Promise<boolean>((resolve) => {
+        if (signal?.aborted) return resolve(false);
+        const onAbort = () => {
+          clearTimeout(timer);
+          resolve(false);
+        };
+        const timer = setTimeout(() => {
+          signal?.removeEventListener('abort', onAbort);
+          resolve(true);
+        }, ms);
+        signal?.addEventListener('abort', onAbort, { once: true });
+      });
+    const aborted = () => {
+      if (kind === 'throw') throw new DOMException('Aborted', 'AbortError');
+      return { provider: 'fake', model: 'fake', usage: null, stopReason: null };
+    };
+    for (const c of chunks) {
+      if (!(await wait(GAP))) return aborted();
+      onChunk(c);
+    }
+    if (!(await wait(GAP))) return aborted();
+    return { provider: 'fake', model: 'fake', usage: null, stopReason: 'end_turn' };
+  });
+  return { generateStream };
+}
+
+interface HarnessOptions {
+  adapter: AdapterKind;
+  /** 1 回目の生成の塊（省けば FIRST） */
+  first?: string[];
+  debounceMs?: number;
+}
+
+function createHarness(opts: HarnessOptions) {
+  const turns: any[] = [];
+  const subscribers: Function[] = [];
+  const notify = (payload: any) => subscribers.forEach((cb) => cb(payload));
+  const history = {
+    on: (_event: string, cb: Function) => {
+      subscribers.push(cb);
+      return () => {};
+    },
+    get: () => turns,
+    append: (role: string, content: any, meta: any) => {
+      const turn = { id: `t${turns.length}`, timestamp: 0, role, content, meta: { ...meta } };
+      turns.push(turn);
+      notify({ type: 'append', turn });
+      return turn;
+    },
+    update: (id: string, content: any, meta: any) => {
+      const turn = turns.find((t) => t.id === id);
+      if (!turn) return null;
+      turn.content = content;
+      turn.meta = { ...turn.meta, ...meta };
+      notify({ type: 'update', turn });
+      return turn;
+    },
+  };
+  /** 投影の中で呼ぶ口（試験が差す） */
+  let inProjection: (() => void) | null = null;
+  const createContext = vi.fn(async () => {
+    inProjection?.();
+    await new Promise((r) => setTimeout(r, 5));
+    return [];
+  });
+  const first = opts.first ?? FIRST;
+  const llm = fakeAdapter(opts.adapter, (cycle) => (cycle === 1 ? first : SECOND));
+  /** 道具の execute の中で呼ぶ口（試験が差す） */
+  let inExecute: ((action: any) => void) | null = null;
+  const tools = {
+    getRegisteredToolNames: () => ['write', 'yield', 'report'],
+    execute: vi.fn(async (action: any) => {
+      inExecute?.(action);
+      await new Promise((r) => setTimeout(r, 60));
+      return { log: `ok ${action.type}`, ui: `ok ${action.type}`, trigger_llm: false };
+    }),
+  };
+  const engine = new Engine(
+    { history, vfs: {}, configManager: { get: () => ({}) } } as any,
+    { createContext } as any,
+    llm as any,
+    new Translator(),
+    tools as any,
+    {},
+    'realtime',
+    opts.debounceMs ?? 10,
+    'e1',
+  );
+  /** 知らせの並び（STOP は試験が stop() を呼んだ所） */
+  const seq: string[] = [];
+  const listeners: Record<string, Array<(d: any) => void>> = { turn_start: [], stream_chunk: [], turn_end: [] };
+  engine.on('turn_start', (d: any) => {
+    seq.push(`turn_start(${d.role})`);
+    listeners.turn_start.forEach((cb) => cb(d));
+  });
+  engine.on('stream_chunk', (c: string) => listeners.stream_chunk.forEach((cb) => cb(c)));
+  engine.on('turn_end', (d: any) => {
+    const kind = d.role === 'model' ? `model:${d.turn?.meta?.status}` : d.role;
+    seq.push(`turn_end(${kind})`);
+    listeners.turn_end.forEach((cb) => cb(d));
+  });
+  engine.on('loop_stop', (d: any) => seq.push(`loop_stop(${d?.reason})`));
+
+  const stop = () => {
+    seq.push('STOP');
+    engine.stop();
+  };
+  const afterStop = () => seq.slice(seq.indexOf('STOP') + 1);
+  return {
+    engine,
+    turns,
+    seq,
+    tools,
+    llm,
+    createContext,
+    stop,
+    afterStop,
+    loopStopsAfterStop: () => afterStop().filter((e) => e.startsWith('loop_stop')),
+    onChunk: (cb: (c: string, i: number) => void) => {
+      let i = -1;
+      listeners.stream_chunk.push((c) => cb(c, ++i));
+    },
+    onTurnEnd: (cb: (d: any) => void) => listeners.turn_end.push(cb),
+    setInProjection: (cb: () => void) => (inProjection = cb),
+    setInExecute: (cb: (a: any) => void) => (inExecute = cb),
+    modelTurn: () => turns.find((t) => t.role === 'model'),
+    frames: () => turns.filter((t) => t.meta?.type === 'tool_execution'),
+    /** 発言 → 回を最後まで進める */
+    go: async () => {
+      await engine.injectUserTurn('go');
+      await vi.advanceTimersByTimeAsync(1000);
+    },
+    /** 次の発言で起きるか（生成が 1 回増えるか） */
+    wakesAgain: async () => {
+      const before = createContext.mock.calls.length;
+      await engine.injectUserTurn('again');
+      await vi.advanceTimersByTimeAsync(1000);
+      return createContext.mock.calls.length > before;
+    },
+  };
+}
+
+const idle = { running: false, busy: false, outstandingTools: 0, scheduled: false };
+
+beforeEach(() => {
+  vi.spyOn(console, 'log').mockImplementation(() => {});
+  vi.spyOn(console, 'error').mockImplementation(() => {});
+  vi.useFakeTimers();
+});
+afterEach(() => {
+  vi.useRealTimers();
+  vi.restoreAllMocks();
+});
+
+const POSITIONS: Array<[string, number]> = [
+  ['mid_text', 0],
+  ['open_tag', 2],
+  ['closed_tag', 4],
+  ['after_terminal', 5],
+];
+
+describe('流れの途中の stop()', () => {
+  for (const adapter of ['silent', 'throw'] as AdapterKind[])
+    for (const [position, index] of POSITIONS)
+      for (const mode of ['sync', 'async'] as const) {
+        it(`${adapter} × ${position} × ${mode}: loop_stop(abort) が 1 度。束は作らない。文は error のターンに残る`, async () => {
+          const h = createHarness({ adapter });
+          h.onChunk((_c, i) => {
+            if (i !== index) return;
+            if (mode === 'sync') h.stop();
+            else setTimeout(h.stop, 0);
+          });
+          await h.go();
+
+          expect(h.loopStopsAfterStop()).toEqual(['loop_stop(abort)']);
+          expect(h.afterStop()).toEqual(['turn_end(model:error)', 'loop_stop(abort)']);
+          expect(h.frames()).toHaveLength(0);
+          expect(h.tools.execute).not.toHaveBeenCalled();
+          expect(h.modelTurn().content).toBe(FIRST.slice(0, index + 1).join(''));
+          expect(h.modelTurn().meta.status).toBe('error');
+          expect(h.modelTurn().meta.stopReason).toBeUndefined();
+          expect(h.engine.status()).toEqual(idle);
+          expect(await h.wakesAgain()).toBe(true);
+        });
+      }
+
+  it('2 度押しても loop_stop(abort) は 1 度', async () => {
+    const h = createHarness({ adapter: 'silent' });
+    h.onChunk((_c, i) => {
+      if (i !== 2) return;
+      h.stop();
+      h.stop();
+    });
+    await h.go();
+    expect(h.loopStopsAfterStop()).toEqual(['loop_stop(abort)']);
+  });
+
+  it('（対比）回が終わったあとにもう 1 度押せば、その場で 1 度出る（止まっているときと同じ）', async () => {
+    const h = createHarness({ adapter: 'silent' });
+    h.onChunk((_c, i) => {
+      if (i === 2) h.stop();
+    });
+    await h.go();
+    h.stop();
+    expect(h.seq.filter((e) => e === 'loop_stop(abort)')).toHaveLength(2);
+  });
+});
+
+describe('投影の中の stop()', () => {
+  for (const adapter of ['silent', 'throw'] as AdapterKind[])
+    for (const mode of ['sync', 'async'] as const) {
+      it(`${adapter} × ${mode}: 空の model のターンを積まず、アダプタを呼ばない。理由は abort`, async () => {
+        const h = createHarness({ adapter });
+        h.setInProjection(() => {
+          h.setInProjection(() => {});
+          if (mode === 'sync') h.stop();
+          else setTimeout(h.stop, 0);
+        });
+        await h.go();
+        expect(h.afterStop()).toEqual(['loop_stop(abort)']);
+        expect(h.seq).not.toContain('turn_start(model)');
+        expect(h.modelTurn()).toBeUndefined();
+        expect(h.llm.generateStream).not.toHaveBeenCalled();
+        expect(h.engine.status()).toEqual(idle);
+        expect(await h.wakesAgain()).toBe(true);
+      });
+    }
+});
+
+describe('流れのあと〜回の終わりの前の同期の窓での stop()', () => {
+  for (const adapter of ['silent', 'throw'] as AdapterKind[]) {
+    it(`${adapter} × turn_end(model) の聞き手の中: 1 度。束は作らない`, async () => {
+      const h = createHarness({ adapter });
+      h.onTurnEnd((d) => {
+        if (d.role === 'model' && h.seq.indexOf('STOP') < 0) h.stop();
+      });
+      await h.go();
+      expect(h.afterStop()).toEqual(['loop_stop(abort)']);
+      expect(h.frames()).toHaveLength(0);
+      expect(h.tools.execute).not.toHaveBeenCalled();
+      expect(await h.wakesAgain()).toBe(true);
+    });
+
+    it(`${adapter} × 警告（終端タグの後ろ）の turn_end(system) の聞き手の中: 1 度。束は作らない`, async () => {
+      const h = createHarness({ adapter, first: [...FIRST, '\ntrailing words'] });
+      h.onTurnEnd((d) => {
+        if (d.role === 'system' && String(d.turn?.content).includes('syntax_warning') && h.seq.indexOf('STOP') < 0)
+          h.stop();
+      });
+      await h.go();
+      expect(h.afterStop()).toEqual(['loop_stop(abort)']);
+      expect(h.frames()).toHaveLength(0);
+      expect(h.tools.execute).not.toHaveBeenCalled();
+    });
+
+    it(`${adapter} × [Pending] の枠の turn_end(system) の聞き手の中: 1 度。道具は走らない。枠は積んだまま`, async () => {
+      const h = createHarness({ adapter });
+      h.onTurnEnd((d) => {
+        const isFrame =
+          Array.isArray(d.turn?.content) && d.turn.content.some((e: any) => e.output?.log === PENDING_LOG);
+        if (d.role === 'system' && isFrame && h.seq.indexOf('STOP') < 0) h.stop();
+      });
+      await h.go();
+      expect(h.loopStopsAfterStop()).toEqual(['loop_stop(abort)']);
+      expect(h.tools.execute).not.toHaveBeenCalled();
+      expect(h.frames()).toHaveLength(1);
+      // 枠は書き換えない（モデルが読む文は積んだときのまま）
+      expect(h.frames()[0].content.map((e: any) => e.output.log)).toEqual([PENDING_LOG, PENDING_LOG]);
+      expect(h.engine.status()).toEqual(idle);
+      expect(await h.wakesAgain()).toBe(true);
+    });
+
+    it(`${adapter} × 最初の道具の execute の中: 1 度。2 本目は走らない`, async () => {
+      const h = createHarness({ adapter });
+      h.setInExecute(() => {
+        if (h.seq.indexOf('STOP') < 0) h.stop();
+      });
+      await h.go();
+      expect(h.loopStopsAfterStop()).toEqual(['loop_stop(abort)']);
+      expect(h.tools.execute).toHaveBeenCalledTimes(1);
+      expect(h.tools.execute.mock.calls[0][0].type).toBe('write');
+      expect(h.engine.status()).toEqual(idle);
+    });
+  }
+});
+
+describe('止めた直後の発言', () => {
+  for (const debounceMs of [0, 10])
+    for (const mode of ['sync', 'async'] as const)
+      it(`待ち ${debounceMs}ms × ${mode}: turn_end(model) → loop_stop(abort) → 次の回の turn_start。取りこぼさない`, async () => {
+        const h = createHarness({ adapter: 'silent', debounceMs });
+        const stopAndSpeak = () => {
+          h.stop();
+          void h.engine.injectUserTurn('next');
+        };
+        h.onChunk((_c, i) => {
+          if (i !== 2) return;
+          if (mode === 'sync') stopAndSpeak();
+          else setTimeout(stopAndSpeak, 0);
+        });
+        await h.go();
+        const after = h.afterStop().filter((e) => e !== 'turn_end(user)');
+        expect(after.slice(0, 3)).toEqual(['turn_end(model:error)', 'loop_stop(abort)', 'turn_start(model)']);
+        expect(h.loopStopsAfterStop()).toEqual(['loop_stop(abort)', 'loop_stop(idle)']);
+        expect(h.llm.generateStream).toHaveBeenCalledTimes(2);
+      });
+});
+
+describe('（対比）回の外の stop() は、いままでどおりその場で 1 度', () => {
+  it('道具の段: その場で loop_stop(abort)。枠は書き換えない', async () => {
+    const h = createHarness({ adapter: 'silent' });
+    h.setInExecute(() => {});
+    await h.engine.injectUserTurn('go');
+    // 生成が終わり、1 本目の道具が走っている（回は終わっている）
+    await vi.advanceTimersByTimeAsync(10 + 5 + GAP * 7 + 5);
+    expect(h.tools.execute).toHaveBeenCalledTimes(1);
+    expect(h.engine.status().running).toBe(false);
+    h.stop();
+    expect(h.afterStop()[0]).toBe('loop_stop(abort)');
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(h.loopStopsAfterStop()).toEqual(['loop_stop(abort)']);
+    expect(h.tools.execute).toHaveBeenCalledTimes(1);
+    const logs = h.frames()[0].content.map((e: any) => e.output.log);
+    expect(logs).toEqual([PENDING_LOG, PENDING_LOG]);
+  });
+
+  it('止まっているとき: 押すたびにその場で 1 度', () => {
+    const h = createHarness({ adapter: 'silent' });
+    h.stop();
+    h.stop();
+    expect(h.seq).toEqual(['STOP', 'loop_stop(abort)', 'STOP', 'loop_stop(abort)']);
+  });
+});
