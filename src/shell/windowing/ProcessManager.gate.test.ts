@@ -256,12 +256,16 @@ describe('プロセスの記録（process_events）に、誰が動かしたか�
     void w.pm.spawn(A, { pid: 'x', path: 'data/x.html', show: false });
     void w.pm.spawn(USER_MOVER, { pid: 'x', path: 'data/x.html', engine: 'eng-a', show: false, forceReload: true });
     w.pm.kill(OS_MOVER, 'x');
+    void w.pm.spawn(A, { pid: 'y', path: 'data/y.html', show: false });
+    w.pm.kill(engineMover('eng-a', 'a_app'), 'y');
     expect(lines.map(who)).toEqual([
       ['spawned', 'x', 'engine', 'eng-a', 'a_app'],
       ['resumed', 'x', 'engine', 'eng-a', undefined],
       ['killed', 'x', 'user', undefined, undefined],
       ['spawned', 'x', 'user', undefined, undefined],
       ['killed', 'x', 'os', undefined, undefined],
+      ['spawned', 'y', 'engine', 'eng-a', undefined],
+      ['killed', 'y', 'engine', 'eng-a', 'a_app'],
     ]);
     // 載らない欄は、行に無い（undefined の鍵を書かない）
     expect(Object.keys(lines[2])).not.toContain('byEngine');

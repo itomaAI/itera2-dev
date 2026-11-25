@@ -126,13 +126,18 @@ describe('NavHistory', () => {
     expect(navigate).toHaveBeenLastCalledWith('metaos://run/c.html', USER_MOVER);
     expect(await h.onPopState({ iteraNav: 1 })).toBe(true);
     expect(navigate).toHaveBeenLastCalledWith('metaos://run/b.html', USER_MOVER);
+    // 進むも同じく持ち越す（いま段 1 に居る）
+    await h.forward(SUB);
+    expect(await h.onPopState({ iteraNav: 2 })).toBe(true);
+    expect(navigate).toHaveBeenLastCalledWith('metaos://run/c.html', SUB);
+    await h.go(1, USER_MOVER);
     // 外から来た popstate（自分の state でない）は、持ち越しを消さない
     await h.back(SUB);
     expect(await h.onPopState(null)).toBe(false);
     expect(await h.onPopState({ foo: 1 })).toBe(false);
     expect(await h.onPopState({ iteraNav: 0 })).toBe(true);
     expect(navigate).toHaveBeenLastCalledWith('metaos://run/a.html', SUB);
-    expect(navigate).toHaveBeenCalledTimes(5);
+    expect(navigate).toHaveBeenCalledTimes(7);
   });
 
   it('購読: 変化のたびに state が届く。購読側が投げても止まらない', async () => {
