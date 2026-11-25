@@ -168,7 +168,7 @@ Please safely install this application into the user's environment by strictly f
                 await MetaOS.tools.register({
                     name: 'add_node',
                     description: 'Adds a new idea node to the canvas.',
-                    definition: '<define_tag name="add_node">Attributes: id (unique), text, x (0-100 percentage), y (0-100 percentage), color (primary|success|warning|error)</define_tag>',
+                    definition: '<define_tag name="add_node">Adds an idea node to the mind map canvas. When the user asks to brainstorm, draw the map with this tag and connect_nodes. Attributes: id (unique), text, x (10-90, percentage), y (10-90, percentage), color (primary|success|warning|error)</define_tag>',
                     handler: async (p) => {
                         nodes[p.id] = { 
                             text: p.text || 'Idea', 
@@ -185,7 +185,7 @@ Please safely install this application into the user's environment by strictly f
                 await MetaOS.tools.register({
                     name: 'connect_nodes',
                     description: 'Draws a line between two existing nodes.',
-                    definition: '<define_tag name="connect_nodes">Attributes: from (node id), to (node id)</define_tag>',
+                    definition: '<define_tag name="connect_nodes">Draws a line between two existing nodes of the mind map. Attributes: from (node id), to (node id)</define_tag>',
                     handler: async (p) => {
                         edges.push({ from: p.from, to: p.to });
                         render();
@@ -193,15 +193,9 @@ Please safely install this application into the user's environment by strictly f
                     }
                 });
 
-                // 3. Inform the LLM that tools are ready via History Injection
-                const systemMsg = \`
-[System] AI MindMap App is opened. You can now visually map out ideas using the following tags:
-<define_tag name="add_node">Attributes: id, text, x(10-90), y(10-90), color(primary|success|warning|error)</define_tag>
-<define_tag name="connect_nodes">Attributes: from(id), to(id)</define_tag>
-When the user asks to brainstorm, use these tags to draw a map!
-                \`.trim();
-                
-                await MetaOS.ai.log(systemMsg, "tool_available");
+                // 3. Nothing to announce. The OS places the definitions registered above in the conversation
+                //    (a tool_available event) when they are registered. Do not log them with MetaOS.ai.log:
+                //    they would be in the conversation twice.
 
                 DOM.status.textContent = "AI Connected";
                 DOM.status.classList.add('bg-success/10', 'text-success', 'border-success/30');
