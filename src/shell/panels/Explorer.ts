@@ -470,7 +470,8 @@ export class Explorer {
           actor: 'User',
           action: 'upload',
           items,
-          targetDir: targetDir,
+          // targetDir はパスの頭に付ける形（末尾に /）。知らせにはフォルダのパスを渡す（T-0923）
+          targetDir: targetDir.replace(/\/$/, ''),
         });
         this._emitHistory('file_created', msg);
       }
